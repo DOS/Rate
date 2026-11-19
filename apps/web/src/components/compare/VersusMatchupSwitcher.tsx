@@ -11,11 +11,36 @@ import {
   type CanonicalCategorySlug,
   type MasterProduct,
 } from '@/lib/rate-domain';
-import { versusHref } from '@/lib/item-compare';
+import {
+  canonicalVersusOrder,
+  isParseableVersusPair,
+  versusHref,
+} from '@/lib/item-compare';
+import type { ItemCatalogRow } from '@/lib/item-directory';
+
+export function sanitizeVersusPeerPriceVnd(value: unknown): number {
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  let num: number;
+  if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return 0;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return 0;
+    }
+    num = Number(trimmed);
+  } else {
+    num = value;
+  }
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return 0;
+  }
+  const rounded = Math.round(num);
+  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
+}
 
 export function formatVersusPeerPriceBadge(value: unknown): string {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+  const num = sanitizeVersusPeerPriceVnd(value);
+  if (num <= 0) {
     return 'N/A';
   }
   if (num >= 1_000_000) {
@@ -24,19 +49,152 @@ export function formatVersusPeerPriceBadge(value: unknown): string {
   return `${Math.max(1, Math.round(num / 1_000))}K`;
 }
 
+function lookupVersusOwnSlug(
+  map: Readonly<Record<string, string>> | null | undefined,
+  slug: string
+): string | undefined {
+  if (!map || !slug || !Object.hasOwn(map, slug)) return undefined;
+  const val = map[slug];
+  return typeof val === 'string' && val ? val : undefined;
+}
+
+function setVersusOwnSlug(
+  map: Record<string, string>,
+  slug: string,
+  value: string
+): void {
+  if (slug === '__proto__') {
+    Object.defineProperty(map, slug, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  } else {
+    map[slug] = value;
+  }
+}
+
+export function buildVersusPeerItemSlugMap(
+  peers: readonly ItemCatalogRow[],
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): Record<string, string> {
+  const map = Object.create(null) as Record<string, string>;
+  if (itemSlugBySlug) {
+    for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
+      if (slug && typeof itemSlug === 'string' && itemSlug) {
+        setVersusOwnSlug(map, slug, itemSlug);
+      }
+    }
+  }
+  for (const peer of peers) {
+    if (!peer || typeof peer.slug !== 'string' || !peer.slug) continue;
+    if (
+      typeof peer.item_slug === 'string' &&
+      peer.item_slug &&
+      !lookupVersusOwnSlug(map, peer.slug)
+    ) {
+      setVersusOwnSlug(map, peer.slug, peer.item_slug);
+    }
+  }
+  return map;
+}
+
+export function resolveVersusPeerSideSlug(
+  slug: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): string {
+  if (!slug) return '';
+  const mapped = lookupVersusOwnSlug(itemSlugBySlug, slug);
+  return mapped && !mapped.toLowerCase().includes('-vs-') ? mapped : slug;
+}
+
+export function isSameVersusPeerItem(
+  slugA: string,
+  slugB: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): boolean {
+  if (!slugA || !slugB) return false;
+  if (slugA.toLowerCase() === slugB.toLowerCase()) return true;
+  const sideA = resolveVersusPeerSideSlug(slugA, itemSlugBySlug);
+  const sideB = resolveVersusPeerSideSlug(slugB, itemSlugBySlug);
+  if (sideA.toLowerCase() === sideB.toLowerCase()) return true;
+  const rawItemA = lookupVersusOwnSlug(itemSlugBySlug, slugA);
+  const rawItemB = lookupVersusOwnSlug(itemSlugBySlug, slugB);
+  return Boolean(
+    rawItemA && rawItemB && rawItemA.toLowerCase() === rawItemB.toLowerCase()
+  );
+}
+
+export function isValidVersusPeerPair(
+  slugA: string,
+  slugB: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): boolean {
+  if (!slugA || !slugB) return false;
+  if (isSameVersusPeerItem(slugA, slugB, itemSlugBySlug)) return false;
+  if (
+    lookupVersusOwnSlug(itemSlugBySlug, slugA)
+      ?.toLowerCase()
+      .includes('-vs-') ||
+    lookupVersusOwnSlug(itemSlugBySlug, slugB)?.toLowerCase().includes('-vs-')
+  ) {
+    return false;
+  }
+  const sideA = resolveVersusPeerSideSlug(slugA, itemSlugBySlug);
+  const sideB = resolveVersusPeerSideSlug(slugB, itemSlugBySlug);
+  const [first, second] = canonicalVersusOrder(sideA, sideB);
+  return Boolean(
+    first &&
+    second &&
+    first.toLowerCase() !== second.toLowerCase() &&
+    isParseableVersusPair(first.toLowerCase(), second.toLowerCase())
+  );
+}
+
 export function resolveEffectivePeerSlugs(
-  peers: readonly MasterProduct[],
+  peers: readonly ItemCatalogRow[],
   requestedSlugA: string,
-  requestedSlugB: string
+  requestedSlugB: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
 ): { effectiveSlugA: string; effectiveSlugB: string } {
+  const mergedMap = buildVersusPeerItemSlugMap(peers, itemSlugBySlug);
   const validSlugs = new Set(peers.map((p) => p.slug).filter(Boolean));
   const effectiveSlugA = validSlugs.has(requestedSlugA)
     ? requestedSlugA
-    : (peers[0]?.slug ?? '');
+    : ((requestedSlugA
+        ? peers.find(
+            (p) =>
+              p.slug && isSameVersusPeerItem(p.slug, requestedSlugA, mergedMap)
+          )?.slug
+        : undefined) ??
+      peers.find(
+        (p) =>
+          p.slug &&
+          peers.some(
+            (other) =>
+              other.slug && isValidVersusPeerPair(p.slug, other.slug, mergedMap)
+          )
+      )?.slug ??
+      peers[0]?.slug ??
+      '');
   const effectiveSlugB =
-    validSlugs.has(requestedSlugB) && requestedSlugB !== effectiveSlugA
+    validSlugs.has(requestedSlugB) &&
+    isValidVersusPeerPair(requestedSlugB, effectiveSlugA, mergedMap)
       ? requestedSlugB
-      : (peers.find((p) => p.slug && p.slug !== effectiveSlugA)?.slug ?? '');
+      : ((requestedSlugB
+          ? peers.find(
+              (p) =>
+                p.slug &&
+                isSameVersusPeerItem(p.slug, requestedSlugB, mergedMap) &&
+                isValidVersusPeerPair(p.slug, effectiveSlugA, mergedMap)
+            )?.slug
+          : undefined) ??
+        peers.find(
+          (p) =>
+            p.slug && isValidVersusPeerPair(p.slug, effectiveSlugA, mergedMap)
+        )?.slug ??
+        '');
   return { effectiveSlugA, effectiveSlugB };
 }
 
@@ -69,26 +227,46 @@ export default function VersusMatchupSwitcher({
     );
   }, [catalogCandidates, categorySlug]);
 
-  const { effectiveSlugA, effectiveSlugB } = useMemo(
-    () => resolveEffectivePeerSlugs(sameCategoryPeers, slugA, slugB),
-    [sameCategoryPeers, slugA, slugB]
+  const resolvedItemSlugBySlug = useMemo(
+    () => buildVersusPeerItemSlugMap(sameCategoryPeers, itemSlugBySlug),
+    [sameCategoryPeers, itemSlugBySlug]
   );
 
-  const canLaunchMatchup = Boolean(
-    effectiveSlugA && effectiveSlugB && effectiveSlugA !== effectiveSlugB
+  const { effectiveSlugA, effectiveSlugB } = useMemo(
+    () =>
+      resolveEffectivePeerSlugs(
+        sameCategoryPeers,
+        slugA,
+        slugB,
+        resolvedItemSlugBySlug
+      ),
+    [sameCategoryPeers, slugA, slugB, resolvedItemSlugBySlug]
   );
-  const isDifferentFromCurrent =
-    effectiveSlugA !== currentSlugA || effectiveSlugB !== currentSlugB;
+
+  const canLaunchMatchup = isValidVersusPeerPair(
+    effectiveSlugA,
+    effectiveSlugB,
+    resolvedItemSlugBySlug
+  );
+  const targetHref = canLaunchMatchup
+    ? versusHref(effectiveSlugA, effectiveSlugB, resolvedItemSlugBySlug)
+    : '';
+  const currentHref =
+    currentSlugA && currentSlugB
+      ? versusHref(currentSlugA, currentSlugB, resolvedItemSlugBySlug)
+      : '';
+  const isDifferentFromCurrent = Boolean(
+    targetHref && targetHref !== currentHref
+  );
 
   const handleLaunchMatchup = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canLaunchMatchup) return;
-    const href = versusHref(effectiveSlugA, effectiveSlugB, itemSlugBySlug);
-    startNavigationProgress(href);
-    router.push(href);
+    if (!canLaunchMatchup || !targetHref) return;
+    startNavigationProgress(targetHref);
+    router.push(targetHref);
   };
 
-  if (sameCategoryPeers.length < 2) {
+  if (sameCategoryPeers.length < 2 || !canLaunchMatchup) {
     return null;
   }
 
@@ -124,7 +302,13 @@ export default function VersusMatchupSwitcher({
               <option
                 key={`a-${peer.slug}`}
                 value={peer.slug}
-                disabled={peer.slug === effectiveSlugB}
+                disabled={
+                  !isValidVersusPeerPair(
+                    peer.slug,
+                    effectiveSlugB,
+                    resolvedItemSlugBySlug
+                  )
+                }
               >
                 [A] {peer.name} ({formatVersusPeerPriceBadge(peer.min_price)})
               </option>
@@ -143,7 +327,13 @@ export default function VersusMatchupSwitcher({
               <option
                 key={`b-${peer.slug}`}
                 value={peer.slug}
-                disabled={peer.slug === effectiveSlugA}
+                disabled={
+                  !isValidVersusPeerPair(
+                    peer.slug,
+                    effectiveSlugA,
+                    resolvedItemSlugBySlug
+                  )
+                }
               >
                 [B] {peer.name} ({formatVersusPeerPriceBadge(peer.min_price)})
               </option>

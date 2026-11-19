@@ -159,6 +159,52 @@ const SUPPORTED_CROWD_PLATFORMS = new Set([
   'phongvu',
 ]);
 
+const QUICK_QUERY_BARE_MARKETPLACE_DOMAINS = [
+  'shopee.vn',
+  'lazada.vn',
+  'tiki.vn',
+  'tiktok.com',
+  'cellphones.com.vn',
+  'thegioididong.com',
+  'topzone.vn',
+  'dienmayxanh.com',
+  'fptshop.com.vn',
+  'hoanghamobile.com',
+  'didongviet.vn',
+  'phongvu.vn',
+] as const;
+
+function normalizeQuickQueryBareMarketplaceUrl(
+  rawQuery: string
+): string | null {
+  const hostAndPath =
+    rawQuery.startsWith('//') && !rawQuery.startsWith('///')
+      ? rawQuery.slice(2)
+      : rawQuery;
+  if (
+    !hostAndPath ||
+    /\s/.test(hostAndPath) ||
+    hostAndPath.startsWith('/') ||
+    /^[a-z][a-z0-9+.-]*:(?!\d+(?:[/?#]|$))/i.test(hostAndPath)
+  ) {
+    return null;
+  }
+  const rawHost = hostAndPath
+    .split(/[/?#]/, 1)[0]
+    ?.replace(/:\d+$/, '')
+    .toLowerCase();
+  if (
+    !rawHost ||
+    !/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(rawHost) ||
+    !QUICK_QUERY_BARE_MARKETPLACE_DOMAINS.some(
+      (domain) => rawHost === domain || rawHost.endsWith(`.${domain}`)
+    )
+  ) {
+    return null;
+  }
+  return sanitizeProductUrl(`https://${hostAndPath}`);
+}
+
 // The latest product lookup per tab (DOS/Rate#1300, #1664).
 let detectRequestCounter = 0;
 const latestDetectByTab = new Map<number, number>();
@@ -661,22 +707,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         const hasHttpScheme = /^https?:\/\//i.test(rawQuery);
-        const schemelessHostPath =
-          rawQuery.startsWith('//') && !rawQuery.startsWith('///')
-            ? rawQuery.slice(2)
-            : rawQuery;
-        const schemelessCandidate =
-          !hasHttpScheme &&
-          !/\s/.test(schemelessHostPath) &&
-          !/^[a-z][a-z0-9+.-]*:(?!\d+(?:\/|$))/i.test(schemelessHostPath) &&
-          !schemelessHostPath.startsWith('/')
-            ? `https://${schemelessHostPath}`
-            : null;
         const sanitizedCandidate = hasHttpScheme
           ? sanitizeProductUrl(rawQuery)
-          : schemelessCandidate
-            ? sanitizeProductUrl(schemelessCandidate)
-            : null;
+          : normalizeQuickQueryBareMarketplaceUrl(rawQuery);
         const detectedPlatform = sanitizedCandidate
           ? detectEcommercePlatform(sanitizedCandidate)
           : null;

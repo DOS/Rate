@@ -5,7 +5,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { DEVICE_IMAGE_RENDITIONS } from '../device-image-renditions';
-import { deviceImageSizesForHeight, deviceImageSrcSet } from '../device-images';
+import {
+  DEVICE_IMAGE_CREDITS,
+  deviceImageCredit,
+  deviceImageJsonLd,
+  deviceImageSizesForHeight,
+  deviceImageSrcSet,
+  type DeviceImageCredit,
+} from '../device-images';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const devicesDir = join(here, '../../../public/img/devices');
@@ -191,6 +198,77 @@ async function main() {
     DEVICE_IMAGE_RENDITIONS[
       'apple-macbook-pro-m4-pro-14-inch-512gb'
     ]?.widths.includes(800)
+  );
+
+  // Licence notices (DOS/Rate#1756): every credited photo exists and has
+  // renditions, and the notice is found only for that local photo.
+  for (const [slug, credit] of Object.entries(DEVICE_IMAGE_CREDITS)) {
+    assert.ok(
+      existsSync(join(devicesDir, `${slug}.jpg`)),
+      `${slug}: credited photo is in public/img/devices`
+    );
+    assert.ok(DEVICE_IMAGE_RENDITIONS[slug], `${slug}: has renditions`);
+    assert.match(
+      credit.sourceUrl,
+      /^https:\/\/commons\.wikimedia\.org\/wiki\/File:/
+    );
+    assert.equal(credit.license, 'CC BY-SA 4.0');
+    assert.equal(
+      credit.licenseUrl,
+      'https://creativecommons.org/licenses/by-sa/4.0/'
+    );
+    assert.ok(credit.author.trim().length > 0, `${slug}: names the author`);
+  }
+  // The lookup and the JSON-LD, on a sample entry (no photo is credited yet).
+  const sample: Record<string, DeviceImageCredit> = {
+    'sample-phone': {
+      author: 'Sample Author',
+      authorLang: 'ja',
+      sourceUrl: 'https://commons.wikimedia.org/wiki/File:Sample_phone.jpg',
+      license: 'CC BY-SA 4.0',
+      licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+    },
+  };
+  assert.equal(
+    deviceImageCredit('/img/devices/sample-phone.jpg', sample),
+    sample['sample-phone']
+  );
+  assert.equal(deviceImageCredit('/img/devices/sample-phone.jpg'), null);
+  for (const other of [
+    '/img/devices/apple-iphone-16-128gb.jpg',
+    'https://cdn.example/sample-phone.jpg',
+    '/img/devices/sample-phone.png',
+    '/img/devices/constructor.jpg',
+    null,
+    undefined,
+  ]) {
+    assert.equal(deviceImageCredit(other, sample), null, String(other));
+  }
+  // JSON-LD: a credited photo is an ImageObject with its licence; any other
+  // image stays a plain URL.
+  assert.deepEqual(
+    deviceImageJsonLd(
+      '/img/devices/sample-phone.jpg',
+      'https://rate.vn/img/devices/sample-phone.jpg',
+      sample
+    ),
+    {
+      '@type': 'ImageObject',
+      contentUrl: 'https://rate.vn/img/devices/sample-phone.jpg',
+      creator: { '@type': 'Person', name: 'Sample Author' },
+      creditText: 'Sample Author, Wikimedia Commons, CC BY-SA 4.0',
+      license: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      acquireLicensePage:
+        'https://commons.wikimedia.org/wiki/File:Sample_phone.jpg',
+    }
+  );
+  assert.equal(
+    deviceImageJsonLd(
+      '/img/devices/apple-iphone-16-128gb.jpg',
+      'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg',
+      sample
+    ),
+    'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg'
   );
 
   console.warn('✅ Device image renditions suite passed');

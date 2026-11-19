@@ -200,13 +200,33 @@ export function hasCategoryScopedSpecFilter(
   return false;
 }
 
-function parseFiniteDecimalInput(raw: unknown): number {
+const SINGLE_WS_OR_CTRL_CHAR_RE = /[\s\p{Cc}]/u;
+
+export function trimEdgeControlAndWhitespace(raw: string): string {
+  if (typeof raw !== 'string' || raw.length === 0) return '';
+  let start = 0;
+  let end = raw.length;
+  while (start < end && SINGLE_WS_OR_CTRL_CHAR_RE.test(raw[start]!)) {
+    start += 1;
+  }
+  while (end > start && SINGLE_WS_OR_CTRL_CHAR_RE.test(raw[end - 1]!)) {
+    end -= 1;
+  }
+  return start === 0 && end === raw.length ? raw : raw.slice(start, end);
+}
+
+export function parseFiniteDecimalInput(raw: unknown): number {
   if (typeof raw === 'number') {
     return Number.isFinite(raw) ? raw : Number.NaN;
   }
   if (typeof raw === 'string') {
-    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
-    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+    const cleaned = trimEdgeControlAndWhitespace(raw);
+    if (
+      !cleaned ||
+      cleaned.length > 32 ||
+      SINGLE_WS_OR_CTRL_CHAR_RE.test(cleaned) ||
+      /^[+-]?0[xbo]/i.test(cleaned)
+    ) {
       return Number.NaN;
     }
     const parsed = Number(cleaned);
@@ -280,11 +300,13 @@ export function parseOptionalVndPriceParam(
   if (typeof raw !== 'string') return null;
   const n = parseFiniteDecimalInput(raw);
   if (!Number.isFinite(n) || n <= 0) return null;
+  const rounded = Math.round(n);
+  if (rounded <= 0) return null;
   const safeMaxVnd =
     typeof maxVnd === 'number' && Number.isFinite(maxVnd) && maxVnd > 0
       ? Math.round(maxVnd)
       : 500_000_000;
-  return Math.min(Math.round(n), safeMaxVnd);
+  return Math.min(rounded, safeMaxVnd);
 }
 
 /**
@@ -573,15 +595,20 @@ export function resolveInspectObservedPrices(input: {
     return Number.isFinite(n) && n > 0 && n <= safeMaxVnd ? Math.round(n) : 0;
   };
 
+  const queryPriceVal = toPositiveBoundedPrice(input.queryPrice);
+  const matchedOfferPriceVal = toPositiveBoundedPrice(
+    input.matchedOfferPriceCurrent
+  );
   const observedPrice =
-    toPositiveBoundedPrice(input.queryPrice) ||
-    toPositiveBoundedPrice(input.matchedOfferPriceCurrent) ||
+    queryPriceVal ||
+    matchedOfferPriceVal ||
     toPositiveBoundedPrice(input.masterMinPrice) ||
     0;
 
   const rawOrigCandidate =
     input.queryOriginalPrice ??
-    (input.queryPrice === null || input.queryPrice === undefined
+    ((input.queryPrice === null || input.queryPrice === undefined) &&
+    matchedOfferPriceVal > 0
       ? input.matchedOfferPriceOriginal
       : null);
   const candidateOrig = toPositiveBoundedPrice(rawOrigCandidate);
@@ -626,21 +653,63 @@ function isValidProductSlugToken(slug: string, maxLength = 120): boolean {
   );
 }
 
+const MAX_COMPARE_VARIANT_KEY_LENGTH = 64;
+
+export function splitComparePinToken(
+  raw: string,
+  keepCase = false
+): { slug: string; variantKey: string | null } {
+  const trimmed =
+    typeof raw === 'string' ? trimEdgeControlAndWhitespace(raw) : '';
+  const clean = keepCase ? trimmed : trimmed.toLowerCase();
+  const atIdx = clean.indexOf('@');
+  if (atIdx === -1) {
+    return { slug: clean, variantKey: null };
+  }
+  return {
+    slug: clean.slice(0, atIdx),
+    variantKey: clean.slice(atIdx + 1).toLowerCase(),
+  };
+}
+
+function isValidCompareSlugOrPinToken(
+  token: string,
+  maxSlugLength = 120
+): boolean {
+  if (typeof token !== 'string') return false;
+  const atIdx = token.indexOf('@');
+  if (atIdx === -1) {
+    return isValidProductSlugToken(token, maxSlugLength);
+  }
+  if (token.indexOf('@', atIdx + 1) !== -1) return false;
+  const slugPart = token.slice(0, atIdx);
+  const variantPart = token.slice(atIdx + 1);
+  return (
+    isValidProductSlugToken(slugPart, maxSlugLength) &&
+    variantPart.length >= 1 &&
+    variantPart.length <= MAX_COMPARE_VARIANT_KEY_LENGTH &&
+    /^[a-zA-Z0-9_-]+$/.test(variantPart) &&
+    /[a-zA-Z0-9]/.test(variantPart) &&
+    !DISALLOWED_SLUG_AND_BRAND_TOKENS.has(variantPart.toLowerCase())
+  );
+}
+
 /**
- * Parses and validates comma-separated master product slugs for `GET /api/v1/rate/compare`.
+ * Parses and validates comma-separated master product or Item slugs (including `@variant_key` pins)
+ * for `GET /api/v1/rate/compare`.
  * Bounds raw input length, trims/deduplicates up to `maxSlugs` (default 4), and rejects invalid characters.
  */
 export function parseCompareSlugsParam(
   raw: string | null | undefined,
   maxSlugs = 4
 ): string[] {
-  const boundedRaw = parseBoundedStringParam(raw, 600);
+  const boundedRaw = parseBoundedStringParam(raw, 800);
   if (!boundedRaw) return [];
   const uniqueSlugs: string[] = [];
   const seen = new Set<string>();
   for (const part of boundedRaw.split(',')) {
     const slug = part.trim();
-    if (!isValidProductSlugToken(slug, 120)) {
+    if (!isValidCompareSlugOrPinToken(slug, 120)) {
       continue;
     }
     const lower = slug.toLowerCase();
@@ -1001,39 +1070,62 @@ export function resolveReviewVoteInput(rawBody: unknown): {
 
 /**
  * Parses and validates a 1v1 versus pair (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`).
- * Rejects missing, identical, overlong (`> 120` chars), or malformed product slugs (`null`).
+ * Rejects missing, identical, overlong (`> 120` chars per slug), or malformed product/Item slugs (`null`).
  */
 export function parseVersusQueryParams(
   searchParams: Pick<URLSearchParams, 'get'>,
-  maxSlugLength = 120
+  maxSlugLength = 120,
+  keepCase = false
 ): [string, string] | null {
+  const safeMaxSlugLength =
+    typeof maxSlugLength === 'number' &&
+    Number.isFinite(maxSlugLength) &&
+    maxSlugLength >= 1
+      ? Math.floor(maxSlugLength)
+      : 120;
   const isValidSlug = (s: string): boolean =>
-    isValidProductSlugToken(s, maxSlugLength);
+    !SINGLE_WS_OR_CTRL_CHAR_RE.test(s) &&
+    isValidCompareSlugOrPinToken(s, safeMaxSlugLength);
+  const normalizeSide = (raw: string): string => {
+    const trimmed = trimEdgeControlAndWhitespace(raw);
+    return keepCase ? trimmed : trimmed.toLowerCase();
+  };
 
-  const rawPair = (searchParams.get('pair') || '').toLowerCase().trim();
+  const rawPairParam = searchParams.get('pair');
+  const trimmedPair =
+    typeof rawPairParam === 'string'
+      ? trimEdgeControlAndWhitespace(rawPairParam)
+      : '';
+  const maxSideLength = safeMaxSlugLength + 1 + MAX_COMPARE_VARIANT_KEY_LENGTH;
   if (
-    rawPair &&
-    rawPair.length <= maxSlugLength * 2 + 4 &&
-    rawPair.includes('-vs-')
+    trimmedPair &&
+    trimmedPair.length <= maxSideLength * 2 + 4 &&
+    !SINGLE_WS_OR_CTRL_CHAR_RE.test(trimmedPair)
   ) {
-    const parts = rawPair.split('-vs-');
+    const parts = trimmedPair.split(/-vs-/i);
     if (parts.length === 2) {
-      const a = parts[0]?.trim() || '';
-      const b = parts[1]?.trim() || '';
-      if (isValidSlug(a) && isValidSlug(b) && a !== b) {
+      const a = normalizeSide(parts[0] || '');
+      const b = normalizeSide(parts[1] || '');
+      if (
+        isValidSlug(a) &&
+        isValidSlug(b) &&
+        a.toLowerCase() !== b.toLowerCase()
+      ) {
         return [a, b];
       }
     }
   }
 
-  const slugA = (searchParams.get('slugA') || searchParams.get('a') || '')
-    .toLowerCase()
-    .trim();
-  const slugB = (searchParams.get('slugB') || searchParams.get('b') || '')
-    .toLowerCase()
-    .trim();
+  const rawA = searchParams.get('slugA') ?? searchParams.get('a') ?? '';
+  const rawB = searchParams.get('slugB') ?? searchParams.get('b') ?? '';
+  const slugA = normalizeSide(rawA);
+  const slugB = normalizeSide(rawB);
 
-  if (isValidSlug(slugA) && isValidSlug(slugB) && slugA !== slugB) {
+  if (
+    isValidSlug(slugA) &&
+    isValidSlug(slugB) &&
+    slugA.toLowerCase() !== slugB.toLowerCase()
+  ) {
     return [slugA, slugB];
   }
 
@@ -1057,12 +1149,15 @@ export function parseReviewsQueryParams(
   limit: number;
 } | null {
   const hideFakeRaw = searchParams.get('hideFake');
-  const hideFake =
-    hideFakeRaw === '1' || hideFakeRaw?.trim().toLowerCase() === 'true';
+  const cleanedHideFake =
+    typeof hideFakeRaw === 'string'
+      ? trimEdgeControlAndWhitespace(hideFakeRaw).toLowerCase()
+      : '';
+  const hideFake = cleanedHideFake === '1' || cleanedHideFake === 'true';
 
   const rawLimit = searchParams.get('limit');
   let limit = 50;
-  if (rawLimit != null && rawLimit.replace(/\p{Cc}+/gu, '').trim() !== '') {
+  if (rawLimit != null && trimEdgeControlAndWhitespace(rawLimit) !== '') {
     const parsedLimit = parseFiniteDecimalInput(rawLimit);
     if (
       !Number.isSafeInteger(parsedLimit) ||
@@ -1076,21 +1171,26 @@ export function parseReviewsQueryParams(
 
   const rawMasterId =
     searchParams.get('masterProductId') ?? searchParams.get('productId');
-  if (
-    rawMasterId != null &&
-    rawMasterId.replace(/\p{Cc}+/gu, '').trim() !== ''
-  ) {
-    const trimmedId = rawMasterId.replace(/\p{Cc}+/gu, '').trim();
-    if (!UUID_PARAM_REGEX.test(trimmedId)) {
+  const trimmedId =
+    rawMasterId != null ? trimEdgeControlAndWhitespace(rawMasterId) : '';
+  if (trimmedId !== '') {
+    if (
+      SINGLE_WS_OR_CTRL_CHAR_RE.test(trimmedId) ||
+      !UUID_PARAM_REGEX.test(trimmedId)
+    ) {
       return null;
     }
     return { masterProductId: trimmedId, slug: null, hideFake, limit };
   }
 
   const rawSlug = searchParams.get('slug');
-  if (rawSlug != null && rawSlug.replace(/\p{Cc}+/gu, '').trim() !== '') {
-    const trimmedSlug = rawSlug.replace(/\p{Cc}+/gu, '').trim();
-    if (!isValidProductSlugToken(trimmedSlug, 120)) {
+  const trimmedSlug =
+    rawSlug != null ? trimEdgeControlAndWhitespace(rawSlug) : '';
+  if (trimmedSlug !== '') {
+    if (
+      SINGLE_WS_OR_CTRL_CHAR_RE.test(trimmedSlug) ||
+      !isValidProductSlugToken(trimmedSlug, 120)
+    ) {
       return null;
     }
     return { masterProductId: null, slug: trimmedSlug, hideFake, limit };
@@ -1132,7 +1232,7 @@ export function parseProductsFilterBounds(
   const rawCategory = searchParams.get('category');
   const cleanedCategory =
     typeof rawCategory === 'string'
-      ? rawCategory.replace(/\p{Cc}+/gu, '').trim()
+      ? trimEdgeControlAndWhitespace(rawCategory)
       : '';
   const categorySlug =
     cleanedCategory === '' ? 'smartphones' : cleanedCategory.toLowerCase();

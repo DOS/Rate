@@ -980,7 +980,8 @@ async function main() {
   const pdvSrc = fs.readFileSync(productRouteFiles[0]!, 'utf8');
   assert.match(
     pdvSrc,
-    /\.\.\.\(jsonLdImages\.length > 0 \? \{ image: jsonLdImages \} : \{\}\)/
+    // A credited photo is an ImageObject there (DOS/Rate#1756).
+    /\.\.\.\(jsonLdProductImages\.length > 0\s*\?\s*\{ image: jsonLdProductImages \}\s*:\s*\{\}\)/
   );
   assert.doesNotMatch(pdvSrc, /image:\s*usableImageUrls\(/);
   assert.match(

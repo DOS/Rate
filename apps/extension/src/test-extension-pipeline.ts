@@ -580,6 +580,52 @@ async function runTests() {
       );
     }
 
+    for (const url of [
+      'https://thegioididong.com/dtdd/iphone-16-pro-max',
+      'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
+      'https://topzone.vn/iphone/iphone-16-pro-max',
+      'https://www.topzone.vn/iphone/iphone-16-pro-max',
+      'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
+      'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
+    ]) {
+      assert.ok(injectedOn(url), `content script must run on ${url}`);
+      assert.equal(detectEcommercePlatform(url), 'tgdd', url);
+      assert.equal(
+        extractIdsFromUrl('tgdd', url).externalItemId,
+        'iphone-16-pro-max',
+        url
+      );
+      assert.ok(
+        hosts.some((p) => matchesPattern(p, url)),
+        `host_permissions must cover ${url}`
+      );
+    }
+    for (const pattern of [
+      'https://thegioididong.com/*',
+      'https://*.thegioididong.com/*',
+      'https://topzone.vn/*',
+      'https://*.topzone.vn/*',
+      'https://dienmayxanh.com/*',
+      'https://*.dienmayxanh.com/*',
+    ]) {
+      assert.ok(matches.includes(pattern), `matches missing ${pattern}`);
+      assert.ok(hosts.includes(pattern), `host_permissions missing ${pattern}`);
+    }
+    for (const lookalikeUrl of [
+      'https://eviltopzone.vn/iphone/iphone-16-pro-max',
+      'https://evildienmayxanh.com/dtdd/iphone-16-pro-max',
+      'https://evilthegioididong.com/dtdd/iphone-16-pro-max',
+    ]) {
+      assert.ok(
+        !injectedOn(lookalikeUrl),
+        `content script must not run on lookalike ${lookalikeUrl}`
+      );
+      assert.ok(
+        !hosts.some((p) => matchesPattern(p, lookalikeUrl)),
+        `host_permissions must not cover lookalike ${lookalikeUrl}`
+      );
+    }
+
     // CHROMEWEBSTORE.md justifies exactly what the manifest requests
     // (DOS/Rate#1231).
     const storeDoc = fs.readFileSync(
@@ -643,6 +689,56 @@ async function runTests() {
       '2.1.0'
     );
     assert.ok(sample);
+    for (const tgddSisterUrl of [
+      'https://topzone.vn/iphone/iphone-16-pro-max',
+      'https://www.topzone.vn/iphone/iphone-16-pro-max',
+      'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
+      'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
+    ]) {
+      const obs = buildExtensionObservationV1(
+        {
+          platform: 'tgdd',
+          canonicalUrl: tgddSisterUrl,
+          externalItemId: 'iphone-16-pro-max',
+          externalShopId: null,
+          title: 'iPhone 16 Pro Max',
+          selectedVariant: '256GB',
+          price: 29_990_000,
+          originalPrice: 34_990_000,
+          ratingStar: 4.9,
+          ratingCount: 120,
+        },
+        new Date(),
+        '2.1.0'
+      );
+      assert.ok(obs, `tgdd observation must accept ${tgddSisterUrl}`);
+      assert.equal(obs.listing_url, tgddSisterUrl);
+    }
+    for (const lookalikeUrl of [
+      'https://eviltopzone.vn/iphone/iphone-16-pro-max',
+      'https://evildienmayxanh.com/dtdd/iphone-16-pro-max',
+    ]) {
+      assert.equal(
+        buildExtensionObservationV1(
+          {
+            platform: 'tgdd',
+            canonicalUrl: lookalikeUrl,
+            externalItemId: 'iphone-16-pro-max',
+            externalShopId: null,
+            title: 'iPhone 16 Pro Max',
+            selectedVariant: null,
+            price: 29_990_000,
+            originalPrice: null,
+            ratingStar: null,
+            ratingCount: null,
+          },
+          new Date(),
+          '2.1.0'
+        ),
+        null,
+        `tgdd observation must reject lookalike ${lookalikeUrl}`
+      );
+    }
     assert.deepEqual(
       Object.keys(sample).sort(),
       [...Object.keys(OBSERVATION_FIELD_LABELS), 'schema_version'].sort()
@@ -8295,21 +8391,56 @@ async function runTests() {
             (r) => resolve(r as Record<string, unknown>)
           );
         });
-      const bareCases: Array<[string, string, string]> = [
+      const bareCases: Array<[string, string, string, string?]> = [
         ['shopee.vn/Dien-thoai-i.111.222', 'shopee', '222'],
         ['lazada.vn/products/p-i333444-s555.html', 'lazada', '333444'],
         ['tiki.vn/sp-p777888.html', 'tiki', '777888'],
         ['tiktok.com/@apple/product/999111', 'tiktok', '999111'],
         ['thegioididong.com/dtdd/iphone-16-pro', 'tgdd', 'iphone-16-pro'],
+        ['topzone.vn/iphone/iphone-16-pro', 'tgdd', 'iphone-16-pro'],
+        [
+          'www.topzone.vn/iphone/iphone-16-pro?utm_source=fb#specs',
+          'tgdd',
+          'iphone-16-pro',
+          'https://www.topzone.vn/iphone/iphone-16-pro',
+        ],
+        ['dienmayxanh.com/dtdd/iphone-16-pro', 'tgdd', 'iphone-16-pro'],
+        [
+          '//www.dienmayxanh.com/dtdd/iphone-16-pro',
+          'tgdd',
+          'iphone-16-pro',
+          'https://www.dienmayxanh.com/dtdd/iphone-16-pro',
+        ],
         ['fptshop.com.vn/dien-thoai/iphone-16-pro', 'fptshop', 'iphone-16-pro'],
         ['cellphones.com.vn/iphone-16-pro.html', 'cellphones', 'iphone-16-pro'],
+        [
+          'hoanghamobile.com/dien-thoai/iphone-16-pro',
+          'hoangha',
+          'iphone-16-pro',
+        ],
+        [
+          'didongviet.vn/dien-thoai/iphone-16-pro.html',
+          'didongviet',
+          'iphone-16-pro',
+        ],
+        [
+          'phongvu.vn/apple-iphone-16-pro--s2502001',
+          'phongvu',
+          'apple-iphone-16-pro--s2502001',
+        ],
       ];
-      for (const [bareUrl, expectedPlatform, expectedId] of bareCases) {
+      for (const [
+        bareUrl,
+        expectedPlatform,
+        expectedId,
+        expectedCanonical,
+      ] of bareCases) {
         const res = await callQuick(bareUrl);
         assert.equal(res.ok, true);
+        const expectedHref = expectedCanonical ?? `https://${bareUrl}`;
         const lastUrl = new URL(fetchedUrls.at(-1)!);
         assert.equal(lastUrl.searchParams.get('platform'), expectedPlatform);
-        assert.equal(lastUrl.searchParams.get('url'), `https://${bareUrl}`);
+        assert.equal(lastUrl.searchParams.get('url'), expectedHref);
         assert.equal(lastUrl.searchParams.get('externalId'), expectedId);
         assert.deepEqual(sessionStore.get('lookup_tab_latest'), res.data);
         assert.equal(
@@ -8318,7 +8449,32 @@ async function runTests() {
               signal: { canonicalUrl: string };
             }
           ).signal.canonicalUrl,
-          `https://${bareUrl}`
+          expectedHref
+        );
+      }
+      for (const lookalikeBare of [
+        'eviltopzone.vn/iphone/iphone-16-pro',
+        'evildienmayxanh.com/dtdd/iphone-16-pro',
+        'evilthegioididong.com/dtdd/iphone-16-pro',
+        'topzone.vn.evil.com/iphone/iphone-16-pro',
+      ]) {
+        const lookalikeRes = await callQuick(lookalikeBare);
+        assert.equal(lookalikeRes.ok, true);
+        const lookalikeUrl = new URL(fetchedUrls.at(-1)!);
+        assert.equal(
+          lookalikeUrl.searchParams.get('url'),
+          null,
+          `lookalike bare query ${lookalikeBare} must not resolve as a URL`
+        );
+        assert.equal(lookalikeUrl.searchParams.get('platform'), null);
+        assert.equal(lookalikeUrl.searchParams.get('externalId'), null);
+        assert.equal(
+          (
+            sessionStore.get('tab_latest') as {
+              signal: { canonicalUrl: string };
+            }
+          ).signal.canonicalUrl,
+          ''
         );
       }
       const plainRes = await callQuick('iPhone 16 Pro Max');

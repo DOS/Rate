@@ -49,3 +49,60 @@ export function deviceImageSizesForHeight(
   const width = (h: number) => Math.round(h * found.rendition.aspect);
   return `(max-width: 767.98px) ${width(heights.phone)}px, ${width(heights.other)}px`;
 }
+
+/**
+ * The licence notice of a device photo Rate did not take itself and may show
+ * only with attribution (DOS/Rate#1756). Every photo in public/img/devices
+ * that is under such a licence has an entry here, keyed by its file name, and
+ * the product page prints it under the photo: the author, the source file
+ * page, the licence and the changes Rate made. A photo with no entry is shown
+ * without a notice, so a licensed photo is added together with its entry.
+ */
+export interface DeviceImageCredit {
+  /** The author as the source page names them. */
+  readonly author: string;
+  /** The BCP 47 language of the author's name, so screen readers say it right. */
+  readonly authorLang?: string;
+  /** The source file page (Wikimedia Commons), which carries the licence. */
+  readonly sourceUrl: string;
+  readonly license: 'CC BY-SA 4.0';
+  readonly licenseUrl: string;
+}
+
+// No credited photo yet: the iPhone 17e store photo was dropped in review
+// (DOS/Rate#1756). Add a photo together with its entry here and its row in
+// public/img/devices/CREDITS.md.
+export const DEVICE_IMAGE_CREDITS: Readonly<Record<string, DeviceImageCredit>> =
+  {};
+
+/** The licence notice of a local device photo, or null when it needs none. */
+export function deviceImageCredit(
+  src: string | null | undefined,
+  credits: Readonly<Record<string, DeviceImageCredit>> = DEVICE_IMAGE_CREDITS
+): DeviceImageCredit | null {
+  if (typeof src !== 'string') return null;
+  const slug = /^\/img\/devices\/([a-z0-9-]+)\.jpg$/.exec(src)?.[1];
+  return slug && Object.hasOwn(credits, slug) ? credits[slug]! : null;
+}
+
+/**
+ * A schema.org image for a product's JSON-LD: the absolute URL, or for a
+ * credited photo an ImageObject with its creator, credit and licence, so the
+ * notice travels with the image (DOS/Rate#1756).
+ */
+export function deviceImageJsonLd(
+  src: string,
+  absoluteSrc: string,
+  credits: Readonly<Record<string, DeviceImageCredit>> = DEVICE_IMAGE_CREDITS
+): string | Record<string, unknown> {
+  const credit = deviceImageCredit(src, credits);
+  if (!credit) return absoluteSrc;
+  return {
+    '@type': 'ImageObject',
+    contentUrl: absoluteSrc,
+    creator: { '@type': 'Person', name: credit.author },
+    creditText: `${credit.author}, Wikimedia Commons, ${credit.license}`,
+    license: credit.licenseUrl,
+    acquireLicensePage: credit.sourceUrl,
+  };
+}

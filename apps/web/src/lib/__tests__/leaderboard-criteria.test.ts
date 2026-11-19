@@ -1,45 +1,100 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import Module from 'node:module';
 import path from 'node:path';
-import { mock } from 'node:test';
+import { mock, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { NextIntlClientProvider, createTranslator } from 'next-intl';
+import {
+  AppRouterContext,
+  type AppRouterInstance,
+} from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import csMessages from '../../../locales/cs.json';
 import enMessages from '../../../locales/en.json';
 import viMessages from '../../../locales/vi.json';
-import {
+import CompareWorkspace, {
+  COMPARE_ITEM_LOOKUP_RETRY_MS,
   COMPARE_REPLACE_FOCUS_DELAY_MS,
+  MAX_COMPARE_ITEM_LOOKUP_ATTEMPTS,
+  applyCompareItemLookupOutcomes,
+  buildCompareMarkdownMinPriceRow,
+  buildCompareVersusSlugMap,
   cancelPendingCompareReplaceFocus,
   computeCompareHeadToHeadSummary,
   formatComparePriceVnd,
+  isSameCompareVersusItem,
+  isValidCompareVersusPair,
   nextCompareReplaceState,
+  parseCompareItemLookupAnswer,
   pickBestBattery,
   pickHighestMemory,
   pickLowestPrice,
+  planCompareItemLookupBatch,
   resolveCompareAddSlotAriaLabel,
+  resolveComparePopularBattles,
   resolveCompareReplaceButtonA11y,
+  sanitizeComparePriceVnd,
   scheduleCompareReplaceFocus,
   shouldDismissCompareOnOutsidePointerDown,
   syncCompareReplaceFocusState,
+  type CompareItemLookupFailure,
 } from '../../components/compare/CompareWorkspace';
-import DealFinderWorkspace from '../../components/deals/DealFinderWorkspace';
+import VersusInteractiveScoreboard, {
+  buildVersusMarkdownMinPriceRow,
+  formatVersusPriceVnd,
+  resolveVersusScoreMinPriceVnd,
+  sanitizeVersusPriceVnd,
+} from '../../components/compare/VersusInteractiveScoreboard';
+import DealFinderWorkspace, {
+  buildDealRadarCsvRows,
+  buildDealRadarMarkdown,
+  buildDealsMarkdown,
+  filterValidRadarDeals,
+  filterValidRadarSpreads,
+  formatDealRadarPriceVnd,
+  rankProductsForDealFinder,
+  resolveClaimedOriginalPriceVnd,
+  sanitizeDealFinderBudgetVnd,
+  sanitizeDealRadarPriceVnd,
+} from '../../components/deals/DealFinderWorkspace';
+import CategoryCatalogToolbar, {
+  buildCatalogCsvRow,
+  buildCatalogItemSlugMap,
+  sanitizeCatalogPriceVnd,
+} from '../../components/leaderboard/CategoryCatalogToolbar';
 import LeaderboardExplorer, {
+  buildLeaderboardCsvRow,
+  buildLeaderboardItemSlugMap,
+  buildLeaderboardMarkdownRow,
+  encodeLeaderboardCompareSlug,
   formatLeaderboardDisplayPriceVnd,
   formatLeaderboardPriceVnd,
   formatLeaderboardShowdownDelta,
+  isSameLeaderboardVersusItem,
   resolveLeaderboardActiveScoreLabel,
+  resolveLeaderboardCompareSlugs,
+  resolveLeaderboardEffectiveVersusSlugs,
+  sanitizeLeaderboardPriceVnd,
 } from '../../components/leaderboard/LeaderboardExplorer';
 import ProductOffersExplorer from '../../components/leaderboard/ProductOffersExplorer';
 import { pickClientMessages } from '../client-messages';
 import {
   EMPTY_RADAR_SIGNAL,
+  buildRadarIndex,
   radarLabel,
   radarMarkdownCell,
+  type CrossPlatformDealRadarItem,
+  type CrossPlatformDealRadarResponse,
+  type CrossPlatformPriceSpreadItem,
   type RadarSignal,
 } from '../deal-radar';
 import { discountVerdictCopy } from '../discount-verdict-copy';
+import { compareTarget, parseCompareToken, versusHref } from '../item-compare';
+import type { ItemCatalogRow } from '../item-directory';
+import { NBSP, formatNumber } from '../locale-format';
+import { MAX_VALID_VND_PRICE } from '../rate-domain';
 import {
   computeJReviewsCriteriaScores,
   computeProductStandingInCategory,
@@ -1137,6 +1192,1850 @@ assert.equal(
   );
   assert.match(compareSrc, /scheduleCompareReplaceFocus\(/);
   assert.match(compareSrc, /syncCompareReplaceFocusState\(/);
+}
+
+// DealFinder localized exports, unfabricated list prices, catalog CSV unpriced
+// cells, canonical Item versus slugs, and smartphone catalog icon a11y (#1745).
+{
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const webSrcDir = path.resolve(testDir, '../..');
+  const Provider = NextIntlClientProvider as React.ComponentType<{
+    locale: string;
+    messages: Record<string, unknown>;
+    timeZone: string;
+    children?: React.ReactNode;
+  }>;
+  const localeCatalogs = {
+    vi: viMessages,
+    en: enMessages,
+    cs: csMessages,
+  } as const;
+
+  // 1. Strict VND bounds reject <= 0, > MAX_VALID_VND_PRICE, 0x/0b/0o prefixes,
+  // and embedded \p{Cc} control chars across DealFinder and catalog helpers.
+  for (const invalidVnd of [
+    null,
+    undefined,
+    0,
+    -500_000,
+    MAX_VALID_VND_PRICE + 1,
+    '0x1000000',
+    '0b101000',
+    '0o777000',
+    '+0x10000',
+    '\u000025000000',
+    '25000\u0000000',
+    '25000000\n',
+    '\t19990000',
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+  ]) {
+    assert.equal(sanitizeDealRadarPriceVnd(invalidVnd), null);
+    assert.equal(formatDealRadarPriceVnd(invalidVnd, 'en'), '-');
+  }
+  assert.equal(sanitizeDealRadarPriceVnd(19_990_000), 19_990_000);
+  assert.equal(
+    sanitizeDealRadarPriceVnd(MAX_VALID_VND_PRICE),
+    MAX_VALID_VND_PRICE
+  );
+  assert.equal(sanitizeDealFinderBudgetVnd('0x1000000'), MAX_VALID_VND_PRICE);
+  assert.equal(
+    sanitizeDealFinderBudgetVnd('\u000025000000'),
+    MAX_VALID_VND_PRICE
+  );
+
+  // resolveClaimedOriginalPriceVnd never fabricates list prices from priceCurrent.
+  assert.equal(resolveClaimedOriginalPriceVnd(null, 15_990_000), null);
+  assert.equal(resolveClaimedOriginalPriceVnd(0, 15_990_000), null);
+  assert.equal(resolveClaimedOriginalPriceVnd(15_990_000, 15_990_000), null);
+  assert.equal(resolveClaimedOriginalPriceVnd(14_000_000, 15_990_000), null);
+  assert.equal(
+    resolveClaimedOriginalPriceVnd(MAX_VALID_VND_PRICE + 1, 15_990_000),
+    null
+  );
+  assert.equal(resolveClaimedOriginalPriceVnd('0x2000000', 15_990_000), null);
+  assert.equal(
+    resolveClaimedOriginalPriceVnd('20000\u0000000', 15_990_000),
+    null
+  );
+  assert.equal(resolveClaimedOriginalPriceVnd(21_990_000, 0), null);
+  assert.equal(
+    resolveClaimedOriginalPriceVnd(21_990_000, 15_990_000),
+    21_990_000
+  );
+
+  // 2. DealFinder radar filtering, UI, Markdown, and CSV across vi/en/cs.
+  const makeRadarOffer = (
+    overrides: Partial<CrossPlatformDealRadarItem>
+  ): CrossPlatformDealRadarItem => ({
+    id: 'offer-1',
+    verdict: 'genuine_all_time_low',
+    verdictBadgeVi: 'Day gia',
+    productSlug: 'iphone-16-256gb',
+    productName: 'iPhone 16 256GB',
+    brand: 'Apple',
+    categorySlug: 'smartphones',
+    productHref: '/smartphones/apple-iphone-16',
+    imageUrl: null,
+    platform: 'shopee',
+    merchantId: 'm-1',
+    merchantName: 'Apple Flagship',
+    isOfficialMall: true,
+    merchantRiskScore: 10,
+    offerUrl: 'https://shopee.vn/item-1',
+    priceCurrent: 18_990_000,
+    priceOriginal: null,
+    marketMedianPrice: 20_990_000,
+    marketMinPrice: 18_990_000,
+    marketMaxPrice: 22_990_000,
+    savingsVsMedianVnd: 2_000_000,
+    savingsVsMedianPct: 9.5,
+    marketOfferCount: 4,
+    claimedDiscountPct: 0,
+    fakeMarkupPct: 0,
+    jreviewsScore10: 9.1,
+    explanationVi: 'Verified',
+    ...overrides,
+  });
+
+  const makeSpreadItem = (
+    overrides: Partial<CrossPlatformPriceSpreadItem>
+  ): CrossPlatformPriceSpreadItem => ({
+    id: 'spread-1',
+    productSlug: 'iphone-16-256gb',
+    productName: 'iPhone 16 256GB',
+    brand: 'Apple',
+    categorySlug: 'smartphones',
+    productHref: '/smartphones/apple-iphone-16',
+    imageUrl: null,
+    platformCount: 3,
+    offerCount: 5,
+    minPrice: 18_990_000,
+    maxPrice: 22_990_000,
+    medianPrice: 20_990_000,
+    spreadVnd: 4_000_000,
+    spreadPct: 17.4,
+    cheapestPlatform: 'shopee',
+    cheapestMerchantName: 'Apple Flagship',
+    cheapestOfferUrl: 'https://shopee.vn/item-1',
+    priciestPlatform: 'lazada',
+    priciestMerchantName: 'Overpriced Shop',
+    explanationVi: 'Spread',
+    ...overrides,
+  });
+
+  const radarPayload1745: CrossPlatformDealRadarResponse = {
+    generatedAt: '2026-11-19T00:00:00.000Z',
+    categoryFilter: 'all',
+    totalClustersAnalyzed: 1250,
+    totalOffersAnalyzed: 4320,
+    totalMerchantsAnalyzed: 42,
+    genuineDeals: [
+      makeRadarOffer({
+        id: 'gen-valid',
+        priceCurrent: 18_990_000,
+        priceOriginal: null,
+      }),
+      makeRadarOffer({
+        id: 'gen-zero',
+        productName: 'Zero Price Ghost',
+        priceCurrent: 0,
+      }),
+      makeRadarOffer({
+        id: 'gen-over-cap',
+        productName: 'Billion Price Ghost',
+        priceCurrent: MAX_VALID_VND_PRICE + 500,
+      }),
+      makeRadarOffer({
+        id: 'gen-hex',
+        productName: 'Hex Price Ghost',
+        priceCurrent: '0x1000000' as unknown as number,
+      }),
+    ],
+    fakeSaleTraps: [
+      makeRadarOffer({
+        id: 'trap-no-orig',
+        verdict: 'inflated_fake_sale',
+        productName: 'No Orig Trap Phone',
+        platform: 'lazada',
+        merchantName: 'Trap Seller A',
+        priceCurrent: 24_990_000,
+        priceOriginal: null,
+        fakeMarkupPct: 19,
+      }),
+      makeRadarOffer({
+        id: 'trap-equal-orig',
+        verdict: 'inflated_fake_sale',
+        productName: 'Equal Orig Trap Phone',
+        platform: 'tiki',
+        merchantName: 'Trap Seller B',
+        priceCurrent: 23_500_000,
+        priceOriginal: 23_500_000,
+        fakeMarkupPct: 12,
+      }),
+      makeRadarOffer({
+        id: 'trap-valid-orig',
+        verdict: 'inflated_fake_sale',
+        productName: 'Inflated Orig Trap Phone',
+        platform: 'shopee',
+        merchantName: 'Trap Seller C',
+        priceCurrent: 22_490_000,
+        priceOriginal: 29_990_000,
+        fakeMarkupPct: 33.3,
+      }),
+      makeRadarOffer({
+        id: 'trap-ctrl-price',
+        verdict: 'inflated_fake_sale',
+        productName: 'Control Char Trap Ghost',
+        priceCurrent: '19990000\u0000' as unknown as number,
+        priceOriginal: 25_000_000,
+        fakeMarkupPct: 25,
+      }),
+    ],
+    priceSpreadLeaders: [
+      makeSpreadItem({ id: 'spread-valid' }),
+      makeSpreadItem({
+        id: 'spread-invalid',
+        productName: 'Invalid Spread Ghost',
+        spreadVnd: 0,
+      }),
+    ],
+  };
+
+  const validGen1745 = filterValidRadarDeals(
+    radarPayload1745.genuineDeals,
+    'all'
+  );
+  const validTraps1745 = filterValidRadarDeals(
+    radarPayload1745.fakeSaleTraps,
+    'all'
+  );
+  const validSpreads1745 = filterValidRadarSpreads(
+    radarPayload1745.priceSpreadLeaders,
+    'all'
+  );
+  assert.equal(validGen1745.length, 1);
+  assert.equal(validTraps1745.length, 3);
+  assert.equal(validTraps1745[0]?.priceOriginal, null);
+  assert.equal(validTraps1745[1]?.priceOriginal, null);
+  assert.equal(validTraps1745[2]?.priceOriginal, 29_990_000);
+  assert.equal(validSpreads1745.length, 1);
+
+  const csvRows1745 = buildDealRadarCsvRows(
+    validGen1745,
+    validTraps1745,
+    validSpreads1745
+  );
+  // Genuine deal with null priceOriginal emits '' in Claimed Original Price (index 8)
+  assert.equal(csvRows1745[0]?.[7], 18_990_000);
+  assert.equal(csvRows1745[0]?.[8], '');
+  // Traps with null / <= priceCurrent priceOriginal emit '' instead of fabricating priceCurrent
+  assert.equal(csvRows1745[1]?.[7], 24_990_000);
+  assert.equal(csvRows1745[1]?.[8], '');
+  assert.equal(csvRows1745[2]?.[7], 23_500_000);
+  assert.equal(csvRows1745[2]?.[8], '');
+  // Trap with valid priceOriginal > priceCurrent preserves 29_990_000
+  assert.equal(csvRows1745[3]?.[7], 22_490_000);
+  assert.equal(csvRows1745[3]?.[8], 29_990_000);
+
+  const dealProduct1745: MasterProduct = {
+    ...phone('iphone-16-256gb', 4.6, { value: 9.2 }),
+    name: 'iPhone 16 256GB',
+    brand: 'Apple',
+    min_price: 18_990_000,
+    max_price: 22_990_000,
+    expert_rating: 9.1,
+    expert_criteria_scores: { value: 9.2 },
+  } as unknown as MasterProduct;
+  const ranked1745 = rankProductsForDealFinder([dealProduct1745], {
+    categoryFilter: 'all',
+    persona: 'value_hunter',
+    maxBudgetVnd: 65_000_000,
+    searchQuery: '',
+  });
+  const radarIndex1745 = buildRadarIndex(radarPayload1745);
+
+  for (const locale of ['vi', 'en', 'cs'] as const) {
+    const fullMessages = localeCatalogs[locale];
+    const tDeals = createTranslator({
+      locale,
+      messages: fullMessages,
+      namespace: 'deals',
+    });
+
+    const radarMd = buildDealRadarMarkdown({
+      t: tDeals,
+      locale,
+      categoryLabel: fullMessages.deals.catAll,
+      totalClustersAnalyzed: radarPayload1745.totalClustersAnalyzed,
+      totalOffersAnalyzed: radarPayload1745.totalOffersAnalyzed,
+      genuineDeals: validGen1745,
+      fakeSaleTraps: validTraps1745,
+      priceSpreadLeaders: validSpreads1745,
+    });
+    assert.ok(
+      radarMd.includes(fullMessages.deals.catAll),
+      `${locale}: radar Markdown includes localized category label`
+    );
+    assert.doesNotMatch(
+      radarMd,
+      /\*\*Category:\*\* all\b|\*\*Ngành hàng:\*\* all\b|\*\*Kategorie:\*\* all\b/,
+      `${locale}: radar Markdown must not emit raw categoryFilter slug`
+    );
+    assert.ok(
+      radarMd.includes(formatNumber(18_990_000, locale)),
+      `${locale}: radar Markdown formats numbers via formatNumber(..., locale)`
+    );
+    // Traps without valid > priceCurrent original price emit '-' in column 4
+    assert.match(
+      radarMd,
+      new RegExp(
+        `No Orig Trap Phone \\| LAZADA \\(Trap Seller A\\) \\| ${formatNumber(24_990_000, locale).replace(/\s/g, '\\s')} ₫ \\| - \\|`
+      ),
+      `${locale}: missing priceOriginal emits '-' instead of fabricating priceCurrent`
+    );
+    assert.match(
+      radarMd,
+      new RegExp(
+        `Equal Orig Trap Phone \\| TIKI \\(Trap Seller B\\) \\| ${formatNumber(23_500_000, locale).replace(/\s/g, '\\s')} ₫ \\| - \\|`
+      ),
+      `${locale}: priceOriginal <= priceCurrent emits '-'`
+    );
+    assert.ok(
+      radarMd.includes(`${formatNumber(29_990_000, locale)} ₫`),
+      `${locale}: valid priceOriginal > priceCurrent renders formatted VND`
+    );
+
+    const dealsMd = buildDealsMarkdown({
+      t: tDeals,
+      locale,
+      persona: 'value_hunter',
+      personaLabel: fullMessages.deals.personaValueHunter,
+      maxBudgetVnd: 65_000_000,
+      url: 'https://rate.vn/deals',
+      rankedDeals: ranked1745,
+      radarIndex: radarIndex1745,
+    });
+    assert.ok(
+      dealsMd.includes(fullMessages.deals.personaValueHunter),
+      `${locale}: deals Markdown includes localized persona label`
+    );
+    assert.ok(
+      !dealsMd.includes('value_hunter'),
+      `${locale}: deals Markdown must not emit raw value_hunter key`
+    );
+    assert.ok(
+      dealsMd.includes(formatNumber(65_000_000, locale)),
+      `${locale}: deals Markdown formats budget via formatNumber(..., locale)`
+    );
+    assert.ok(
+      dealsMd.includes(formatNumber(18_990_000, locale)),
+      `${locale}: deals Markdown formats minPrice via formatNumber(..., locale)`
+    );
+
+    const dealFinderHtml = renderToStaticMarkup(
+      React.createElement(
+        Provider,
+        {
+          locale,
+          messages: pickClientMessages(
+            fullMessages as unknown as Record<string, unknown>,
+            'deals'
+          ),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(DealFinderWorkspace, {
+          products: [dealProduct1745],
+          dealRadar: radarPayload1745,
+        })
+      )
+    );
+    // Exactly one <s> strikethrough (only for trap-valid-orig, never for trap-no-orig or trap-equal-orig)
+    const strikeMatches = [...dealFinderHtml.matchAll(/<s>(.*?)<\/s>/g)];
+    assert.equal(
+      strikeMatches.length,
+      1,
+      `${locale}: UI renders <s> only when priceOriginal is finite, > priceCurrent, and <= MAX_VALID_VND_PRICE`
+    );
+    assert.ok(
+      strikeMatches[0]?.[1]?.includes(
+        locale === 'cs' ? '29\u00a0990\u00a0000' : '29.990.000'
+      ),
+      `${locale}: single <s> shows 29,990,000 VND`
+    );
+    assert.ok(!dealFinderHtml.includes('Zero Price Ghost'));
+    assert.ok(!dealFinderHtml.includes('Billion Price Ghost'));
+    assert.ok(!dealFinderHtml.includes('Hex Price Ghost'));
+    assert.ok(!dealFinderHtml.includes('Control Char Trap Ghost'));
+    assert.ok(!dealFinderHtml.includes('Invalid Spread Ghost'));
+  }
+
+  // 3. CategoryCatalogToolbar CSV unpriced cells & sanitizeCatalogPriceVnd compatibility.
+  assert.equal(sanitizeCatalogPriceVnd(-500_000), 0);
+  assert.equal(sanitizeCatalogPriceVnd(0), 0);
+  assert.equal(sanitizeCatalogPriceVnd(MAX_VALID_VND_PRICE + 1), 0);
+  assert.equal(sanitizeCatalogPriceVnd('0x100000'), 0);
+  assert.equal(sanitizeCatalogPriceVnd('\u0000100000'), 0);
+  assert.equal(sanitizeCatalogPriceVnd(19_990_000.6), 19_990_001);
+
+  const soldOutCatalogRow: ItemCatalogRow = {
+    ...phone('sold-out-phone-256gb', 4.4),
+    min_price: 0,
+    max_price: null,
+    merchant_count: 0,
+    item_slug: 'sold-out-phone',
+  } as unknown as ItemCatalogRow;
+  const pricedCatalogRow: ItemCatalogRow = {
+    ...phone('samsung-galaxy-s24-256gb', 4.7),
+    min_price: 18_990_000,
+    max_price: 21_490_000,
+    merchant_count: 4,
+    item_slug: 'samsung-galaxy-s24',
+  } as unknown as ItemCatalogRow;
+  const secondItemRow: ItemCatalogRow = {
+    ...phone('apple-iphone-16-256gb', 4.8),
+    min_price: 21_990_000,
+    max_price: 24_990_000,
+    merchant_count: 5,
+    item_slug: 'apple-iphone-16',
+  } as unknown as ItemCatalogRow;
+
+  const soldOutCsvCells = buildCatalogCsvRow(
+    soldOutCatalogRow,
+    1,
+    'smartphones',
+    EMPTY_RADAR_SIGNAL
+  );
+  assert.equal(
+    soldOutCsvCells[9],
+    '',
+    'unpriced MinPriceVND CSV cell must be empty string instead of "0"'
+  );
+  assert.equal(
+    soldOutCsvCells[10],
+    '',
+    'unpriced MaxPriceVND CSV cell must be empty string instead of "0"'
+  );
+
+  const pricedCsvCells = buildCatalogCsvRow(
+    pricedCatalogRow,
+    2,
+    'smartphones',
+    EMPTY_RADAR_SIGNAL
+  );
+  assert.equal(pricedCsvCells[9], '18990000');
+  assert.equal(pricedCsvCells[10], '21490000');
+
+  // 4. Canonical Item slugs in CategoryCatalogToolbar versusHref and smartphones/page.tsx.
+  const toolbarItemMap = buildCatalogItemSlugMap([
+    pricedCatalogRow,
+    secondItemRow,
+  ]);
+  assert.deepEqual(toolbarItemMap, {
+    'samsung-galaxy-s24-256gb': 'samsung-galaxy-s24',
+    'apple-iphone-16-256gb': 'apple-iphone-16',
+  });
+  assert.equal(
+    versusHref(pricedCatalogRow.slug, secondItemRow.slug, toolbarItemMap),
+    '/compare/apple-iphone-16-vs-samsung-galaxy-s24'
+  );
+  // Item slug containing '-vs-' falls back to variant slug in versusHref
+  assert.equal(
+    versusHref('weird-a-256gb', 'apple-iphone-16-256gb', {
+      'weird-a-256gb': 'weird-a-vs-b',
+      'apple-iphone-16-256gb': 'apple-iphone-16',
+    }),
+    '/compare/apple-iphone-16-vs-weird-a-256gb'
+  );
+
+  test('smartphones/page.tsx Item slug and radar VND helpers (#1745)', async () => {
+    const extMap = (
+      Module as unknown as {
+        _extensions?: Record<string, (mod: { exports: unknown }) => void>;
+      }
+    )._extensions;
+    if (extMap && !extMap['.css']) {
+      extMap['.css'] = (mod) => {
+        mod.exports = { bar: 'bar' };
+      };
+    }
+    const {
+      buildCatalogPageItemSlugMap,
+      buildCatalogQuickCompareHref,
+      buildCatalogQuickCompareSlugs,
+      formatCatalogRadarPriceVnd,
+      sanitizeCatalogRadarPriceVnd,
+    } = await import('../../app/[locale]/smartphones/page');
+
+    for (const invalidVnd of [
+      null,
+      undefined,
+      0,
+      -500_000,
+      MAX_VALID_VND_PRICE + 1,
+      '0x1000000',
+      '0b101000',
+      '0o777000',
+      '\u000025000000',
+      '25000\u0000000',
+      '25000000\n',
+    ]) {
+      assert.equal(sanitizeCatalogRadarPriceVnd(invalidVnd), null);
+      assert.equal(formatCatalogRadarPriceVnd(invalidVnd, 'en'), '-');
+    }
+    assert.equal(sanitizeCatalogRadarPriceVnd(' 24990000 '), 24_990_000);
+
+    const pageItemMap = buildCatalogPageItemSlugMap([
+      pricedCatalogRow,
+      secondItemRow,
+      { slug: 'plain-variant-only' },
+    ]);
+    assert.deepEqual(pageItemMap, {
+      'samsung-galaxy-s24-256gb': 'samsung-galaxy-s24',
+      'apple-iphone-16-256gb': 'apple-iphone-16',
+    });
+    assert.deepEqual(
+      buildCatalogQuickCompareSlugs([
+        secondItemRow,
+        { slug: 'apple-iphone-16-512gb', item_slug: 'apple-iphone-16' },
+        pricedCatalogRow,
+        soldOutCatalogRow,
+      ]),
+      ['apple-iphone-16', 'samsung-galaxy-s24', 'sold-out-phone']
+    );
+    assert.equal(
+      buildCatalogQuickCompareHref('smartphones', [
+        secondItemRow,
+        pricedCatalogRow,
+        soldOutCatalogRow,
+      ]),
+      '/compare?cat=smartphones&slugs=apple-iphone-16,samsung-galaxy-s24,sold-out-phone'
+    );
+
+    // Multi-variant Item cards (e.g. ?storage=512) pin item_slug@variant_key
+    // so /compare keeps the displayed 512GB variant instead of default 128GB.
+    const iphone512Row = {
+      id: 'v512',
+      slug: 'apple-iphone-16-512gb',
+      item_slug: 'apple-iphone-16',
+      item_variants: [
+        {
+          id: 'v128',
+          variant_key: '128gb',
+          storage_gb: 128,
+          min_price: 19_990_000,
+        },
+        {
+          id: 'v512',
+          variant_key: '512gb',
+          storage_gb: 512,
+          min_price: 25_990_000,
+        },
+      ],
+    };
+    const galaxy512Row = {
+      id: 's512',
+      slug: 'samsung-galaxy-s24-512gb',
+      item_slug: 'samsung-galaxy-s24',
+      item_variants: [
+        {
+          id: 's256',
+          variant_key: '256gb',
+          storage_gb: 256,
+          min_price: 18_990_000,
+        },
+        {
+          id: 's512',
+          variant_key: '512gb',
+          storage_gb: 512,
+          min_price: 22_490_000,
+        },
+      ],
+    };
+    const pinnedHref = buildCatalogQuickCompareHref('smartphones', [
+      iphone512Row,
+      { ...iphone512Row, id: 'v128', slug: 'apple-iphone-16-128gb' },
+      galaxy512Row,
+    ]);
+    assert.equal(
+      pinnedHref,
+      '/compare?cat=smartphones&slugs=apple-iphone-16@512gb,samsung-galaxy-s24@512gb'
+    );
+    const firstToken =
+      new URL(pinnedHref, 'https://rate.vn').searchParams
+        .get('slugs')
+        ?.split(',')[0] ?? '';
+    assert.equal(
+      compareTarget(
+        {
+          kind: 'item',
+          item: {
+            id: 'item-iphone-16',
+            slug: 'apple-iphone-16',
+            default_variant_id: 'v128',
+          },
+          variants: [
+            { id: 'v128', slug: 'apple-iphone-16-128gb', variant_key: '128gb' },
+            { id: 'v512', slug: 'apple-iphone-16-512gb', variant_key: '512gb' },
+          ],
+        },
+        parseCompareToken(firstToken)
+      )?.variantSlug,
+      'apple-iphone-16-512gb'
+    );
+  });
+
+  const toolbarHtml = renderToStaticMarkup(
+    React.createElement(
+      Provider,
+      {
+        locale: 'en',
+        messages: pickClientMessages(
+          enMessages as unknown as Record<string, unknown>,
+          'catalog'
+        ),
+        timeZone: 'Asia/Ho_Chi_Minh',
+      },
+      React.createElement(CategoryCatalogToolbar, {
+        categorySlug: 'smartphones',
+        categoryTitle: 'Smartphones',
+        products: [pricedCatalogRow, secondItemRow],
+      })
+    )
+  );
+  assert.match(
+    toolbarHtml,
+    /href="\/en\/compare\/apple-iphone-16-vs-samsung-galaxy-s24"|href="\/compare\/apple-iphone-16-vs-samsung-galaxy-s24"/,
+    'CategoryCatalogToolbar 1v1 Go button links directly to canonical Item slugs'
+  );
+
+  const sameItemToolbarHtml = renderToStaticMarkup(
+    React.createElement(
+      Provider,
+      {
+        locale: 'en',
+        messages: pickClientMessages(
+          enMessages as unknown as Record<string, unknown>,
+          'catalog'
+        ),
+        timeZone: 'Asia/Ho_Chi_Minh',
+      },
+      React.createElement(CategoryCatalogToolbar, {
+        categorySlug: 'smartphones',
+        categoryTitle: 'Smartphones',
+        products: [
+          secondItemRow,
+          { ...secondItemRow, slug: 'apple-iphone-16-512gb' },
+        ],
+      })
+    )
+  );
+  assert.doesNotMatch(
+    sameItemToolbarHtml,
+    /<select\b/,
+    'CategoryCatalogToolbar hides 1v1 picker instead of rendering an empty <select> when all rows share one Item'
+  );
+  assert.match(
+    sameItemToolbarHtml,
+    /data-testid="download-catalog-csv-btn"/,
+    'CategoryCatalogToolbar still renders export menu when all rows share one Item'
+  );
+
+  // 5. Source-level guards for DealFinderWorkspace.tsx and smartphones/page.tsx (#1745).
+  const dealFinderSrc1745 = fs.readFileSync(
+    path.join(webSrcDir, 'components/deals/DealFinderWorkspace.tsx'),
+    'utf8'
+  );
+  assert.doesNotMatch(
+    dealFinderSrc1745,
+    /toLocaleString\('vi-VN'\)/,
+    'DealFinderWorkspace must use formatNumber(..., locale) instead of hardcoded vi-VN toLocaleString'
+  );
+  assert.doesNotMatch(
+    dealFinderSrc1745,
+    /priceOriginal\s*\|\|\s*\w+\.priceCurrent|priceOriginal\s*\?\?\s*\w+\.priceCurrent/,
+    'DealFinderWorkspace must never fabricate claimed list prices from priceCurrent'
+  );
+
+  const smartphonesPageSrc = fs.readFileSync(
+    path.join(webSrcDir, 'app/[locale]/smartphones/page.tsx'),
+    'utf8'
+  );
+  const bsIconTags = [...smartphonesPageSrc.matchAll(/<Bs[A-Z]\w*[^>]*>/g)].map(
+    (m) => m[0]
+  );
+  assert.ok(
+    bsIconTags.length >= 11,
+    'smartphones/page.tsx decorative Bs* icons matched'
+  );
+  for (const tag of bsIconTags) {
+    assert.match(
+      tag,
+      /\baria-hidden="true"/,
+      `Decorative icon ${tag} in smartphones/page.tsx must carry aria-hidden="true"`
+    );
+  }
+
+  // DOS/Rate#1764: canonical Item slugs across /leaderboard and /compare/[versus],
+  // same-Item 404 guards in VersusMatchupSwitcher & CompareWorkspace, localized
+  // Markdown VND exports, empty unpriced CSV cells, strict price sanitizers,
+  // and decorative Bs* icon a11y in LeaderboardExplorer.tsx.
+  {
+    const thirdItemRow: ItemCatalogRow = {
+      ...phone('xiaomi-14-ultra-512gb', 4.6),
+      min_price: 23_990_000,
+      max_price: 26_990_000,
+      merchant_count: 3,
+      item_slug: 'xiaomi-14-ultra',
+    } as unknown as ItemCatalogRow;
+
+    const leaderboardItemMap = buildLeaderboardItemSlugMap([
+      secondItemRow,
+      pricedCatalogRow,
+      soldOutCatalogRow,
+    ]);
+    assert.deepEqual(
+      { ...leaderboardItemMap },
+      {
+        'apple-iphone-16-256gb': 'apple-iphone-16',
+        'samsung-galaxy-s24-256gb': 'samsung-galaxy-s24',
+        'sold-out-phone-256gb': 'sold-out-phone',
+      }
+    );
+
+    assert.deepEqual(
+      resolveLeaderboardCompareSlugs(
+        [
+          { product: secondItemRow },
+          {
+            product: {
+              slug: 'apple-iphone-16-512gb',
+              item_slug: 'apple-iphone-16',
+            },
+          },
+          { product: pricedCatalogRow },
+          { product: soldOutCatalogRow },
+        ],
+        leaderboardItemMap,
+        3
+      ),
+      ['apple-iphone-16', 'samsung-galaxy-s24', 'sold-out-phone']
+    );
+
+    // Multi-variant leaderboard Item rows preserve the represented variant via
+    // item_slug@variant_key while deduplicating by canonical Item slug.
+    const multiVariantIphone256: ItemCatalogRow = {
+      ...secondItemRow,
+      id: 'v256',
+      slug: 'apple-iphone-16-256gb',
+      item_slug: 'apple-iphone-16',
+      item_variants: [
+        {
+          id: 'v256',
+          variant_key: '256gb',
+          storage_gb: 256,
+          min_price: 21_990_000,
+        },
+        {
+          id: 'v512',
+          variant_key: '512gb',
+          storage_gb: 512,
+          min_price: 25_990_000,
+        },
+      ],
+    };
+    const multiVariantGalaxy512: ItemCatalogRow = {
+      ...pricedCatalogRow,
+      id: 's512',
+      slug: 'samsung-galaxy-s24-512gb',
+      item_slug: 'samsung-galaxy-s24',
+      item_variants: [
+        {
+          id: 's256',
+          variant_key: '256gb',
+          storage_gb: 256,
+          min_price: 18_990_000,
+        },
+        {
+          id: 's512',
+          variant_key: '512gb',
+          storage_gb: 512,
+          min_price: 22_490_000,
+        },
+      ],
+    };
+    const pinnedLeaderboardTokens = resolveLeaderboardCompareSlugs(
+      [
+        { product: multiVariantIphone256 },
+        {
+          product: {
+            ...multiVariantIphone256,
+            id: 'v512',
+            slug: 'apple-iphone-16-512gb',
+          },
+        },
+        { product: multiVariantGalaxy512 },
+        {
+          product: {
+            id: 'x256',
+            slug: 'xiaomi-14-ultra-256gb',
+            item_slug: 'xiaomi-14-ultra',
+            variant_key: '256gb',
+            variant_count: 2,
+            default_variant_id: 'x512',
+          },
+        },
+      ],
+      undefined,
+      3
+    );
+    assert.deepEqual(pinnedLeaderboardTokens, [
+      'apple-iphone-16@256gb',
+      'samsung-galaxy-s24@512gb',
+      'xiaomi-14-ultra@256gb',
+    ]);
+    assert.equal(
+      encodeLeaderboardCompareSlug('apple-iphone-16@256gb'),
+      'apple-iphone-16@256gb'
+    );
+    assert.equal(
+      compareTarget(
+        {
+          kind: 'item',
+          item: {
+            id: 'item-iphone-16',
+            slug: 'apple-iphone-16',
+            default_variant_id: 'v512',
+          },
+          variants: [
+            { id: 'v256', slug: 'apple-iphone-16-256gb', variant_key: '256gb' },
+            { id: 'v512', slug: 'apple-iphone-16-512gb', variant_key: '512gb' },
+          ],
+        },
+        parseCompareToken(pinnedLeaderboardTokens[0]!)
+      )?.variantSlug,
+      'apple-iphone-16-256gb'
+    );
+    assert.deepEqual(
+      resolveLeaderboardCompareSlugs([
+        {
+          product: {
+            id: 'x512',
+            slug: 'xiaomi-14-ultra-512gb',
+            item_slug: 'xiaomi-14-ultra',
+            variant_key: '512gb',
+            variant_count: 2,
+            default_variant_id: 'x512',
+          },
+        },
+      ]),
+      ['xiaomi-14-ultra']
+    );
+
+    // Guard effectiveVersusB against matching effectiveVersusA's resolved Item side slug.
+    const samePhoneVariantEntries = [
+      {
+        product: {
+          slug: 'apple-iphone-16-128gb',
+          item_slug: 'apple-iphone-16',
+        },
+      },
+      {
+        product: {
+          slug: 'apple-iphone-16-256gb',
+          item_slug: 'apple-iphone-16',
+        },
+      },
+      {
+        product: {
+          slug: 'samsung-galaxy-s24-256gb',
+          item_slug: 'samsung-galaxy-s24',
+        },
+      },
+    ];
+    const variantLeaderboardMap = buildLeaderboardItemSlugMap(
+      samePhoneVariantEntries.map((e) => e.product as ItemCatalogRow)
+    );
+    assert.equal(
+      isSameLeaderboardVersusItem(
+        'apple-iphone-16-128gb',
+        'apple-iphone-16-256gb',
+        variantLeaderboardMap
+      ),
+      true
+    );
+    assert.deepEqual(
+      resolveLeaderboardEffectiveVersusSlugs(
+        samePhoneVariantEntries,
+        'apple-iphone-16-128gb',
+        'apple-iphone-16-256gb',
+        variantLeaderboardMap
+      ),
+      {
+        effectiveVersusA: 'apple-iphone-16-128gb',
+        effectiveVersusB: 'samsung-galaxy-s24-256gb',
+      }
+    );
+    assert.deepEqual(
+      resolveLeaderboardEffectiveVersusSlugs(
+        samePhoneVariantEntries.slice(0, 2),
+        'apple-iphone-16-128gb',
+        'apple-iphone-16-256gb',
+        variantLeaderboardMap
+      ),
+      {
+        effectiveVersusA: 'apple-iphone-16-128gb',
+        effectiveVersusB: '',
+      }
+    );
+
+    const leaderboardHtml = renderToStaticMarkup(
+      React.createElement(
+        Provider,
+        {
+          locale: 'en',
+          messages: pickClientMessages(
+            enMessages as unknown as Record<string, unknown>,
+            'leaderboard'
+          ),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(LeaderboardExplorer, {
+          products: [secondItemRow, pricedCatalogRow, soldOutCatalogRow],
+          locale: 'en',
+        })
+      )
+    );
+    assert.match(
+      leaderboardHtml,
+      /href="(?:\/en)?\/compare\?cat=smartphones&amp;slugs=apple-iphone-16,samsung-galaxy-s24,sold-out-phone"/,
+      'LeaderboardExplorer Compare Top 3 CTA must use canonical Item slugs'
+    );
+
+    const pinnedLeaderboardHtml = renderToStaticMarkup(
+      React.createElement(
+        Provider,
+        {
+          locale: 'en',
+          messages: pickClientMessages(
+            enMessages as unknown as Record<string, unknown>,
+            'leaderboard'
+          ),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(LeaderboardExplorer, {
+          products: [
+            multiVariantIphone256,
+            multiVariantGalaxy512,
+            soldOutCatalogRow,
+          ],
+          locale: 'en',
+        })
+      )
+    );
+    assert.match(
+      pinnedLeaderboardHtml,
+      /href="(?:\/en)?\/compare\?cat=smartphones&amp;slugs=apple-iphone-16@256gb,samsung-galaxy-s24@512gb,sold-out-phone"/,
+      'LeaderboardExplorer Compare Top 3 CTA preserves non-default multi-variant pins'
+    );
+    assert.match(
+      pinnedLeaderboardHtml,
+      /href="(?:\/en)?\/compare\?category=smartphones&amp;slugs=apple-iphone-16@256gb,samsung-galaxy-s24@512gb"/,
+      'LeaderboardExplorer Open Compare Matrix CTA preserves non-default multi-variant pins'
+    );
+    assert.match(
+      leaderboardHtml,
+      /href="(?:\/en)?\/compare\?category=smartphones&amp;slugs=apple-iphone-16,samsung-galaxy-s24"/,
+      'LeaderboardExplorer Showdowns Compare Matrix CTA must use canonical Item slugs'
+    );
+    assert.match(
+      leaderboardHtml,
+      /href="(?:\/en)?\/compare\/apple-iphone-16-vs-samsung-galaxy-s24"[^>]*data-testid="leaderboard-1v1-go-btn"|data-testid="leaderboard-1v1-go-btn"[^>]*href="(?:\/en)?\/compare\/apple-iphone-16-vs-samsung-galaxy-s24"/,
+      'LeaderboardExplorer 1v1 Go button must link to canonical Item slugs'
+    );
+    assert.match(
+      leaderboardHtml,
+      /href="(?:\/en)?\/compare\/apple-iphone-16-vs-sold-out-phone"/,
+      'LeaderboardExplorer Top 1v1 Showdown cards must link to canonical Item slugs'
+    );
+    assert.match(
+      leaderboardHtml,
+      /href="(?:\/en)?\/compare\/samsung-galaxy-s24-vs-sold-out-phone"/,
+      'LeaderboardExplorer #2 vs #3 Showdown card must link to canonical Item slugs'
+    );
+    assert.doesNotMatch(
+      leaderboardHtml,
+      /\/compare\/[^"]*256gb/,
+      'LeaderboardExplorer versus links must never emit variant slugs when item_slug is present'
+    );
+
+    // Same-Item only rows hide the 1v1 picker and Showdowns section instead of rendering a 404 link.
+    const sameItemLeaderboardHtml = renderToStaticMarkup(
+      React.createElement(
+        Provider,
+        {
+          locale: 'en',
+          messages: pickClientMessages(
+            enMessages as unknown as Record<string, unknown>,
+            'leaderboard'
+          ),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(LeaderboardExplorer, {
+          products: [
+            secondItemRow,
+            {
+              ...secondItemRow,
+              id: 'id-iphone-16-512',
+              slug: 'apple-iphone-16-512gb',
+            },
+          ],
+          locale: 'en',
+        })
+      )
+    );
+    assert.doesNotMatch(
+      sameItemLeaderboardHtml,
+      /data-testid="leaderboard-1v1-go-btn"/,
+      'LeaderboardExplorer hides 1v1 Go button when all entries belong to the same Item'
+    );
+    assert.doesNotMatch(
+      sameItemLeaderboardHtml,
+      /apple-iphone-16-vs-apple-iphone-16/,
+      'LeaderboardExplorer never renders a same-Item 404 versus link'
+    );
+
+    // Leaderboard CSV MinPriceVND emits "" on unpriced rows and integer string on priced rows.
+    const unpricedLeaderboardCsv = buildLeaderboardCsvRow(
+      {
+        product: soldOutCatalogRow,
+        categorySlug: 'smartphones',
+        activeScore5: 4.4,
+        userScore5: 4.4,
+        expertScore10: null,
+        criteria: NONE,
+      },
+      1,
+      1,
+      EMPTY_RADAR_SIGNAL
+    );
+    assert.equal(
+      unpricedLeaderboardCsv[13],
+      '',
+      'LeaderboardExplorer unpriced MinPriceVND CSV cell must be "" instead of "0"'
+    );
+    const pricedLeaderboardCsv = buildLeaderboardCsvRow(
+      {
+        product: pricedCatalogRow,
+        categorySlug: 'smartphones',
+        activeScore5: 4.7,
+        userScore5: 4.7,
+        expertScore10: 8.6,
+        criteria: NONE,
+      },
+      2,
+      1,
+      EMPTY_RADAR_SIGNAL
+    );
+    assert.equal(pricedLeaderboardCsv[13], '18990000');
+
+    // Localized VND in Markdown exports across LeaderboardExplorer, VersusInteractiveScoreboard, and CompareWorkspace.
+    const csLeaderboardMdRow = buildLeaderboardMarkdownRow(
+      {
+        product: pricedCatalogRow,
+        activeScore5: 4.7,
+        userScore5: 4.7,
+        expertScore10: 8.6,
+      },
+      1,
+      1,
+      'N/A',
+      EMPTY_RADAR_SIGNAL,
+      'cs'
+    );
+    assert.equal(
+      csLeaderboardMdRow[6],
+      `18${NBSP}990${NBSP}000${NBSP}₫`,
+      'LeaderboardExplorer Czech Markdown export must format VND with non-breaking spaces'
+    );
+    const unpricedCsLeaderboardMdRow = buildLeaderboardMarkdownRow(
+      {
+        product: soldOutCatalogRow,
+        activeScore5: 4.4,
+        userScore5: 4.4,
+        expertScore10: null,
+      },
+      2,
+      1,
+      'N/A',
+      EMPTY_RADAR_SIGNAL,
+      'cs'
+    );
+    assert.equal(unpricedCsLeaderboardMdRow[6], '-');
+
+    assert.equal(
+      buildVersusMarkdownMinPriceRow(
+        'Nejnižší cena',
+        18_990_000,
+        0,
+        'Samsung Galaxy S24',
+        'cs'
+      ),
+      `| **Nejnižší cena** | 18${NBSP}990${NBSP}000${NBSP}₫ | - | Samsung Galaxy S24 |`
+    );
+    assert.equal(
+      formatVersusPriceVnd(21_990_000, 'cs'),
+      `21${NBSP}990${NBSP}000${NBSP}₫`
+    );
+    assert.equal(formatVersusPriceVnd(0, 'cs'), '-');
+
+    assert.equal(
+      buildCompareMarkdownMinPriceRow(
+        'Nejnižší cena',
+        [pricedCatalogRow, soldOutCatalogRow],
+        'cs'
+      ),
+      `| **Nejnižší cena** | 18${NBSP}990${NBSP}000${NBSP}₫ | - |`
+    );
+
+    // Strict price sanitizers reject booleans, radix prefixes, and embedded \p{Cc} control chars.
+    for (const invalidPrice of [
+      true,
+      false,
+      null,
+      undefined,
+      0,
+      -0,
+      0.4,
+      '0.49',
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      -500_000,
+      MAX_VALID_VND_PRICE + 0.4,
+      MAX_VALID_VND_PRICE + 1,
+      '0x1000000',
+      '+0x1000000',
+      '-0x1000000',
+      '0b101000',
+      '0o777000',
+      '\u000025000000',
+      '25000\u0000000',
+      '25000000\n',
+      '25000000\t',
+      [25_000_000],
+      { valueOf: () => 25_000_000 },
+    ]) {
+      assert.equal(sanitizeLeaderboardPriceVnd(invalidPrice), 0);
+      assert.equal(sanitizeComparePriceVnd(invalidPrice), 0);
+      assert.equal(sanitizeVersusPriceVnd(invalidPrice), 0);
+    }
+    assert.equal(sanitizeLeaderboardPriceVnd(' 24990000 '), 24_990_000);
+    assert.equal(sanitizeComparePriceVnd(' 24990000 '), 24_990_000);
+    assert.equal(sanitizeVersusPriceVnd(' 24990000 '), 24_990_000);
+    assert.equal(
+      sanitizeLeaderboardPriceVnd(MAX_VALID_VND_PRICE - 0.4),
+      MAX_VALID_VND_PRICE
+    );
+    assert.equal(
+      sanitizeComparePriceVnd(MAX_VALID_VND_PRICE - 0.4),
+      MAX_VALID_VND_PRICE
+    );
+    assert.equal(
+      sanitizeVersusPriceVnd(MAX_VALID_VND_PRICE - 0.4),
+      MAX_VALID_VND_PRICE
+    );
+
+    // CompareWorkspace popularBattles maps through versusHref(..., versusSlugMap) and skips same-Item pairs,
+    // including partial itemSlugBySlug maps (/compare SSR) via model_key sibling prefix propagation.
+    const rawCandidateVariants: MasterProduct[] = [
+      {
+        ...phone('apple-iphone-16-512gb', 4.95),
+        model_key: 'apple:iphone-16:512gb',
+        min_price: 25_990_000,
+      } as unknown as MasterProduct,
+      {
+        ...phone('apple-iphone-16-256gb', 4.9),
+        model_key: 'apple:iphone-16:256gb',
+        min_price: 21_990_000,
+      } as unknown as MasterProduct,
+      {
+        ...phone('samsung-galaxy-s24-256gb', 4.7),
+        model_key: 'samsung:galaxy-s24:256gb',
+        min_price: 18_990_000,
+      } as unknown as MasterProduct,
+      {
+        ...phone('xiaomi-14-ultra-512gb', 4.6),
+        model_key: 'xiaomi:14-ultra:512gb',
+        min_price: 23_990_000,
+      } as unknown as MasterProduct,
+      {
+        ...phone('weird-vs-phone-256gb', 4.99),
+        model_key: 'brand:weird-vs-phone:256gb',
+        min_price: 15_990_000,
+      } as unknown as MasterProduct,
+    ];
+    const partialCandidateSlugMap = {
+      // Simulates /compare where only initialProducts were looked up on SSR:
+      // 512gb sibling is unmapped, and weird-vs-phone has an unparseable -vs- Item slug.
+      'apple-iphone-16-256gb': 'apple-iphone-16',
+      'samsung-galaxy-s24-256gb': 'samsung-galaxy-s24',
+      'xiaomi-14-ultra-512gb': 'xiaomi-14-ultra',
+      'weird-vs-phone-256gb': 'weird-vs-phone',
+    };
+    assert.equal(
+      isSameCompareVersusItem(
+        'apple-iphone-16-512gb',
+        'apple-iphone-16-256gb',
+        {
+          ...partialCandidateSlugMap,
+          'apple-iphone-16-512gb': 'apple-iphone-16',
+        }
+      ),
+      true
+    );
+    // Scoreboard validates raw product.min_price before scoreMasterProductForLeaderboard strips \p{Cc}.
+    const pollutedScored = scoreMasterProductForLeaderboard(
+      {
+        ...phone('polluted-price-phone', 4.6),
+        min_price: '25000\n000' as unknown as number,
+      },
+      'combined'
+    );
+    assert.equal(
+      resolveVersusScoreMinPriceVnd(pollutedScored),
+      0,
+      'resolveVersusScoreMinPriceVnd rejects embedded control chars in product.min_price even after scoring normalization'
+    );
+    assert.equal(
+      resolveVersusScoreMinPriceVnd(
+        scoreMasterProductForLeaderboard(pricedCatalogRow, 'combined')
+      ),
+      18_990_000
+    );
+
+    // Unlinked masters (slug -> slug in getItemSlugsFor) must NOT propagate their variant slug
+    // onto sibling variants, and confirmed identity mappings override sibling heuristics.
+    const unlinkedVariants: MasterProduct[] = [
+      {
+        ...phone('unlinked-phone-256gb', 4.8),
+        model_key: 'brand:unlinked-phone:256gb',
+      } as unknown as MasterProduct,
+      {
+        ...phone('unlinked-phone-512gb', 4.75),
+        model_key: 'brand:unlinked-phone:512gb',
+      } as unknown as MasterProduct,
+    ];
+    const unlinkedMap = buildCompareVersusSlugMap(unlinkedVariants, {
+      'unlinked-phone-256gb': 'unlinked-phone-256gb',
+    });
+    assert.equal(
+      unlinkedMap?.['unlinked-phone-512gb'],
+      undefined,
+      'Unlinked master identity mapping is never propagated to sibling variants'
+    );
+    const confirmedUnlinkedOverride = buildCompareVersusSlugMap(
+      rawCandidateVariants,
+      partialCandidateSlugMap,
+      { 'apple-iphone-16-512gb': 'apple-iphone-16-512gb' }
+    );
+    assert.equal(
+      confirmedUnlinkedOverride?.['apple-iphone-16-512gb'],
+      'apple-iphone-16-512gb',
+      'Confirmed client identity mapping takes precedence over sibling Item inference'
+    );
+
+    // Object.prototype keys like "constructor" or "toString" never collide on empty/plain maps.
+    const protoCandidates: MasterProduct[] = [
+      phone('constructor', 4.9),
+      phone('tostring', 4.8),
+    ];
+    assert.deepEqual(
+      resolveComparePopularBattles(protoCandidates, 'smartphones', null, 3).map(
+        (b) => b.versusHref
+      ),
+      ['/compare/constructor-vs-tostring']
+    );
+    assert.equal(
+      isSameLeaderboardVersusItem('constructor', 'tostring', {}),
+      false
+    );
+
+    const propagatedCompareMap = buildCompareVersusSlugMap(
+      rawCandidateVariants,
+      partialCandidateSlugMap,
+      { 'apple-iphone-16-512gb': '' }
+    );
+    assert.equal(
+      propagatedCompareMap?.['apple-iphone-16-512gb'],
+      'apple-iphone-16',
+      'buildCompareVersusSlugMap propagates Item slug to unmapped sibling even if client fetch failed'
+    );
+    assert.equal(
+      isValidCompareVersusPair(
+        'apple-iphone-16-512gb',
+        'apple-iphone-16-256gb',
+        propagatedCompareMap
+      ),
+      false,
+      'Same-Item storage siblings are rejected by isValidCompareVersusPair'
+    );
+    const resolvedBattles = resolveComparePopularBattles(
+      rawCandidateVariants,
+      'smartphones',
+      partialCandidateSlugMap,
+      3
+    );
+    assert.deepEqual(
+      resolvedBattles.map((b) => b.versusHref),
+      [
+        '/compare/apple-iphone-16-vs-samsung-galaxy-s24',
+        '/compare/apple-iphone-16-vs-xiaomi-14-ultra',
+        '/compare/samsung-galaxy-s24-vs-xiaomi-14-ultra',
+      ]
+    );
+
+    // Failed Item lookups stay out of clientItemSlugs and retry with bounded backoff,
+    // while confirmed HTTP 200 unlinked responses are stored and never retried.
+    assert.equal(
+      parseCompareItemLookupAnswer(
+        false,
+        { ok: true },
+        'apple-iphone-16-512gb'
+      ),
+      null,
+      'HTTP 500 response is never treated as confirmed'
+    );
+    assert.equal(
+      parseCompareItemLookupAnswer(
+        true,
+        { ok: false },
+        'apple-iphone-16-512gb'
+      ),
+      null,
+      'Error payload without ok:true is never treated as confirmed'
+    );
+    assert.equal(
+      parseCompareItemLookupAnswer(
+        true,
+        { ok: true, data: { product: { slug: 'unlinked-phone-256gb' } } },
+        'unlinked-phone-256gb'
+      ),
+      'unlinked-phone-256gb',
+      'HTTP 200 unlinked variant response resolves to confirmed variant slug'
+    );
+    assert.equal(
+      parseCompareItemLookupAnswer(
+        true,
+        {
+          ok: true,
+          data: {
+            product: { slug: 'apple-iphone-16-512gb' },
+            item: { slug: 'apple-iphone-16' },
+          },
+        },
+        'apple-iphone-16-512gb'
+      ),
+      'apple-iphone-16',
+      'HTTP 200 linked variant response resolves to canonical Item slug'
+    );
+
+    const lookupFailures = new Map<string, CompareItemLookupFailure>();
+    const confirmedClientSlugs: Record<string, string> = {};
+    const t0 = 1_000_000;
+    const batch1 = planCompareItemLookupBatch(
+      ['apple-iphone-16-512gb', 'unlinked-phone-256gb'],
+      partialCandidateSlugMap,
+      confirmedClientSlugs,
+      lookupFailures,
+      t0
+    );
+    assert.deepEqual(batch1.readyToFetch, [
+      'apple-iphone-16-512gb',
+      'unlinked-phone-256gb',
+    ]);
+    const outcome1 = applyCompareItemLookupOutcomes(
+      [
+        ['apple-iphone-16-512gb', null],
+        ['unlinked-phone-256gb', 'unlinked-phone-256gb'],
+      ],
+      lookupFailures,
+      t0
+    );
+    assert.deepEqual(outcome1.confirmed, [
+      ['unlinked-phone-256gb', 'unlinked-phone-256gb'],
+    ]);
+    for (const [s, itemSlug] of outcome1.confirmed) {
+      confirmedClientSlugs[s] = itemSlug;
+    }
+    assert.equal(
+      Object.hasOwn(confirmedClientSlugs, 'apple-iphone-16-512gb'),
+      false,
+      'Failed HTTP 500 lookup is kept out of clientItemSlugs'
+    );
+    assert.equal(outcome1.nextRetryAt, t0 + COMPARE_ITEM_LOOKUP_RETRY_MS);
+
+    const duringBackoff = planCompareItemLookupBatch(
+      ['apple-iphone-16-512gb', 'unlinked-phone-256gb'],
+      partialCandidateSlugMap,
+      confirmedClientSlugs,
+      lookupFailures,
+      t0 + COMPARE_ITEM_LOOKUP_RETRY_MS - 1
+    );
+    assert.deepEqual(duringBackoff.readyToFetch, []);
+    assert.equal(
+      duringBackoff.earliestRetryAt,
+      t0 + COMPARE_ITEM_LOOKUP_RETRY_MS
+    );
+
+    const afterBackoff = planCompareItemLookupBatch(
+      ['apple-iphone-16-512gb', 'unlinked-phone-256gb'],
+      partialCandidateSlugMap,
+      confirmedClientSlugs,
+      lookupFailures,
+      t0 + COMPARE_ITEM_LOOKUP_RETRY_MS
+    );
+    assert.deepEqual(
+      afterBackoff.readyToFetch,
+      ['apple-iphone-16-512gb'],
+      'Failed slug becomes eligible after backoff while confirmed unlinked slug is not retried'
+    );
+
+    const outcome2Fail = applyCompareItemLookupOutcomes(
+      [['apple-iphone-16-512gb', null]],
+      lookupFailures,
+      t0 + COMPARE_ITEM_LOOKUP_RETRY_MS
+    );
+    assert.equal(
+      lookupFailures.get('apple-iphone-16-512gb')?.attempts,
+      MAX_COMPARE_ITEM_LOOKUP_ATTEMPTS
+    );
+    assert.equal(outcome2Fail.nextRetryAt, Number.POSITIVE_INFINITY);
+    const exhaustedBatch = planCompareItemLookupBatch(
+      ['apple-iphone-16-512gb', 'unlinked-phone-256gb'],
+      partialCandidateSlugMap,
+      confirmedClientSlugs,
+      lookupFailures,
+      t0 + COMPARE_ITEM_LOOKUP_RETRY_MS * 10
+    );
+    assert.deepEqual(exhaustedBatch.readyToFetch, []);
+    assert.equal(exhaustedBatch.earliestRetryAt, Number.POSITIVE_INFINITY);
+
+    // Source-level guards for hardcoded vi-VN and decorative Bs* icons in LeaderboardExplorer.tsx.
+    for (const relPath of [
+      'components/leaderboard/LeaderboardExplorer.tsx',
+      'components/compare/VersusInteractiveScoreboard.tsx',
+      'components/compare/CompareWorkspace.tsx',
+    ]) {
+      const fileSrc = fs.readFileSync(path.join(webSrcDir, relPath), 'utf8');
+      assert.doesNotMatch(
+        fileSrc,
+        /toLocaleString\('vi-VN'\)/,
+        `${relPath} must format VND with locale instead of hardcoded toLocaleString('vi-VN')`
+      );
+    }
+
+    const leaderboardSrc1764 = fs.readFileSync(
+      path.join(webSrcDir, 'components/leaderboard/LeaderboardExplorer.tsx'),
+      'utf8'
+    );
+    const leaderboardBsTags = [
+      ...leaderboardSrc1764.matchAll(/<Bs[A-Z]\w*[^>]*>/g),
+    ].map((m) => m[0]);
+    assert.ok(
+      leaderboardBsTags.length >= 14,
+      'Decorative Bs* icon tags in LeaderboardExplorer.tsx matched'
+    );
+    for (const tag of leaderboardBsTags) {
+      assert.match(
+        tag,
+        /\baria-hidden="true"/,
+        `Decorative icon ${tag} in LeaderboardExplorer.tsx must carry aria-hidden="true"`
+      );
+    }
+
+    test('compare/[versus]/page.tsx and VersusMatchupSwitcher canonical Item slugs & same-Item guards (#1764)', async () => {
+      const extMap = (
+        Module as unknown as {
+          _extensions?: Record<string, (mod: { exports: unknown }) => void>;
+        }
+      )._extensions;
+      if (extMap && !extMap['.css']) {
+        extMap['.css'] = (mod) => {
+          mod.exports = { bar: 'bar' };
+        };
+      }
+      const { attachVersusItemSlug, buildVersusItemListSchema } =
+        await import('../../app/[locale]/compare/[versus]/page');
+      const {
+        default: VersusMatchupSwitcher,
+        buildVersusPeerItemSlugMap,
+        formatVersusPeerPriceBadge,
+        isSameVersusPeerItem,
+        resolveEffectivePeerSlugs,
+        resolveVersusPeerSideSlug,
+        sanitizeVersusPeerPriceVnd,
+      } = await import('../../components/compare/VersusMatchupSwitcher');
+
+      for (const invalidPrice of [
+        true,
+        false,
+        null,
+        undefined,
+        0,
+        -0,
+        0.4,
+        '0.49',
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.NEGATIVE_INFINITY,
+        -500_000,
+        MAX_VALID_VND_PRICE + 0.4,
+        MAX_VALID_VND_PRICE + 1,
+        '0x1000000',
+        '+0x1000000',
+        '-0x1000000',
+        '0b101000',
+        '0o777000',
+        '\u000025000000',
+        '25000\u0000000',
+        '25000000\n',
+        '25000000\t',
+        [25_000_000],
+        { valueOf: () => 25_000_000 },
+      ]) {
+        assert.equal(sanitizeVersusPeerPriceVnd(invalidPrice), 0);
+        assert.equal(formatVersusPeerPriceBadge(invalidPrice), 'N/A');
+      }
+      assert.equal(sanitizeVersusPeerPriceVnd(' 24990000 '), 24_990_000);
+      assert.equal(formatVersusPeerPriceBadge(' 24990000 '), '25M');
+
+      const switcherPeers: ItemCatalogRow[] = [
+        { ...secondItemRow, slug: 'apple-iphone-16-128gb' },
+        { ...secondItemRow, slug: 'apple-iphone-16-256gb' },
+        pricedCatalogRow,
+        thirdItemRow,
+      ];
+      const switcherMap = {
+        ...buildVersusPeerItemSlugMap(switcherPeers),
+        // Out-of-top-60 default variant mapped to the same Item:
+        'apple-iphone-16-64gb': 'apple-iphone-16',
+      };
+      assert.equal(
+        resolveVersusPeerSideSlug('apple-iphone-16-128gb', switcherMap),
+        'apple-iphone-16'
+      );
+      assert.equal(
+        isSameVersusPeerItem(
+          'apple-iphone-16-128gb',
+          'apple-iphone-16-256gb',
+          switcherMap
+        ),
+        true
+      );
+      assert.deepEqual(
+        resolveEffectivePeerSlugs(
+          switcherPeers,
+          'apple-iphone-16-64gb',
+          'apple-iphone-16-256gb',
+          switcherMap
+        ),
+        {
+          effectiveSlugA: 'apple-iphone-16-128gb',
+          effectiveSlugB: 'samsung-galaxy-s24-256gb',
+        }
+      );
+      assert.deepEqual(
+        resolveEffectivePeerSlugs(
+          switcherPeers.slice(0, 2),
+          'apple-iphone-16-128gb',
+          'apple-iphone-16-256gb',
+          switcherMap
+        ),
+        {
+          effectiveSlugA: 'apple-iphone-16-128gb',
+          effectiveSlugB: '',
+        }
+      );
+
+      const stubRouter: AppRouterInstance = {
+        bfcacheId: '',
+        back: () => {},
+        forward: () => {},
+        refresh: () => {},
+        push: () => {},
+        replace: () => {},
+        prefetch: () => {},
+      };
+      const switcherHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: stubRouter },
+          React.createElement(
+            Provider,
+            {
+              locale: 'en',
+              messages: pickClientMessages(
+                enMessages as unknown as Record<string, unknown>,
+                'compare'
+              ),
+              timeZone: 'Asia/Ho_Chi_Minh',
+            },
+            React.createElement(VersusMatchupSwitcher, {
+              currentSlugA: 'apple-iphone-16-64gb',
+              currentSlugB: 'samsung-galaxy-s24-256gb',
+              categorySlug: 'smartphones',
+              catalogCandidates: switcherPeers,
+              locale: 'en',
+              itemSlugBySlug: switcherMap,
+            })
+          )
+        )
+      );
+      const selectMatches = [
+        ...switcherHtml.matchAll(/<select\b[\s\S]*?<\/select>/g),
+      ].map((m) => m[0]);
+      assert.equal(selectMatches.length, 2);
+      assert.match(
+        selectMatches[1]!,
+        /<option value="apple-iphone-16-128gb" disabled=""/,
+        'Device B select disables primary variant of Device A Item'
+      );
+      assert.match(
+        selectMatches[1]!,
+        /<option value="apple-iphone-16-256gb" disabled=""/,
+        'Device B select disables sibling storage variant of Device A Item'
+      );
+      assert.match(
+        switcherHtml,
+        /<button type="submit" disabled=""/,
+        'Submit button stays disabled when resolved canonical versusHref matches current page'
+      );
+
+      const sameItemOnlySwitcherHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: stubRouter },
+          React.createElement(
+            Provider,
+            {
+              locale: 'en',
+              messages: pickClientMessages(
+                enMessages as unknown as Record<string, unknown>,
+                'compare'
+              ),
+              timeZone: 'Asia/Ho_Chi_Minh',
+            },
+            React.createElement(VersusMatchupSwitcher, {
+              currentSlugA: 'apple-iphone-16-128gb',
+              currentSlugB: 'apple-iphone-16-256gb',
+              categorySlug: 'smartphones',
+              catalogCandidates: switcherPeers.slice(0, 2),
+              locale: 'en',
+              itemSlugBySlug: switcherMap,
+            })
+          )
+        )
+      );
+      assert.equal(
+        sameItemOnlySwitcherHtml,
+        '',
+        'VersusMatchupSwitcher renders nothing when all peers belong to one Item'
+      );
+
+      const compareWorkspaceHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: stubRouter },
+          React.createElement(
+            Provider,
+            {
+              locale: 'en',
+              messages: pickClientMessages(
+                enMessages as unknown as Record<string, unknown>,
+                'compare'
+              ),
+              timeZone: 'Asia/Ho_Chi_Minh',
+            },
+            React.createElement(CompareWorkspace, {
+              initialProducts: [
+                rawCandidateVariants[1]!,
+                rawCandidateVariants[2]!,
+              ],
+              catalogCandidates: rawCandidateVariants,
+              initialCategory: 'smartphones',
+              hasExplicitSlugs: true,
+              locale: 'en',
+              itemSlugBySlug: partialCandidateSlugMap,
+            })
+          )
+        )
+      );
+      const popularBattleLinks = [
+        ...compareWorkspaceHtml.matchAll(
+          /<a\b[^>]*data-testid="popular-battle-1v1-link"[^>]*>/g
+        ),
+      ].map((m) => m[0]);
+      assert.equal(
+        popularBattleLinks.length,
+        3,
+        'CompareWorkspace SSR popularBattles renders action links on all 3 battle cards'
+      );
+      assert.match(
+        popularBattleLinks[0]!,
+        /href="(?:\/en)?\/compare\/apple-iphone-16-vs-samsung-galaxy-s24"/,
+        'CompareWorkspace SSR popular-battle card link uses propagated canonical Item versusHref when higher-ranked sibling was omitted from itemSlugBySlug'
+      );
+      assert.match(
+        popularBattleLinks[1]!,
+        /href="(?:\/en)?\/compare\/apple-iphone-16-vs-xiaomi-14-ultra"/,
+        'Second popular-battle card link also uses propagated canonical Item versusHref'
+      );
+      for (const battleLinkTag of popularBattleLinks) {
+        assert.doesNotMatch(
+          battleLinkTag,
+          /\/compare\/apple-iphone-16-512gb-vs-/,
+          'Popular-battle card link never leaks redirecting variant slug'
+        );
+      }
+
+      // Variant rows without category_id/category_slug keep their variant-inferred
+      // category when Item slug is substituted in JSON-LD and CompareWorkspace links.
+      const unhintedTabletVariant: MasterProduct = {
+        ...phone('acme-tablet-x1-256gb', 4.8),
+        name: 'Acme X1',
+        model: 'X1',
+        category_id: null,
+        metadata: { custom_flag: true },
+        specifications: {},
+      } as unknown as MasterProduct;
+      const tabletMap = {
+        'acme-tablet-x1-256gb': 'acme-x1',
+        'ipad-pro-m4-256gb': 'ipad-pro-m4',
+      };
+      const tabletPeer: MasterProduct = {
+        ...phone('ipad-pro-m4-256gb', 4.9),
+        name: 'iPad Pro M4',
+        model: 'iPad Pro',
+        category_id: null,
+        metadata: undefined,
+        specifications: {},
+      } as unknown as MasterProduct;
+      const tabletSchema = buildVersusItemListSchema('Acme X1', 'iPad Pro M4', [
+        {
+          name: 'Acme X1',
+          product: attachVersusItemSlug(unhintedTabletVariant, tabletMap),
+        },
+        {
+          name: 'iPad Pro M4',
+          product: attachVersusItemSlug(tabletPeer, tabletMap),
+        },
+      ]);
+      assert.deepEqual(
+        tabletSchema.itemListElement.map((el) => el.url),
+        [
+          'https://rate.vn/tablets/acme-x1',
+          'https://rate.vn/tablets/ipad-pro-m4',
+        ]
+      );
+
+      const tabletCompareHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: stubRouter },
+          React.createElement(
+            Provider,
+            {
+              locale: 'en',
+              messages: pickClientMessages(
+                enMessages as unknown as Record<string, unknown>,
+                'compare'
+              ),
+              timeZone: 'Asia/Ho_Chi_Minh',
+            },
+            React.createElement(CompareWorkspace, {
+              initialProducts: [unhintedTabletVariant, tabletPeer],
+              catalogCandidates: [unhintedTabletVariant, tabletPeer],
+              initialCategory: 'tablets',
+              hasExplicitSlugs: true,
+              locale: 'en',
+              itemSlugBySlug: tabletMap,
+            })
+          )
+        )
+      );
+      assert.match(
+        tabletCompareHtml,
+        /href="(?:\/en)?\/tablets\/acme-x1"/,
+        'CompareWorkspace matrix header product link preserves variant-inferred tablets category'
+      );
+      assert.match(
+        tabletCompareHtml,
+        /href="(?:\/en)?\/tablets\/acme-x1#jreviews-section"/,
+        'CompareWorkspace matrix reviews CTA preserves variant-inferred tablets category'
+      );
+      assert.doesNotMatch(
+        tabletCompareHtml,
+        /\/smartphones\/acme-x1/,
+        'CompareWorkspace never misclassifies tablet Item slug as smartphones'
+      );
+
+      const rawA = phone('apple-iphone-16-256gb', 4.8);
+      const rawB = phone('samsung-galaxy-s24-256gb', 4.7);
+      const map = {
+        'apple-iphone-16-256gb': 'apple-iphone-16',
+        'samsung-galaxy-s24-256gb': 'samsung-galaxy-s24',
+      };
+      const itemA = attachVersusItemSlug(rawA, map);
+      const itemB = attachVersusItemSlug(rawB, map);
+      const scoredA = scoreMasterProductForLeaderboard(itemA, 'combined');
+      const scoredB = scoreMasterProductForLeaderboard(itemB, 'combined');
+
+      assert.equal(scoredA.productHref, '/smartphones/apple-iphone-16');
+      assert.equal(scoredB.productHref, '/smartphones/samsung-galaxy-s24');
+
+      const schema = buildVersusItemListSchema(itemA.name, itemB.name, [
+        scoredA,
+        scoredB,
+      ]);
+      assert.deepEqual(
+        schema.itemListElement.map((el) => el.url),
+        [
+          'https://rate.vn/smartphones/apple-iphone-16',
+          'https://rate.vn/smartphones/samsung-galaxy-s24',
+        ]
+      );
+
+      const scoreboardHtml = renderToStaticMarkup(
+        React.createElement(
+          Provider,
+          {
+            locale: 'cs',
+            messages: pickClientMessages(
+              csMessages as unknown as Record<string, unknown>,
+              'compare'
+            ),
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(VersusInteractiveScoreboard, {
+            scoreA: scoredA,
+            scoreB: scoredB,
+            locale: 'cs',
+          })
+        )
+      );
+      assert.match(
+        scoreboardHtml,
+        /href="(?:\/cs)?\/smartphones\/apple-iphone-16"/,
+        'VersusInteractiveScoreboard product A link points to canonical Item URL'
+      );
+      assert.match(
+        scoreboardHtml,
+        /href="(?:\/cs)?\/smartphones\/samsung-galaxy-s24"/,
+        'VersusInteractiveScoreboard product B link points to canonical Item URL'
+      );
+    });
+  }
 }
 
 console.log('leaderboard-criteria: criterion scores are real or null');

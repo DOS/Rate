@@ -117,25 +117,46 @@ test('models without the new registry fields keep their previous output', () => 
     'Apple iPhone 11 64GB',
   ]) {
     const out = normalize(title).specifications;
-    assert.equal(out.design?.keys, 'Action Button, Camera Control, Volume, Power', title);
+    // The iPhone 11 is outside the registry: it gets its generation's Apple Tech Specs
+    // (DOS/Rate#1754, pinned in apple-generic-fallbacks.test.ts).
+    const iphone11 = title === 'Apple iPhone 11 64GB';
     assert.equal(
-      out.display?.features,
-      'Dynamic Island, True Tone, Wide color (P3), Haptic Touch',
+      out.design?.keys,
+      iphone11
+        ? 'Ring/Silent switch, side button, volume buttons'
+        : 'Action Button, Camera Control, Volume, Power',
       title
     );
-    assert.equal(out.battery?.charging, 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2', title);
+    assert.equal(
+      out.display?.features,
+      iphone11
+        ? 'True Tone, Wide color (P3), Haptic Touch'
+        : 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch',
+      title
+    );
+    assert.equal(
+      out.battery?.charging,
+      iphone11 ? 'Sạc không dây Qi' : 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2',
+      title
+    );
     assert.equal(out.connectivity?.bluetooth, '5.3, A2DP, LE', title);
     assert.equal(
       out.connectivity?.sensors,
       'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế',
       title
     );
-    assert.equal(out.connectivity?.other, 'Ultra Wideband (UWB), SOS vệ tinh', title);
-    assert.equal(out.multimedia?.loudspeaker, 'Loa kép Stereo đa chiều', title);
-    assert.equal(out.multimedia?.headphone_jack_35mm, false, title);
+    assert.equal(
+      out.connectivity?.other,
+      iphone11 ? 'Ultra Wideband (UWB)' : 'Ultra Wideband (UWB), SOS vệ tinh',
+      title
+    );
+    // No source states their loudspeaker or SAR: no generic value (DOS/Rate#1748).
+    assert.equal(out.multimedia?.loudspeaker, undefined, title);
+    // The registry phones keep "no jack"; the iPhone 11 outside it gets none (DOS/Rate#1754).
+    assert.equal(out.multimedia?.headphone_jack_35mm, iphone11 ? undefined : false, title);
     assert.equal(out.multimedia?.audio_features, 'Dolby Atmos, Hi-Res Audio', title);
-    assert.equal(out.regulatory?.sar_head, '1.10 W/kg', title);
-    assert.equal(out.regulatory?.sar_body, '1.15 W/kg', title);
+    assert.equal(out.regulatory?.sar_head, undefined, title);
+    assert.equal(out.regulatory?.sar_body, undefined, title);
     assert.equal(out.display?.protection, 'Ceramic Shield', title);
     assert.equal(out.connectivity?.usb, 'USB Type-C, OTG', title);
     assert.equal(out.regulatory?.certifications, 'CE, FCC ID, Apple Eco Standards', title);
@@ -154,8 +175,10 @@ test('models without the new registry fields keep their previous output', () => 
     assert.equal(out.display?.features, 'Always-on display, HDR10+, Eye Comfort Shield', title);
     assert.equal(out.battery?.charging, 'Sạc nhanh USB-C PD/PPS', title);
     assert.equal(out.connectivity?.other, 'Hỗ trợ OTG, Chia sẻ nhanh', title);
-    assert.equal(out.multimedia?.loudspeaker, 'Loa kép Stereo đa chiều', title);
-    assert.equal(out.regulatory?.sar_head, '1.10 W/kg', title);
+    // No source states their loudspeaker or SAR: no generic value, inside the registry
+    // (DOS/Rate#1748) or outside it (DOS/Rate#1754).
+    assert.equal(out.multimedia?.loudspeaker, undefined, title);
+    assert.equal(out.regulatory?.sar_head, undefined, title);
     assert.equal(out.display?.protection, 'Corning Gorilla Glass', title);
     assert.equal(out.regulatory?.certifications, 'CE, FCC, RoHS', title);
     // The Xiaomi is outside the registry and its 5G is unknown: no cellular group.
