@@ -347,18 +347,19 @@ export function resolveLeaderboardEffectiveVersusSlugs(
   requestedSlugB: string,
   itemSlugBySlug?: Readonly<Record<string, string>> | null
 ): { effectiveVersusA: string; effectiveVersusB: string } {
+  const hasOpponent = (slug: string) =>
+    Boolean(
+      slug &&
+      entries.some((other) =>
+        isValidLeaderboardVersusPair(slug, other.product.slug, itemSlugBySlug)
+      )
+    );
   const effectiveVersusA =
-    requestedSlugA && entries.some((e) => e.product.slug === requestedSlugA)
+    requestedSlugA &&
+    entries.some((e) => e.product.slug === requestedSlugA) &&
+    hasOpponent(requestedSlugA)
       ? requestedSlugA
-      : (entries.find((e) =>
-          entries.some((other) =>
-            isValidLeaderboardVersusPair(
-              e.product.slug,
-              other.product.slug,
-              itemSlugBySlug
-            )
-          )
-        )?.product.slug ??
+      : (entries.find((e) => hasOpponent(e.product.slug))?.product.slug ??
         entries[0]?.product.slug ??
         '');
   const effectiveVersusB =
@@ -1604,17 +1605,31 @@ export default function LeaderboardExplorer({
                   onChange={(e) => setVersusSlugA(e.target.value)}
                   aria-label={t('selectDeviceAAria')}
                 >
-                  {rankedEntries.map((entry, idx) => (
-                    <option key={entry.product.slug} value={entry.product.slug}>
-                      #{idx + 1} {entry.product.name} (
-                      {formatRatingValue(
-                        entry.activeScore5,
-                        locale,
-                        scoreDigits
-                      )}
-                      ★)
-                    </option>
-                  ))}
+                  {rankedEntries
+                    .map((entry, idx) => ({ entry, idx }))
+                    .filter(({ entry }) =>
+                      rankedEntries.some((other) =>
+                        isValidLeaderboardVersusPair(
+                          entry.product.slug,
+                          other.product.slug,
+                          resolvedItemSlugBySlug
+                        )
+                      )
+                    )
+                    .map(({ entry, idx }) => (
+                      <option
+                        key={entry.product.slug}
+                        value={entry.product.slug}
+                      >
+                        #{idx + 1} {entry.product.name} (
+                        {formatRatingValue(
+                          entry.activeScore5,
+                          locale,
+                          scoreDigits
+                        )}
+                        ★)
+                      </option>
+                    ))}
                 </select>
               </div>
               <div className="col-lg-3 col-md-5">
