@@ -131,11 +131,12 @@ test('models without the new registry fields keep their previous output', () => 
       title
     );
     assert.equal(out.connectivity?.other, 'Ultra Wideband (UWB), SOS vệ tinh', title);
-    assert.equal(out.multimedia?.loudspeaker, 'Loa kép Stereo đa chiều', title);
+    // No source states their loudspeaker or SAR: no generic value (DOS/Rate#1748).
+    assert.equal(out.multimedia?.loudspeaker, undefined, title);
     assert.equal(out.multimedia?.headphone_jack_35mm, false, title);
     assert.equal(out.multimedia?.audio_features, 'Dolby Atmos, Hi-Res Audio', title);
-    assert.equal(out.regulatory?.sar_head, '1.10 W/kg', title);
-    assert.equal(out.regulatory?.sar_body, '1.15 W/kg', title);
+    assert.equal(out.regulatory?.sar_head, undefined, title);
+    assert.equal(out.regulatory?.sar_body, undefined, title);
     assert.equal(out.display?.protection, 'Ceramic Shield', title);
     assert.equal(out.connectivity?.usb, 'USB Type-C, OTG', title);
     assert.equal(out.regulatory?.certifications, 'CE, FCC ID, Apple Eco Standards', title);
@@ -154,8 +155,11 @@ test('models without the new registry fields keep their previous output', () => 
     assert.equal(out.display?.features, 'Always-on display, HDR10+, Eye Comfort Shield', title);
     assert.equal(out.battery?.charging, 'Sạc nhanh USB-C PD/PPS', title);
     assert.equal(out.connectivity?.other, 'Hỗ trợ OTG, Chia sẻ nhanh', title);
-    assert.equal(out.multimedia?.loudspeaker, 'Loa kép Stereo đa chiều', title);
-    assert.equal(out.regulatory?.sar_head, '1.10 W/kg', title);
+    // The registry S24 Ultra gets no generic loudspeaker or SAR (DOS/Rate#1748); a phone
+    // outside the registry keeps them.
+    const generic = title.startsWith('Samsung') ? undefined : 'Loa kép Stereo đa chiều';
+    assert.equal(out.multimedia?.loudspeaker, generic, title);
+    assert.equal(out.regulatory?.sar_head, generic && '1.10 W/kg', title);
     assert.equal(out.display?.protection, 'Corning Gorilla Glass', title);
     assert.equal(out.regulatory?.certifications, 'CE, FCC, RoHS', title);
     // The Xiaomi is outside the registry and its 5G is unknown: no cellular group.
