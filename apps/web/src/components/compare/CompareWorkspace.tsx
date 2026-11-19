@@ -37,6 +37,7 @@ import {
   buildPopular1v1BattlesForCategory,
   getMasterProductCategorySlug,
   getMasterProductHref,
+  rankMasterProductsForLeaderboard,
   resolveCompareBatteryMah,
   resolveCompareDisplaySizeInch,
   resolveCompareEffectiveUserRating,
@@ -88,6 +89,7 @@ import {
   productFromProductAnswer,
   versusHref,
 } from '@/lib/item-compare';
+import { catalogRowSlug, type ItemCatalogRow } from '@/lib/item-directory';
 import StarRating from '@/components/elementary/StarRating';
 import {
   formatDecimal,
@@ -336,11 +338,23 @@ export function computeCompareHeadToHeadSummary(
 const COMPARE_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
 export function sanitizeComparePriceVnd(value: unknown): number {
-  const num = Number(value);
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  let num: number;
+  if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return 0;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return 0;
+    }
+    num = Number(trimmed);
+  } else {
+    num = value;
+  }
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  return Math.round(num);
+  const rounded = Math.round(num);
+  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
 }
 
 export function formatComparePriceVnd(
@@ -349,6 +363,118 @@ export function formatComparePriceVnd(
 ): string {
   const safe = sanitizeComparePriceVnd(value);
   return safe > 0 ? formatPriceVnd(safe, locale) : '-';
+}
+
+export function buildCompareMarkdownMinPriceRow(
+  rowLabel: string,
+  items: readonly Pick<MasterProduct, 'min_price'>[],
+  locale?: string | null
+): string {
+  return `| **${rowLabel}** | ${items
+    .map((p) => formatComparePriceVnd(p.min_price, locale))
+    .join(' | ')} |`;
+}
+
+export function isSameCompareVersusItem(
+  slugA: string,
+  slugB: string,
+  versusSlugMap?: Readonly<Record<string, string>> | null
+): boolean {
+  if (!slugA || !slugB) return false;
+  if (slugA.toLowerCase() === slugB.toLowerCase()) return true;
+  const resolveSide = (slug: string) => {
+    const mapped = versusSlugMap?.[slug];
+    return mapped && !mapped.includes('-vs-') ? mapped : slug;
+  };
+  if (resolveSide(slugA).toLowerCase() === resolveSide(slugB).toLowerCase()) {
+    return true;
+  }
+  const rawItemA = versusSlugMap?.[slugA];
+  const rawItemB = versusSlugMap?.[slugB];
+  return Boolean(
+    rawItemA && rawItemB && rawItemA.toLowerCase() === rawItemB.toLowerCase()
+  );
+}
+
+export function resolveComparePopularBattles(
+  catalogCandidates: MasterProduct[],
+  category: CanonicalCategorySlug,
+  versusSlugMap?: Readonly<Record<string, string>> | null,
+  maxPairs = 3
+) {
+  const mergedMap: Record<string, string> = {};
+  for (const row of catalogCandidates) {
+    if (!row || typeof row.slug !== 'string' || !row.slug) continue;
+    const rowItemSlug = catalogRowSlug(row as ItemCatalogRow);
+    if (rowItemSlug && rowItemSlug !== row.slug) {
+      mergedMap[row.slug] = rowItemSlug;
+    }
+  }
+  if (versusSlugMap) {
+    for (const [slug, itemSlug] of Object.entries(versusSlugMap)) {
+      if (slug && typeof itemSlug === 'string' && itemSlug) {
+        mergedMap[slug] = itemSlug;
+      }
+    }
+  }
+
+  const ranked = rankMasterProductsForLeaderboard(catalogCandidates, {
+    category,
+    criterion: 'combined',
+  });
+  const seenItems = new Set<string>();
+  const uniqueItemCandidates: MasterProduct[] = [];
+  for (const entry of ranked) {
+    const slug = entry.product.slug;
+    if (!slug) continue;
+    const itemKey = (mergedMap[slug] || slug).toLowerCase();
+    if (seenItems.has(itemKey)) continue;
+    seenItems.add(itemKey);
+    uniqueItemCandidates.push(
+      mergedMap[slug]
+        ? ({
+            ...entry.product,
+            item_slug: mergedMap[slug],
+          } as MasterProduct)
+        : entry.product
+    );
+  }
+
+  const rawBattles = buildPopular1v1BattlesForCategory(
+    uniqueItemCandidates,
+    category,
+    20
+  );
+  const seenHrefs = new Set<string>();
+  const resolved: typeof rawBattles = [];
+  for (const battle of rawBattles) {
+    const slugA = battle.productA.slug;
+    const slugB = battle.productB.slug;
+    if (isSameCompareVersusItem(slugA, slugB, mergedMap)) {
+      continue;
+    }
+    const href = versusHref(slugA, slugB, mergedMap);
+    const nextVersusSlug = href.replace(/^\/compare\//, '');
+    const sides = nextVersusSlug.split('-vs-');
+    if (
+      sides.length !== 2 ||
+      !sides[0] ||
+      !sides[1] ||
+      sides[0].toLowerCase() === sides[1].toLowerCase()
+    ) {
+      continue;
+    }
+    const hrefKey = href.toLowerCase();
+    if (seenHrefs.has(hrefKey)) continue;
+    seenHrefs.add(hrefKey);
+    resolved.push({
+      ...battle,
+      versusSlug: nextVersusSlug,
+      versusHref: href,
+    });
+    if (resolved.length >= maxPairs) break;
+  }
+  return resolved;
 }
 
 export type CompareReplaceTranslate = (key: 'replaceDeviceBtn') => string;
@@ -1329,9 +1455,29 @@ export default function CompareWorkspace({
       cancelled = true;
     };
   }, [itemSlugBySlug, pairSlugA, pairSlugB, clientItemSlugs]);
-  const versusSlugMap = itemSlugBySlug
-    ? { ...itemSlugBySlug, ...clientItemSlugs }
-    : undefined;
+  const versusSlugMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const row of [...catalogCandidates, ...products]) {
+      if (!row || typeof row.slug !== 'string' || !row.slug) continue;
+      const rowSlug = catalogRowSlug(row as ItemCatalogRow);
+      if (rowSlug && rowSlug !== row.slug) {
+        map[row.slug] = rowSlug;
+      }
+    }
+    if (itemSlugBySlug) {
+      for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
+        if (slug && typeof itemSlug === 'string' && itemSlug) {
+          map[slug] = itemSlug;
+        }
+      }
+    }
+    for (const [slug, itemSlug] of Object.entries(clientItemSlugs)) {
+      if (slug && typeof itemSlug === 'string' && itemSlug) {
+        map[slug] = itemSlug;
+      }
+    }
+    return Object.keys(map).length > 0 ? map : undefined;
+  }, [catalogCandidates, products, itemSlugBySlug, clientItemSlugs]);
   const specGroups = useMemo(
     () => filterSpecGroupsForCategory(allSpecGroups, activeCategory),
     [allSpecGroups, activeCategory]
@@ -1731,8 +1877,13 @@ export default function CompareWorkspace({
 
   const popularBattles = useMemo(
     () =>
-      buildPopular1v1BattlesForCategory(catalogCandidates, activeCategory, 3),
-    [catalogCandidates, activeCategory]
+      resolveComparePopularBattles(
+        catalogCandidates,
+        activeCategory,
+        versusSlugMap,
+        3
+      ),
+    [catalogCandidates, activeCategory, versusSlugMap]
   );
 
   const handleCopyShareLink = async () => {
@@ -1777,9 +1928,7 @@ export default function CompareWorkspace({
               : t('unratedShort');
           })
           .join(' | ')} |`,
-        `| **${t('mdRowMinPrice')}** | ${products
-          .map((p) => formatComparePriceVnd(p.min_price))
-          .join(' | ')} |`,
+        buildCompareMarkdownMinPriceRow(t('mdRowMinPrice'), products, locale),
         `| **${t('mdRowDealRadar')}** | ${products
           .map((p) =>
             radarMarkdownCell(getRadarSignal(radarIndex, p.slug), locale)
@@ -2253,18 +2402,25 @@ export default function CompareWorkspace({
                 </>
               )}
 
-              {products.length === 2 && products[0] && products[1] && (
-                <Link
-                  href={versusHref(
-                    products[0].slug,
-                    products[1].slug,
-                    versusSlugMap
-                  )}
-                  className="btn btn-sm btn-dark rounded-pill fw-medium px-3 py-2"
-                >
-                  {t('deep1v1PageBtn')}
-                </Link>
-              )}
+              {products.length === 2 &&
+                products[0] &&
+                products[1] &&
+                !isSameCompareVersusItem(
+                  products[0].slug,
+                  products[1].slug,
+                  versusSlugMap
+                ) && (
+                  <Link
+                    href={versusHref(
+                      products[0].slug,
+                      products[1].slug,
+                      versusSlugMap
+                    )}
+                    className="btn btn-sm btn-dark rounded-pill fw-medium px-3 py-2"
+                  >
+                    {t('deep1v1PageBtn')}
+                  </Link>
+                )}
 
               {products.length > 0 && (
                 <button
@@ -2432,7 +2588,11 @@ export default function CompareWorkspace({
                       {t('loadIntoMatrixBtn')}
                     </button>
                     <IntentLink
-                      href={battle.versusHref}
+                      href={versusHref(
+                        battle.productA.slug,
+                        battle.productB.slug,
+                        versusSlugMap
+                      )}
                       className="btn btn-sm btn-dark rounded-pill small fw-semibold px-3"
                     >
                       {t('go1v1Btn')}
@@ -2749,7 +2909,12 @@ export default function CompareWorkspace({
                           <span className="rate-spec-pill mb-1">{p.brand}</span>
 
                           <Link
-                            href={getMasterProductHref(p)}
+                            href={getMasterProductHref({
+                              ...p,
+                              slug:
+                                versusSlugMap?.[p.slug] ||
+                                catalogRowSlug(p as ItemCatalogRow),
+                            })}
                             className="fw-bold text-dark text-decoration-none h6 mb-2"
                           >
                             {p.name}
@@ -2790,7 +2955,12 @@ export default function CompareWorkspace({
 
                           <div className="d-flex mt-1 gap-2">
                             <Link
-                              href={`${getMasterProductHref(p)}#jreviews-section`}
+                              href={`${getMasterProductHref({
+                                ...p,
+                                slug:
+                                  versusSlugMap?.[p.slug] ||
+                                  catalogRowSlug(p as ItemCatalogRow),
+                              })}#jreviews-section`}
                               className="btn btn-sm btn-dark rounded-pill fw-medium px-3"
                             >
                               {t('readReviewsAndScoreBtn')}

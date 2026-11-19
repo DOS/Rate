@@ -15,6 +15,7 @@ import {
   inPairOrder,
   versusAliasRedirect,
 } from '@/lib/item-compare';
+import { catalogRowSlug, type ItemCatalogRow } from '@/lib/item-directory';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
@@ -128,6 +129,52 @@ export async function generateMetadata({
   };
 }
 
+export function attachVersusItemSlug<
+  T extends { slug: string; item_slug?: string },
+>(
+  product: T,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): T & { item_slug?: string } {
+  const mapped = itemSlugBySlug?.[product.slug];
+  return typeof mapped === 'string' && mapped
+    ? { ...product, item_slug: mapped }
+    : product;
+}
+
+export function buildVersusItemListSchema(
+  nameA: string,
+  nameB: string,
+  entries: ReadonlyArray<{
+    name: string;
+    product: Pick<
+      ItemCatalogRow,
+      | 'slug'
+      | 'item_slug'
+      | 'name'
+      | 'model'
+      | 'category_id'
+      | 'metadata'
+      | 'specifications'
+    >;
+  }>
+) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: `${nameA} vs ${nameB}`,
+    numberOfItems: entries.length,
+    itemListElement: entries.map((entry, idx) => ({
+      '@type': 'ListItem',
+      position: idx + 1,
+      name: entry.name,
+      url: `https://rate.vn${getMasterProductHref({
+        ...entry.product,
+        slug: catalogRowSlug(entry.product),
+      })}`,
+    })),
+  };
+}
+
 export default async function VersusComparePage({ params }: VersusPageProps) {
   const { locale, versus } = await params;
   setRequestLocale(locale);
@@ -179,33 +226,31 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   if (!prodA || !prodB) {
     notFound();
   }
-  const catSlug = getMasterProductCategorySlug(prodA);
-  const scoreA = scoreMasterProductForLeaderboard(prodA, 'combined');
-  const scoreB = scoreMasterProductForLeaderboard(prodB, 'combined');
-  // RATE_ITEM_MODEL on: in-app versus links name Items (DOS/Rate#1290).
+  // RATE_ITEM_MODEL on: in-app versus and product links name Items (DOS/Rate#1290, #1764).
   const itemSlugBySlug = await getItemSlugsFor([
     ...compared.map((p) => p.slug),
     ...directory.map((p) => p.slug),
   ]);
+  const itemProdA = attachVersusItemSlug(prodA, itemSlugBySlug);
+  const itemProdB = attachVersusItemSlug(prodB, itemSlugBySlug);
+  const catSlug = getMasterProductCategorySlug(itemProdA);
+  const scoreA = scoreMasterProductForLeaderboard(itemProdA, 'combined');
+  const scoreB = scoreMasterProductForLeaderboard(itemProdB, 'combined');
   const itemSlugProps = itemSlugBySlug ? { itemSlugBySlug } : {};
   // The picker and switcher rank and list the directory; an added product gets
   // its full sheet from the page the selection navigates to (DOS/Rate#1515).
-  const candidateRows = directory.map(withScoringSpecs);
+  const scoredDirectory = directory.map(withScoringSpecs);
+  const candidateRows = scoredDirectory.map((p) =>
+    attachVersusItemSlug(p, itemSlugBySlug)
+  );
 
   // Summary ItemList: each item links to its product page, which carries the
   // Product markup (DOS/Rate#1059).
-  const itemListSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'ItemList',
-    name: `${prodA.name} vs ${prodB.name}`,
-    numberOfItems: 2,
-    itemListElement: [scoreA, scoreB].map((entry, idx) => ({
-      '@type': 'ListItem',
-      position: idx + 1,
-      name: entry.name,
-      url: `https://rate.vn${getMasterProductHref(entry.product)}`,
-    })),
-  };
+  const itemListSchema = buildVersusItemListSchema(
+    itemProdA.name,
+    itemProdB.name,
+    [scoreA, scoreB]
+  );
 
   return (
     <ClientMessages scope="compare">
@@ -280,7 +325,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
         <section className="bg-light py-5">
           <div className="container">
             <CompareWorkspace
-              initialProducts={[prodA, prodB]}
+              initialProducts={[itemProdA, itemProdB]}
               catalogCandidates={candidateRows}
               initialCategory={catSlug}
               hasExplicitSlugs={true}

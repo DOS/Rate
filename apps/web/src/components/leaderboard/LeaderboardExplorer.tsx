@@ -23,7 +23,6 @@ import {
   type FilteredReviewCountsByMaster,
   type LeaderboardCriterionKey,
   type LeaderboardPriceSegment,
-  type MasterProduct,
 } from '@/lib/rate-domain';
 import {
   LEADERBOARD_SCORE_CRITERIA,
@@ -84,6 +83,7 @@ import {
   roundScore,
 } from '@/lib/rating-display';
 import { versusHref } from '@/lib/item-compare';
+import { catalogRowSlug, type ItemCatalogRow } from '@/lib/item-directory';
 
 export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
 
@@ -101,11 +101,23 @@ export function sanitizeLeaderboardWeight(
 }
 
 export function sanitizeLeaderboardPriceVnd(value: unknown): number {
-  const num = Number(value);
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  let num: number;
+  if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return 0;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return 0;
+    }
+    num = Number(trimmed);
+  } else {
+    num = value;
+  }
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  return Math.round(num);
+  const rounded = Math.round(num);
+  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
 }
 
 export function formatLeaderboardPriceVnd(
@@ -193,6 +205,173 @@ export function formatLeaderboardActiveScore(
     : emptyText;
 }
 
+export function buildLeaderboardItemSlugMap(
+  products: readonly ItemCatalogRow[],
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  if (itemSlugBySlug) {
+    for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
+      if (slug && typeof itemSlug === 'string' && itemSlug) {
+        map[slug] = itemSlug;
+      }
+    }
+  }
+  for (const p of products) {
+    if (!p || typeof p.slug !== 'string' || !p.slug) continue;
+    const rowSlug = catalogRowSlug(p);
+    if (rowSlug && rowSlug !== p.slug && !map[p.slug]) {
+      map[p.slug] = rowSlug;
+    }
+  }
+  return map;
+}
+
+export function resolveLeaderboardVersusSideSlug(
+  slug: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): string {
+  if (!slug) return '';
+  const mapped = itemSlugBySlug?.[slug];
+  return mapped && !mapped.includes('-vs-') ? mapped : slug;
+}
+
+export function isSameLeaderboardVersusItem(
+  slugA: string,
+  slugB: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): boolean {
+  if (!slugA || !slugB) return false;
+  if (slugA.toLowerCase() === slugB.toLowerCase()) return true;
+  const sideA = resolveLeaderboardVersusSideSlug(slugA, itemSlugBySlug);
+  const sideB = resolveLeaderboardVersusSideSlug(slugB, itemSlugBySlug);
+  if (sideA.toLowerCase() === sideB.toLowerCase()) return true;
+  const rawItemA = itemSlugBySlug?.[slugA];
+  const rawItemB = itemSlugBySlug?.[slugB];
+  return Boolean(
+    rawItemA && rawItemB && rawItemA.toLowerCase() === rawItemB.toLowerCase()
+  );
+}
+
+export function resolveLeaderboardCompareSlugs(
+  entries: ReadonlyArray<{
+    product: Pick<ItemCatalogRow, 'slug' | 'item_slug'>;
+  }>,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null,
+  limit = 3
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const entry of entries) {
+    const rawSlug = entry?.product?.slug?.trim() ?? '';
+    if (!rawSlug) continue;
+    const canonical = (
+      itemSlugBySlug?.[rawSlug] || catalogRowSlug(entry.product)
+    ).trim();
+    const key = (canonical || rawSlug).toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(canonical || rawSlug);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+export function resolveLeaderboardEffectiveVersusSlugs(
+  entries: ReadonlyArray<{
+    product: Pick<ItemCatalogRow, 'slug' | 'item_slug'>;
+  }>,
+  requestedSlugA: string,
+  requestedSlugB: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): { effectiveVersusA: string; effectiveVersusB: string } {
+  const effectiveVersusA =
+    requestedSlugA && entries.some((e) => e.product.slug === requestedSlugA)
+      ? requestedSlugA
+      : (entries[0]?.product.slug ?? '');
+  const effectiveVersusB =
+    requestedSlugB &&
+    !isSameLeaderboardVersusItem(
+      requestedSlugB,
+      effectiveVersusA,
+      itemSlugBySlug
+    ) &&
+    entries.some((e) => e.product.slug === requestedSlugB)
+      ? requestedSlugB
+      : (entries.find(
+          (e) =>
+            !isSameLeaderboardVersusItem(
+              e.product.slug,
+              effectiveVersusA,
+              itemSlugBySlug
+            )
+        )?.product.slug ?? '');
+  return { effectiveVersusA, effectiveVersusB };
+}
+
+export function buildLeaderboardMarkdownRow(
+  entry: Pick<
+    RankedProductEntry,
+    'product' | 'activeScore5' | 'userScore5' | 'expertScore10'
+  >,
+  rank: number,
+  scoreDigits: 1 | 2,
+  unratedShort: string,
+  radar: RadarSignal | null | undefined,
+  locale?: string
+): string[] {
+  const safePrice = sanitizeLeaderboardPriceVnd(entry.product.min_price);
+  return [
+    `#${rank}`,
+    sanitizeLeaderboardMarkdownCell(entry.product.name),
+    sanitizeLeaderboardMarkdownCell(entry.product.brand),
+    formatLeaderboardActiveScore(entry.activeScore5, scoreDigits, unratedShort),
+    entry.userScore5 > 0
+      ? formatScoreFixed(displayedScore5(entry.userScore5), 1)
+      : unratedShort,
+    entry.expertScore10 != null
+      ? formatScoreFixed(entry.expertScore10, 1)
+      : unratedShort,
+    formatLeaderboardDisplayPriceVnd(safePrice, locale),
+    radarMarkdownCell(radar, locale),
+  ];
+}
+
+export function buildLeaderboardCsvRow(
+  entry: Pick<
+    RankedProductEntry,
+    | 'product'
+    | 'categorySlug'
+    | 'activeScore5'
+    | 'userScore5'
+    | 'expertScore10'
+    | 'criteria'
+  >,
+  rank: number,
+  scoreDigits: 1 | 2,
+  radar: RadarSignal | null | undefined
+): string[] {
+  const safePrice = sanitizeLeaderboardPriceVnd(entry.product.min_price);
+  return [
+    String(rank),
+    entry.product.slug,
+    entry.product.name,
+    entry.product.brand || '',
+    entry.categorySlug,
+    formatLeaderboardActiveScore(entry.activeScore5, scoreDigits),
+    entry.userScore5 > 0
+      ? formatScoreFixed(displayedScore5(entry.userScore5), 1)
+      : '',
+    entry.expertScore10 != null ? formatScoreFixed(entry.expertScore10, 1) : '',
+    ...LEADERBOARD_SCORE_CRITERIA.map((c) => {
+      const score = entry.criteria[c];
+      return score != null && score > 0 ? formatScoreFixed(score, 1) : '';
+    }),
+    safePrice > 0 ? String(safePrice) : '',
+    ...radarCsvCells(radar),
+  ];
+}
+
 export function buildLeaderboardJsonItem(
   entry: Pick<
     RankedProductEntry,
@@ -218,15 +397,17 @@ export function buildLeaderboardJsonItem(
 }
 
 interface LeaderboardExplorerProps {
-  readonly products: readonly MasterProduct[];
+  readonly products: readonly ItemCatalogRow[];
   readonly dealRadar?: CrossPlatformDealRadarResponse | null;
   readonly locale?: string;
   /** Stored reviews kept out of the rating, per master id (DOS/Rate#1139). */
   readonly filteredReviewCounts?: FilteredReviewCountsByMaster;
+  /** RATE_ITEM_MODEL on: variant slug to Item slug, for versus links. */
+  readonly itemSlugBySlug?: Readonly<Record<string, string>>;
 }
 
 interface RankedProductEntry {
-  product: MasterProduct;
+  product: ItemCatalogRow;
   categorySlug: CanonicalCategorySlug;
   categoryPath: string;
   productHref: string;
@@ -291,7 +472,7 @@ function buildCategoryTabs(t: TranslateFn): ReadonlyArray<{
 }
 
 function computeProductScores(
-  item: MasterProduct,
+  item: ItemCatalogRow,
   criterion: LeaderboardCriterionKey,
   filteredReviewCounts?: FilteredReviewCountsByMaster
 ): RankedProductEntry {
@@ -301,7 +482,7 @@ function computeProductScores(
     filteredReviewCounts
   );
   return {
-    product: scored.product,
+    product: scored.product as ItemCatalogRow,
     categorySlug: scored.categorySlug,
     categoryPath: scored.categoryPath,
     productHref: scored.productHref,
@@ -343,10 +524,13 @@ function TabFromUrl({
 export default function LeaderboardExplorer({
   products,
   dealRadar,
+  locale: localeProp,
   filteredReviewCounts,
+  itemSlugBySlug,
 }: LeaderboardExplorerProps) {
   const t = useTranslations('leaderboard');
-  const locale = useLocale();
+  const hookLocale = useLocale();
+  const locale = localeProp || hookLocale;
 
   const radarIndex = useDealRadarIndex(dealRadar);
   const categoryTabs = useMemo(() => buildCategoryTabs(t), [t]);
@@ -712,38 +896,71 @@ export default function LeaderboardExplorer({
     filteredReviewCounts,
   ]);
 
+  const resolvedItemSlugBySlug = useMemo(
+    () => buildLeaderboardItemSlugMap(products, itemSlugBySlug),
+    [products, itemSlugBySlug]
+  );
+
   const top3Slugs = useMemo(
-    () => rankedEntries.slice(0, 3).map((e) => e.product.slug),
-    [rankedEntries]
+    () =>
+      resolveLeaderboardCompareSlugs(rankedEntries, resolvedItemSlugBySlug, 3),
+    [rankedEntries, resolvedItemSlugBySlug]
   );
 
   const [copiedLeaderboardMd, setCopiedLeaderboardMd] = useState(false);
   const [versusSlugA, setVersusSlugA] = useState<string>('');
   const [versusSlugB, setVersusSlugB] = useState<string>('');
 
-  const effectiveVersusA = useMemo(() => {
-    if (
-      versusSlugA &&
-      rankedEntries.some((e) => e.product.slug === versusSlugA)
-    ) {
-      return versusSlugA;
-    }
-    return rankedEntries[0]?.product.slug ?? '';
-  }, [versusSlugA, rankedEntries]);
+  const { effectiveVersusA, effectiveVersusB } = useMemo(
+    () =>
+      resolveLeaderboardEffectiveVersusSlugs(
+        rankedEntries,
+        versusSlugA,
+        versusSlugB,
+        resolvedItemSlugBySlug
+      ),
+    [rankedEntries, versusSlugA, versusSlugB, resolvedItemSlugBySlug]
+  );
 
-  const effectiveVersusB = useMemo(() => {
-    if (
-      versusSlugB &&
-      versusSlugB !== effectiveVersusA &&
-      rankedEntries.some((e) => e.product.slug === versusSlugB)
-    ) {
-      return versusSlugB;
+  const showdownPairs = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{
+      iA: number;
+      iB: number;
+      a: RankedProductEntry;
+      b: RankedProductEntry;
+      vHref: string;
+    }> = [];
+    for (const [iA, iB] of [
+      [0, 1],
+      [0, 2],
+      [1, 2],
+    ] as const) {
+      const a = rankedEntries[iA];
+      const b = rankedEntries[iB];
+      if (
+        !a ||
+        !b ||
+        isSameLeaderboardVersusItem(
+          a.product.slug,
+          b.product.slug,
+          resolvedItemSlugBySlug
+        )
+      ) {
+        continue;
+      }
+      const vHref = versusHref(
+        a.product.slug,
+        b.product.slug,
+        resolvedItemSlugBySlug
+      );
+      const key = vHref.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ iA, iB, a, b, vHref });
     }
-    return (
-      rankedEntries.find((e) => e.product.slug !== effectiveVersusA)?.product
-        .slug ?? ''
-    );
-  }, [versusSlugB, effectiveVersusA, rankedEntries]);
+    return out;
+  }, [rankedEntries, resolvedItemSlugBySlug]);
 
   const handleCopyLeaderboardMarkdown = async () => {
     if (typeof navigator === 'undefined' || rankedEntries.length === 0) return;
@@ -758,28 +975,16 @@ export default function LeaderboardExplorer({
       'Price signal',
     ];
     const sep = headers.map(() => '---');
-    const rows = rankedEntries.map((entry, idx) => {
-      const radar = getRadarSignal(radarIndex, entry.product.slug);
-      const safePrice = sanitizeLeaderboardPriceVnd(entry.product.min_price);
-      return [
-        `#${idx + 1}`,
-        sanitizeLeaderboardMarkdownCell(entry.product.name),
-        sanitizeLeaderboardMarkdownCell(entry.product.brand),
-        formatLeaderboardActiveScore(
-          entry.activeScore5,
-          scoreDigits,
-          t('unratedShort')
-        ),
-        entry.userScore5 > 0
-          ? formatScoreFixed(displayedScore5(entry.userScore5), 1)
-          : t('unratedShort'),
-        entry.expertScore10 != null
-          ? formatScoreFixed(entry.expertScore10, 1)
-          : t('unratedShort'),
-        formatLeaderboardDisplayPriceVnd(safePrice),
-        radarMarkdownCell(radar, locale),
-      ];
-    });
+    const rows = rankedEntries.map((entry, idx) =>
+      buildLeaderboardMarkdownRow(
+        entry,
+        idx + 1,
+        scoreDigits,
+        t('unratedShort'),
+        getRadarSignal(radarIndex, entry.product.slug),
+        locale
+      )
+    );
     const md = [
       `### 🏆 Rate.vn JReviews Leaderboard (${activeCategory.toUpperCase()} - ${activeScoreLabel})`,
       '',
@@ -817,29 +1022,14 @@ export default function LeaderboardExplorer({
       'MinPriceVND',
       ...RADAR_CSV_HEADERS,
     ];
-    const rows = rankedEntries.map((entry, idx) => {
-      const radar = getRadarSignal(radarIndex, entry.product.slug);
-      return [
-        String(idx + 1),
-        entry.product.slug,
-        entry.product.name,
-        entry.product.brand || '',
-        entry.categorySlug,
-        formatLeaderboardActiveScore(entry.activeScore5, scoreDigits),
-        entry.userScore5 > 0
-          ? formatScoreFixed(displayedScore5(entry.userScore5), 1)
-          : '',
-        entry.expertScore10 != null
-          ? formatScoreFixed(entry.expertScore10, 1)
-          : '',
-        ...LEADERBOARD_SCORE_CRITERIA.map((c) => {
-          const score = entry.criteria[c];
-          return score != null && score > 0 ? formatScoreFixed(score, 1) : '';
-        }),
-        String(sanitizeLeaderboardPriceVnd(entry.product.min_price)),
-        ...radarCsvCells(radar),
-      ];
-    });
+    const rows = rankedEntries.map((entry, idx) =>
+      buildLeaderboardCsvRow(
+        entry,
+        idx + 1,
+        scoreDigits,
+        getRadarSignal(radarIndex, entry.product.slug)
+      )
+    );
     const csvContent =
       '\uFEFF' +
       [
@@ -951,42 +1141,42 @@ export default function LeaderboardExplorer({
     {
       key: 'combined',
       label: copy.critLabels.combined,
-      icon: <BsTrophyFill className="text-warning" />,
+      icon: <BsTrophyFill aria-hidden="true" className="text-warning" />,
     },
     {
       key: 'user',
       label: copy.critLabels.user,
-      icon: <BsStarFill className="text-warning" />,
+      icon: <BsStarFill aria-hidden="true" className="text-warning" />,
     },
     {
       key: 'expert',
       label: copy.critLabels.expert,
-      icon: <BsShieldCheck className="text-primary" />,
+      icon: <BsShieldCheck aria-hidden="true" className="text-primary" />,
     },
     {
       key: 'screen',
       label: copy.critLabels.screen,
-      icon: <BsDisplay className="text-danger" />,
+      icon: <BsDisplay aria-hidden="true" className="text-danger" />,
     },
     {
       key: 'performance',
       label: copy.critLabels.performance,
-      icon: <BsCpu className="text-danger" />,
+      icon: <BsCpu aria-hidden="true" className="text-danger" />,
     },
     {
       key: 'camera',
       label: copy.critLabels.camera,
-      icon: <BsCameraFill className="text-danger" />,
+      icon: <BsCameraFill aria-hidden="true" className="text-danger" />,
     },
     {
       key: 'battery',
       label: copy.critLabels.battery,
-      icon: <BsBatteryCharging className="text-success" />,
+      icon: <BsBatteryCharging aria-hidden="true" className="text-success" />,
     },
     {
       key: 'value',
       label: copy.critLabels.value,
-      icon: <BsGem className="text-info" />,
+      icon: <BsGem aria-hidden="true" className="text-info" />,
     },
   ];
   const criterionOptions = allCriterionOptions.filter(
@@ -1047,10 +1237,10 @@ export default function LeaderboardExplorer({
             </button>
             {top3Slugs.length >= 2 && (
               <Link
-                href={`/compare?cat=${activeCategory}&slugs=${top3Slugs.join(',')}`}
+                href={`/compare?cat=${activeCategory}&slugs=${top3Slugs.map(encodeURIComponent).join(',')}`}
                 className="btn btn-sm btn-danger rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-1"
               >
-                <BsArrowLeftRight />
+                <BsArrowLeftRight aria-hidden="true" />
                 <span>{copy.compareTop3Btn}</span>
               </Link>
             )}
@@ -1258,7 +1448,7 @@ export default function LeaderboardExplorer({
           <div className="col-lg-5 col-md-12">
             <div className="input-group input-group-sm">
               <span className="input-group-text bg-light border-end-0 text-muted">
-                <BsSearch />
+                <BsSearch aria-hidden="true" />
               </span>
               <input
                 type="search"
@@ -1306,7 +1496,8 @@ export default function LeaderboardExplorer({
           <div className="col-lg-3 col-md-6">
             <div className="input-group input-group-sm">
               <span className="input-group-text bg-light text-muted">
-                <BsFunnel className="me-1" /> {t('brandFilterLabel')}
+                <BsFunnel aria-hidden="true" className="me-1" />{' '}
+                {t('brandFilterLabel')}
               </span>
               <select
                 value={selectedBrand}
@@ -1326,7 +1517,7 @@ export default function LeaderboardExplorer({
         </div>
 
         {/* Interactive Same-Category 1v1 Matchup Picker (Issue #67) */}
-        {rankedEntries.length >= 2 && (
+        {rankedEntries.length >= 2 && effectiveVersusA && effectiveVersusB && (
           <div className="border-top mt-3 pt-3">
             <div className="row g-2 align-items-center">
               <div className="col-lg-4 col-md-12">
@@ -1363,7 +1554,14 @@ export default function LeaderboardExplorer({
                   aria-label={t('selectDeviceBAria')}
                 >
                   {rankedEntries
-                    .filter((e) => e.product.slug !== effectiveVersusA)
+                    .filter(
+                      (e) =>
+                        !isSameLeaderboardVersusItem(
+                          e.product.slug,
+                          effectiveVersusA,
+                          resolvedItemSlugBySlug
+                        )
+                    )
                     .map((entry) => {
                       const rankIdx = rankedEntries.findIndex(
                         (r) => r.product.slug === entry.product.slug
@@ -1386,16 +1584,26 @@ export default function LeaderboardExplorer({
                 </select>
               </div>
               <div className="col-lg-2 col-md-2">
-                {effectiveVersusA && effectiveVersusB && (
-                  <Link
-                    href={versusHref(effectiveVersusA, effectiveVersusB)}
-                    className="btn btn-sm btn-danger rounded-pill fw-bold w-100"
-                    data-testid="leaderboard-1v1-go-btn"
-                  >
-                    <BsArrowLeftRight aria-hidden="true" className="me-1" />
-                    {t('go1v1BattleBtn')}
-                  </Link>
-                )}
+                {effectiveVersusA &&
+                  effectiveVersusB &&
+                  !isSameLeaderboardVersusItem(
+                    effectiveVersusA,
+                    effectiveVersusB,
+                    resolvedItemSlugBySlug
+                  ) && (
+                    <Link
+                      href={versusHref(
+                        effectiveVersusA,
+                        effectiveVersusB,
+                        resolvedItemSlugBySlug
+                      )}
+                      className="btn btn-sm btn-danger rounded-pill fw-bold w-100"
+                      data-testid="leaderboard-1v1-go-btn"
+                    >
+                      <BsArrowLeftRight aria-hidden="true" className="me-1" />
+                      {t('go1v1BattleBtn')}
+                    </Link>
+                  )}
               </div>
             </div>
           </div>
@@ -1407,7 +1615,7 @@ export default function LeaderboardExplorer({
         <div className="rate-scoreboard-dark p-lg-5 mb-4 p-4">
           <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
             <div className="d-flex align-items-center gap-2">
-              <BsTrophyFill className="text-warning fs-4" />
+              <BsTrophyFill aria-hidden="true" className="text-warning fs-4" />
               <h2 className="h4 fw-bold mb-0 text-white">{copy.podiumTitle}</h2>
             </div>
             <span className="badge bg-warning text-dark rounded-pill fw-bold px-3 py-2">
@@ -1644,7 +1852,7 @@ export default function LeaderboardExplorer({
       )}
 
       {/* 2.5. Top 1v1 Head-to-Head Battles among Current Leaderboard */}
-      {rankedEntries.length >= 2 && (
+      {showdownPairs.length > 0 && top3Slugs.length >= 2 && (
         <div className="rate-card rounded-4 p-md-4 mb-4 border bg-white p-3 shadow-sm">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <div>
@@ -1654,12 +1862,10 @@ export default function LeaderboardExplorer({
               </h3>
             </div>
             <Link
-              href={`/compare?category=${activeCategory}&slugs=${encodeURIComponent(
-                rankedEntries
-                  .slice(0, 2)
-                  .map((e: RankedProductEntry) => e.product.slug)
-                  .join(',')
-              )}`}
+              href={`/compare?category=${activeCategory}&slugs=${top3Slugs
+                .slice(0, 2)
+                .map(encodeURIComponent)
+                .join(',')}`}
               className="btn btn-sm btn-outline-dark rounded-pill px-3"
             >
               {t('openCompareMatrixBtn')}
@@ -1667,82 +1873,68 @@ export default function LeaderboardExplorer({
           </div>
 
           <div className="row g-3">
-            {(
-              [
-                [0, 1],
-                [0, 2],
-                [1, 2],
-              ] as const
-            )
-              .filter(
-                ([iA, iB]) =>
-                  Boolean(rankedEntries[iA]) && Boolean(rankedEntries[iB])
-              )
-              .map(([iA, iB]) => {
-                const a = rankedEntries[iA]!;
-                const b = rankedEntries[iB]!;
-                const vHref = versusHref(a.product.slug, b.product.slug);
-                const deltaBadge = formatLeaderboardShowdownDelta(
-                  a.activeScore5,
-                  b.activeScore5,
-                  scoreDigits,
-                  locale
-                );
-                return (
-                  <div key={vHref} className="col-lg-4 col-md-6">
-                    <div className="rounded-4 d-flex flex-column justify-content-between bg-light h-100 border p-3">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <span className="badge bg-dark rounded-pill small text-white">
-                          #{iA + 1} vs #{iB + 1}
+            {showdownPairs.map(({ iA, iB, a, b, vHref }) => {
+              const deltaBadge = formatLeaderboardShowdownDelta(
+                a.activeScore5,
+                b.activeScore5,
+                scoreDigits,
+                locale
+              );
+              return (
+                <div key={vHref} className="col-lg-4 col-md-6">
+                  <div className="rounded-4 d-flex flex-column justify-content-between bg-light h-100 border p-3">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <span className="badge bg-dark rounded-pill small text-white">
+                        #{iA + 1} vs #{iB + 1}
+                      </span>
+                      {deltaBadge && (
+                        <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
+                          {deltaBadge}
                         </span>
-                        {deltaBadge && (
-                          <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
-                            {deltaBadge}
-                          </span>
-                        )}
-                      </div>
+                      )}
+                    </div>
 
-                      <div className="d-flex align-items-center justify-content-between my-2 gap-2">
-                        <div className="overflow-hidden">
-                          <div className="small fw-bold text-dark text-truncate">
-                            {a.product.name}
-                          </div>
-                          <StarRating
-                            value={a.activeScore5}
-                            digits={scoreDigits}
-                            size="sm"
-                            emptyLabel={t('unratedShort')}
-                          />
+                    <div className="d-flex align-items-center justify-content-between my-2 gap-2">
+                      <div className="overflow-hidden">
+                        <div className="small fw-bold text-dark text-truncate">
+                          {a.product.name}
                         </div>
-                        <span className="badge bg-secondary rounded-pill flex-shrink-0">
-                          VS
-                        </span>
-                        <div className="overflow-hidden text-end">
-                          <div className="small fw-bold text-dark text-truncate">
-                            {b.product.name}
-                          </div>
-                          <StarRating
-                            value={b.activeScore5}
-                            digits={scoreDigits}
-                            size="sm"
-                            emptyLabel={t('unratedShort')}
-                          />
-                        </div>
+                        <StarRating
+                          value={a.activeScore5}
+                          digits={scoreDigits}
+                          size="sm"
+                          emptyLabel={t('unratedShort')}
+                        />
                       </div>
-
-                      <div className="border-top mt-2 pt-2 text-end">
-                        <IntentLink
-                          href={vHref}
-                          className="btn btn-sm btn-dark rounded-pill small fw-semibold w-100"
-                        >
-                          <BsArrowLeftRight className="me-1" />
-                          {t('view1v1DeepBtn')}
-                        </IntentLink>
+                      <span className="badge bg-secondary rounded-pill flex-shrink-0">
+                        VS
+                      </span>
+                      <div className="overflow-hidden text-end">
+                        <div className="small fw-bold text-dark text-truncate">
+                          {b.product.name}
+                        </div>
+                        <StarRating
+                          value={b.activeScore5}
+                          digits={scoreDigits}
+                          size="sm"
+                          emptyLabel={t('unratedShort')}
+                        />
                       </div>
                     </div>
+
+                    <div className="border-top mt-2 pt-2 text-end">
+                      <IntentLink
+                        href={vHref}
+                        className="btn btn-sm btn-dark rounded-pill small fw-semibold w-100"
+                      >
+                        <BsArrowLeftRight aria-hidden="true" className="me-1" />
+                        {t('view1v1DeepBtn')}
+                      </IntentLink>
+                    </div>
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1750,7 +1942,7 @@ export default function LeaderboardExplorer({
       {/* 3. Full Ranked Leaderboard List (#1 .. #N) */}
       <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h3 className="h5 fw-bold text-dark d-flex align-items-center mb-0 gap-2">
-          <BsAwardFill className="text-danger" />
+          <BsAwardFill aria-hidden="true" className="text-danger" />
           <span>
             {copy.fullTableTitle} ({rankedEntries.length})
           </span>
