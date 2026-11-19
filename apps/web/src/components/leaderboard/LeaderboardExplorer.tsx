@@ -426,23 +426,17 @@ export function leaderboardCompareHref(
     .map(({ token }) => encodeLeaderboardCompareSlug(token))
     .join(',');
   const fallbacks = new URLSearchParams();
-  // A bare Item token carries no size. During pin fallback it needs the
-  // represented master whenever the two slugs differ.
-  const hasPin = entries.some(
-    ({ token }) => !!parseCompareToken(token).variantKey
-  );
-  const needsFallback =
-    hasPin &&
-    entries.some(({ token, variantSlug }) => {
-      const { slug, variantKey } = parseCompareToken(token);
-      const master = variantSlug.toLowerCase();
-      if (!variantKey) return master !== slug;
-      return (
-        variantKey === 'standard' ||
-        slug.endsWith(`-${variantKey}`) ||
-        `${slug}-${variantKey}` !== master
-      );
-    });
+  // A bare token can represent one of several sizes even on a link with no pins.
+  const needsFallback = entries.some(({ token, variantSlug }) => {
+    const { slug, variantKey } = parseCompareToken(token);
+    const master = variantSlug.toLowerCase();
+    if (!variantKey) return master !== slug;
+    return (
+      variantKey === 'standard' ||
+      slug.endsWith(`-${variantKey}`) ||
+      `${slug}-${variantKey}` !== master
+    );
+  });
   if (needsFallback) {
     for (const { token, variantSlug } of entries) {
       if (token !== variantSlug)

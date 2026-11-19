@@ -3,11 +3,10 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   type CanonicalCategorySlug,
-  getCachedCompareMasterProducts,
   getCachedMasterProducts,
   getMasterProductCategorySlug,
 } from '@/server/rate';
-import { resolveCompareSlugs } from '@/server/rate/item-compare';
+import { getRequestedComparison } from '@/server/rate/compare-selection';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
 import { compareCategoryParam } from '@/lib/compare-params';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
@@ -24,7 +23,7 @@ export const dynamic = 'force-dynamic';
 
 type PageProps = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ slugs?: string; category?: string; cat?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
@@ -42,7 +41,8 @@ function normalizeCategoryParam(raw?: string): CanonicalCategorySlug {
   return 'smartphones';
 }
 
-function parseSlugsCsv(slugsParam?: string): string[] {
+function parseSlugsCsv(value?: string | string[]): string[] {
+  const slugsParam = Array.isArray(value) ? value[0] : value;
   if (!slugsParam) return [];
   return Array.from(
     new Set(
@@ -54,17 +54,6 @@ function parseSlugsCsv(slugsParam?: string): string[] {
   ).slice(0, 4);
 }
 
-/** Keep the Item resolution that selected these products for the workspace. */
-async function getRequestedComparison(requested: string[]) {
-  if (requested.length === 0)
-    return { products: [], resolvedSelection: undefined };
-  const resolvedSelection = await resolveCompareSlugs(requested);
-  const products = await getCachedCompareMasterProducts(
-    (resolvedSelection ?? requested).join(',')
-  );
-  return { products, resolvedSelection };
-}
-
 export async function generateMetadata({
   params,
   searchParams,
@@ -72,13 +61,16 @@ export async function generateMetadata({
   const { locale } = await params;
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
-  const { slugs: slugsParam } = await searchParams;
-  const requestedSlugs = parseSlugsCsv(slugsParam);
+  const query = await searchParams;
+  const requestedSlugs = parseSlugsCsv(query.slugs);
 
   const canonicalUrl = 'https://rate.vn/compare';
 
   if (requestedSlugs.length >= 2) {
-    const { products: compared } = await getRequestedComparison(requestedSlugs);
+    const { products: compared } = await getRequestedComparison(
+      requestedSlugs,
+      query
+    );
     if (compared.length >= 2) {
       const names = compared.map((p) => p.name).join(' vs ');
       const fullTitle = t('compareMetaTitleWithNames', { names });
@@ -135,7 +127,7 @@ export default async function ComparePhonesPage({
   ] = await Promise.all([
     // Fixed key, so it shares the data cache; only the compared slugs vary.
     getCachedMasterProducts({ categorySlug: 'all', limit: 50 }),
-    getRequestedComparison(requestedSlugs),
+    getRequestedComparison(requestedSlugs, resolvedSearch),
   ]);
 
   const activeCategory: CanonicalCategorySlug =
@@ -149,7 +141,7 @@ export default async function ComparePhonesPage({
   );
 
   const initialProducts =
-    requestedProducts.length > 0
+    requestedProducts.length > 0 || resolvedSelection === null
       ? requestedProducts.filter(
           (p) => getMasterProductCategorySlug(p) === activeCategory
         )
