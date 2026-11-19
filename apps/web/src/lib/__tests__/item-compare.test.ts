@@ -551,7 +551,71 @@ async function main() {
       'safe-variant-slug',
       `unsafe Item slug ${JSON.stringify(unsafeSlug)} must fall back to variant slug`
     );
+    assert.equal(
+      versusHref('safe-variant-slug', 'pixel-10', {
+        'safe-variant-slug': unsafeSlug,
+      }),
+      '/compare/pixel-10-vs-safe-variant-slug',
+      `versusHref must reject unsafe pre-resolved Item slug ${JSON.stringify(unsafeSlug)}`
+    );
   }
+  for (const unsafeFragmentSlug of [
+    'Apple#iPhone-16',
+    'Apple?iPhone-16',
+    `${maxLenItemSlug}x`,
+  ]) {
+    assert.equal(
+      versusHref('safe-variant-slug', 'pixel-10', {
+        'safe-variant-slug': unsafeFragmentSlug,
+      }),
+      '/compare/pixel-10-vs-safe-variant-slug',
+      `versusHref must reject malformed pre-resolved Item slug ${JSON.stringify(unsafeFragmentSlug)}`
+    );
+    assert.deepEqual(
+      planVersusRoute(
+        {
+          slug: 'safe-variant-slug',
+          resolution: {
+            kind: 'item',
+            item: {
+              id: 'item-unsafe',
+              slug: unsafeFragmentSlug,
+              default_variant_id: null,
+            },
+            variants: [
+              {
+                id: 'v-unsafe',
+                slug: 'safe-variant-slug',
+                variant_key: 'standard',
+              },
+            ],
+          },
+        },
+        { slug: 'samsung-galaxy-s24', resolution: s24 }
+      ),
+      { kind: 'not_found' }
+    );
+  }
+  assert.deepEqual(
+    planVersusRoute(
+      {
+        slug: 'safe-variant-slug',
+        resolution: {
+          kind: 'item',
+          item: {
+            id: 'item-dot',
+            slug: 'Apple..iPhone-16',
+            default_variant_id: null,
+          },
+          variants: [
+            { id: 'v-dot', slug: 'safe-variant-slug', variant_key: 'standard' },
+          ],
+        },
+      },
+      { slug: 'samsung-galaxy-s24', resolution: s24 }
+    ),
+    { kind: 'not_found' }
+  );
   assert.equal(
     itemSlugFromProductAnswer(
       Object.assign([], {
@@ -578,8 +642,8 @@ async function main() {
   );
 
   // /compare SSR pre-resolves both initialProducts and catalogCandidates via
-  // getItemSlugsFor so popular-battle and selector candidates carry exact Item
-  // membership (including mixed linked/unlinked siblings) from first paint (#1768).
+  // getItemSlugsFor so CompareWorkspace receives exact Item membership
+  // (including mixed linked/unlinked siblings) from first paint (#1768).
   const comparePageSrc = readFileSync(
     new URL('../../app/[locale]/compare/page.tsx', import.meta.url),
     'utf8'
@@ -670,7 +734,7 @@ async function main() {
     assert.equal(
       versusHref('xiaomi-15-ultra-512gb', 'apple-iphone-16-256gb', ssrMap),
       '/compare/Apple-iPhone-16-vs-xiaomi-15-ultra',
-      'popular-battle candidate pair resolves to canonical Item slugs on SSR'
+      'pre-resolved catalogCandidate pair maps to canonical Item slugs in versusHref'
     );
     assert.equal(
       versusHref(

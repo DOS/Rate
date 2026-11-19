@@ -214,6 +214,38 @@ export async function lookupSlugAnyCase<T>(
   return { slug: lower, found: await lookupExact(lower) };
 }
 
+const ITEM_ANSWER_SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$/;
+const UNSAFE_ITEM_SLUG_KEYS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  'tostring',
+  'tolocalestring',
+  'valueof',
+  'hasownproperty',
+  'isprototypeof',
+  'propertyisenumerable',
+]);
+
+function getOwnRecordField(record: unknown, key: string): unknown {
+  return record &&
+    typeof record === 'object' &&
+    !Array.isArray(record) &&
+    Object.prototype.hasOwnProperty.call(record, key)
+    ? (record as Record<string, unknown>)[key]
+    : undefined;
+}
+
+function isSafeVersusItemSlug(slug: unknown): slug is string {
+  return (
+    typeof slug === 'string' &&
+    ITEM_ANSWER_SLUG_REGEX.test(slug) &&
+    !slug.includes('..') &&
+    !slug.endsWith('.') &&
+    !UNSAFE_ITEM_SLUG_KEYS.has(slug.toLowerCase())
+  );
+}
+
 export type VersusPlan =
   /** Neither side has an Item: today's versus page. */
   | { kind: 'legacy' }
@@ -237,9 +269,11 @@ export function planVersusRoute(
   if (a.itemId && a.itemId === b.itemId) return { kind: 'not_found' };
   const urlSlugA = a.itemSlug ?? a.variantSlug;
   const urlSlugB = b.itemSlug ?? b.variantSlug;
-  // A slug holding "-vs-" cannot be one side of a versus URL (it would not
-  // parse back), so there is no versus page for it (#1275).
+  // A slug with path/fragment characters, dot traversal or "-vs-" cannot be
+  // one side of a versus URL (#1275, #1768).
   if (
+    !isSafeVersusItemSlug(urlSlugA) ||
+    !isSafeVersusItemSlug(urlSlugB) ||
     urlSlugA.toLowerCase().includes('-vs-') ||
     urlSlugB.toLowerCase().includes('-vs-')
   ) {
@@ -276,33 +310,11 @@ export function planVersusRoute(
   };
 }
 
-const ITEM_ANSWER_SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$/;
-const UNSAFE_ITEM_SLUG_KEYS = new Set([
-  '__proto__',
-  'constructor',
-  'prototype',
-  'tostring',
-  'tolocalestring',
-  'valueof',
-  'hasownproperty',
-  'isprototypeof',
-  'propertyisenumerable',
-]);
-
-function getOwnRecordField(record: unknown, key: string): unknown {
-  return record &&
-    typeof record === 'object' &&
-    !Array.isArray(record) &&
-    Object.prototype.hasOwnProperty.call(record, key)
-    ? (record as Record<string, unknown>)[key]
-    : undefined;
-}
-
 /**
  * The canonical versus URL for two catalogue slugs: the sides in sorted
  * order (#1367), each named by its Item when `itemSlugBySlug` maps it
  * (RATE_ITEM_MODEL on), so in-app links need no 308 hop (DOS/Rate#1290). A
- * side whose Item slug holds "-vs-" keeps its own slug.
+ * side whose Item slug is unsafe or holds "-vs-" keeps its own slug.
  */
 export function versusHref(
   slugA: string,
@@ -311,8 +323,7 @@ export function versusHref(
 ): string {
   const side = (slug: string) => {
     const itemSlug = getOwnRecordField(itemSlugBySlug, slug);
-    return typeof itemSlug === 'string' &&
-      itemSlug &&
+    return isSafeVersusItemSlug(itemSlug) &&
       !itemSlug.toLowerCase().includes('-vs-')
       ? itemSlug
       : slug;
@@ -331,13 +342,7 @@ export function itemSlugFromProductAnswer(json: unknown, slug: string): string {
       ? getOwnRecordField(getOwnRecordField(json, 'data'), 'item')
       : undefined;
   const itemSlug = getOwnRecordField(item, 'slug');
-  return typeof itemSlug === 'string' &&
-    ITEM_ANSWER_SLUG_REGEX.test(itemSlug) &&
-    !itemSlug.includes('..') &&
-    !itemSlug.endsWith('.') &&
-    !UNSAFE_ITEM_SLUG_KEYS.has(itemSlug.toLowerCase())
-    ? itemSlug
-    : slug;
+  return isSafeVersusItemSlug(itemSlug) ? itemSlug : slug;
 }
 
 /**
