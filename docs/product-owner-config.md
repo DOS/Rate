@@ -100,6 +100,7 @@ side as "Triage" in that skill says.
   says: a fresh-context subagent review of the diff (`AGENTS.md` sections 0.2
   and 5), then a Codex review where Codex is available; a PR without one
   says so
+- agent_model: sonnet
 
 ## Claim lock and parallel POs
 
@@ -110,3 +111,7 @@ side as "Triage" in that skill says.
 - pr_issue_keyword: Closes
 - po_labels: claude: po:claude, qwen: po:qwen
 - promotion_po: claude
+
+## Sessions
+
+- gatekeeper_model: haiku
