@@ -219,8 +219,9 @@ export async function lookupSlugAnyCase<T>(
   return { slug: lower, found: await lookupExact(lower) };
 }
 
-// Matches resolveCatalogSlug's 120-char and sentinel bounds in rate-api.ts so
-// every Item slug emitted into a versus URL can be resolved back by slug.
+// Matches resolveCatalogSlug's 120-char and sentinel bounds in rate-api.ts
+// plus api-handler's prototype-key denylist so every Item slug emitted into a
+// versus URL can be resolved back by slug.
 const ITEM_ANSWER_SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/;
 const UNSAFE_ITEM_SLUG_KEYS = new Set([
   '0',
@@ -240,6 +241,9 @@ const UNSAFE_ITEM_SLUG_KEYS = new Set([
   'hasownproperty',
   'isprototypeof',
   'propertyisenumerable',
+  ...Object.getOwnPropertyNames(Object.prototype).map((key) =>
+    key.toLowerCase()
+  ),
 ]);
 
 function getOwnRecordField(record: unknown, key: string): unknown {
@@ -257,6 +261,7 @@ function isSafeVersusItemSlug(slug: unknown): slug is string {
     ITEM_ANSWER_SLUG_REGEX.test(slug) &&
     !slug.includes('..') &&
     !slug.endsWith('.') &&
+    !(slug in Object.prototype) &&
     !UNSAFE_ITEM_SLUG_KEYS.has(slug.toLowerCase())
   );
 }
