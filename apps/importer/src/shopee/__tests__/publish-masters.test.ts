@@ -1,14 +1,12 @@
 /**
  * DOS/Rate#1756: the scoped publish job flips only the named seed drafts that carry their
  * seed's licensed image and full specs, checks --expect before its first write, and writes
- * with a status guard. All database access here is a stand-in.
+ * with a status guard. The 17e seeds have no licensed image yet, so most cases run on copies
+ * of them that carry a sample one. All database access here is a stand-in.
  */
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { IPHONE_17E_IMAGE, SOURCED_SEEDS_IPHONE_17E } from '../flagship-seed-sourced-iphone-17e.js';
+import { SOURCED_SEEDS_IPHONE_17E } from '../flagship-seed-sourced-iphone-17e.js';
 import { seedMasterSpecUpdate } from '../jobs/backfill-specs.js';
 import {
   parsePublishMastersArgs,
@@ -18,9 +16,12 @@ import {
 import type { RateSupabaseClient } from '../types.js';
 
 const KEYS = ['apple:iphone-17e:256gb', 'apple:iphone-17e:512gb'] as const;
-const seeds = KEYS.map(k => SOURCED_SEEDS_IPHONE_17E.find(s => s.model_key === k)!);
+const realSeeds = KEYS.map(k => SOURCED_SEEDS_IPHONE_17E.find(s => s.model_key === k)!);
+/** The 17e seeds as they would be with a licensed photo (the job's happy path). */
+const SAMPLE_IMAGE = '/img/devices/sample-phone.jpg';
+const seeds = realSeeds.map(s => ({ ...s, images: [SAMPLE_IMAGE] }));
 
-/** A 17e master as the scoped backfill apply leaves it: a draft with the seed's image. */
+/** A 17e master as the scoped backfill apply would leave it: a draft with the seed's image. */
 function draftRow(i: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   const seed = seeds[i]!;
   return {
@@ -87,13 +88,19 @@ function tableClient(rows: Array<Record<string, unknown>>, onWrite?: () => void)
   return { client: client as unknown as RateSupabaseClient, writes };
 }
 
-test('the 17e seeds carry the licensed photo, and the web app serves and credits it', () => {
-  assert.equal(IPHONE_17E_IMAGE, '/img/devices/apple-iphone-17e.jpg');
-  for (const seed of seeds) assert.deepEqual(seed.images, [IPHONE_17E_IMAGE]);
-  const webRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../web');
-  assert.ok(existsSync(join(webRoot, 'public', IPHONE_17E_IMAGE)), 'photo is in apps/web/public');
-  const credits = readFileSync(join(webRoot, 'src/lib/device-images.ts'), 'utf8');
-  assert.match(credits, /'apple-iphone-17e': \{/, 'photo has a licence notice');
+test('the 17e stays a draft: its seeds have no image, so the job refuses to publish it', async () => {
+  for (const seed of realSeeds) assert.deepEqual(seed.images, []);
+  const rows = [
+    draftRow(0, { images: [], thumbnail: null }),
+    draftRow(1, { images: [], thumbnail: null }),
+  ];
+  const { client, writes } = tableClient(rows);
+  await assert.rejects(
+    publishSeedMastersWith(client, { only: [...KEYS], apply: true, expect: 2 }),
+    /Cannot publish \(2\), nothing written:[^]*the seed has no images/
+  );
+  assert.deepEqual(writes, []);
+  assert.ok(rows.every(r => r.status === 'draft'));
 });
 
 test('parsePublishMastersArgs is strict', () => {
@@ -127,7 +134,7 @@ test('parsePublishMastersArgs is strict', () => {
 test('a dry run plans the two 17e drafts and writes nothing', async () => {
   const rows = [draftRow(0), draftRow(1)];
   const { client, writes } = tableClient(rows);
-  const result = await publishSeedMastersWith(client, { only: [...KEYS], expect: 2 });
+  const result = await publishSeedMastersWith(client, { seeds, only: [...KEYS], expect: 2 });
   assert.deepEqual(result, { planned: [...KEYS], alreadyPublished: [], published: 0 });
   assert.deepEqual(writes, []);
   assert.ok(rows.every(r => r.status === 'draft'));
@@ -142,7 +149,12 @@ test('an apply publishes exactly the named drafts with a status guard', async ()
   };
   const rows = [draftRow(0), draftRow(1), other];
   const { client, writes } = tableClient(rows);
-  const result = await publishSeedMastersWith(client, { only: [...KEYS], apply: true, expect: 2 });
+  const result = await publishSeedMastersWith(client, {
+    seeds,
+    only: [...KEYS],
+    apply: true,
+    expect: 2,
+  });
   assert.equal(result.published, 2);
   assert.deepEqual(
     writes.map(w => [w.id, w.status, Object.keys(w.payload).sort()]),
@@ -160,11 +172,16 @@ test('a re-run leaves published masters alone and needs --expect 0', async () =>
   const rows = [draftRow(0, { status: 'published' }), draftRow(1)];
   const { client, writes } = tableClient(rows);
   await assert.rejects(
-    publishSeedMastersWith(client, { only: [...KEYS], apply: true, expect: 2 }),
+    publishSeedMastersWith(client, { seeds, only: [...KEYS], apply: true, expect: 2 }),
     /does not match the plan \(1 draft/
   );
   assert.deepEqual(writes, []);
-  const result = await publishSeedMastersWith(client, { only: [...KEYS], apply: true, expect: 1 });
+  const result = await publishSeedMastersWith(client, {
+    seeds,
+    only: [...KEYS],
+    apply: true,
+    expect: 1,
+  });
   assert.deepEqual(result, { planned: [KEYS[1]], alreadyPublished: [KEYS[0]], published: 1 });
 });
 
@@ -186,7 +203,7 @@ test('a draft without the seed image, specs or category stops the run before any
     const rows = [draftRow(0), draftRow(1, overrides)];
     const { client, writes } = tableClient(rows);
     await assert.rejects(
-      publishSeedMastersWith(client, { only: [...KEYS], apply: true, expect: 2 }),
+      publishSeedMastersWith(client, { seeds, only: [...KEYS], apply: true, expect: 2 }),
       message
     );
     assert.deepEqual(writes, [], `nothing written for ${JSON.stringify(overrides)}`);
@@ -194,13 +211,13 @@ test('a draft without the seed image, specs or category stops the run before any
   }
   const { client } = tableClient([draftRow(0)]);
   await assert.rejects(
-    publishSeedMastersWith(client, { only: [...KEYS] }),
+    publishSeedMastersWith(client, { seeds, only: [...KEYS] }),
     /apple:iphone-17e:512gb: no master row/
   );
 });
 
 test('a seed with no images is never published', () => {
-  const seed = { ...seeds[0]!, images: [] };
+  const seed = realSeeds[0]!;
   assert.deepEqual(
     publishBlockers(draftRow(0, { images: [], thumbnail: null }) as never, seed, 'cat-1').filter(
       p => p.includes('image')
@@ -218,11 +235,11 @@ test('unknown keys and a missing --expect on apply fail before any read', async 
     },
   } as unknown as RateSupabaseClient;
   await assert.rejects(
-    publishSeedMastersWith(client, { only: ['apple:iphone-99:1tb'] }),
+    publishSeedMastersWith(client, { seeds, only: ['apple:iphone-99:1tb'] }),
     /no seed/
   );
   await assert.rejects(
-    publishSeedMastersWith(client, { only: [...KEYS], apply: true }),
+    publishSeedMastersWith(client, { seeds, only: [...KEYS], apply: true }),
     /apply needs expect/
   );
   assert.equal(reads, 0);
@@ -236,7 +253,7 @@ test('a status change between plan and write stops the run', async () => {
     if (++n === 2) rows[1]!.status = 'archived';
   });
   await assert.rejects(
-    publishSeedMastersWith(client, { only: [...KEYS], apply: true, expect: 2 }),
+    publishSeedMastersWith(client, { seeds, only: [...KEYS], apply: true, expect: 2 }),
     /touched 0 rows, not 1: its status, slug or thumbnail changed after the plan \(1 published before it\)/
   );
   assert.equal(rows[0]!.status, 'published');
@@ -247,7 +264,7 @@ test('a dry run with a mismatched --expect fails without writing', async () => {
   const rows = [draftRow(0), draftRow(1)];
   const { client, writes } = tableClient(rows);
   await assert.rejects(
-    publishSeedMastersWith(client, { only: [...KEYS], expect: 1 }),
+    publishSeedMastersWith(client, { seeds, only: [...KEYS], expect: 1 }),
     /--expect 1 does not match the plan \(2 draft/
   );
   assert.deepEqual(writes, []);
@@ -261,7 +278,7 @@ test("an apply writes only while slug and thumbnail are still the seed's", async
     if (++n === 1) rows[0]!.thumbnail = 'https://cdn.example/other.jpg';
   });
   await assert.rejects(
-    publishSeedMastersWith(client, { only: [...KEYS], apply: true, expect: 2 }),
+    publishSeedMastersWith(client, { seeds, only: [...KEYS], apply: true, expect: 2 }),
     /Publishing apple:iphone-17e:256gb touched 0 rows/
   );
   assert.equal(rows[0]!.status, 'draft');

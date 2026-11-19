@@ -11,6 +11,7 @@ import {
   deviceImageJsonLd,
   deviceImageSizesForHeight,
   deviceImageSrcSet,
+  type DeviceImageCredit,
 } from '../device-images';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -218,46 +219,54 @@ async function main() {
     );
     assert.ok(credit.author.trim().length > 0, `${slug}: names the author`);
   }
-  const iphone17e = deviceImageCredit('/img/devices/apple-iphone-17e.jpg');
-  assert.equal(iphone17e?.author, '茅野ふたば');
+  // The lookup and the JSON-LD, on a sample entry (no photo is credited yet).
+  const sample: Record<string, DeviceImageCredit> = {
+    'sample-phone': {
+      author: 'Sample Author',
+      authorLang: 'ja',
+      sourceUrl: 'https://commons.wikimedia.org/wiki/File:Sample_phone.jpg',
+      license: 'CC BY-SA 4.0',
+      licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+    },
+  };
   assert.equal(
-    iphone17e?.sourceUrl,
-    'https://commons.wikimedia.org/wiki/File:IPhone_17e_backside.jpg'
+    deviceImageCredit('/img/devices/sample-phone.jpg', sample),
+    sample['sample-phone']
   );
-  assert.equal(
-    deviceImageCredit('/img/devices/apple-iphone-16-128gb.jpg'),
-    null
-  );
-  assert.equal(
-    deviceImageCredit('https://cdn.example/apple-iphone-17e.jpg'),
-    null
-  );
-  assert.equal(deviceImageCredit('/img/devices/constructor.jpg'), null);
-  assert.equal(deviceImageCredit(null), null);
-  assert.equal(deviceImageCredit(undefined), null);
-
-  assert.equal(iphone17e?.authorLang, 'ja');
+  assert.equal(deviceImageCredit('/img/devices/sample-phone.jpg'), null);
+  for (const other of [
+    '/img/devices/apple-iphone-16-128gb.jpg',
+    'https://cdn.example/sample-phone.jpg',
+    '/img/devices/sample-phone.png',
+    '/img/devices/constructor.jpg',
+    null,
+    undefined,
+  ]) {
+    assert.equal(deviceImageCredit(other, sample), null, String(other));
+  }
   // JSON-LD: a credited photo is an ImageObject with its licence; any other
   // image stays a plain URL.
   assert.deepEqual(
     deviceImageJsonLd(
-      '/img/devices/apple-iphone-17e.jpg',
-      'https://rate.vn/img/devices/apple-iphone-17e.jpg'
+      '/img/devices/sample-phone.jpg',
+      'https://rate.vn/img/devices/sample-phone.jpg',
+      sample
     ),
     {
       '@type': 'ImageObject',
-      contentUrl: 'https://rate.vn/img/devices/apple-iphone-17e.jpg',
-      creator: { '@type': 'Person', name: '茅野ふたば' },
-      creditText: '茅野ふたば, Wikimedia Commons, CC BY-SA 4.0',
+      contentUrl: 'https://rate.vn/img/devices/sample-phone.jpg',
+      creator: { '@type': 'Person', name: 'Sample Author' },
+      creditText: 'Sample Author, Wikimedia Commons, CC BY-SA 4.0',
       license: 'https://creativecommons.org/licenses/by-sa/4.0/',
       acquireLicensePage:
-        'https://commons.wikimedia.org/wiki/File:IPhone_17e_backside.jpg',
+        'https://commons.wikimedia.org/wiki/File:Sample_phone.jpg',
     }
   );
   assert.equal(
     deviceImageJsonLd(
       '/img/devices/apple-iphone-16-128gb.jpg',
-      'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg'
+      'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg',
+      sample
     ),
     'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg'
   );

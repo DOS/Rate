@@ -69,32 +69,20 @@ export interface DeviceImageCredit {
   readonly licenseUrl: string;
 }
 
+// No credited photo yet: the iPhone 17e store photo was dropped in review
+// (DOS/Rate#1756). Add a photo together with its entry here and its row in
+// public/img/devices/CREDITS.md.
 export const DEVICE_IMAGE_CREDITS: Readonly<Record<string, DeviceImageCredit>> =
-  {
-    // https://commons.wikimedia.org/wiki/File:IPhone_17e_backside.jpg
-    // (Own work, 2026-03-12; original 4284x5712, SHA-1
-    // 6b01bfb190ee7319595a6d26d41f4c48dfadfe22). Rate's copy is cropped to
-    // the phone and resized to 600x800, so it is shared under the same
-    // licence (CC BY-SA 4.0, ShareAlike).
-    'apple-iphone-17e': {
-      author: '茅野ふたば',
-      authorLang: 'ja',
-      sourceUrl:
-        'https://commons.wikimedia.org/wiki/File:IPhone_17e_backside.jpg',
-      license: 'CC BY-SA 4.0',
-      licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
-    },
-  };
+  {};
 
 /** The licence notice of a local device photo, or null when it needs none. */
 export function deviceImageCredit(
-  src: string | null | undefined
+  src: string | null | undefined,
+  credits: Readonly<Record<string, DeviceImageCredit>> = DEVICE_IMAGE_CREDITS
 ): DeviceImageCredit | null {
   if (typeof src !== 'string') return null;
   const slug = /^\/img\/devices\/([a-z0-9-]+)\.jpg$/.exec(src)?.[1];
-  return slug && Object.hasOwn(DEVICE_IMAGE_CREDITS, slug)
-    ? DEVICE_IMAGE_CREDITS[slug]!
-    : null;
+  return slug && Object.hasOwn(credits, slug) ? credits[slug]! : null;
 }
 
 /**
@@ -104,9 +92,10 @@ export function deviceImageCredit(
  */
 export function deviceImageJsonLd(
   src: string,
-  absoluteSrc: string
+  absoluteSrc: string,
+  credits: Readonly<Record<string, DeviceImageCredit>> = DEVICE_IMAGE_CREDITS
 ): string | Record<string, unknown> {
-  const credit = deviceImageCredit(src);
+  const credit = deviceImageCredit(src, credits);
   if (!credit) return absoluteSrc;
   return {
     '@type': 'ImageObject',
