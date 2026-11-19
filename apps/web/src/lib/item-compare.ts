@@ -191,7 +191,12 @@ export function versusAliasRedirect(
   const slugs = canonicalPath.replace(/^\/compare\//, '').split('-vs-');
   if (
     slugs.length !== 2 ||
-    !slugs.every((slug) => VERSUS_URL_SLUG.test(slug) && !slug.includes('..'))
+    !slugs.every(
+      (slug) =>
+        VERSUS_URL_SLUG.test(slug) &&
+        !slug.includes('..') &&
+        !slug.endsWith('.')
+    )
   ) {
     return null;
   }
@@ -214,8 +219,18 @@ export async function lookupSlugAnyCase<T>(
   return { slug: lower, found: await lookupExact(lower) };
 }
 
-const ITEM_ANSWER_SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$/;
+// Matches resolveCatalogSlug's 120-char and sentinel bounds in rate-api.ts so
+// every Item slug emitted into a versus URL can be resolved back by slug.
+const ITEM_ANSWER_SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/;
 const UNSAFE_ITEM_SLUG_KEYS = new Set([
+  '0',
+  'null',
+  'undefined',
+  'nan',
+  'none',
+  'na',
+  'false',
+  'true',
   '__proto__',
   'constructor',
   'prototype',
@@ -267,10 +282,21 @@ export function planVersusRoute(
   if (!a || !b) return { kind: 'not_found' };
   if (!a.itemId && !b.itemId) return { kind: 'legacy' };
   if (a.itemId && a.itemId === b.itemId) return { kind: 'not_found' };
-  const urlSlugA = a.itemSlug ?? a.variantSlug;
-  const urlSlugB = b.itemSlug ?? b.variantSlug;
-  // A slug with path/fragment characters, dot traversal or "-vs-" cannot be
-  // one side of a versus URL (#1275, #1768).
+  // A slug holding "-vs-" cannot be one side of a versus URL (it would not
+  // parse back), so there is no versus page for that Item (#1275).
+  if (
+    a.itemSlug?.toLowerCase().includes('-vs-') ||
+    b.itemSlug?.toLowerCase().includes('-vs-')
+  ) {
+    return { kind: 'not_found' };
+  }
+  // When an Item's stored slug fails versus slug validation (malformed, over
+  // 120 chars, dot traversal or sentinel), fall back to the variant slug just
+  // like versusHref so fallback 1v1 links render instead of 404ing (#1768).
+  const urlSlugA =
+    a.itemSlug && isSafeVersusItemSlug(a.itemSlug) ? a.itemSlug : a.variantSlug;
+  const urlSlugB =
+    b.itemSlug && isSafeVersusItemSlug(b.itemSlug) ? b.itemSlug : b.variantSlug;
   if (
     !isSafeVersusItemSlug(urlSlugA) ||
     !isSafeVersusItemSlug(urlSlugB) ||

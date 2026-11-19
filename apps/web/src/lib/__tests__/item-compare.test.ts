@@ -501,7 +501,8 @@ async function main() {
     '/compare/constructor-vs-pixel-10',
     'versusHref ignores Object.prototype properties on itemSlugBySlug'
   );
-  const maxLenItemSlug = `A${'b'.repeat(159)}`;
+  const maxLenItemSlug = `A${'b'.repeat(119)}`;
+  assert.equal(maxLenItemSlug.length, 120);
   assert.equal(
     itemSlugFromProductAnswer(
       { ok: true, data: { item: { slug: maxLenItemSlug } } },
@@ -510,14 +511,21 @@ async function main() {
     maxLenItemSlug
   );
   assert.equal(
+    versusHref('fallback-slug', 'samsung-galaxy-s24-256gb', {
+      'fallback-slug': maxLenItemSlug,
+      'samsung-galaxy-s24-256gb': 'samsung-galaxy-s24',
+    }),
+    `/compare/${maxLenItemSlug}-vs-samsung-galaxy-s24`
+  );
+  assert.equal(
     itemSlugFromProductAnswer(
       { ok: true, data: { item: { slug: `${maxLenItemSlug}x` } } },
       'fallback-slug'
     ),
     'fallback-slug',
-    'over-160-char Item slug falls back to requested slug'
+    'over-120-char Item slug falls back to requested slug to match resolveCatalogSlug'
   );
-  // Rejects path-traversal / dot segments and prototype keys (#1768).
+  // Rejects path-traversal / dot segments, sentinel tokens and prototype keys (#1768).
   for (const unsafeSlug of [
     '',
     '.',
@@ -527,9 +535,22 @@ async function main() {
     'Apple-iPhone-16.',
     'Apple-iPhone-16..',
     'Apple/iPhone-16',
+    'Apple#iPhone-16',
+    'Apple?iPhone-16',
+    `${maxLenItemSlug}x`,
     '../etc/passwd',
     ' Apple-iPhone-16',
     'Apple-iPhone-16 ',
+    '0',
+    'null',
+    'Null',
+    'undefined',
+    'nan',
+    'none',
+    'na',
+    'false',
+    'true',
+    'TRUE',
     '__proto__',
     'constructor',
     'Constructor',
@@ -539,6 +560,7 @@ async function main() {
     'toString',
     'toLocaleString',
     'valueOf',
+    'ValueOf',
     'hasOwnProperty',
     'isPrototypeOf',
     'propertyIsEnumerable',
@@ -551,64 +573,69 @@ async function main() {
       'safe-variant-slug',
       `unsafe Item slug ${JSON.stringify(unsafeSlug)} must fall back to variant slug`
     );
+    const fallbackHref = versusHref('safe-variant-slug', 'pixel-10', {
+      'safe-variant-slug': unsafeSlug,
+    });
     assert.equal(
-      versusHref('safe-variant-slug', 'pixel-10', {
-        'safe-variant-slug': unsafeSlug,
-      }),
+      fallbackHref,
       '/compare/pixel-10-vs-safe-variant-slug',
       `versusHref must reject unsafe pre-resolved Item slug ${JSON.stringify(unsafeSlug)}`
     );
-  }
-  for (const unsafeFragmentSlug of [
-    'Apple#iPhone-16',
-    'Apple?iPhone-16',
-    `${maxLenItemSlug}x`,
-  ]) {
-    assert.equal(
-      versusHref('safe-variant-slug', 'pixel-10', {
-        'safe-variant-slug': unsafeFragmentSlug,
-      }),
-      '/compare/pixel-10-vs-safe-variant-slug',
-      `versusHref must reject malformed pre-resolved Item slug ${JSON.stringify(unsafeFragmentSlug)}`
-    );
+    const [routeSlugA, routeSlugB] = fallbackHref
+      .replace(/^\/compare\//, '')
+      .split('-vs-') as [string, string];
+    const variantResolution: CompareResolution = {
+      kind: 'variant',
+      item: {
+        id: 'item-unsafe',
+        slug: unsafeSlug,
+        default_variant_id: 'v-unsafe',
+      },
+      variant: {
+        id: 'v-unsafe',
+        slug: 'safe-variant-slug',
+        variant_key: 'standard',
+      },
+      variants: [
+        {
+          id: 'v-unsafe',
+          slug: 'safe-variant-slug',
+          variant_key: 'standard',
+        },
+      ],
+      retired: false,
+    };
     assert.deepEqual(
       planVersusRoute(
-        {
-          slug: 'safe-variant-slug',
-          resolution: {
-            kind: 'item',
-            item: {
-              id: 'item-unsafe',
-              slug: unsafeFragmentSlug,
-              default_variant_id: null,
-            },
-            variants: [
-              {
-                id: 'v-unsafe',
-                slug: 'safe-variant-slug',
-                variant_key: 'standard',
-              },
-            ],
-          },
-        },
-        { slug: 'samsung-galaxy-s24', resolution: s24 }
+        { slug: routeSlugA, resolution: { kind: 'unlinked' } },
+        { slug: routeSlugB, resolution: variantResolution }
       ),
-      { kind: 'not_found' }
+      {
+        kind: 'render',
+        slugA: 'pixel-10',
+        slugB: 'safe-variant-slug',
+        canonical: fallbackHref,
+      },
+      `fallback link ${fallbackHref} for rejected Item slug ${JSON.stringify(unsafeSlug)} must render in planVersusRoute`
     );
   }
   assert.deepEqual(
     planVersusRoute(
       {
-        slug: 'safe-variant-slug',
+        slug: 'bad..variant',
         resolution: {
           kind: 'item',
           item: {
-            id: 'item-dot',
+            id: 'item-both-unsafe',
             slug: 'Apple..iPhone-16',
             default_variant_id: null,
           },
           variants: [
-            { id: 'v-dot', slug: 'safe-variant-slug', variant_key: 'standard' },
+            {
+              id: 'v-both-unsafe',
+              slug: 'bad..variant',
+              variant_key: 'standard',
+            },
           ],
         },
       },
