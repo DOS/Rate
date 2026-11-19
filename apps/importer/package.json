@@ -75,7 +75,7 @@
     "@repo/eslint-config": "workspace:*",
     "@types/node": "^26.6.5",
     "eslint": "^9.39.5",
-    "prettier": "^3.9.6",
+    "prettier": "^3.10.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
