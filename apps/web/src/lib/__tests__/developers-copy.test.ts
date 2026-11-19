@@ -163,13 +163,44 @@ async function executeFetchSnippetBody(snippet: string): Promise<unknown> {
   return capturedBody;
 }
 
+const HTML_ENTITY_MAP: Record<string, string> = {
+  '&quot;': '"',
+  '&#x27;': "'",
+  '&#39;': "'",
+  '&apos;': "'",
+  '&lt;': '<',
+  '&gt;': '>',
+  '&amp;': '&',
+};
+
 function decodeHtmlEntities(html: string): string {
-  return html
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;|&#39;|&apos;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
+  return html.replace(
+    /&(?:quot|#x27|#39|apos|lt|gt|amp);/g,
+    (entity) => HTML_ENTITY_MAP[entity] ?? entity
+  );
+}
+
+function stripMarkupTags(s: string): string {
+  let out = '';
+  let inTag = false;
+  for (const ch of s) {
+    if (ch === '<') {
+      if (!inTag) {
+        out += ' ';
+      }
+      inTag = true;
+    } else if (ch === '>') {
+      if (inTag) {
+        inTag = false;
+        out += ' ';
+      } else {
+        out += ch;
+      }
+    } else if (!inTag) {
+      out += ch;
+    }
+  }
+  return out;
 }
 
 function getPressedButtonLabelsInGroup(
@@ -190,11 +221,7 @@ function getPressedButtonLabelsInGroup(
   const pressedLabels: string[] = [];
   for (const [, attrs, innerHtml] of buttons) {
     if (/\baria-pressed="true"/.test(attrs!)) {
-      const withoutHidden = innerHtml!.replace(
-        /<([a-z0-9]+)\b[^>]*\baria-hidden="true"[^>]*>[\s\S]*?<\/\1>/gi,
-        ''
-      );
-      const text = decodeHtmlEntities(withoutHidden.replace(/<[^>]+>/g, ' '))
+      const text = decodeHtmlEntities(stripMarkupTags(innerHtml!))
         .replace(/\s+/g, ' ')
         .trim();
       pressedLabels.push(text);
