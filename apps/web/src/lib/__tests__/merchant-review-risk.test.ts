@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { registerHooks } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as React from 'react';
@@ -8,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { NextIntlClientProvider, useTranslations } from 'next-intl';
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { pickClientMessages } from '../client-messages';
+import { getRadarSignal } from '../deal-radar';
 import { formatPriceVnd } from '../locale-format';
 import {
   filterMerchantDirectory,
@@ -1292,23 +1292,23 @@ function merchantPagesRiskPriceAndA11ySuite() {
 // positive VND bounds and strikethrough prices; quickCompareSlugs uses
 // Item-grouped gridProducts + catalogRowSlug; review stars round to 1..5.
 async function homePageMerchantRadarAndCompareSuite() {
-  registerHooks({
-    load(url, context, nextLoad) {
-      if (url.endsWith('.css')) {
-        return {
-          format: 'commonjs',
-          shortCircuit: true,
-          source: 'module.exports = {};',
-        };
-      }
-      return nextLoad(url, context);
-    },
-  });
+  const nodeModule = await import('node:module');
+  const extMap = (
+    nodeModule.default as unknown as {
+      _extensions?: Record<string, (mod: { exports: unknown }) => void>;
+    }
+  )._extensions;
+  if (extMap && !extMap['.css']) {
+    extMap['.css'] = (mod) => {
+      mod.exports = {};
+    };
+  }
   const {
     HomeDealRadarBlock,
     HomeMerchantCard,
     HomeReviewCard,
     buildHomeQuickCompareSlugs,
+    buildHomeRadarIndex,
     homeMerchantDosafeDisplay,
     homeMerchantReviewRiskDisplay,
     homeMerchantTrustDisplay,
@@ -1501,6 +1501,48 @@ async function homePageMerchantRadarAndCompareSuite() {
     resolveHomeRadarOriginalPriceVnd(15_990_000, MAX_VALID_VND_PRICE),
     MAX_VALID_VND_PRICE
   );
+  assert.equal(buildHomeRadarIndex(null).size, 0);
+  const homeRadarIdx = buildHomeRadarIndex({
+    categorySlug: 'all',
+    totalClustersAnalyzed: 2,
+    totalOffersAnalyzed: 4,
+    totalMerchantsAnalyzed: 3,
+    genuineDeals: [
+      {
+        id: 'gd-zero',
+        productSlug: 'zero-phone',
+        productName: 'Zero Phone',
+        productHref: '/smartphones/zero-phone',
+        platform: 'shopee',
+        merchantName: 'Zero Shop',
+        priceCurrent: 0,
+        marketMedianPrice: 12_000_000,
+        savingsVsMedianPct: 25,
+        offerUrl: 'https://shopee.vn/zero-phone',
+      },
+      {
+        id: 'gd-valid',
+        productSlug: 'valid-phone',
+        productName: 'Valid Phone',
+        productHref: '/smartphones/valid-phone',
+        platform: 'shopee',
+        merchantName: 'Good Shop',
+        priceCurrent: 15_990_000,
+        marketMedianPrice: 18_990_000,
+        savingsVsMedianPct: 16,
+        offerUrl: 'https://shopee.vn/valid-phone',
+      },
+    ],
+    fakeSaleTraps: [],
+    priceSpreadLeaders: [],
+  } as unknown as CrossPlatformDealRadarResponse);
+  assert.equal(getRadarSignal(homeRadarIdx, 'zero-phone').verdict, 'none');
+  assert.equal(getRadarSignal(homeRadarIdx, 'zero-phone').savingsPct, 0);
+  assert.equal(
+    getRadarSignal(homeRadarIdx, 'valid-phone').verdict,
+    'genuine_deal'
+  );
+  assert.equal(getRadarSignal(homeRadarIdx, 'valid-phone').savingsPct, 16);
 
   // 3. Item-grouped quickCompareSlugs + rounded/clamped review stars.
   const catSlugById = new Map<string, string>([
@@ -1551,10 +1593,27 @@ async function homePageMerchantRadarAndCompareSuite() {
     makeMaster('p3', 'xiaomi-15-ultra', 'cat-phone'),
     makeMaster('p4', 'oppo-find-x8-pro', 'cat-phone'),
   ];
+  const firstGroupedItem = groupedProducts[0];
+  assert.ok(firstGroupedItem);
+  assert.notEqual(
+    (firstGroupedItem as { item_slug?: string }).item_slug,
+    firstGroupedItem.slug,
+    'grouped Item fixture must have item_slug !== slug'
+  );
   assert.deepEqual(buildHomeQuickCompareSlugs(groupedProducts, catSlugById), [
     'iphone-16-pro-max',
     'galaxy-s25-ultra',
     'xiaomi-15-ultra',
+  ]);
+  const rawMasterProducts: MasterProduct[] = [
+    makeMaster('p1-256', 'iphone-16-pro-max-256gb', 'cat-phone'),
+    makeMaster('p1-512', 'iphone-16-pro-max-512gb', 'cat-phone'),
+    makeMaster('p2-256', 'galaxy-s25-ultra-256gb', 'cat-phone'),
+  ];
+  assert.deepEqual(buildHomeQuickCompareSlugs(rawMasterProducts, catSlugById), [
+    'iphone-16-pro-max-256gb',
+    'iphone-16-pro-max-512gb',
+    'galaxy-s25-ultra-256gb',
   ]);
 
   for (const badStars of [
@@ -1624,6 +1683,17 @@ async function homePageMerchantRadarAndCompareSuite() {
       updated_at: 'not-a-date',
       review_risk_breakdown:
         null as unknown as MerchantSummary['review_risk_breakdown'],
+    },
+    {
+      ...merchant('hm-null-score-with-reviews', 0, 10, 82),
+      review_risk_score: null as never,
+    },
+    {
+      ...merchant('hm-invalid-count-rev', 0, 0, 78),
+      review_risk_score: null as never,
+      review_risk_breakdown: {
+        total_reviews: Number.NaN,
+      } as unknown as MerchantSummary['review_risk_breakdown'],
     },
     {
       ...merchant('hm-unscored', 12, 0, 80),
@@ -1808,11 +1878,13 @@ async function homePageMerchantRadarAndCompareSuite() {
     const highRiskLabel = String(homeMsgs.merchantHighRiskLabel);
     const noScamText = String(homeMsgs.noScamDetected);
     const reviewNoDataText = String(homeMsgs.reviewRiskNoData);
+    const reviewNoReviewsText = String(homeMsgs.reviewRiskNoReviews);
     const merchantNoDataText = String(homeMsgs.merchantNoDataLabel);
     assert.ok(
       highRiskLabel.length > 0 &&
         noScamText.length > 0 &&
         reviewNoDataText.length > 0 &&
+        reviewNoReviewsText.length > 0 &&
         merchantNoDataText.length > 0
     );
 
@@ -1857,7 +1929,8 @@ async function homePageMerchantRadarAndCompareSuite() {
       `${loc}: fractional scores must be rounded before display and tone`
     );
 
-    // Legacy null breakdown + null review_risk_score renders reviewRiskNoData, never "/100".
+    // Legacy null breakdown + null review_risk_score renders reviewRiskNoData,
+    // omits reviewRiskNoReviews (missing count !== 0), and never renders "/100".
     const legacyCard = cardSegment(html, 'hm-legacy-null-rev');
     assert.match(
       legacyCard,
@@ -1866,8 +1939,29 @@ async function homePageMerchantRadarAndCompareSuite() {
     assert.ok(
       legacyCard.includes(
         `data-testid="home-merchant-review-score">${reviewNoDataText}</dd>`
-      ) && !legacyCard.includes('>/100<'),
-      `${loc}: null review_risk_score on legacy null breakdown must render reviewRiskNoData`
+      ) &&
+        !legacyCard.includes(reviewNoReviewsText) &&
+        !legacyCard.includes('>/100<'),
+      `${loc}: null review_risk_score on legacy null breakdown must render reviewRiskNoData without reviewRiskNoReviews`
+    );
+
+    // Null review_risk_score with nonzero or invalid total_reviews also omits reviewRiskNoReviews.
+    const nullScoreWithReviewsCard = cardSegment(
+      html,
+      'hm-null-score-with-reviews'
+    );
+    const invalidCountCard = cardSegment(html, 'hm-invalid-count-rev');
+    assert.ok(
+      nullScoreWithReviewsCard.includes(
+        `data-testid="home-merchant-review-score">${reviewNoDataText}</dd>`
+      ) && !nullScoreWithReviewsCard.includes(reviewNoReviewsText),
+      `${loc}: null review_risk_score with total_reviews=10 must omit reviewRiskNoReviews`
+    );
+    assert.ok(
+      invalidCountCard.includes(
+        `data-testid="home-merchant-review-score">${reviewNoDataText}</dd>`
+      ) && !invalidCountCard.includes(reviewNoReviewsText),
+      `${loc}: null review_risk_score with NaN total_reviews must omit reviewRiskNoReviews`
     );
 
     // Legacy null breakdown + finite review_risk_score rounds score without fabricating 0/0,
@@ -1884,13 +1978,14 @@ async function homePageMerchantRadarAndCompareSuite() {
       `${loc}: legacy scored row with null breakdown and rating_star=0 must omit 0/0, empty StarRating, and Invalid Date`
     );
 
-    // Unscored store renders neutral trust pill without /100.
+    // Unscored store (explicit total_reviews=0) renders neutral trust pill without /100
+    // and keeps reviewRiskNoReviews.
     const unscoredCard = cardSegment(html, 'hm-unscored');
     assert.ok(
       unscoredCard.includes(
         `data-testid="home-merchant-trust-badge" class="rate-radar-tag">${merchantNoDataText}</span>`
-      ),
-      `${loc}: unscored merchant must render neutral merchantNoDataLabel without /100`
+      ) && unscoredCard.includes(reviewNoReviewsText),
+      `${loc}: unscored merchant with total_reviews=0 must render neutral merchantNoDataLabel and reviewRiskNoReviews`
     );
 
     // Radar section: never fabricates strikethrough from priceCurrent, never renders 0 VND or > MAX_VALID_VND_PRICE.
@@ -1906,6 +2001,78 @@ async function homePageMerchantRadarAndCompareSuite() {
         !radarHtml.includes(`<s>${formatPriceVnd(16_490_000, loc)}</s>`) &&
         radarHtml.includes(`<s>${formatPriceVnd(22_990_000, loc)}</s>`),
       `${loc}: radar must guard 0/overflow VND and only strike through valid higher original prices`
+    );
+
+    // Spread-only radar stays visible when genuineDeals/fakeSaleTraps filter down to empty,
+    // while an all-empty radar returns empty markup.
+    function SpreadOnlyRadar({
+      payload,
+    }: {
+      payload: CrossPlatformDealRadarResponse;
+    }) {
+      const tHome = useTranslations('homePage');
+      return React.createElement(HomeDealRadarBlock, {
+        dealRadar: payload,
+        locale: loc,
+        tHome: (k, v) => tHome(k, v),
+      });
+    }
+    const spreadOnlyHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter as never },
+        React.createElement(
+          IntlProvider,
+          {
+            locale: loc,
+            messages: localeMessages,
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(SpreadOnlyRadar, {
+            payload: {
+              ...radarFixture,
+              genuineDeals: radarFixture.genuineDeals.slice(0, 1),
+              fakeSaleTraps: [],
+              priceSpreadLeaders: radarFixture.priceSpreadLeaders.slice(1, 2),
+            },
+          })
+        )
+      )
+    );
+    assert.ok(
+      spreadOnlyHtml.includes('data-testid="homepage-deal-radar"') &&
+        spreadOnlyHtml.includes(
+          'data-testid="homepage-price-spread-leaders"'
+        ) &&
+        spreadOnlyHtml.includes('Valid Spread'),
+      `${loc}: valid priceSpreadLeaders must keep homepage radar visible when deals/traps filter empty`
+    );
+    const allEmptyRadarHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter as never },
+        React.createElement(
+          IntlProvider,
+          {
+            locale: loc,
+            messages: localeMessages,
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(SpreadOnlyRadar, {
+            payload: {
+              ...radarFixture,
+              genuineDeals: radarFixture.genuineDeals.slice(0, 1),
+              fakeSaleTraps: [],
+              priceSpreadLeaders: radarFixture.priceSpreadLeaders.slice(0, 1),
+            },
+          })
+        )
+      )
+    );
+    assert.equal(
+      allEmptyRadarHtml,
+      '',
+      `${loc}: homepage radar must hide when all three filtered collections are empty`
     );
 
     // Review stars: 4.6 rounds to 5 SVGs, NaN omits .rate-review-stars.
@@ -1938,19 +2105,30 @@ async function homePageMerchantRadarAndCompareSuite() {
     join(testDir, '../../app/[locale]/page.tsx'),
     'utf8'
   );
+  const compactHomeCallSrc = homePageSrc.replace(
+    /buildHomeQuickCompareSlugs\(\s*([^)]*?)\s*\)/g,
+    (_, args: string) =>
+      `buildHomeQuickCompareSlugs(${args.replace(/\s+/g, ' ')})`
+  );
+  const shieldTags = homePageSrc.match(/<BsShieldCheck[^>]*>/g) ?? [];
+  const heroShieldTag =
+    shieldTags.find((tag) => tag.includes('text-success')) ?? '';
+  assert.match(heroShieldTag, /\btext-success\b/);
+  assert.match(heroShieldTag, /\baria-hidden="true"/);
   assert.ok(
-    homePageSrc.includes('buildHomeQuickCompareSlugs(') &&
-      !homePageSrc.includes('t.priceOriginal || t.priceCurrent') &&
-      /<BsShieldCheck[\s\S]*?className="text-success"[\s\S]*?aria-hidden="true"/.test(
-        homePageSrc
+    homePageSrc.includes('const radarIndex = buildHomeRadarIndex(dealRadar)') &&
+      compactHomeCallSrc.includes(
+        'const quickCompareSlugs = buildHomeQuickCompareSlugs(gridProducts, catSlugById)'
       ) &&
+      !/buildHomeQuickCompareSlugs\(\s*masterProducts\b/.test(homePageSrc) &&
+      !homePageSrc.includes('t.priceOriginal || t.priceCurrent') &&
       homePageSrc.includes(
         'className="rate-card rate-card-interactive rate-category-card"'
       ) &&
       homePageSrc.includes(
         'applyCategorySpecTemplate(\n                    getMasterProductCategorySlug('
       ),
-    'app/[locale]/page.tsx must use buildHomeQuickCompareSlugs, hide hero BsShieldCheck, drop fabricated strikethrough fallback, and preserve category card + spec-template contracts'
+    'app/[locale]/page.tsx must pass gridProducts to buildHomeQuickCompareSlugs, build radarIndex via buildHomeRadarIndex, hide hero BsShieldCheck, drop fabricated strikethrough fallback, and preserve category card + spec-template contracts'
   );
 }
 

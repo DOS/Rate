@@ -240,6 +240,23 @@ export function resolveHomeRadarOriginalPriceVnd(
   return original;
 }
 
+export function buildHomeRadarIndex(
+  dealRadar: CrossPlatformDealRadarResponse | null | undefined
+) {
+  return buildRadarIndex(
+    dealRadar
+      ? {
+          ...dealRadar,
+          genuineDeals: Array.isArray(dealRadar.genuineDeals)
+            ? dealRadar.genuineDeals.filter(
+                (g) => sanitizeHomePriceVnd(g.priceCurrent) != null
+              )
+            : dealRadar.genuineDeals,
+        }
+      : dealRadar
+  );
+}
+
 export function buildHomeQuickCompareSlugs(
   products: MasterProduct[],
   catSlugById: Map<string, string>,
@@ -313,7 +330,11 @@ export function HomeDealRadarBlock({
       )
     : [];
 
-  if (genuineDeals.length === 0 && fakeSaleTraps.length === 0) {
+  if (
+    genuineDeals.length === 0 &&
+    fakeSaleTraps.length === 0 &&
+    priceSpreadLeaders.length === 0
+  ) {
     return null;
   }
 
@@ -347,118 +368,120 @@ export function HomeDealRadarBlock({
         </div>
       </div>
 
-      <div className="row g-4">
-        {genuineDeals.length > 0 && (
-          <div className="col-lg-6">
-            <h4 className="rate-radar-list-title is-good">
-              <BsGraphDownArrow aria-hidden="true" />
-              {tHome('radarGenuineTitle', {
-                count: genuineDeals.length,
-              })}
-            </h4>
-            <ul className="rate-radar-list">
-              {genuineDeals.slice(0, 3).map((g) => {
-                const currentPrice = sanitizeHomePriceVnd(g.priceCurrent)!;
-                const medianPrice = sanitizeHomePriceVnd(g.marketMedianPrice);
-                const savingsPct = sanitizePositiveRadarPct(
-                  g.savingsVsMedianPct
-                );
-                return (
-                  <li key={g.id}>
-                    <div className="rate-radar-item-main">
-                      <Link href={g.productHref} className="text-truncate">
-                        {g.productName}
-                      </Link>
-                      <span className="rate-radar-item-meta text-truncate">
-                        <span className="rate-radar-platform">
-                          {g.platform}
+      {(genuineDeals.length > 0 || fakeSaleTraps.length > 0) && (
+        <div className="row g-4">
+          {genuineDeals.length > 0 && (
+            <div className="col-lg-6">
+              <h4 className="rate-radar-list-title is-good">
+                <BsGraphDownArrow aria-hidden="true" />
+                {tHome('radarGenuineTitle', {
+                  count: genuineDeals.length,
+                })}
+              </h4>
+              <ul className="rate-radar-list">
+                {genuineDeals.slice(0, 3).map((g) => {
+                  const currentPrice = sanitizeHomePriceVnd(g.priceCurrent)!;
+                  const medianPrice = sanitizeHomePriceVnd(g.marketMedianPrice);
+                  const savingsPct = sanitizePositiveRadarPct(
+                    g.savingsVsMedianPct
+                  );
+                  return (
+                    <li key={g.id}>
+                      <div className="rate-radar-item-main">
+                        <Link href={g.productHref} className="text-truncate">
+                          {g.productName}
+                        </Link>
+                        <span className="rate-radar-item-meta text-truncate">
+                          <span className="rate-radar-platform">
+                            {g.platform}
+                          </span>
+                          <ContentText text={g.merchantName} locale={locale} />
+                          {medianPrice != null && (
+                            <>
+                              {' '}
+                              ·{' '}
+                              {tHome('medianPriceInline', {
+                                price: formatNumber(medianPrice, locale),
+                              })}
+                            </>
+                          )}
                         </span>
-                        <ContentText text={g.merchantName} locale={locale} />
-                        {medianPrice != null && (
-                          <>
-                            {' '}
-                            ·{' '}
-                            {tHome('medianPriceInline', {
-                              price: formatNumber(medianPrice, locale),
+                      </div>
+                      <div className="rate-radar-item-side">
+                        <span className="rate-radar-price">
+                          {formatPriceVnd(currentPrice, locale)}
+                        </span>
+                        {savingsPct != null && (
+                          <span className="rate-radar-tag is-good">
+                            {tHome('vsMedianPctBadge', {
+                              pct: formatPlainNumber(savingsPct, locale),
                             })}
-                          </>
+                          </span>
                         )}
-                      </span>
-                    </div>
-                    <div className="rate-radar-item-side">
-                      <span className="rate-radar-price">
-                        {formatPriceVnd(currentPrice, locale)}
-                      </span>
-                      {savingsPct != null && (
-                        <span className="rate-radar-tag is-good">
-                          {tHome('vsMedianPctBadge', {
-                            pct: formatPlainNumber(savingsPct, locale),
-                          })}
-                        </span>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
-        {fakeSaleTraps.length > 0 && (
-          <div className="col-lg-6">
-            <h4 className="rate-radar-list-title is-bad">
-              <BsExclamationTriangle aria-hidden="true" />
-              {tHome('radarFakeTitle', {
-                count: fakeSaleTraps.length,
-              })}
-            </h4>
-            <ul className="rate-radar-list">
-              {fakeSaleTraps.slice(0, 3).map((t) => {
-                const currentPrice = sanitizeHomePriceVnd(t.priceCurrent)!;
-                const origPrice = resolveHomeRadarOriginalPriceVnd(
-                  currentPrice,
-                  t.priceOriginal
-                );
-                const markupPct = sanitizePositiveRadarPct(t.fakeMarkupPct);
-                return (
-                  <li key={t.id}>
-                    <div className="rate-radar-item-main">
-                      <Link href={t.productHref} className="text-truncate">
-                        {t.productName}
-                      </Link>
-                      <span className="rate-radar-item-meta text-truncate">
-                        <span className="rate-radar-platform">
-                          {t.platform}
+          {fakeSaleTraps.length > 0 && (
+            <div className="col-lg-6">
+              <h4 className="rate-radar-list-title is-bad">
+                <BsExclamationTriangle aria-hidden="true" />
+                {tHome('radarFakeTitle', {
+                  count: fakeSaleTraps.length,
+                })}
+              </h4>
+              <ul className="rate-radar-list">
+                {fakeSaleTraps.slice(0, 3).map((t) => {
+                  const currentPrice = sanitizeHomePriceVnd(t.priceCurrent)!;
+                  const origPrice = resolveHomeRadarOriginalPriceVnd(
+                    currentPrice,
+                    t.priceOriginal
+                  );
+                  const markupPct = sanitizePositiveRadarPct(t.fakeMarkupPct);
+                  return (
+                    <li key={t.id}>
+                      <div className="rate-radar-item-main">
+                        <Link href={t.productHref} className="text-truncate">
+                          {t.productName}
+                        </Link>
+                        <span className="rate-radar-item-meta text-truncate">
+                          <span className="rate-radar-platform">
+                            {t.platform}
+                          </span>
+                          <ContentText text={t.merchantName} locale={locale} />
+                          {origPrice != null && (
+                            <>
+                              {' '}
+                              · {tHome('inflatedOrigInline')}{' '}
+                              <s>{formatPriceVnd(origPrice, locale)}</s>
+                            </>
+                          )}
                         </span>
-                        <ContentText text={t.merchantName} locale={locale} />
-                        {origPrice != null && (
-                          <>
-                            {' '}
-                            · {tHome('inflatedOrigInline')}{' '}
-                            <s>{formatPriceVnd(origPrice, locale)}</s>
-                          </>
+                      </div>
+                      <div className="rate-radar-item-side">
+                        <span className="rate-radar-price">
+                          {formatPriceVnd(currentPrice, locale)}
+                        </span>
+                        {markupPct != null && (
+                          <span className="rate-radar-tag is-bad">
+                            {tHome('fakeMarkupPctBadge', {
+                              pct: formatPlainNumber(markupPct, locale),
+                            })}
+                          </span>
                         )}
-                      </span>
-                    </div>
-                    <div className="rate-radar-item-side">
-                      <span className="rate-radar-price">
-                        {formatPriceVnd(currentPrice, locale)}
-                      </span>
-                      {markupPct != null && (
-                        <span className="rate-radar-tag is-bad">
-                          {tHome('fakeMarkupPctBadge', {
-                            pct: formatPlainNumber(markupPct, locale),
-                          })}
-                        </span>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-      </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {priceSpreadLeaders.length > 0 && (
         <div
@@ -676,9 +699,11 @@ export function HomeMerchantCard({
               <dd data-testid="home-merchant-review-score">
                 {tHome('reviewRiskNoData')}
               </dd>
-              <dd className="rate-merchant-note">
-                {tHome('reviewRiskNoReviews')}
-              </dd>
+              {parseStrictFiniteNumber(breakdown?.total_reviews) === 0 && (
+                <dd className="rate-merchant-note">
+                  {tHome('reviewRiskNoReviews')}
+                </dd>
+              )}
             </>
           )}
         </div>
@@ -859,7 +884,7 @@ export default async function Home({
     'smartphones',
     3
   );
-  const radarIndex = buildRadarIndex(dealRadar);
+  const radarIndex = buildHomeRadarIndex(dealRadar);
 
   const catSlugById = new Map<string, string>();
   for (const c of platformStats.categoriesWithCounts) {
