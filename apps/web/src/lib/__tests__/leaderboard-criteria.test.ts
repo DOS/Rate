@@ -2147,10 +2147,21 @@ assert.equal(
         })
       )
     );
-    assert.match(
-      pinnedLeaderboardHtml,
-      /href="(?:\/en)?\/compare\?cat=smartphones&amp;slugs=apple-iphone-16@256gb,samsung-galaxy-s24@512gb,sold-out-phone"/,
-      'LeaderboardExplorer Compare Top 3 CTA preserves non-default multi-variant pins'
+    const top3Href = pinnedLeaderboardHtml.match(
+      /href="((?:\/en)?\/compare\?cat=smartphones&amp;slugs=[^"]+)"/
+    )?.[1];
+    assert.ok(top3Href);
+    const top3Query = new URL(
+      top3Href.replaceAll('&amp;', '&'),
+      'https://rate.test'
+    ).searchParams;
+    assert.equal(
+      top3Query.get('slugs'),
+      'apple-iphone-16@256gb,samsung-galaxy-s24@512gb,sold-out-phone'
+    );
+    assert.equal(
+      top3Query.get('variant.sold-out-phone'),
+      'sold-out-phone-256gb'
     );
     assert.match(
       pinnedLeaderboardHtml,
@@ -3238,34 +3249,35 @@ test('older pins without hints derive the master slug once per Item, in order', 
   );
 });
 
-test('a failed Item comparison and a failed directory read take independent paths', async (t) => {
+test('a directory outage distinguishes an empty Item selection from no selection', async (t) => {
+  const previous = process.env.RATE_ITEM_MODEL;
+  t.after(() => {
+    if (previous === undefined) delete process.env.RATE_ITEM_MODEL;
+    else process.env.RATE_ITEM_MODEL = previous;
+  });
+  process.env.RATE_ITEM_MODEL = 'off';
+  const slugs = ['acme-retail-1tb'];
+  assert.deepEqual(await getItemSlugsFor(slugs, []), {});
+  assert.equal(await getItemSlugsFor(slugs), null);
+});
+
+test('a later failed compare read preserves the selection that already resolved', async (t) => {
   const previous = process.env.RATE_ITEM_MODEL;
   t.after(() => {
     if (previous === undefined) delete process.env.RATE_ITEM_MODEL;
     else process.env.RATE_ITEM_MODEL = previous;
   });
   process.env.RATE_ITEM_MODEL = 'item';
-  const failed = {};
-  const healthy = {};
-  const slugs = ['acme-retail-1tb'];
-  assert.equal(
-    await whenItemModel(
-      'compare slugs',
-      async () => {
-        throw new Error('simulated Item read failure');
-      },
-      failed
-    ),
-    null
-  );
-  assert.deepEqual(
-    await whenItemModel('compare slugs', async () => slugs, healthy),
-    slugs
-  );
+  const slugs = ['acme-256gb'];
+  const selected = await whenItemModel('compare slugs', async () => slugs);
+  const failed = await whenItemModel('compare slugs', async () => {
+    throw new Error('simulated metadata lookup failure');
+  });
+  assert.deepEqual(selected, slugs);
+  assert.equal(failed, null);
   assert.equal(await getItemSlugsFor(slugs, failed), null);
   process.env.RATE_ITEM_MODEL = 'off';
-  assert.deepEqual(await getItemSlugsFor(slugs, healthy), {});
-  assert.equal(await getItemSlugsFor(slugs), null);
+  assert.deepEqual(await getItemSlugsFor(slugs, selected), {});
 });
 
 test('a legacy-only master or shared Item slug keeps its requested size across a second Item read', async (t) => {
@@ -3320,5 +3332,27 @@ test('a conventional pin keeps the exact retail slug of its unpinned peer', () =
   assert.deepEqual(
     plan?.targets.map((target) => target.master),
     ['acme-256gb', 'peer-retail']
+  );
+});
+
+test('a pinned comparison redirects to the size-suffixed master of its unpinned peer', () => {
+  const url = new URL(
+    leaderboardCompareHref(
+      [
+        { token: 'acme@256gb', variantSlug: 'acme-256gb' },
+        { token: 'peer', variantSlug: 'peer-512gb' },
+      ],
+      'smartphones',
+      'cat'
+    ),
+    'https://rate.test'
+  );
+  assert.equal(url.searchParams.get('variant.peer'), 'peer-512gb');
+  const plan = planComparePinFallback(url.searchParams);
+  assert.ok(plan);
+  assert.equal(plan.needsVariantRead, false);
+  assert.equal(
+    new URL(plan.href, url).searchParams.get('slugs'),
+    'acme-256gb,peer-512gb'
   );
 });

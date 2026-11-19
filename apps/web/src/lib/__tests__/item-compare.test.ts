@@ -677,8 +677,8 @@ async function main() {
   );
   assert.match(
     comparePageSrc,
-    /getItemSlugsFor\(\s*\[\s*\.\.\.initialProducts\.map\(\(p\)\s*=>\s*p\.slug\),\s*\.\.\.catalogCandidates\.map\(\(p\)\s*=>\s*p\.slug\),?\s*\]\s*\)/,
-    'apps/web/src/app/[locale]/compare/page.tsx must pass [...initialProducts.map((p) => p.slug), ...catalogCandidates.map((p) => p.slug)] into getItemSlugsFor (#1768)'
+    /getItemSlugsFor\(\s*\[\s*\.\.\.initialProducts\.map\(\(p\)\s*=>\s*p\.slug\),\s*\.\.\.catalogCandidates\.map\(\(p\)\s*=>\s*p\.slug\),?\s*\],\s*resolvedSelection\s*\)/,
+    'ComparePhonesPage must resolve initial and candidate slugs with its own Item selection'
   );
   assert.ok(
     comparePageSrc.includes('{...(itemSlugBySlug ? { itemSlugBySlug } : {})}'),

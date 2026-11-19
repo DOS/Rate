@@ -426,8 +426,8 @@ export function leaderboardCompareHref(
     .map(({ token }) => encodeLeaderboardCompareSlug(token))
     .join(',');
   const fallbacks = new URLSearchParams();
-  // Conventional size pins already name their master. Keep those URLs stable.
-  // For an irregular pin, carry the exact masters for the entire comparison.
+  // A bare Item token carries no size. During pin fallback it needs the
+  // represented master whenever the two slugs differ.
   const hasPin = entries.some(
     ({ token }) => !!parseCompareToken(token).variantKey
   );
@@ -436,15 +436,7 @@ export function leaderboardCompareHref(
     entries.some(({ token, variantSlug }) => {
       const { slug, variantKey } = parseCompareToken(token);
       const master = variantSlug.toLowerCase();
-      if (!variantKey) {
-        // A grouped single-size row can have an unrelated retail identifier.
-        return (
-          master !== slug &&
-          !/^-[0-9]+(?:gb|tb)$/i.test(
-            master.startsWith(slug) ? master.slice(slug.length) : ''
-          )
-        );
-      }
+      if (!variantKey) return master !== slug;
       return (
         variantKey === 'standard' ||
         slug.endsWith(`-${variantKey}`) ||
