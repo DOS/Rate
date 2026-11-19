@@ -690,7 +690,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     // Spec text as the model's sourced seed states it, where the generic Apple default
     // below is wrong for the model (Camera Control, Dynamic Island, UWB and MagSafe on the
     // 16e/17e; two nano-SIMs, USB OTG and Ceramic Shield 1 are wrong too). `null` means the sources state none, so the listing gets no generic value.
-    // Without them a listing gets the generic defaults below (DOS/Rate#1743).
+    // Without them a listing gets the generic defaults below (DOS/Rate#1743), except the
+    // loudspeaker and SAR: a registry model gets only the ones set here (DOS/Rate#1748).
     keys?: string;
     display_features?: string;
     charging?: string;
@@ -910,6 +911,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2023',
     ip_rating: 'IP68 (6m up to 30 mins)',
+    // Apple's tech specs (https://support.apple.com/en-us/111828) list an Action button and
+    // no Camera Control, which came with the iPhone 16 (DOS/Rate#1748).
+    keys: 'Action button, side button, volume buttons',
   },
   'apple:iphone-15': {
     screen_size_inch: 6.1,
@@ -931,6 +935,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2023',
     ip_rating: 'IP68 (6m up to 30 mins)',
+    // Apple's tech specs (https://support.apple.com/en-us/111831) list a Ring/Silent switch,
+    // neither an Action button nor Camera Control (DOS/Rate#1748).
+    keys: 'Ring/Silent switch, side button, volume buttons',
   },
   'samsung:galaxy-s24-ultra': {
     screen_size_inch: 6.8,
@@ -1359,6 +1366,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2026',
     ip_rating: 'IP68 (up to 6 m for 30 min)',
+    // As the sourced seed states it (DOS/Rate#1748).
+    loudspeaker: 'Yes, stereo speakers',
   },
   'apple:iphone-18-pro': {
     // Sourced with the seeds (flagship-seed-sourced-2026.ts); Apple and
@@ -1385,6 +1394,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2026',
     ip_rating: 'IP68 (up to 6 m for 30 min)',
+    // As the sourced seed states it (DOS/Rate#1748).
+    loudspeaker: 'Yes, stereo speakers',
   },
   'samsung:galaxy-s26-ultra': {
     // Sourced with the seeds (flagship-seed-sourced-2026.ts).
@@ -1410,6 +1421,10 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'February 2026',
     ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min)',
+    // As the sourced seed states them (GSMArena) (DOS/Rate#1748).
+    loudspeaker: 'Yes, with stereo speakers',
+    sar_head: '1.09 W/kg',
+    sar_body: '1.19 W/kg',
   },
   'oppo:find-x9-pro': {
     screen_size_inch: 6.82,
@@ -3019,6 +3034,9 @@ export class ProductNormalizer {
     // 6. Enrich with 10 Field Groups (PhoneArena structure + GSMArena depth)
     const isApple = brand === 'Apple';
     const isSmartphone = categorySlug === 'smartphones';
+    // The generic loudspeaker and SAR values were never checked against a source: only a
+    // non-Apple device outside the registry still gets them (DOS/Rate#1748).
+    const unsourcedAudioAndSar = !isApple && benchmark === undefined;
 
     const titleScreenMatch =
       categorySlug === 'earbuds' ? null : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i);
@@ -3316,9 +3334,15 @@ export class ProductNormalizer {
       battery: {
         capacity_mah: batteryMah || undefined,
         type: 'Li-Ion, không thể tháo rời',
+        // MagSafe/Qi2 and the satellite and UWB line below describe an iPhone, not an
+        // Apple laptop, tablet, watch or earbuds (DOS/Rate#1748).
         charging:
           benchmark?.charging ??
-          (isApple ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2' : 'Sạc nhanh USB-C PD/PPS'),
+          (isApple
+            ? isSmartphone
+              ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2'
+              : undefined
+            : 'Sạc nhanh USB-C PD/PPS'),
         fast_charging_w: fallbackChargingW,
         reverse_charging: false,
       },
@@ -3352,7 +3376,11 @@ export class ProductNormalizer {
         nfc: true,
         other:
           benchmark?.connectivity_other ??
-          (isApple ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Hỗ trợ OTG, Chia sẻ nhanh'),
+          (isApple
+            ? isSmartphone
+              ? 'Ultra Wideband (UWB), SOS vệ tinh'
+              : undefined
+            : 'Hỗ trợ OTG, Chia sẻ nhanh'),
       },
       // Nothing is known about the network of a phone or tablet whose 5G is unknown.
       cellular:
@@ -3381,7 +3409,10 @@ export class ProductNormalizer {
                 vowifi: true,
               },
       multimedia: {
-        loudspeaker: sourcedOr(benchmark?.loudspeaker, 'Loa kép Stereo đa chiều'),
+        // An Apple or registry device gets only the loudspeaker and SAR its sources state
+        // (DOS/Rate#1748); `null` in the registry means none is stated.
+        loudspeaker:
+          benchmark?.loudspeaker ?? (unsourcedAudioAndSar ? 'Loa kép Stereo đa chiều' : undefined),
         headphone_jack_35mm: sourcedOr(benchmark?.headphone_jack_35mm, false),
         audio_features: benchmark?.audio_features ?? 'Dolby Atmos, Hi-Res Audio',
       },
@@ -3389,8 +3420,12 @@ export class ProductNormalizer {
         certifications:
           benchmark?.certifications ??
           (isApple ? 'CE, FCC ID, Apple Eco Standards' : 'CE, FCC, RoHS'),
-        sar_head: isSmartphone ? sourcedOr(benchmark?.sar_head, '1.10 W/kg') : undefined,
-        sar_body: isSmartphone ? sourcedOr(benchmark?.sar_body, '1.15 W/kg') : undefined,
+        sar_head: isSmartphone
+          ? (benchmark?.sar_head ?? (unsourcedAudioAndSar ? '1.10 W/kg' : undefined))
+          : undefined,
+        sar_body: isSmartphone
+          ? (benchmark?.sar_body ?? (unsourcedAudioAndSar ? '1.15 W/kg' : undefined))
+          : undefined,
       },
     };
 

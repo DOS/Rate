@@ -2829,13 +2829,19 @@ async function runSuite() {
     assert.equal(watchUltra.specifications.design?.biometrics, undefined);
     assert.equal(watchUltra.specifications.regulatory?.sar_head, undefined);
 
-    // Smartphones retain their template SAR and biometrics
-    assert.equal(s24.specifications.regulatory?.sar_head, '1.10 W/kg');
-    assert.equal(s24.specifications.regulatory?.sar_body, '1.15 W/kg');
+    // Smartphones retain their biometrics. Only a non-Apple phone outside the registry keeps
+    // the template SAR: an Apple or registry phone gets only a sourced one (DOS/Rate#1748).
+    assert.equal(s24.specifications.regulatory?.sar_head, undefined);
+    assert.equal(s24.specifications.regulatory?.sar_body, undefined);
     assert.equal(s24.specifications.design?.biometrics, 'Fingerprint (under display), Face unlock');
     const iphone16 = normalizer.normalize(createDummyShopeeProduct('iPhone 16 Pro Max 256GB'));
     assert.equal(iphone16.specifications.design?.biometrics, 'Face ID');
-    assert.equal(iphone16.specifications.regulatory?.sar_head, '1.10 W/kg');
+    assert.equal(iphone16.specifications.regulatory?.sar_head, undefined);
+    const offRegistry = normalizer.normalize(
+      createDummyShopeeProduct('Xiaomi Redmi Note 99 Pro 256GB')
+    );
+    assert.equal(offRegistry.specifications.regulatory?.sar_head, '1.10 W/kg');
+    assert.equal(offRegistry.specifications.regulatory?.sar_body, '1.15 W/kg');
   }
   console.log(
     '  ✅ [14/14] Earbud :unknown Keys, AirPods Pro Years, iPad RAM & Non-Phone Spec Hygiene (#643, #657) passed'
