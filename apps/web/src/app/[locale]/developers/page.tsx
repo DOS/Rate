@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import PageShell from '../components/page-shell';
 import ApiPlaygroundClient from '@/components/developers/ApiPlaygroundClient';
+import { formatNumber } from '@/lib/locale-format';
 import { EMPTY_RATE_PLATFORM_STATS } from '@/lib/rate-api';
 import { getCachedRatePlatformStats } from '@/server/rate';
 import {
@@ -273,7 +274,7 @@ export default async function DevelopersPage({
             <div className="row align-items-center g-4">
               <div className="col-lg-8">
                 <div className="d-inline-flex align-items-center rounded-pill bg-danger bg-opacity-25 border-danger text-light small fw-semibold mb-3 gap-2 border px-3 py-1">
-                  <BsCodeSquare className="text-danger" />
+                  <BsCodeSquare aria-hidden="true" className="text-danger" />
                   <span>{t('heroBadge')}</span>
                 </div>
                 <h1 className="display-6 fw-bold mb-3 text-white">
@@ -307,7 +308,7 @@ export default async function DevelopersPage({
                     rel="noopener noreferrer"
                     className="btn btn-outline-light rounded-pill fw-medium d-inline-flex align-items-center gap-2 px-4 py-2"
                   >
-                    <BsGithub /> {t('btnGithubSource')}
+                    <BsGithub aria-hidden="true" /> {t('btnGithubSource')}
                   </a>
                 </div>
               </div>
@@ -329,7 +330,7 @@ export default async function DevelopersPage({
                         {t('statMasterProducts')}
                       </div>
                       <div className="h4 fw-bold text-warning mb-0">
-                        {stats.masterProductsCount}
+                        {formatNumber(stats.masterProductsCount, locale)}
                       </div>
                     </div>
                     <div className="col-6">
@@ -337,7 +338,7 @@ export default async function DevelopersPage({
                         {t('statPriceObservations')}
                       </div>
                       <div className="h4 fw-bold text-info mb-0">
-                        {stats.priceObservationsCount}
+                        {formatNumber(stats.priceObservationsCount, locale)}
                       </div>
                     </div>
                     <div className="col-6">
@@ -345,7 +346,7 @@ export default async function DevelopersPage({
                         {t('statAiFilteredReviews')}
                       </div>
                       <div className="h4 fw-bold text-success mb-0">
-                        {stats.totalReviewsCount}
+                        {formatNumber(stats.totalReviewsCount, locale)}
                       </div>
                     </div>
                     <div className="col-6">
@@ -353,7 +354,7 @@ export default async function DevelopersPage({
                         {t('statEcommerceMerchants')}
                       </div>
                       <div className="h4 fw-bold text-light mb-0">
-                        {stats.merchantsCount}
+                        {formatNumber(stats.merchantsCount, locale)}
                       </div>
                     </div>
                   </div>
@@ -402,11 +403,17 @@ export default async function DevelopersPage({
               <table className="table-hover mb-0 table align-middle">
                 <thead className="table-light">
                   <tr>
-                    <th style={{ width: '90px' }}>{t('thMethod')}</th>
-                    <th style={{ minWidth: '250px' }}>{t('thPath')}</th>
-                    <th style={{ minWidth: '210px' }}>{t('thQueryParams')}</th>
-                    <th>{t('thDescription')}</th>
-                    <th style={{ minWidth: '180px' }}>
+                    <th scope="col" style={{ width: '90px' }}>
+                      {t('thMethod')}
+                    </th>
+                    <th scope="col" style={{ minWidth: '250px' }}>
+                      {t('thPath')}
+                    </th>
+                    <th scope="col" style={{ minWidth: '210px' }}>
+                      {t('thQueryParams')}
+                    </th>
+                    <th scope="col">{t('thDescription')}</th>
+                    <th scope="col" style={{ minWidth: '180px' }}>
                       {t('thCacheSecurity')}
                     </th>
                   </tr>
@@ -514,7 +521,10 @@ export default async function DevelopersPage({
             <div className="row g-4">
               <div className="col-lg-3 col-md-6">
                 <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                  <BsLayers className="text-primary fs-2 mb-3" />
+                  <BsLayers
+                    aria-hidden="true"
+                    className="text-primary fs-2 mb-3"
+                  />
                   <h3 className="h5 fw-bold">{t('layer1Title')}</h3>
                   <p className="small text-muted mb-0">
                     {t('layer1DescPrefix')} <code>React.cache()</code>{' '}
@@ -524,7 +534,10 @@ export default async function DevelopersPage({
               </div>
               <div className="col-lg-3 col-md-6">
                 <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                  <BsCpu className="text-success fs-2 mb-3" />
+                  <BsCpu
+                    aria-hidden="true"
+                    className="text-success fs-2 mb-3"
+                  />
                   <h3 className="h5 fw-bold">{t('layer2Title')}</h3>
                   <p className="small text-muted mb-0">
                     {t('layer2DescPrefix')} <code>ProductNormalizer</code>,{' '}
@@ -536,7 +549,10 @@ export default async function DevelopersPage({
               </div>
               <div className="col-lg-3 col-md-6">
                 <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                  <BsShieldLock className="text-warning fs-2 mb-3" />
+                  <BsShieldLock
+                    aria-hidden="true"
+                    className="text-warning fs-2 mb-3"
+                  />
                   <h3 className="h5 fw-bold">{t('layer3Title')}</h3>
                   <p className="small text-muted mb-0">
                     {t('layer3DescPrefix')} <code>FOR UPDATE SKIP LOCKED</code>{' '}
@@ -546,7 +562,10 @@ export default async function DevelopersPage({
               </div>
               <div className="col-lg-3 col-md-6">
                 <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                  <BsDatabaseCheck className="text-danger fs-2 mb-3" />
+                  <BsDatabaseCheck
+                    aria-hidden="true"
+                    className="text-danger fs-2 mb-3"
+                  />
                   <h3 className="h5 fw-bold">{t('layer4Title')}</h3>
                   <p className="small text-muted mb-0">{t('layer4Desc')}</p>
                 </div>
