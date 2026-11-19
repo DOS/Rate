@@ -643,6 +643,57 @@ const SOURCED_IPHONE_E_SPECS = {
 function sourcedOr<T>(value: T | null | undefined, fallback: T): T | undefined {
   return value === null ? undefined : (value ?? fallback);
 }
+
+/**
+ * The iPhone-only spec text an iPhone outside the registry gets, by generation, as Apple's
+ * Tech Specs pages state it (DOS/Rate#1754). Checked pages: iPhone 11 (111865), 11 Pro
+ * (111879), 12 (111876), 12 mini (111877), 13 (111872), 13 Pro (111871), 14 (111850),
+ * 14 Plus (111854), 14 Pro (111849), 15 (111831), 15 Plus (111830), 15 Pro (111829),
+ * 16 Plus (121030), 16 Pro (121031), 17 (125089), 17 Pro (125090), Air (125092), all at
+ * https://support.apple.com/en-us/<id>. A field is undefined where the generation's pages
+ * do not state it (the SE, an unnumbered or pre-iPhone 11 title, the 16e/17e line).
+ */
+export function iphoneGenerationSpecs(model: string): {
+  keys?: string;
+  display_features?: string;
+  charging?: string;
+  connectivity_other?: string;
+} {
+  const air = /^iPhone Air\b/i.test(model);
+  const match = model.match(/^iPhone (\d{2})(?:\s+(Pro Max|Pro|Plus|mini|e))?\b/i);
+  const generation = air ? 17 : match ? Number(match[1]) : null;
+  const tier = air ? '' : (match?.[2] ?? '').toLowerCase();
+  // The 16e and 17e differ from their line (no Camera Control, Dynamic Island or UWB):
+  // only their registry entries describe them.
+  // A generation after the 17 has no checked page.
+  if (generation === null || generation < 11 || generation > 17 || tier === 'e') return {};
+  const pro = tier === 'pro' || tier === 'pro max';
+  return {
+    // Every listed iPhone 16 and later lists the Action button and Camera Control; the
+    // 15 Pro lists the Action button; the 11 to 15 Plus list a Ring/Silent switch.
+    keys:
+      generation >= 16
+        ? 'Action Button, Camera Control, Volume, Power'
+        : generation === 15 && pro
+          ? 'Action button, side button, volume buttons'
+          : 'Ring/Silent switch, side button, volume buttons',
+    // Dynamic Island came with the 14 Pro; every listed page states True Tone, Wide color
+    // (P3) and Haptic Touch.
+    display_features:
+      generation >= 15 || (generation === 14 && pro)
+        ? 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
+        : 'True Tone, Wide color (P3), Haptic Touch',
+    // MagSafe and Qi2 are both listed for the 13 and the 15 and later; the 12, 13 Pro and
+    // 14 pages list MagSafe without Qi2, the 11 plain Qi only.
+    charging:
+      generation >= 15 || (generation === 13 && tier === '')
+        ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2'
+        : undefined,
+    // Ultra Wideband from the 11, Emergency SOS via satellite from the 14.
+    connectivity_other:
+      generation >= 14 ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Ultra Wideband (UWB)',
+  };
+}
 const CANONICAL_PHONE_REGISTRY: Record<
   string,
   {
@@ -1092,6 +1143,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'March 2024',
     ip_rating: 'Recycled aluminum enclosure',
+    // Apple's Tech Specs (https://support.apple.com/en-us/118551) list a 3.5 mm headphone
+    // jack (DOS/Rate#1754).
+    headphone_jack_35mm: true,
   },
   'apple:watch-ultra-2': {
     screen_size_inch: 1.92,
@@ -1512,6 +1566,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'March 2025',
     ip_rating: 'Fanless silent 100% recycled aluminum unibody enclosure',
+    // Apple's Tech Specs (https://support.apple.com/en-us/122209) list a 3.5 mm headphone
+    // jack (DOS/Rate#1754).
+    headphone_jack_35mm: true,
   },
   'apple:macbook-pro-m4-pro': {
     screen_size_inch: 14.2,
@@ -1535,6 +1592,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'November 2024',
     ip_rating: 'Precision-machined aluminum enclosure (Space Black anodized seal)',
+    // Apple's Tech Specs (https://support.apple.com/en-us/121553) list a 3.5 mm headphone
+    // jack (DOS/Rate#1754).
+    headphone_jack_35mm: true,
   },
   // One storage (64GB), so a title without it keys like the `:64gb` seed (M0 inventory,
   // DOS/Rate#1148, #1152). Size-dependent specs are the 42mm's (`case_mm`).
@@ -3034,9 +3094,18 @@ export class ProductNormalizer {
     // 6. Enrich with 10 Field Groups (PhoneArena structure + GSMArena depth)
     const isApple = brand === 'Apple';
     const isSmartphone = categorySlug === 'smartphones';
-    // The generic loudspeaker and SAR values were never checked against a source: only a
-    // non-Apple device outside the registry still gets them (DOS/Rate#1748).
-    const unsourcedAudioAndSar = !isApple && benchmark === undefined;
+    // An iPhone outside the registry gets the iPhone-only text its generation's Apple Tech
+    // Specs state, or none; a registry iPhone keeps its entry and the generic iPhone text
+    // (DOS/Rate#1754).
+    const iphoneSpecs =
+      isApple && isSmartphone && benchmark === undefined ? iphoneGenerationSpecs(model) : undefined;
+    const appleIphoneText = <K extends keyof ReturnType<typeof iphoneGenerationSpecs>>(
+      field: K,
+      generic: string
+    ): string | undefined => (iphoneSpecs ? iphoneSpecs[field] : generic);
+    // GPS and NFC are phone and watch hardware: a laptop, tablet or earbuds gets none
+    // unless a source states it (DOS/Rate#1754).
+    const hasPhoneRadios = isSmartphone || categorySlug === 'smartwatches';
 
     const titleScreenMatch =
       categorySlug === 'earbuds' ? null : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i);
@@ -3292,7 +3361,9 @@ export class ProductNormalizer {
           : undefined,
         keys: isSmartphone
           ? (benchmark?.keys ??
-            (isApple ? 'Action Button, Camera Control, Volume, Power' : 'Volume, Power'))
+            (isApple
+              ? appleIphoneText('keys', 'Action Button, Camera Control, Volume, Power')
+              : 'Volume, Power'))
           : undefined,
         colors: colors.length > 0 ? colors : ['Tiêu chuẩn'],
       },
@@ -3318,7 +3389,10 @@ export class ProductNormalizer {
         features: isSmartphone
           ? (benchmark?.display_features ??
             (isApple
-              ? 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
+              ? appleIphoneText(
+                  'display_features',
+                  'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
+                )
               : 'Always-on display, HDR10+, Eye Comfort Shield'))
           : undefined,
       },
@@ -3340,7 +3414,7 @@ export class ProductNormalizer {
           benchmark?.charging ??
           (isApple
             ? isSmartphone
-              ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2'
+              ? appleIphoneText('charging', 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2')
               : undefined
             : 'Sạc nhanh USB-C PD/PPS'),
         fast_charging_w: fallbackChargingW,
@@ -3358,8 +3432,18 @@ export class ProductNormalizer {
         third_camera: benchmark?.third_camera || undefined,
         fourth_camera: benchmark?.fourth_camera || undefined,
         front_camera: benchmark?.front_camera || fallbackFrontCamera,
+        // A laptop, watch or earbuds has no rear flash, and iPads differ by model (the
+        // iPad Air has none): only phones and non-Apple tablets keep a default
+        // (DOS/Rate#1754).
         flash:
-          benchmark?.flash ?? (isApple ? 'True Tone Dual-LED' : 'LED flash, auto-HDR, panorama'),
+          benchmark?.flash ??
+          (isSmartphone
+            ? isApple
+              ? 'True Tone Dual-LED'
+              : 'LED flash, auto-HDR, panorama'
+            : categorySlug === 'tablets' && !isApple
+              ? 'LED flash, auto-HDR, panorama'
+              : undefined),
         video_recording: '4K@30/60fps, 1080p@30/60/120/240fps, HDR',
       },
       connectivity: {
@@ -3372,13 +3456,13 @@ export class ProductNormalizer {
               ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
               : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn'))
           : undefined,
-        location: 'GPS, GLONASS, Galileo, QZSS, BeiDou',
-        nfc: true,
+        location: hasPhoneRadios ? 'GPS, GLONASS, Galileo, QZSS, BeiDou' : undefined,
+        nfc: hasPhoneRadios ? true : undefined,
         other:
           benchmark?.connectivity_other ??
           (isApple
             ? isSmartphone
-              ? 'Ultra Wideband (UWB), SOS vệ tinh'
+              ? appleIphoneText('connectivity_other', 'Ultra Wideband (UWB), SOS vệ tinh')
               : undefined
             : 'Hỗ trợ OTG, Chia sẻ nhanh'),
       },
@@ -3409,23 +3493,23 @@ export class ProductNormalizer {
                 vowifi: true,
               },
       multimedia: {
-        // An Apple or registry device gets only the loudspeaker and SAR its sources state
-        // (DOS/Rate#1748); `null` in the registry means none is stated.
-        loudspeaker:
-          benchmark?.loudspeaker ?? (unsourcedAudioAndSar ? 'Loa kép Stereo đa chiều' : undefined),
-        headphone_jack_35mm: sourcedOr(benchmark?.headphone_jack_35mm, false),
+        // A device gets only the loudspeaker and SAR its sources state (DOS/Rate#1748,
+        // #1754); `null` in the registry means none is stated.
+        loudspeaker: benchmark?.loudspeaker ?? undefined,
+        // Most laptops have a 3.5 mm jack: a laptop gets one only from a source
+        // (DOS/Rate#1754).
+        headphone_jack_35mm:
+          categorySlug === 'laptops'
+            ? (benchmark?.headphone_jack_35mm ?? undefined)
+            : sourcedOr(benchmark?.headphone_jack_35mm, false),
         audio_features: benchmark?.audio_features ?? 'Dolby Atmos, Hi-Res Audio',
       },
       regulatory: {
         certifications:
           benchmark?.certifications ??
           (isApple ? 'CE, FCC ID, Apple Eco Standards' : 'CE, FCC, RoHS'),
-        sar_head: isSmartphone
-          ? (benchmark?.sar_head ?? (unsourcedAudioAndSar ? '1.10 W/kg' : undefined))
-          : undefined,
-        sar_body: isSmartphone
-          ? (benchmark?.sar_body ?? (unsourcedAudioAndSar ? '1.15 W/kg' : undefined))
-          : undefined,
+        sar_head: isSmartphone ? (benchmark?.sar_head ?? undefined) : undefined,
+        sar_body: isSmartphone ? (benchmark?.sar_body ?? undefined) : undefined,
       },
     };
 

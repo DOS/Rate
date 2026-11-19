@@ -133,9 +133,10 @@ test('non-Apple devices outside the registry, and other iPhones, keep their prev
   assert.equal(redmi.design?.keys, 'Volume, Power');
   assert.equal(redmi.battery?.charging, 'Sạc nhanh USB-C PD/PPS');
   assert.equal(redmi.connectivity?.other, 'Hỗ trợ OTG, Chia sẻ nhanh');
-  assert.equal(redmi.multimedia?.loudspeaker, 'Loa kép Stereo đa chiều');
-  assert.equal(redmi.regulatory?.sar_head, '1.10 W/kg');
-  assert.equal(redmi.regulatory?.sar_body, '1.15 W/kg');
+  // No source states its loudspeaker or SAR: none since DOS/Rate#1754.
+  assert.equal(redmi.multimedia?.loudspeaker, undefined);
+  assert.equal(redmi.regulatory?.sar_head, undefined);
+  assert.equal(redmi.regulatory?.sar_body, undefined);
 
   // A non-Apple tablet keeps the non-Apple charging and connectivity defaults; as a registry
   // device it gets no unsourced loudspeaker.
