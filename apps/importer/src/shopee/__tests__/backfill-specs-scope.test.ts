@@ -315,7 +315,7 @@ test('the scoped dry run writes nothing and reports the plan and the field diff'
   assert.match(text, /battery_mah: 1 -> \d+/, 'the diff shows the changed leaves');
 });
 
-test('without the new flags the backfill plans and writes as before', async () => {
+test('an unscoped backfill updates masters only and never inserts a seed (#1739)', async () => {
   const seeds = FLAGSHIP_DEVICES_TO_SEED.slice(0, 2);
   const canonicalKey = Object.keys(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY).find(
     k => !FLAGSHIP_DEVICES_TO_SEED.some(s => s.model_key === k)
@@ -336,9 +336,10 @@ test('without the new flags the backfill plans and writes as before', async () =
     { ...dryResult },
     {
       apply: false,
-      planned: 3,
+      planned: 2,
       catalogUpdated: 2,
-      catalogInserted: 1,
+      catalogInserted: 0,
+      insertsSkipped: 1,
       itemsUpdated: 0,
       skipped: 2,
       totalAudited: 0,
@@ -347,26 +348,182 @@ test('without the new flags the backfill plans and writes as before', async () =
 
   const enrichCalls: string[] = [];
   const live = mockClient(existing, masters);
-  const result = await runMasterSpecsBackfillWith(
-    live.client,
-    { ...deps(enrichCalls), enricher: { isConfigured: () => true }, seeds },
-    { apply: true }
-  );
+  const lines: string[] = [];
+  const original = { log: console.log, warn: console.warn };
+  console.log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
+  console.warn = (...args: unknown[]) => lines.push(args.map(String).join(' '));
+  let result;
+  try {
+    result = await runMasterSpecsBackfillWith(
+      live.client,
+      { ...deps(enrichCalls), enricher: { isConfigured: () => true }, seeds },
+      { apply: true }
+    );
+  } finally {
+    console.log = original.log;
+    console.warn = original.warn;
+  }
   assert.deepEqual(
-    live.writes().map(o => [o.op, o.op === 'insert' ? o.payload!.model_key : o.filters[0]![1]]),
+    live.writes().map(o => [o.op, o.filters[0]![1]]),
     [
       ['update', 'seed-0'],
-      ['insert', seeds[1]!.model_key],
       ['update', 'canon'],
     ],
-    'every seed, then the canonical master, in order'
+    'the existing seed, then the canonical master, in order; no insert'
+  );
+  assert.equal(
+    live.writes().some(o => o.op === 'insert'),
+    false,
+    'a seed with no master is never inserted by an unscoped --apply'
   );
   assert.deepEqual(enrichCalls, ['other'], 'the AI enricher gets the remaining master');
-  assert.equal(result.planned, 4);
+  assert.equal(result.planned, 3);
   assert.equal(result.catalogUpdated, 3);
-  assert.equal(result.catalogInserted, 1);
+  assert.equal(result.catalogInserted, 0);
+  assert.equal(result.insertsSkipped, 1);
   assert.equal(result.skipped, 1);
-  const insert = live.writes().find(o => o.op === 'insert')!;
-  assert.equal(insert.payload!.status, 'draft');
-  assert.equal(insert.payload!.category_id, 'cat-1');
+  const warning = lines.find(l => l.includes('an unscoped run never inserts'));
+  assert.ok(warning, 'the left-out seed is reported');
+  assert.ok(warning.includes(seeds[1]!.model_key), 'the warning names the left-out seed');
+  assert.match(warning, /--insert-missing --apply --expect/);
+});
+
+test('an unscoped --expect counts updates only, so a left-out seed cannot pass as planned', async () => {
+  const seeds = FLAGSHIP_DEVICES_TO_SEED.slice(0, 2);
+  const existing = { [seeds[0]!.model_key]: { id: 'seed-0', specifications: {}, key_specs: {} } };
+  const live = mockClient(existing);
+  await assert.rejects(
+    runMasterSpecsBackfillWith(live.client, { ...deps(), seeds }, { apply: true, expect: 2 }),
+    /--expect 2 does not match the plan of 1 master\(s\).*stopped before any write/
+  );
+  assert.deepEqual(live.writes(), []);
+});
+
+test('--expect-inserts checks the inserts apart from the updates (#1739)', async () => {
+  // Two named seeds: one has a master, one does not -> 1 update + 1 insert.
+  const seeds = FLAGSHIP_DEVICES_TO_SEED.slice(0, 2);
+  const only = seeds.map(s => s.model_key);
+  const existing = { [seeds[0]!.model_key]: { id: 'seed-0', specifications: {}, key_specs: {} } };
+  const base = { apply: true, only, insertMissing: true, expect: 2 } as const;
+
+  // Matching: writes the update and the insert.
+  const ok = mockClient(existing);
+  const result = await runMasterSpecsBackfillWith(
+    ok.client,
+    { ...deps(), seeds },
+    {
+      ...base,
+      expectInserts: 1,
+    }
+  );
+  assert.equal(result.catalogInserted, 1);
+  assert.equal(result.catalogUpdated, 1);
+  assert.deepEqual(
+    ok.writes().map(o => o.op),
+    ['update', 'insert']
+  );
+
+  // The total still matches (--expect 2) but the split does not: stopped before any write.
+  // This is the row that appeared between the dry run and the apply (an insert planned as 2
+  // turns into 2 updates), and the reverse.
+  for (const expectInserts of [0, 2]) {
+    const live = mockClient(existing);
+    await assert.rejects(
+      runMasterSpecsBackfillWith(live.client, { ...deps(), seeds }, { ...base, expectInserts }),
+      new RegExp(
+        `--expect-inserts ${expectInserts} does not match the plan of 1 insert\\(s\\) \\(${seeds[1]!.model_key}\\): stopped before any write`
+      )
+    );
+    assert.deepEqual(live.writes(), [], `expectInserts ${expectInserts}: nothing written`);
+  }
+  const bothExist = mockClient({
+    ...existing,
+    [seeds[1]!.model_key]: { id: 'seed-1', specifications: {}, key_specs: {} },
+  });
+  await assert.rejects(
+    runMasterSpecsBackfillWith(
+      bothExist.client,
+      { ...deps(), seeds },
+      {
+        ...base,
+        expectInserts: 1,
+      }
+    ),
+    /--expect-inserts 1 does not match the plan of 0 insert\(s\) \(none\)/
+  );
+  assert.deepEqual(bothExist.writes(), []);
+
+  // A dry run only warns.
+  const dry = mockClient(existing);
+  const lines: string[] = [];
+  const original = { log: console.log, warn: console.warn };
+  console.log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
+  console.warn = (...args: unknown[]) => lines.push(args.map(String).join(' '));
+  try {
+    await runMasterSpecsBackfillWith(
+      dry.client,
+      { ...deps(), seeds },
+      { ...base, apply: false, expectInserts: 0 }
+    );
+  } finally {
+    console.log = original.log;
+    console.warn = original.warn;
+  }
+  assert.deepEqual(dry.writes(), []);
+  assert.match(lines.join('\n'), /holds 1 insert\(s\), not the expected 0/);
+
+  for (const bad of [-1, 1.5, Number.NaN]) {
+    const { client, ops } = mockClient(existing);
+    await assert.rejects(
+      runMasterSpecsBackfillWith(client, { ...deps(), seeds }, { ...base, expectInserts: bad }),
+      /expectInserts must be a whole number/
+    );
+    assert.equal(ops.length, 0, 'a bad expectInserts fails before any read');
+  }
+});
+
+test('parseBackfillSpecsArgs reads --expect-inserts (#1739)', () => {
+  const only = APPROVED[0]!;
+  assert.deepEqual(
+    parseBackfillSpecsArgs([
+      '--only',
+      only,
+      '--insert-missing',
+      '--apply',
+      '--expect',
+      '2',
+      '--expect-inserts',
+      ' 1 ',
+    ]),
+    {
+      apply: true,
+      auditOnly: false,
+      only: [only],
+      expect: 2,
+      expectInserts: 1,
+      insertMissing: true,
+    }
+  );
+  assert.deepEqual(parseBackfillSpecsArgs(['--expect-inserts', '0']), {
+    apply: false,
+    auditOnly: false,
+    expectInserts: 0,
+  });
+  for (const bad of ['-1', '2.5', 'one', '0x1']) {
+    assert.throws(
+      () => parseBackfillSpecsArgs(['--expect-inserts', bad]),
+      /--expect-inserts takes a whole number/,
+      bad
+    );
+  }
+  assert.throws(() => parseBackfillSpecsArgs(['--expect-inserts']), /needs a value/);
+  assert.throws(
+    () => parseBackfillSpecsArgs(['--expect-inserts', '1', '--expect-inserts', '1']),
+    /--expect-inserts is repeated/
+  );
+  assert.throws(() => parseBackfillSpecsArgs(['--expect-inserts=1']), /unknown argument/);
+  assert.throws(
+    () => parseBackfillSpecsArgs(['--audit-only', '--expect-inserts', '0']),
+    /--audit-only/
+  );
 });

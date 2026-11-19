@@ -1,4 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { NextIntlClientProvider } from 'next-intl';
+import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+import { pickClientMessages } from '../client-messages';
+import { formatPriceVnd } from '../locale-format';
 import {
   filterMerchantDirectory,
   summarizeMerchantDirectory,
@@ -9,7 +18,25 @@ import {
   knownDosafeRiskScore,
   reviewRiskScoreOrNull,
 } from '../merchant-risk-tone';
-import { filterAndSortMerchants, type MerchantSummary } from '../rate-domain';
+import {
+  MAX_VALID_VND_PRICE,
+  filterAndSortMerchants,
+  type MerchantSummary,
+} from '../rate-domain';
+import MerchantDirectoryExplorer, {
+  formatMerchantDirectoryPriceRange,
+  merchantDirectoryDosafeDisplay,
+  merchantDirectoryReviewRiskDisplay,
+  merchantDirectoryTrustDisplay,
+  sanitizeMerchantDirectoryPriceVnd,
+} from '../../components/merchants/MerchantDirectoryExplorer';
+import {
+  MerchantProfilePriceBlock,
+  formatMerchantPagePriceVnd,
+  sanitizeMerchantPagePriceVnd,
+} from '../../app/[locale]/merchants/[id]/page';
+
+const testDir = dirname(fileURLToPath(import.meta.url));
 
 // A store with no analysed reviews has no measured review risk: no number,
 // no low-risk filter match, and not sorted as the lowest risk (DOS/Rate#1249).
@@ -149,6 +176,7 @@ async function main() {
   await offerSellersWithoutReviewsReadAsNoData();
   await combinedColumnIsNotReviewRisk();
   await publicOffersSayNoneWithoutReviews();
+  merchantPagesRiskPriceAndA11ySuite();
 
   // A store with neither a DOSafe score nor analysed reviews has no trust
   // score, not "high trust 100/100"; with one signal, the score is as before
@@ -828,13 +856,7 @@ async function publicOffersSayNoneWithoutReviews() {
   assert.equal(withPublicOfferReviewRisk(sellerless), sellerless);
 
   // Every public route that returns offers passes them through it.
-  const { readFileSync } = await import('node:fs');
-  const { dirname, join } = await import('node:path');
-  const { fileURLToPath } = await import('node:url');
-  const apiDir = join(
-    dirname(fileURLToPath(import.meta.url)),
-    '../../app/api/v1/rate'
-  );
+  const apiDir = join(testDir, '../../app/api/v1/rate');
   for (const route of [
     'products/[slug]/route.ts',
     'item-size/[slug]/route.ts',
@@ -852,6 +874,412 @@ async function publicOffersSayNoneWithoutReviews() {
     readFileSync(join(apiDir, 'extension/lookup/route.ts'), 'utf8'),
     /topCheaperOffers: result\.topCheaperOffers\.map\(\s*withPublicOfferReviewRisk/,
     'the extension lookup also passes its cheaper offers through it'
+  );
+}
+
+// DOS/Rate#1733: /merchants and /merchants/[id] route review_risk_score via
+// merchantRiskTone after integer rounding, treat trustScore <= 50 (risk >= 50)
+// as high-risk alert while keeping trustScore >= 80 for highTrustShops, guard
+// 0 VND and > MAX_VALID_VND_PRICE prices, and hide decorative SVG icons.
+function merchantPagesRiskPriceAndA11ySuite() {
+  // 1. Review risk badge tones + integer rounding (< 20 good, 20-49 warn, >= 50 bad).
+  assert.equal(merchantDirectoryReviewRiskDisplay(null), null);
+  assert.equal(
+    merchantDirectoryReviewRiskDisplay({
+      review_risk_score: 8,
+      review_risk_breakdown: { total_reviews: 0 },
+    }),
+    null
+  );
+  for (const invalidScore of [null, '0x10', '8\t0', '1\n0', '\u000016']) {
+    assert.equal(
+      merchantDirectoryReviewRiskDisplay({
+        review_risk_score: invalidScore,
+        review_risk_breakdown: { total_reviews: 5 },
+      }),
+      null,
+      `review_risk_score ${JSON.stringify(invalidScore)} must return null`
+    );
+  }
+  for (const [raw, expectedScore, expectedTone, expectedCls] of [
+    [0, 0, 'good', 'bg-success-subtle text-success'],
+    [16, 16, 'good', 'bg-success-subtle text-success'],
+    [' 16 ', 16, 'good', 'bg-success-subtle text-success'],
+    [19.4, 19, 'good', 'bg-success-subtle text-success'],
+    [19.5, 20, 'warn', 'bg-warning-subtle text-warning-emphasis'],
+    [41, 41, 'warn', 'bg-warning-subtle text-warning-emphasis'],
+    [49.4, 49, 'warn', 'bg-warning-subtle text-warning-emphasis'],
+    [49.5, 50, 'bad', 'bg-danger-subtle text-danger'],
+    [140, 100, 'bad', 'bg-danger-subtle text-danger'],
+  ] as const) {
+    assert.deepEqual(
+      merchantDirectoryReviewRiskDisplay({
+        review_risk_score: raw,
+        review_risk_breakdown: { total_reviews: 10 },
+      }),
+      { score: expectedScore, tone: expectedTone, badgeClass: expectedCls },
+      `review_risk_score ${String(raw)} must round to ${expectedScore} (${expectedTone})`
+    );
+  }
+  assert.equal(
+    merchantDirectoryDosafeDisplay({
+      dosafe_risk_score: 19.6,
+      dosafe_risk_known: true,
+    })?.tone,
+    'warn'
+  );
+  assert.equal(
+    merchantDirectoryDosafeDisplay({
+      dosafe_risk_score: 49.6,
+      dosafe_risk_known: true,
+    })?.tone,
+    'bad'
+  );
+
+  // 2. Trust score thresholds: >= 80 high, 51-79 moderate, <= 50 high-risk alert.
+  for (const invalid of [
+    null,
+    undefined,
+    '',
+    '0x50',
+    '8\t0',
+    '5\n0',
+    '\u000080',
+    Number.NaN,
+  ]) {
+    assert.equal(
+      merchantDirectoryTrustDisplay(invalid),
+      null,
+      `invalid trustScore ${JSON.stringify(invalid)} must return null`
+    );
+  }
+  for (const [raw, score, tier, badgeClass] of [
+    [100, 100, 'high', 'bg-success text-white'],
+    [80, 80, 'high', 'bg-success text-white'],
+    [' 80 ', 80, 'high', 'bg-success text-white'],
+    [79.6, 80, 'high', 'bg-success text-white'],
+    [79, 79, 'moderate', 'bg-warning text-dark'],
+    [51, 51, 'moderate', 'bg-warning text-dark'],
+    [50.5, 51, 'moderate', 'bg-warning text-dark'],
+    [50.4, 50, 'risk', 'bg-danger text-white'],
+    [50, 50, 'risk', 'bg-danger text-white'],
+    [0, 0, 'risk', 'bg-danger text-white'],
+  ] as const) {
+    assert.deepEqual(
+      merchantDirectoryTrustDisplay(raw),
+      { score, tier, badgeClass },
+      `trustScore ${String(raw)} must map to ${tier} (${score})`
+    );
+  }
+  // Keep summarizeMerchantDirectory highTrustShops aligned at >= 80.
+  assert.equal(
+    summarizeMerchantDirectory([
+      merchant('t80', 10, 5, 80),
+      merchant('t79', 10, 5, 79),
+      merchant('t50', 50, 5, 50),
+    ]).safe,
+    1
+  );
+
+  // 3. VND price guards (> 0 && <= MAX_VALID_VND_PRICE, never "0 ₫", reject embedded control chars).
+  for (const bad of [
+    null,
+    undefined,
+    0,
+    '0',
+    0.4,
+    -1,
+    -500_000,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    '0x1000',
+    '1\n000',
+    '8\t0',
+    '1\u0000000',
+    MAX_VALID_VND_PRICE + 1,
+  ]) {
+    assert.equal(
+      sanitizeMerchantDirectoryPriceVnd(bad),
+      null,
+      `directory invalid price ${JSON.stringify(bad)} must return null`
+    );
+    assert.equal(
+      sanitizeMerchantPagePriceVnd(bad),
+      null,
+      `profile invalid price ${JSON.stringify(bad)} must return null`
+    );
+    assert.equal(
+      formatMerchantPagePriceVnd(bad, 'vi'),
+      '-',
+      `profile formatted invalid price ${JSON.stringify(bad)} must return '-'`
+    );
+  }
+  assert.equal(sanitizeMerchantDirectoryPriceVnd(1), 1);
+  assert.equal(sanitizeMerchantPagePriceVnd(1), 1);
+  assert.equal(sanitizeMerchantDirectoryPriceVnd('  15990000  '), 15_990_000);
+  assert.equal(sanitizeMerchantPagePriceVnd('  15990000  '), 15_990_000);
+  assert.equal(
+    sanitizeMerchantDirectoryPriceVnd(MAX_VALID_VND_PRICE),
+    MAX_VALID_VND_PRICE
+  );
+  assert.equal(
+    sanitizeMerchantPagePriceVnd(MAX_VALID_VND_PRICE),
+    MAX_VALID_VND_PRICE
+  );
+  assert.equal(formatMerchantPagePriceVnd(15_990_000, 'vi'), '15.990.000 ₫');
+  assert.equal(
+    formatMerchantPagePriceVnd('  15990000  ', 'vi'),
+    '15.990.000 ₫'
+  );
+  assert.equal(
+    formatMerchantDirectoryPriceRange({ min_price: 0, max_price: 0 }, 'vi'),
+    null
+  );
+  assert.equal(
+    formatMerchantDirectoryPriceRange(
+      { min_price: 15_000_000, max_price: MAX_VALID_VND_PRICE + 1 },
+      'vi'
+    ),
+    formatPriceVnd(15_000_000, 'vi')
+  );
+  assert.equal(
+    formatMerchantDirectoryPriceRange(
+      { min_price: 25_000_000, max_price: 15_000_000 },
+      'cs'
+    ),
+    `${formatPriceVnd(15_000_000, 'cs')} - ${formatPriceVnd(25_000_000, 'cs')}`
+  );
+
+  // Render MerchantProfilePriceBlock directly for invalid/zero vs valid prices.
+  for (const invalidCurrent of [0, -1, Number.NaN, '1\n000', '8\t0']) {
+    const invalidBlockHtml = renderToStaticMarkup(
+      React.createElement(MerchantProfilePriceBlock, {
+        priceCurrent: invalidCurrent,
+        priceOriginal: 20_000_000,
+        locale: 'vi',
+      })
+    );
+    assert.match(
+      invalidBlockHtml,
+      /data-testid="merchant-profile-recorded-price"[^>]*>-<\/div>/,
+      `MerchantProfilePriceBlock must render '-' for ${String(invalidCurrent)}`
+    );
+    assert.ok(
+      !/(?<![\d.,\u00a0])0[\s\u00a0]*₫/.test(invalidBlockHtml) &&
+        !invalidBlockHtml.includes('20.000.000 ₫'),
+      `MerchantProfilePriceBlock must not render 0 VND or strike-through price for ${String(invalidCurrent)}`
+    );
+  }
+  const validBlockHtml = renderToStaticMarkup(
+    React.createElement(MerchantProfilePriceBlock, {
+      priceCurrent: 15_990_000,
+      priceOriginal: 18_990_000,
+      locale: 'vi',
+    })
+  );
+  assert.ok(
+    validBlockHtml.includes('15.990.000 ₫') &&
+      validBlockHtml.includes('18.990.000 ₫') &&
+      !/(?<![\d.,\u00a0])0[\s\u00a0]*₫/.test(validBlockHtml),
+    'MerchantProfilePriceBlock must render valid current and original VND prices'
+  );
+
+  // 4. SSR render across locales + per-card badge assertions + decorative icon a11y + source contracts.
+  const readLocale = (loc: string) =>
+    JSON.parse(
+      readFileSync(join(testDir, '../../../locales', `${loc}.json`), 'utf8')
+    ) as Record<string, unknown>;
+  const mockRouter = {
+    back: () => {},
+    forward: () => {},
+    refresh: () => {},
+    push: () => {},
+    replace: () => {},
+    prefetch: () => {},
+    bfcacheId: 'test',
+  };
+  const IntlProvider = NextIntlClientProvider as React.ComponentType<{
+    locale: string;
+    messages: Record<string, unknown>;
+    timeZone: string;
+    children?: React.ReactNode;
+  }>;
+  const items = [
+    {
+      ...merchant('m-good', 18, 10, 80),
+      dosafe_risk_score: 35,
+      is_official: true,
+      follower_count: 1_200,
+      min_price: 0,
+      max_price: 0,
+    },
+    {
+      ...merchant('m-warn', 42, 10, 51),
+      min_price: MAX_VALID_VND_PRICE + 999,
+      max_price: MAX_VALID_VND_PRICE + 1_999,
+    },
+    {
+      ...merchant('m-bad', 50, 10, 50),
+      min_price: 12_990_000,
+      max_price: 18_990_000,
+    },
+    {
+      ...merchant('m-norev', 4, 0, 85),
+      min_price: null,
+      max_price: null,
+    },
+  ] as MerchantSummary[];
+
+  const cardSegmentFor = (docHtml: string, merchantId: string): string => {
+    const marker = `data-merchant-id="${merchantId}"`;
+    const start = docHtml.indexOf(marker);
+    assert.notEqual(
+      start,
+      -1,
+      `expected rendered card segment for ${merchantId}`
+    );
+    const nextCard = docHtml.indexOf(
+      'data-merchant-id="',
+      start + marker.length
+    );
+    return nextCard === -1
+      ? docHtml.slice(start)
+      : docHtml.slice(start, nextCard);
+  };
+  const badgeTagInCard = (cardHtml: string, testId: string): string => {
+    const match = cardHtml.match(
+      new RegExp(`<span\\b[^>]*data-testid="${testId}"[^>]*>`)
+    );
+    assert.ok(match, `expected ${testId} in card segment`);
+    return match[0];
+  };
+
+  for (const loc of ['vi', 'en', 'cs'] as const) {
+    const messages = pickClientMessages(readLocale(loc), 'merchants');
+    const renderDir = (matched: number, pageItems: MerchantSummary[]) =>
+      renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: mockRouter as never },
+          React.createElement(
+            IntlProvider,
+            { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+            React.createElement(MerchantDirectoryExplorer, {
+              initialPage: { items: pageItems, matched, offset: 0 },
+              summary: {
+                total: 4,
+                official: 1,
+                safe: 2,
+                avgTrust: 67,
+                platformCounts: { shopee: 4 },
+              },
+            })
+          )
+        )
+      );
+    const html = renderDir(4, items);
+    const emptyHtml = renderDir(0, []);
+    assert.ok(
+      !/(?<![\d.,\u00a0])0[\s\u00a0]*₫/.test(html) &&
+        !html.includes('NaN') &&
+        !html.includes('1.000.000.999') &&
+        !html.includes('1\u00a0000\u00a0000\u00a0999') &&
+        html.includes(formatPriceVnd(12_990_000, loc)) &&
+        html.includes(formatPriceVnd(18_990_000, loc)),
+      `${loc}: /merchants must never render 0 VND or > MAX_VALID_VND_PRICE`
+    );
+
+    const goodCard = cardSegmentFor(html, 'm-good');
+    const warnCard = cardSegmentFor(html, 'm-warn');
+    const badCard = cardSegmentFor(html, 'm-bad');
+    const noRevCard = cardSegmentFor(html, 'm-norev');
+
+    assert.match(
+      badgeTagInCard(goodCard, 'merchant-directory-review-badge'),
+      /\bdata-tone="good"/,
+      `${loc}: m-good review badge must render good tone`
+    );
+    assert.match(
+      badgeTagInCard(goodCard, 'merchant-directory-trust-badge'),
+      /\bbg-success text-white\b/,
+      `${loc}: m-good trust badge (80) must render high-trust class`
+    );
+    assert.match(
+      badgeTagInCard(warnCard, 'merchant-directory-review-badge'),
+      /\bdata-tone="warn"/,
+      `${loc}: m-warn review badge must render warn tone`
+    );
+    assert.match(
+      badgeTagInCard(warnCard, 'merchant-directory-trust-badge'),
+      /\bbg-warning text-dark\b/,
+      `${loc}: m-warn trust badge (51) must render moderate-trust class`
+    );
+    assert.match(
+      badgeTagInCard(badCard, 'merchant-directory-review-badge'),
+      /\bdata-tone="bad"/,
+      `${loc}: m-bad review badge must render bad tone`
+    );
+    assert.match(
+      badgeTagInCard(badCard, 'merchant-directory-trust-badge'),
+      /\bbg-danger text-white\b/,
+      `${loc}: m-bad trust badge (50) must render high-risk alert class`
+    );
+    assert.match(
+      badgeTagInCard(noRevCard, 'merchant-directory-review-badge'),
+      /\bdata-tone="unknown"/,
+      `${loc}: m-norev review badge must render unknown tone`
+    );
+
+    for (const rendered of [html, emptyHtml]) {
+      const svgs = rendered.match(/<svg\b[^>]*>/g) ?? [];
+      assert.ok(svgs.length > 0, `${loc}: expected decorative SVGs`);
+      for (const svg of svgs) {
+        assert.match(
+          svg,
+          /\baria-hidden="true"/,
+          `${loc}: SVG missing aria-hidden: ${svg}`
+        );
+      }
+    }
+  }
+
+  const profilePageSrc = readFileSync(
+    join(testDir, '../../app/[locale]/merchants/[id]/page.tsx'),
+    'utf8'
+  );
+  const directorySrc = readFileSync(
+    join(testDir, '../../components/merchants/MerchantDirectoryExplorer.tsx'),
+    'utf8'
+  );
+  for (const [label, src] of [
+    ['merchants/[id]/page.tsx', profilePageSrc],
+    ['MerchantDirectoryExplorer.tsx', directorySrc],
+  ] as const) {
+    assert.ok(
+      !src.includes('review_risk_score <= 15') &&
+        !src.includes('review_risk_score <= 40') &&
+        !src.includes('trustScore >= 50') &&
+        !src.includes('priceOriginal || 0'),
+      `${label} must not retain legacy review-risk/trust thresholds or 0 VND fallback`
+    );
+    const iconTags = src.match(/<Bs[A-Z]\w*[\s\S]*?\/>/g) ?? [];
+    assert.ok(iconTags.length > 0, `${label} must contain react-icons tags`);
+    for (const tag of iconTags) {
+      assert.match(
+        tag,
+        /\baria-hidden="true"/,
+        `${label}: decorative icon missing aria-hidden="true": ${tag}`
+      );
+    }
+  }
+  assert.ok(
+    profilePageSrc.includes('merchantRiskTone(reviewRiskScore)') &&
+      profilePageSrc.includes('data-testid="merchant-review-risk-badge"') &&
+      profilePageSrc.includes('data-tone={reviewTone}') &&
+      profilePageSrc.includes('trustScore > 50') &&
+      profilePageSrc.includes('<MerchantProfilePriceBlock') &&
+      profilePageSrc.includes('formatMerchantPagePriceVnd('),
+    'merchants/[id]/page.tsx must route review risk via merchantRiskTone, expose data-testid + data-tone, use trustScore > 50, and render prices via MerchantProfilePriceBlock / formatMerchantPagePriceVnd'
   );
 }
 

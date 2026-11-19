@@ -164,6 +164,12 @@ let detectRequestCounter = 0;
 const latestDetectByTab = new Map<number, number>();
 let fullLookupRequestCounter = 0;
 const latestFullLookupByTab = new Map<number, number>();
+let latestSelectionCounter = 0;
+let pendingQuickQueryReceipt: {
+  updatedAt: number;
+  apiBaseUrl: string;
+  data: ExtensionLookupData | null;
+} | null = null;
 async function maybeSendOptInCrowdSignal(
   rawSignal: ExtractedPageProductSignal
 ): Promise<void> {
@@ -319,19 +325,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (msgType === 'RATE_PRODUCT_DETECTED') {
     const requestId = ++detectRequestCounter;
-    if (sender.tab?.id) latestDetectByTab.set(sender.tab.id, requestId);
+    const tabId = sender.tab?.id;
+    const isBackgroundTab = Boolean(sender.tab && sender.tab.active === false);
+    const latestOwnerSeq = !isBackgroundTab ? ++latestSelectionCounter : null;
+    if (tabId) latestDetectByTab.set(tabId, requestId);
+    const ownsTabLatest = () =>
+      latestOwnerSeq !== null && latestSelectionCounter === latestOwnerSeq;
     // Only the tab's latest lookup may set its badge, stored lookup or
     // panel: an earlier one can answer after a later one (DOS/Rate#1300).
     const isLatest = () =>
-      !sender.tab?.id || latestDetectByTab.get(sender.tab.id) === requestId;
+      tabId ? latestDetectByTab.get(tabId) === requestId : ownsTabLatest();
     (async () => {
       try {
         const signal = sanitizeExtensionProductSignal(
           message.signal as ExtractedPageProductSignal
-        );
-        const tabId = sender.tab?.id;
-        const isBackgroundTab = Boolean(
-          sender.tab && sender.tab.active === false
         );
         const cacheKey = tabId ? `tab_${tabId}` : 'tab_latest';
         const now = Date.now();
@@ -339,17 +346,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Store latest extracted signal in session storage (ephemeral SW safe).
         // Background tabs only write their own `tab_<id>` slot so they never hijack
         // `tab_latest` or trigger sidepanel reloads on the active tab (#531).
-        const signalPayload: Record<string, unknown> = {
-          [cacheKey]: { signal, updatedAt: now, source: 'page' },
-        };
-        if (!isBackgroundTab) {
+        const signalPayload: Record<string, unknown> = {};
+        if (tabId) {
+          signalPayload[cacheKey] = { signal, updatedAt: now, source: 'page' };
+        }
+        if (ownsTabLatest()) {
+          pendingQuickQueryReceipt = null;
           signalPayload.tab_latest = {
             signal,
             updatedAt: now,
             source: 'page',
           };
         }
-        await chrome.storage.session.set(signalPayload);
+        if (Object.keys(signalPayload).length > 0) {
+          await chrome.storage.session.set(signalPayload);
+        }
 
         const outcome = await fetchExtensionLookup(signal, 'pill');
         // Fire-and-forget Opt-In Quarantine Crowd Signal if user enabled it.
@@ -371,15 +382,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
         // Always persist or clear `lookup_tab_<id>` (and `lookup_tab_latest`
-        // for the active tab) so stale product state never lingers after a
-        // lookup error or null/unmatched response (DOS/Rate#1664).
-        const lookupPayload: Record<string, unknown> = {
-          [`lookup_${cacheKey}`]: lookup,
-        };
-        if (!isBackgroundTab) {
+        // while this lookup still owns `tab_latest`) so stale product state
+        // never lingers after a lookup error or null/unmatched response
+        // without clobbering a newer quick-query selection (DOS/Rate#1664, #1734).
+        const lookupPayload: Record<string, unknown> = {};
+        if (tabId) {
+          lookupPayload[`lookup_${cacheKey}`] = lookup;
+        }
+        if (ownsTabLatest()) {
           lookupPayload.lookup_tab_latest = lookup;
         }
-        await chrome.storage.session.set(lookupPayload);
+        if (Object.keys(lookupPayload).length > 0) {
+          await chrome.storage.session.set(lookupPayload);
+        }
         if (!isLatest()) {
           sendResponse({ ok: outcome.ok, data: lookup, stale: true });
           return;
@@ -400,19 +415,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           await updateActionBadge(sender.tab?.id, null);
         }
         if (isLatest()) {
-          const errCacheKey = sender.tab?.id
-            ? `tab_${sender.tab.id}`
-            : 'tab_latest';
-          const errPayload: Record<string, unknown> = {
-            [`lookup_${errCacheKey}`]: null,
-          };
-          if (!(sender.tab && sender.tab.active === false)) {
+          const errPayload: Record<string, unknown> = {};
+          if (tabId) {
+            errPayload[`lookup_tab_${tabId}`] = null;
+          }
+          if (ownsTabLatest()) {
             errPayload.lookup_tab_latest = null;
           }
-          try {
-            await chrome.storage.session.set(errPayload);
-          } catch {
-            // Ignore session storage errors during worker shutdown
+          if (Object.keys(errPayload).length > 0) {
+            try {
+              await chrome.storage.session.set(errPayload);
+            } catch {
+              // Ignore session storage errors during worker shutdown
+            }
           }
         }
         sendResponse({
@@ -541,6 +556,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
+        if (
+          isQuickQuerySelected &&
+          !overrideVariant &&
+          pendingQuickQueryReceipt &&
+          latestEntry?.updatedAt === pendingQuickQueryReceipt.updatedAt &&
+          settings.apiBaseUrl === pendingQuickQueryReceipt.apiBaseUrl
+        ) {
+          if (fullSeq !== fullLookupRequestCounter) {
+            sendResponse({
+              ok: true,
+              settings,
+              signal: effectiveSignal,
+              data: pendingQuickQueryReceipt.data,
+              stale: true,
+            });
+            return;
+          }
+          const receipt = pendingQuickQueryReceipt;
+          pendingQuickQueryReceipt = null;
+          sendResponse({
+            ok: true,
+            settings,
+            signal: effectiveSignal,
+            data: receipt.data,
+          });
+          return;
+        }
+
         const outcome = await fetchExtensionLookup(effectiveSignal, 'full');
         if (isCurrentTabLookup() && trackedTabId !== undefined) {
           const resolvedLookup = outcome.ok ? outcome.data : null;
@@ -597,6 +640,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
     }
     const quickSeq = ++fullLookupRequestCounter;
+    const selectionAtQuickEntry = latestSelectionCounter;
+    pendingQuickQueryReceipt = null;
     (async () => {
       try {
         const rawQuery =
@@ -615,12 +660,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        const isUrl = /^https?:\/\//i.test(rawQuery);
-        const canonicalUrl = isUrl ? sanitizeProductUrl(rawQuery) || '' : '';
-        const detectedPlatform =
-          isUrl && canonicalUrl ? detectEcommercePlatform(canonicalUrl) : null;
+        const hasHttpScheme = /^https?:\/\//i.test(rawQuery);
+        const schemelessHostPath =
+          rawQuery.startsWith('//') && !rawQuery.startsWith('///')
+            ? rawQuery.slice(2)
+            : rawQuery;
+        const schemelessCandidate =
+          !hasHttpScheme &&
+          !/\s/.test(schemelessHostPath) &&
+          !/^[a-z][a-z0-9+.-]*:(?!\d+(?:\/|$))/i.test(schemelessHostPath) &&
+          !schemelessHostPath.startsWith('/')
+            ? `https://${schemelessHostPath}`
+            : null;
+        const sanitizedCandidate = hasHttpScheme
+          ? sanitizeProductUrl(rawQuery)
+          : schemelessCandidate
+            ? sanitizeProductUrl(schemelessCandidate)
+            : null;
+        const detectedPlatform = sanitizedCandidate
+          ? detectEcommercePlatform(sanitizedCandidate)
+          : null;
+        const canonicalUrl =
+          sanitizedCandidate && (hasHttpScheme || detectedPlatform)
+            ? sanitizedCandidate
+            : '';
         const extractedIds =
-          isUrl && detectedPlatform && canonicalUrl
+          detectedPlatform && canonicalUrl
             ? extractIdsFromUrl(detectedPlatform, canonicalUrl)
             : { externalItemId: null, externalShopId: null };
 
@@ -674,14 +739,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           syntheticSignal.platform = fullLookup.platform;
         }
 
-        if (quickSeq === fullLookupRequestCounter) {
+        if (
+          quickSeq === fullLookupRequestCounter &&
+          latestSelectionCounter === selectionAtQuickEntry
+        ) {
+          ++latestSelectionCounter;
           const now = Date.now();
+          pendingQuickQueryReceipt = {
+            updatedAt: now,
+            apiBaseUrl: settings.apiBaseUrl,
+            data: fullLookup,
+          };
           await chrome.storage.session.set({
             tab_latest: {
               signal: syntheticSignal,
               updatedAt: now,
               source: 'quick_query',
             },
+            lookup_tab_latest: fullLookup,
           });
         }
 

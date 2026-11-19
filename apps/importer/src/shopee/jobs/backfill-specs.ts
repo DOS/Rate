@@ -4,6 +4,9 @@
  * Usage:
  *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts              (Dry-run + audit, zero DB writes)
  *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts --apply      (Apply spec updates to rate.master_products)
+ *   An unscoped run updates masters only: a seed with no master row is skipped with a
+ *   warning, never inserted. A new seed goes in through the scoped insert below
+ *   (DOS/Rate#1739).
  *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts --audit-only (Read-only 10-Field-Group audit)
  *
  * Scoped run (DOS/Rate#1464), for an approved fix of named masters only:
@@ -14,14 +17,29 @@
  *                  with no seed fails before any database read.
  *   --expect <n>   With --apply, stops before the first write unless the plan updates or
  *                  inserts exactly n masters. A dry run logs whether the plan matches.
+ *   --expect-inserts <n>  Optional, like --expect for the inserts alone, so a row that appears
+ *                  between the dry run and the apply cannot pass as an update (DOS/Rate#1739).
  *   A scoped run only updates existing masters: a named key with no master row stops an
  *   --apply before any write (a dry run warns). Any unknown argument, `--flag=value` or a
  *   repeated flag fails. Neither flag combines with --audit-only. The read-only catalog
  *   audit still runs at the end, so a scoped --apply can exit 1 after its writes when an
  *   unrelated master fails the audit: read the log, not only the exit code.
  *
+ * Scoped insert (DOS/Rate#1737), for an approved new seed (a model with no master yet):
+ *   ... backfill-specs.ts --only <model_key,...> --insert-missing                (Dry-run)
+ *   ... backfill-specs.ts --only <model_key,...> --insert-missing --apply --expect <n> --expect-inserts <i>
+ *   --insert-missing  A named key with no master row is inserted as a draft master instead of
+ *                     stopping the run; named keys that have a row are updated as usual. It
+ *                     needs --only, and with --apply also --expect, so the plan (inserts plus
+ *                     updates) is checked before the first write. A seed slug held by
+ *                     another master stops the run before any write. The job writes no
+ *                     rate.items row (a database master trigger may create a draft Item where
+ *                     the Item model is deployed), and the draft master stays unpublished
+ *                     until someone publishes it.
+ *
  * Safety invariant:
  * - Dry-run by default (`apply = false`): never mutates `rate.master_products` unless `--apply` is passed.
+ * - Inserts a master only for a seed named with `--only ... --insert-missing` (DOS/Rate#1739).
  * - Never writes listings (`rate.products`), merchants, reviews, price_history, or fabricated scores.
  */
 import assert from 'node:assert/strict';
@@ -72,6 +90,16 @@ export interface BackfillSpecsOptions {
    * of any other size stops before the first write; a dry run only reports the comparison.
    */
   readonly expect?: number;
+  /**
+   * `--expect-inserts`: the number of masters the plan must insert, checked like `expect`.
+   * Optional; it tells an insert from an update, which `expect` alone does not.
+   */
+  readonly expectInserts?: number;
+  /**
+   * `--insert-missing` (with `only`): a named key with no master row is inserted as a draft
+   * instead of stopping the run. With `apply`, `expect` is required.
+   */
+  readonly insertMissing?: boolean;
 }
 
 export interface BackfillSpecsResult {
@@ -80,6 +108,8 @@ export interface BackfillSpecsResult {
   readonly planned: number;
   readonly catalogUpdated: number;
   readonly catalogInserted: number;
+  /** Seeds with no master row that an unscoped run left out (it never inserts). */
+  readonly insertsSkipped: number;
   /** Items whose specs the seeds set (RATE_ITEM_MODEL on only; 0 otherwise). */
   readonly itemsUpdated: number;
   readonly skipped: number;
@@ -428,9 +458,11 @@ export interface BackfillSpecsArgs {
   readonly auditOnly: boolean;
   readonly only?: readonly string[];
   readonly expect?: number;
+  readonly expectInserts?: number;
+  readonly insertMissing?: boolean;
 }
 
-/** Parses the job's flags; throws on a malformed `--only` or `--expect`. */
+/** Parses the job's flags; throws on a malformed `--only`, `--expect` or `--expect-inserts`. */
 export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsArgs {
   // Strict: an argument this job does not know (a typo, `--only=keys`) or a repeated flag
   // fails, so it can never turn a scoped run into a full one.
@@ -438,16 +470,24 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
   let auditOnly = false;
   let onlyRaw: string | undefined;
   let expectRaw: string | undefined;
+  let expectInsertsRaw: string | undefined;
+  let insertMissing = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
+    if (arg === '--insert-missing') {
+      if (insertMissing) throw new Error(`${arg} is repeated`);
+      insertMissing = true;
+      continue;
+    }
     if (arg === '--apply' || arg === '--audit-only') {
       if ((arg === '--apply' ? apply : auditOnly) === true) throw new Error(`${arg} is repeated`);
       if (arg === '--apply') apply = true;
       else auditOnly = true;
       continue;
     }
-    if (arg === '--only' || arg === '--expect') {
-      if ((arg === '--only' ? onlyRaw : expectRaw) !== undefined) {
+    if (arg === '--only' || arg === '--expect' || arg === '--expect-inserts') {
+      const seen = arg === '--only' ? onlyRaw : arg === '--expect' ? expectRaw : expectInsertsRaw;
+      if (seen !== undefined) {
         throw new Error(`${arg} is repeated`);
       }
       const next = argv[i + 1];
@@ -455,12 +495,13 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
         throw new Error(`${arg} needs a value`);
       }
       if (arg === '--only') onlyRaw = next;
-      else expectRaw = next;
+      else if (arg === '--expect') expectRaw = next;
+      else expectInsertsRaw = next;
       i++;
       continue;
     }
     throw new Error(
-      `unknown argument ${JSON.stringify(arg)}: this job takes --apply, --audit-only, --only <model_key,...> and --expect <n>`
+      `unknown argument ${JSON.stringify(arg)}: this job takes --apply, --audit-only, --only <model_key,...>, --expect <n>, --expect-inserts <n> and --insert-missing`
     );
   }
   let only: string[] | undefined;
@@ -482,14 +523,32 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
     }
     expect = Number(expectRaw.trim());
   }
-  if (auditOnly && (only !== undefined || expect !== undefined)) {
-    throw new Error('--only and --expect do not combine with --audit-only');
+  let expectInserts: number | undefined;
+  if (expectInsertsRaw !== undefined) {
+    if (!/^\d+$/.test(expectInsertsRaw.trim())) {
+      throw new Error(
+        `--expect-inserts takes a whole number of masters, got "${expectInsertsRaw}"`
+      );
+    }
+    expectInserts = Number(expectInsertsRaw.trim());
+  }
+  if (auditOnly && (only !== undefined || expect !== undefined || expectInserts !== undefined)) {
+    throw new Error('--only, --expect and --expect-inserts do not combine with --audit-only');
+  }
+  if (insertMissing) {
+    if (auditOnly) throw new Error('--insert-missing does not combine with --audit-only');
+    if (only === undefined) throw new Error('--insert-missing needs --only');
+    if (apply && expect === undefined) {
+      throw new Error('--insert-missing --apply needs --expect');
+    }
   }
   return {
     apply,
     auditOnly,
     ...(only !== undefined ? { only } : {}),
     ...(expect !== undefined ? { expect } : {}),
+    ...(expectInserts !== undefined ? { expectInserts } : {}),
+    ...(insertMissing ? { insertMissing } : {}),
   };
 }
 
@@ -629,6 +688,18 @@ export async function runMasterSpecsBackfillWith(
   if (expect !== undefined && (!Number.isInteger(expect) || expect < 0)) {
     throw new Error(`expect must be a whole number of masters, got ${String(expect)}`);
   }
+  const expectInserts = options.expectInserts;
+  if (expectInserts !== undefined && (!Number.isInteger(expectInserts) || expectInserts < 0)) {
+    throw new Error(
+      `expectInserts must be a whole number of masters, got ${String(expectInserts)}`
+    );
+  }
+  // Checked again here (not only by the CLI parser), before any read.
+  const insertMissing = options.insertMissing === true;
+  if (insertMissing && !scoped) throw new Error('insertMissing needs only');
+  if (insertMissing && apply && expect === undefined) {
+    throw new Error('insertMissing with apply needs expect');
+  }
   const { enricher, matcher } = deps;
 
   const { data: categories, error: catErr } = await supabase
@@ -657,6 +728,8 @@ export async function runMasterSpecsBackfillWith(
     : 'id, key_specs, specifications, variant_name, description, ram_gb, storage_gb, screen_size_inch, battery_mah, has_5g, colors';
   const catalogModelKeys = new Set<string>(allSeeds.map(d => d.model_key));
   const seedWrites: SeedWrite[] = [];
+  // Seeds with no master row in an unscoped run: never inserted there (DOS/Rate#1739).
+  const insertsSkippedKeys: string[] = [];
   for (const device of seeds) {
     const categoryId = categoryIdBySlug.get(device.categorySlug) || null;
     const specFields = {
@@ -702,6 +775,10 @@ export async function runMasterSpecsBackfillWith(
           ? specUpdateChanges(row, specUpdate)
           : undefined;
       seedWrites.push({ kind: 'seed-update', device, id: row.id, payload, changes });
+    } else if (!scoped) {
+      // An unscoped run updates masters only: a new seed is inserted only when named,
+      // with --only ... --insert-missing --apply --expect n (DOS/Rate#1739).
+      insertsSkippedKeys.push(device.model_key);
     } else {
       const payload = {
         ...specFields,
@@ -717,6 +794,24 @@ export async function runMasterSpecsBackfillWith(
         status: 'draft',
         metadata: { category_slug: device.categorySlug },
       };
+      // A named insert (--insert-missing) checks the unique slug in the plan, so a clash
+      // stops the run before the first write instead of after a partial insert.
+      if (insertMissing) {
+        const { data: slugOwner, error: slugErr } = await supabase
+          .from('master_products')
+          .select('id, model_key')
+          .eq('slug', device.slug)
+          .maybeSingle();
+        if (slugErr) {
+          throw new Error(`Failed to look up slug ${device.slug}: ${slugErr.message}`);
+        }
+        if (slugOwner) {
+          const owner = String((slugOwner as { model_key?: unknown }).model_key ?? '');
+          throw new Error(
+            `--insert-missing: slug ${device.slug} already belongs to ${owner.slice(0, 160) || 'another master'}: stopped before any write`
+          );
+        }
+      }
       seedWrites.push({
         kind: 'seed-insert',
         device,
@@ -797,9 +892,11 @@ export async function runMasterSpecsBackfillWith(
 
   // A scoped run fixes existing masters: a named key with no master row would insert a draft
   // (and through the master trigger possibly an Item), which --expect alone cannot catch.
-  const scopedInserts = scoped
-    ? seedWrites.filter(w => w.kind === 'seed-insert').map(w => w.device.model_key)
-    : [];
+  // Unless the run asks for the insert by name (--insert-missing, DOS/Rate#1737).
+  const scopedInserts =
+    scoped && !insertMissing
+      ? seedWrites.filter(w => w.kind === 'seed-insert').map(w => w.device.model_key)
+      : [];
   if (scopedInserts.length > 0) {
     const message = `--only updates existing masters only; no master row for ${scopedInserts.join(', ')}`;
     if (apply) throw new Error(`${message}: stopped before any write`);
@@ -812,15 +909,32 @@ export async function runMasterSpecsBackfillWith(
     );
   }
 
+  if (insertsSkippedKeys.length > 0) {
+    logger.warn(
+      'backfill.unscoped_insert_skipped',
+      `${insertsSkippedKeys.length} seed(s) with no master row left out: an unscoped run never inserts; use --only <keys> --insert-missing --apply --expect <n> --expect-inserts <i> (${insertsSkippedKeys.join(', ')})`,
+      { modelKeys: insertsSkippedKeys }
+    );
+  }
+
   const planned = seedWrites.length + masterWrites.length;
+  const plannedInserts = seedWrites.filter(w => w.kind === 'seed-insert').length;
   const plannedKeys = [
     ...seedWrites.map(w => w.device.model_key),
     ...masterWrites.map(w => (w.kind === 'canonical-update' ? w.modelKey : w.id)),
   ];
   logger.info(
     'backfill.plan',
-    `Plan [mode=${apply ? 'APPLY' : 'DRY-RUN'}${scoped ? ', scoped' : ''}]: ${planned} master(s) to update or insert (${seedWrites.filter(w => w.kind === 'seed-insert').length} insert(s))${expect !== undefined ? `, expected ${expect}` : ''}`,
-    { apply, scoped, planned, expect, ...(scoped ? { modelKeys: plannedKeys } : {}) }
+    `Plan [mode=${apply ? 'APPLY' : 'DRY-RUN'}${scoped ? ', scoped' : ''}]: ${planned} master(s) to update or insert (${plannedInserts} insert(s))${expect !== undefined ? `, expected ${expect}` : ''}${expectInserts !== undefined ? `, expected inserts ${expectInserts}` : ''}`,
+    {
+      apply,
+      scoped,
+      planned,
+      plannedInserts,
+      expect,
+      expectInserts,
+      ...(scoped ? { modelKeys: plannedKeys } : {}),
+    }
   );
   if (expect !== undefined && planned !== expect) {
     if (apply) {
@@ -832,6 +946,21 @@ export async function runMasterSpecsBackfillWith(
       'backfill.expect_mismatch',
       `DRY-RUN: the plan holds ${planned} master(s), not the expected ${expect}; an --apply with this --expect would stop before any write`,
       { planned, expect }
+    );
+  }
+  if (expectInserts !== undefined && plannedInserts !== expectInserts) {
+    const insertKeys = seedWrites
+      .filter(w => w.kind === 'seed-insert')
+      .map(w => w.device.model_key);
+    if (apply) {
+      throw new Error(
+        `--expect-inserts ${expectInserts} does not match the plan of ${plannedInserts} insert(s) (${insertKeys.join(', ') || 'none'}): stopped before any write`
+      );
+    }
+    logger.warn(
+      'backfill.expect_inserts_mismatch',
+      `DRY-RUN: the plan holds ${plannedInserts} insert(s), not the expected ${expectInserts}; an --apply with this --expect-inserts would stop before any write`,
+      { plannedInserts, expectInserts }
     );
   }
 
@@ -891,7 +1020,10 @@ export async function runMasterSpecsBackfillWith(
   // A scoped run writes masters only: an Item row spans variants outside the scope.
   let itemsUpdated = 0;
   if (scoped) {
-    logger.info('backfill.items_skipped', 'Scoped run (--only): rate.items rows are not touched');
+    logger.info(
+      'backfill.items_skipped',
+      'Scoped run (--only): the job writes no rate.items row (a master trigger may still create a draft Item)'
+    );
   } else {
     itemsUpdated = (await syncItemSeedSpecs(supabase, { apply })).updated;
   }
@@ -932,8 +1064,16 @@ export async function runMasterSpecsBackfillWith(
   const totalAudited = await auditMasterSpecs(supabase);
   logger.info(
     'backfill.completed',
-    `SPEC CATALOG SYNC COMPLETE [mode=${apply ? 'APPLY' : 'DRY-RUN'}]: ${catalogUpdated} updated, ${catalogInserted} inserted as draft, ${skipped} skipped; ${totalAudited}/${totalAudited} master products verified with 10/10 Field Groups.`,
-    { apply, catalogUpdated, catalogInserted, itemsUpdated, skipped, totalAudited }
+    `SPEC CATALOG SYNC COMPLETE [mode=${apply ? 'APPLY' : 'DRY-RUN'}]: ${catalogUpdated} updated, ${catalogInserted} inserted as draft, ${insertsSkippedKeys.length} seed insert(s) left out, ${skipped} skipped; ${totalAudited}/${totalAudited} master products verified with 10/10 Field Groups.`,
+    {
+      apply,
+      catalogUpdated,
+      catalogInserted,
+      insertsSkipped: insertsSkippedKeys.length,
+      itemsUpdated,
+      skipped,
+      totalAudited,
+    }
   );
 
   return {
@@ -941,6 +1081,7 @@ export async function runMasterSpecsBackfillWith(
     planned,
     catalogUpdated,
     catalogInserted,
+    insertsSkipped: insertsSkippedKeys.length,
     itemsUpdated,
     skipped,
     totalAudited,
@@ -1023,6 +1164,8 @@ if (isDirectExecution) {
             apply: args.apply,
             ...(args.only !== undefined ? { only: args.only } : {}),
             ...(args.expect !== undefined ? { expect: args.expect } : {}),
+            ...(args.expectInserts !== undefined ? { expectInserts: args.expectInserts } : {}),
+            ...(args.insertMissing ? { insertMissing: true } : {}),
           });
     })
     .catch((err: unknown) => {

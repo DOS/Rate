@@ -37,8 +37,7 @@ Every seed must use the normalizer's own key (for example `apple:iphone-18-pro-m
    - Seeds carry no prices, listings, merchants or reviews: those come only from real crawls.
    - The existing tests check every seed key against the normalizer.
 2. **Seed run (prod data write, JOY approves).** `pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts`:
-   - First as a dry run, which prints "WOULD INSERT" per device.
-   - Then with `--apply`, which inserts the missing masters as `draft` and updates specs.
+   - Since #1739 an unscoped run never inserts: it updates existing masters and lists the seeds with no master. New masters go in only by name, first as a dry run with `--only <keys> --insert-missing`, then with `--only <keys> --insert-missing --apply --expect <n> --expect-inserts <i>`, which inserts them as `draft` and stops before any write if the plan differs.
    - This writes production data, so it needs JOY's approval and runs through the usual production step. It is not DDL.
 3. **Crawling (RS).** Discovery searches the retail sites for each master's name (`search-discovery.ts`). Listings that pass the worker's master check are linked, and prices, merchant counts and history fill in.
 4. **Publishing (gap).** A seeded master stays `draft`. The importer publishes only masters it creates itself (Tier 3), with verified specs and a new-device title. No step publishes a seeded draft once it has offers. See decision D2.
@@ -69,7 +68,7 @@ Under the Item model (#1150), one Item stands for one model (for example `apple:
   - (a) Publish a seeded draft automatically once it has at least one in-stock crawled offer that passed the master check. This is a code change in RS or the importer, with no DDL.
   - (b) Publish by hand per batch after the audit. This is a data step each time.
   - Recommended: (a), with a minimum of 2 merchants for tier C.
-- **D3. Approve the seed run** (`backfill-specs --apply`) on production for the approved batch. It is a data write, not DDL.
+- **D3. Approve the seed run** (`backfill-specs --only <keys> --insert-missing --apply --expect <n> --expect-inserts <i>`, #1739) on production for the approved batch. It is a data write, not DDL.
 - **D4. Variants without an offer.** Show them in the storage selector as "chưa có giá" (recommended: buyers see that the size exists), or hide them until they have an offer.
 - **D5. Base iPhone 18 and 18e.** Wait until a VN chain sells them (recommended), or seed them as drafts now so discovery starts early.
 

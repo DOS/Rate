@@ -669,6 +669,48 @@ async function runTests() {
   assert.ok(conflictEvents.marketStatsRefreshed.includes('master-hint-512'));
   assert.ok(conflictEvents.marketStatsRefreshed.includes('master-exact-1'));
 
+  // A size the model is not sold in keys as ':unknown' but still conflicts with a hint to
+  // a master of another size (DOS/Rate#1739): a "17e 128GB" page never joins the 256GB master.
+  for (const [title, hint, hintStorage] of [
+    ['Điện thoại Apple iPhone 17e 128GB Chính hãng VN/A', 'master-hint-17e-256', 256],
+    ['Apple iPhone 16e 1TB', 'master-hint-16e-128', 128],
+  ] as const) {
+    const { stub: unsoldStub, events: unsoldEvents } = createPipelineStubSupabase({
+      hintRow: { id: hint, storage_gb: hintStorage },
+    });
+    const unsoldRes = await new ShopeeIngestionPipeline({
+      supabaseClient: unsoldStub,
+      apiKey: '',
+    }).ingestProduct(
+      createBaseProduct({
+        title,
+        models: [{ modelId: 'm-1', name: 'Đen', price: 15990000, stock: 3 }],
+      }),
+      undefined,
+      { masterIdHint: hint }
+    );
+    assert.notEqual(unsoldRes.masterId, hint, `${title}: an unsold size drops the hint`);
+    assert.notEqual(unsoldEvents.productUpserts[0]?.cluster_id, hint, title);
+  }
+  // The hinted size itself, or no stated size, still keeps a 17e hint.
+  for (const title of ['Apple iPhone 17e 256GB', 'Apple iPhone 17e Chính hãng']) {
+    const { stub: keptStub } = createPipelineStubSupabase({
+      hintRow: { id: 'master-hint-17e-256', storage_gb: 256 },
+    });
+    const keptRes = await new ShopeeIngestionPipeline({
+      supabaseClient: keptStub,
+      apiKey: '',
+    }).ingestProduct(
+      createBaseProduct({
+        title,
+        models: [{ modelId: 'm-1', name: 'Đen', price: 15990000, stock: 3 }],
+      }),
+      undefined,
+      { masterIdHint: 'master-hint-17e-256' }
+    );
+    assert.equal(keptRes.masterId, 'master-hint-17e-256', title);
+  }
+
   // A title that also names the hinted size is no conflict.
   assert.equal(titleNamesStorage('iPhone 16 Pro Max 256/512GB', 256), true);
   assert.equal(titleNamesStorage('iPhone 16 Pro Max 256/512GB', 512), true);
