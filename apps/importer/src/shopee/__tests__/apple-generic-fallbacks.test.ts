@@ -8,6 +8,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { countPopulatedFieldGroups } from '../arena-spec-syncer.js';
 import { SOURCED_SEEDS_2026 } from '../flagship-seed-sourced-2026.js';
 import { ProductNormalizer } from '../product-normalizer.js';
 import type { ShopeeProduct } from '../types.js';
@@ -68,6 +69,7 @@ test('Apple laptops, tablets, watches and earbuds get no iPhone charging, UWB or
     'Apple MacBook Air M3 13 inch 256GB',
     'Apple MacBook Air M4 13 inch 256GB',
     'Apple iPad Pro M4 11 inch 256GB',
+    'Apple iPad Pro M4 13 inch 256GB',
     'Apple Watch Ultra 2 49mm',
     'Apple Watch Series 10 46mm',
     'Tai nghe AirPods Pro 2',
@@ -83,11 +85,8 @@ test('Apple laptops, tablets, watches and earbuds get no iPhone charging, UWB or
     assert.equal(out.multimedia?.loudspeaker, undefined, title);
     assert.equal(out.regulatory?.sar_head, undefined, title);
     // The groups the catalog audit requires stay non-empty.
-    for (const group of [out.battery, out.connectivity, out.multimedia, out.regulatory] as const) {
-      assert.ok(
-        Object.values(group ?? {}).some(v => v !== undefined),
-        title
-      );
+    for (const name of ['battery', 'connectivity', 'multimedia', 'regulatory'] as const) {
+      assert.equal(countPopulatedFieldGroups({ [name]: out[name] }), 1, `${title} ${name}`);
     }
   }
 });
@@ -124,14 +123,8 @@ test('an Apple or registry phone gets only the loudspeaker and SAR its sources s
     assert.equal(out.multimedia?.loudspeaker, undefined, title);
     assert.equal(out.regulatory?.sar_head, undefined, title);
     assert.equal(out.regulatory?.sar_body, undefined, title);
-    assert.ok(
-      Object.values(out.multimedia ?? {}).some(v => v !== undefined),
-      title
-    );
-    assert.ok(
-      Object.values(out.regulatory ?? {}).some(v => v !== undefined),
-      title
-    );
+    assert.ok(countPopulatedFieldGroups({ multimedia: out.multimedia }) === 1, title);
+    assert.ok(countPopulatedFieldGroups({ regulatory: out.regulatory }) === 1, title);
   }
 });
 
@@ -144,8 +137,10 @@ test('non-Apple devices outside the registry, and other iPhones, keep their prev
   assert.equal(redmi.regulatory?.sar_head, '1.10 W/kg');
   assert.equal(redmi.regulatory?.sar_body, '1.15 W/kg');
 
-  // A non-Apple tablet keeps the non-Apple defaults.
+  // A non-Apple tablet keeps the non-Apple charging and connectivity defaults; as a registry
+  // device it gets no unsourced loudspeaker.
   const tab = normalize('Samsung Galaxy Tab S10 Ultra 256GB').specifications;
+  assert.equal(tab.multimedia?.loudspeaker, undefined);
   assert.equal(tab.battery?.charging, 'Sạc nhanh USB-C PD/PPS');
   assert.equal(tab.connectivity?.other, 'Hỗ trợ OTG, Chia sẻ nhanh');
 
