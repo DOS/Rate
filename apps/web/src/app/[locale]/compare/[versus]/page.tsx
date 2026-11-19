@@ -175,6 +175,14 @@ export function buildVersusItemListSchema(
       url: `https://rate.vn${getMasterProductHref({
         ...entry.product,
         slug: catalogRowSlug(entry.product),
+        metadata: {
+          ...(entry.product.metadata &&
+          typeof entry.product.metadata === 'object' &&
+          !Array.isArray(entry.product.metadata)
+            ? entry.product.metadata
+            : {}),
+          category_slug: getMasterProductCategorySlug(entry.product),
+        },
       })}`,
     })),
   };

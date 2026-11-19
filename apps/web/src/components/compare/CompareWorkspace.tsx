@@ -480,7 +480,7 @@ export function buildCompareVersusSlugMap(
   }
   if (clientItemSlugs) {
     // Confirmed client answers (including confirmed unlinked `slug -> slug`)
-    // take precedence over sibling heuristics; failed fetches store `''`.
+    // take precedence over sibling heuristics; empty entries are ignored.
     for (const [slug, itemSlug] of Object.entries(clientItemSlugs)) {
       if (slug && typeof itemSlug === 'string' && itemSlug) {
         setCompareOwnSlug(map, slug, itemSlug);
@@ -588,6 +588,89 @@ export function resolveComparePopularBattles(
     if (resolved.length >= maxPairs) break;
   }
   return resolved;
+}
+
+export const MAX_COMPARE_ITEM_LOOKUP_ATTEMPTS = 2;
+export const COMPARE_ITEM_LOOKUP_RETRY_MS = 800;
+
+export interface CompareItemLookupFailure {
+  attempts: number;
+  retryAt: number;
+}
+
+export function parseCompareItemLookupAnswer(
+  responseOk: boolean,
+  json: unknown,
+  slug: string
+): string | null {
+  if (
+    !responseOk ||
+    !json ||
+    typeof json !== 'object' ||
+    (json as { ok?: unknown }).ok !== true
+  ) {
+    return null;
+  }
+  return itemSlugFromProductAnswer(json, slug);
+}
+
+export function planCompareItemLookupBatch(
+  candidateSlugs: readonly string[],
+  itemSlugBySlug: Readonly<Record<string, string>> | null | undefined,
+  clientItemSlugs: Readonly<Record<string, string>>,
+  failures: ReadonlyMap<string, CompareItemLookupFailure>,
+  now: number
+): { readyToFetch: string[]; earliestRetryAt: number } {
+  const readyToFetch: string[] = [];
+  let earliestRetryAt = Number.POSITIVE_INFINITY;
+  for (const slug of candidateSlugs) {
+    if (
+      !slug ||
+      lookupCompareOwnSlug(itemSlugBySlug, slug) ||
+      Object.hasOwn(clientItemSlugs, slug)
+    ) {
+      continue;
+    }
+    const failure = failures.get(slug);
+    const attempts = failure?.attempts ?? 0;
+    if (attempts >= MAX_COMPARE_ITEM_LOOKUP_ATTEMPTS) continue;
+    const retryAt = failure?.retryAt ?? 0;
+    if (now >= retryAt) {
+      readyToFetch.push(slug);
+    } else if (retryAt < earliestRetryAt) {
+      earliestRetryAt = retryAt;
+    }
+  }
+  return { readyToFetch, earliestRetryAt };
+}
+
+export function applyCompareItemLookupOutcomes(
+  entries: ReadonlyArray<readonly [string, string | null]>,
+  failures: Map<string, CompareItemLookupFailure>,
+  finishedAt: number,
+  initialEarliestRetryAt = Number.POSITIVE_INFINITY
+): { confirmed: Array<[string, string]>; nextRetryAt: number } {
+  const confirmed: Array<[string, string]> = [];
+  let nextRetryAt = initialEarliestRetryAt;
+  for (const [slug, resolved] of entries) {
+    if (resolved) {
+      failures.delete(slug);
+      confirmed.push([slug, resolved]);
+    } else {
+      const prevAttempts = failures.get(slug)?.attempts ?? 0;
+      const attempts = prevAttempts + 1;
+      const delayMs = COMPARE_ITEM_LOOKUP_RETRY_MS * 2 ** prevAttempts;
+      const retryAt = finishedAt + delayMs;
+      failures.set(slug, { attempts, retryAt });
+      if (
+        attempts < MAX_COMPARE_ITEM_LOOKUP_ATTEMPTS &&
+        retryAt < nextRetryAt
+      ) {
+        nextRetryAt = retryAt;
+      }
+    }
+  }
+  return { confirmed, nextRetryAt };
 }
 
 export type CompareReplaceTranslate = (key: 'replaceDeviceBtn') => string;
@@ -1538,6 +1621,10 @@ export default function CompareWorkspace({
   const [clientItemSlugs, setClientItemSlugs] = useState<
     Record<string, string>
   >({});
+  const [itemLookupRetryTick, setItemLookupRetryTick] = useState(0);
+  const itemLookupFailuresRef = useRef<Map<string, CompareItemLookupFailure>>(
+    new Map()
+  );
   const versusSlugMap = useMemo(
     () =>
       buildCompareVersusSlugMap(
@@ -1567,35 +1654,77 @@ export default function CompareWorkspace({
         ].filter(Boolean)
       )
     );
-    const missing = candidateSlugs.filter(
-      (slug) =>
-        !lookupCompareOwnSlug(itemSlugBySlug, slug) &&
-        !Object.hasOwn(clientItemSlugs, slug)
+    const { readyToFetch, earliestRetryAt } = planCompareItemLookupBatch(
+      candidateSlugs,
+      itemSlugBySlug,
+      clientItemSlugs,
+      itemLookupFailuresRef.current,
+      Date.now()
     );
-    if (missing.length === 0) return;
+    if (readyToFetch.length === 0 && !Number.isFinite(earliestRetryAt)) {
+      return;
+    }
     let cancelled = false;
-    void Promise.all(
-      missing.map((slug) =>
-        fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
-          .then((res) => (res.ok ? res.json() : null))
-          .then((json: unknown) => [
-            slug,
-            json ? itemSlugFromProductAnswer(json, slug) : '',
-          ])
-          .catch(() => [slug, ''])
-      )
-    ).then((entries) => {
-      if (!cancelled) {
-        setClientItemSlugs((prev) => ({
-          ...prev,
-          ...Object.fromEntries(entries),
-        }));
-      }
-    });
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRetryAt = (targetMs: number) => {
+      if (cancelled || !Number.isFinite(targetMs)) return;
+      if (retryTimer) clearTimeout(retryTimer);
+      const delayMs = Math.max(50, targetMs - Date.now());
+      retryTimer = setTimeout(() => {
+        if (!cancelled) {
+          setItemLookupRetryTick((tick) => tick + 1);
+        }
+      }, delayMs);
+    };
+    if (Number.isFinite(earliestRetryAt)) {
+      scheduleRetryAt(earliestRetryAt);
+    }
+    if (readyToFetch.length > 0) {
+      void Promise.all(
+        readyToFetch.map((slug) =>
+          fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+            .then(async (res) => {
+              if (!res.ok) return [slug, null] as const;
+              const json: unknown = await res.json();
+              return [
+                slug,
+                parseCompareItemLookupAnswer(res.ok, json, slug),
+              ] as const;
+            })
+            .catch(() => [slug, null] as const)
+        )
+      ).then((entries) => {
+        if (cancelled) return;
+        const { confirmed, nextRetryAt } = applyCompareItemLookupOutcomes(
+          entries,
+          itemLookupFailuresRef.current,
+          Date.now(),
+          earliestRetryAt
+        );
+        if (confirmed.length > 0) {
+          setClientItemSlugs((prev) => {
+            const next = { ...prev };
+            for (const [slug, itemSlug] of confirmed) {
+              setCompareOwnSlug(next, slug, itemSlug);
+            }
+            return next;
+          });
+        } else if (Number.isFinite(nextRetryAt)) {
+          scheduleRetryAt(nextRetryAt);
+        }
+      });
+    }
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [itemSlugBySlug, products, popularBattles, clientItemSlugs]);
+  }, [
+    itemSlugBySlug,
+    products,
+    popularBattles,
+    clientItemSlugs,
+    itemLookupRetryTick,
+  ]);
   const specGroups = useMemo(
     () => filterSpecGroupsForCategory(allSpecGroups, activeCategory),
     [allSpecGroups, activeCategory]
@@ -2700,6 +2829,7 @@ export default function CompareWorkspace({
                         battle.productB.slug,
                         versusSlugMap
                       )}
+                      data-testid="popular-battle-1v1-link"
                       className="btn btn-sm btn-dark rounded-pill small fw-semibold px-3"
                     >
                       {t('go1v1Btn')}
@@ -3021,6 +3151,14 @@ export default function CompareWorkspace({
                               slug:
                                 lookupCompareOwnSlug(versusSlugMap, p.slug) ||
                                 catalogRowSlug(p as ItemCatalogRow),
+                              metadata: {
+                                ...(p.metadata &&
+                                typeof p.metadata === 'object' &&
+                                !Array.isArray(p.metadata)
+                                  ? p.metadata
+                                  : {}),
+                                category_slug: getMasterProductCategorySlug(p),
+                              },
                             })}
                             className="fw-bold text-dark text-decoration-none h6 mb-2"
                           >
@@ -3067,6 +3205,15 @@ export default function CompareWorkspace({
                                 slug:
                                   lookupCompareOwnSlug(versusSlugMap, p.slug) ||
                                   catalogRowSlug(p as ItemCatalogRow),
+                                metadata: {
+                                  ...(p.metadata &&
+                                  typeof p.metadata === 'object' &&
+                                  !Array.isArray(p.metadata)
+                                    ? p.metadata
+                                    : {}),
+                                  category_slug:
+                                    getMasterProductCategorySlug(p),
+                                },
                               })}#jreviews-section`}
                               className="btn btn-sm btn-dark rounded-pill fw-medium px-3"
                             >
