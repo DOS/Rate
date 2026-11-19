@@ -68,7 +68,7 @@
   },
   "dependencies": {
     "@repo/shared-data": "workspace:*",
-    "@supabase/supabase-js": "^2.117.2",
+    "@supabase/supabase-js": "^2.119.0",
     "dotenv": "^18.0.8"
   },
   "devDependencies": {
