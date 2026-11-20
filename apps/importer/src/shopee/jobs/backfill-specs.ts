@@ -288,8 +288,37 @@ export function hasSingleRearCamera(
 }
 
 /**
- * Spec-only audit: every master product must carry all 10 Field Groups and the main camera,
- * plus a second camera unless `camera.rear_setup` declares a single rear camera.
+ * Whether the camera group states any rear camera (a rear setup label, or a main, second,
+ * third or fourth camera). A group that states none (a watch or earbuds, a laptop with
+ * only its webcam, a listing no source describes) has no rear camera to audit: the
+ * importer writes no guessed camera (DOS/Rate#1787).
+ */
+export function statesRearCamera(
+  camera:
+    | {
+        rear_setup?: unknown;
+        main_camera?: unknown;
+        second_camera?: unknown;
+        third_camera?: unknown;
+        fourth_camera?: unknown;
+      }
+    | null
+    | undefined
+): boolean {
+  const filled = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+  return (
+    filled(camera?.rear_setup) ||
+    filled(camera?.main_camera) ||
+    filled(camera?.second_camera) ||
+    filled(camera?.third_camera) ||
+    filled(camera?.fourth_camera)
+  );
+}
+
+/**
+ * Spec-only audit: every master product must carry all 10 Field Groups. A master whose
+ * camera group states a rear camera must carry the main camera, plus a second camera
+ * unless `camera.rear_setup` declares a single rear camera.
  * Deliberately asserts nothing about offers, reviews or ratings.
  */
 export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<number> {
@@ -331,14 +360,14 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
         failures.push(`${label} is missing specification group "${grp}"`);
       }
     }
-    if (!row.specifications?.camera?.main_camera?.trim()) {
-      failures.push(`${label} is missing camera.main_camera`);
-    }
-    if (
-      !hasSingleRearCamera(row.specifications?.camera) &&
-      !row.specifications?.camera?.second_camera?.trim()
-    ) {
-      failures.push(`${label} is missing camera.second_camera`);
+    const camera = row.specifications?.camera;
+    if (statesRearCamera(camera)) {
+      if (!camera?.main_camera?.trim()) {
+        failures.push(`${label} is missing camera.main_camera`);
+      }
+      if (!hasSingleRearCamera(camera) && !camera?.second_camera?.trim()) {
+        failures.push(`${label} is missing camera.second_camera`);
+      }
     }
   }
 

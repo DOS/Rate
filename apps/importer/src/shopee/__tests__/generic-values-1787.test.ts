@@ -9,6 +9,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { auditMasterSpecs, statesRearCamera } from '../jobs/backfill-specs.js';
 import { SOURCED_SEEDS_2025 } from '../flagship-seed-sourced-2025.js';
 import { SOURCED_SEEDS_2026 } from '../flagship-seed-sourced-2026.js';
 import { SOURCED_SEEDS_IPHONE_17E } from '../flagship-seed-sourced-iphone-17e.js';
@@ -246,4 +247,38 @@ test('a registry model with a sourced seed gets the seed’s values', () => {
     assert.ok(s.camera?.video_recording, modelKey);
     assert.equal(out.camera?.video_recording, s.camera?.video_recording, title);
   }
+});
+
+test('the spec audit accepts a master whose camera group states no rear camera', async () => {
+  const titles = [
+    'Laptop Dell XPS 13 512GB',
+    'Apple MacBook Air M3 13 inch 256GB',
+    'Sony WF-1000XM5',
+    'Tai nghe JBL Tune 230NC',
+    'Apple Watch Ultra 2 49mm',
+    'Samsung Galaxy Watch7 44mm',
+    'Samsung Galaxy A35 5G 128GB',
+    'Samsung Galaxy Tab A9 64GB',
+    'Samsung Galaxy S24 Ultra 256GB',
+    'Apple iPhone 16e 128GB',
+  ];
+  const rows = titles.map((title, i) => {
+    const n = normalize(title);
+    return { id: `m${i}`, name: title, model_key: n.model_key, specifications: n.specifications };
+  });
+  // Only the registry phones state rear cameras; the rest leave the group to a spec sync.
+  assert.deepEqual(
+    rows.filter(r => statesRearCamera(r.specifications.camera)).map(r => r.name),
+    ['Samsung Galaxy S24 Ultra 256GB', 'Apple iPhone 16e 128GB']
+  );
+  const client = {
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          range: async (from: number) => ({ data: from === 0 ? rows : [], error: null }),
+        }),
+      }),
+    }),
+  };
+  assert.equal(await auditMasterSpecs(client as never), rows.length);
 });

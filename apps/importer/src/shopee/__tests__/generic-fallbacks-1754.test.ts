@@ -79,9 +79,9 @@ test('an iPhone outside the registry gets its generation’s Apple Tech Specs te
     assert.equal(out.connectivity?.location, undefined, title);
     assert.equal(out.multimedia?.headphone_jack_35mm, undefined, title);
     assert.equal(out.connectivity?.nfc, true, title);
-    // The battery and connectivity groups stay non-empty for the catalog audit; no source
-    // fills multimedia (DOS/Rate#1761) or the camera group (DOS/Rate#1787), which stay
-    // empty.
+    // The battery and connectivity groups keep the iPhone text; no source fills multimedia
+    // (DOS/Rate#1761) or the camera group (DOS/Rate#1787), which stay empty. The spec
+    // audit skips a camera group that states no rear camera.
     assert.equal(out.multimedia?.audio_features, undefined, title);
     for (const name of ['battery', 'connectivity'] as const) {
       assert.equal(countPopulatedFieldGroups({ [name]: out[name] }), 1, `${title} ${name}`);
