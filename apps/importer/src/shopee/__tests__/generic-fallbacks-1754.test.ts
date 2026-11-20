@@ -79,8 +79,10 @@ test('an iPhone outside the registry gets its generation’s Apple Tech Specs te
     assert.equal(out.connectivity?.location, undefined, title);
     assert.equal(out.multimedia?.headphone_jack_35mm, undefined, title);
     assert.equal(out.connectivity?.nfc, true, title);
-    // The battery and connectivity groups stay non-empty for the catalog audit.
-    for (const name of ['battery', 'camera', 'connectivity', 'multimedia'] as const) {
+    // The battery, camera and connectivity groups stay non-empty for the catalog audit;
+    // no source fills multimedia, which stays empty (DOS/Rate#1761).
+    assert.equal(out.multimedia?.audio_features, undefined, title);
+    for (const name of ['battery', 'camera', 'connectivity'] as const) {
       assert.equal(countPopulatedFieldGroups({ [name]: out[name] }), 1, `${title} ${name}`);
     }
   }
@@ -100,7 +102,7 @@ test('an iPhone no checked page describes gets no iPhone-only text', () => {
   assert.deepEqual(iphoneGenerationSpecs('iPhone 10'), {});
 });
 
-test('registry iPhones keep their previous output', () => {
+test('registry iPhones keep their iPhone text, without GNSS or jack no source states', () => {
   for (const [title, keys] of [
     ['Apple iPhone 16 Pro Max 256GB', CAMERA_CONTROL],
     ['Apple iPhone 16 128GB', CAMERA_CONTROL],
@@ -113,9 +115,16 @@ test('registry iPhones keep their previous output', () => {
     assert.equal(out.display?.features, ISLAND, title);
     assert.equal(out.battery?.charging, MAGSAFE_QI2, title);
     assert.equal(out.connectivity?.other, UWB_SOS, title);
-    assert.equal(out.connectivity?.location, 'GPS, GLONASS, Galileo, QZSS, BeiDou', title);
+    // Apple's pages list NavIC or dual-frequency GPS by model: an entry gets the list its
+    // sourced seed states (the 18 Pro) or none (DOS/Rate#1761).
+    const sourced = title.includes('iPhone 18 Pro');
+    assert.equal(
+      out.connectivity?.location,
+      sourced ? 'Dual-frequency GPS (L1+L5), GLONASS, Galileo, QZSS, BeiDou, NavIC' : undefined,
+      title
+    );
     assert.equal(out.connectivity?.nfc, true, title);
-    assert.equal(out.multimedia?.headphone_jack_35mm, false, title);
+    assert.equal(out.multimedia?.headphone_jack_35mm, sourced ? false : undefined, title);
   }
 });
 
@@ -134,7 +143,6 @@ test('laptops, tablets and earbuds get no rear flash, GPS or NFC no source state
     const out = n.specifications;
     assert.equal(out.connectivity?.location, undefined, title);
     assert.equal(out.connectivity?.nfc, undefined, title);
-    assert.equal(countPopulatedFieldGroups({ connectivity: out.connectivity }), 1, title);
   }
   for (const title of [
     'Apple MacBook Air M3 13 inch 256GB',
@@ -150,11 +158,9 @@ test('laptops, tablets and earbuds get no rear flash, GPS or NFC no source state
     if (!title.startsWith('iPad')) assert.equal(out.camera?.video_recording, undefined, title);
     assert.equal(countPopulatedFieldGroups({ camera: out.camera }), 1, title);
   }
-  // A non-Apple tablet and the phones keep their flash; a watch keeps GPS and NFC.
-  assert.equal(
-    normalize('Samsung Galaxy Tab A9 64GB').specifications.camera?.flash,
-    'LED flash, auto-HDR, panorama'
-  );
+  // A non-Apple phone keeps its flash; a tablet gets none (DOS/Rate#1761); a watch keeps
+  // GPS and NFC.
+  assert.equal(normalize('Samsung Galaxy Tab A9 64GB').specifications.camera?.flash, undefined);
   assert.equal(
     normalize('Xiaomi Redmi Note 99 Pro 256GB').specifications.camera?.flash,
     'LED flash, auto-HDR, panorama'
@@ -181,10 +187,12 @@ test('MacBooks get the headphone jack Apple lists; a device outside the registry
   ]) {
     const out = normalize(title).specifications;
     assert.equal(out.multimedia?.headphone_jack_35mm, undefined, title);
-    assert.equal(countPopulatedFieldGroups({ multimedia: out.multimedia }), 1, title);
   }
-  // A registry phone or earbuds entry keeps its previous "no jack" (follow-up to source).
-  assert.equal(normalize('Sony WF-1000XM5').specifications.multimedia?.headphone_jack_35mm, false);
+  // A registry phone or earbuds entry without a sourced jack gets none (DOS/Rate#1761).
+  assert.equal(
+    normalize('Sony WF-1000XM5').specifications.multimedia?.headphone_jack_35mm,
+    undefined
+  );
 });
 
 test('a non-Apple device outside the registry gets no unsourced loudspeaker or SAR', () => {
@@ -198,9 +206,6 @@ test('a non-Apple device outside the registry gets no unsourced loudspeaker or S
     assert.equal(out.multimedia?.loudspeaker, undefined, title);
     assert.equal(out.regulatory?.sar_head, undefined, title);
     assert.equal(out.regulatory?.sar_body, undefined, title);
-    for (const name of ['multimedia', 'regulatory'] as const) {
-      assert.equal(countPopulatedFieldGroups({ [name]: out[name] }), 1, `${title} ${name}`);
-    }
   }
 });
 

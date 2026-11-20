@@ -70,22 +70,24 @@ test('a registry phone with no sourced refresh rate gets none; one with a rate k
   );
 });
 
-test('models without the new registry fields keep their previous output', () => {
+test('models without the new registry fields get no generic Wi-Fi or iPhone flash', () => {
+  // No source states a Wi-Fi version for every device, or "Dual-LED" for an iPhone: none
+  // (DOS/Rate#1761).
   const pro = normalize('Apple iPhone 16 Pro Max 256GB');
   assert.equal(pro.is_benchmark_enriched, true);
-  assert.equal(pro.specifications.connectivity?.wlan, 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct');
-  assert.equal(pro.specifications.camera?.flash, 'True Tone Dual-LED');
+  assert.equal(pro.specifications.connectivity?.wlan, undefined);
+  assert.equal(pro.specifications.camera?.flash, undefined);
 
   const samsung = normalize('Samsung Galaxy S24 Ultra 256GB');
   assert.equal(samsung.is_benchmark_enriched, true);
-  assert.equal(samsung.specifications.connectivity?.wlan, 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct');
+  assert.equal(samsung.specifications.connectivity?.wlan, undefined);
   assert.equal(samsung.specifications.camera?.flash, 'LED flash, auto-HDR, panorama');
 
-  // A phone outside the registry keeps the category fallbacks.
+  // A phone outside the registry keeps the other category fallbacks.
   const other = normalize('Xiaomi Redmi Note 99 Pro 256GB');
   assert.equal(other.is_benchmark_enriched, false);
   assert.equal(other.specifications.display?.refresh_rate_hz, 120);
-  assert.equal(other.specifications.connectivity?.wlan, 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct');
+  assert.equal(other.specifications.connectivity?.wlan, undefined);
   assert.equal(other.specifications.camera?.flash, 'LED flash, auto-HDR, panorama');
   const otherApple = normalize('Apple iPhone 11 64GB');
   assert.equal(otherApple.is_benchmark_enriched, false);

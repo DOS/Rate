@@ -393,6 +393,41 @@ const GIFT_CUT_ALL = new RegExp(GIFT_CUT.source, 'giu');
 const GIFT_PHRASE_END =
   /[)\]】,|]|(?<!\d) [-–] |(?<=\d) [-–] (?!\d{1,2}(?: ?(?:pro|plus|max|mini)(?![\p{L}\d])| ?(?:$|[,|)\]】])))/iu;
 
+/**
+ * A product other than a phone, as the title's own part names it (a gift such as "tặng sạc
+ * dự phòng" is cut first), also when a phone brand makes it ("Máy lọc không khí Xiaomi",
+ * "Xiaomi Smart Air Purifier 4", "Xiaomi Mi Band 8") (DOS/Rate#1761). A Vietnamese title
+ * opens with its product noun, so the short nouns ("loa", "màn hình", which a phone title
+ * also uses for its own parts) count only at the start, after any promo brackets; the
+ * longer names count anywhere. A bare "Máy" opens phone titles too ("Máy Samsung Galaxy
+ * A54"), so only a named appliance counts.
+ */
+const LEADING_BRACKETS = String.raw`^(?:\s*(?:\[[^\]]*\]|【[^】]*】|\([^)]*\)))*\s*`;
+const NON_PHONE_OPENING_RE = new RegExp(
+  `${LEADING_BRACKETS}(?:loa|speaker|soundbar|màn hình|monitor|tivi|tv|smart tv|quạt|đèn|bóng đèn|camera|router|bộ phát|bàn phím|keyboard|chuột|mouse|tay cầm|nồi|bếp|tủ lạnh|điều hòa|ổ cắm|bàn chải|cân|xe|robot|sạc dự phòng|pin dự phòng|power ?bank)(?![\\p{L}\\d])`,
+  'iu'
+);
+const NON_PHONE_PRODUCT_RE =
+  /(?<![\p{L}\d])(?:máy (?:lọc|hút bụi|chiếu|sấy|cạo râu|giặt|lạnh|xay|pha|in|ảnh|quay phim|tạo ẩm|massage|rửa)|air purifier|robot hút bụi|robot vacuum|vacuum cleaner|bluetooth speaker|soundbar|smart tv|tv box|projector|sạc dự phòng|pin dự phòng|power ?bank|(?:mi|smart|redmi|huawei|honor) band)(?![\p{L}\d])/iu;
+const OPENS_WITH_PHONE_WORD_RE = new RegExp(`${LEADING_BRACKETS}điện thoại(?![\\p{L}\\d])`, 'iu');
+/** Phone makers PHONE_BRAND_RE leaves out (it decides categories, so it stays narrow). */
+const OTHER_PHONE_MAKER_RE =
+  /\b(?:huawei|vsmart|zte|nubia|meizu|itel|zenfone|tcl|hmd|aquos|ulefone|doogee|blackview|oukitel|masstel|sumo|fairphone|cat s\d{2}|alcatel|wiko|benco|lava|inoi|kyocera)\b/i;
+
+/** True when a title names a phone: an iPhone, "điện thoại", or a phone maker (DOS/Rate#1761). */
+function namesPhone(title: string, model: string): boolean {
+  if (/^iphone\b/i.test(model)) return true;
+  const own = ownProductPart(title);
+  if (NON_PHONE_OPENING_RE.test(own) || NON_PHONE_PRODUCT_RE.test(own)) {
+    return OPENS_WITH_PHONE_WORD_RE.test(own);
+  }
+  return (
+    /(?<![\p{L}\d])(?:iphone|điện thoại|smartphone|phone)(?![\p{L}\d])/iu.test(own) ||
+    PHONE_BRAND_RE.test(own) ||
+    OTHER_PHONE_MAKER_RE.test(own)
+  );
+}
+
 /** True when the text names an Apple family other than `line` (DOS/Rate#1407). */
 function namesAppleFamilyOtherThan(text: string, line: string): boolean {
   return APPLE_FAMILIES.some(([family, name]) => name !== line && family.test(text));
@@ -639,11 +674,6 @@ const SOURCED_IPHONE_E_SPECS = {
   usb: 'USB-C, USB 2 (up to 480Mb/s)',
 } as const;
 
-/** A registry value: `null` (the sources state none) gives none, absent gives the default. */
-function sourcedOr<T>(value: T | null | undefined, fallback: T): T | undefined {
-  return value === null ? undefined : (value ?? fallback);
-}
-
 /**
  * The iPhone-only spec text an iPhone outside the registry gets, by generation, as Apple's
  * Tech Specs pages state it (DOS/Rate#1754). Checked pages: iPhone 11 (111865), 11 Pro
@@ -737,15 +767,17 @@ const CANONICAL_PHONE_REGISTRY: Record<
     // phantom master for a size that does not exist (DOS/Rate#1739). Without it, any
     // storage in a title is keyed.
     storages_gb?: readonly number[];
-    // Wi-Fi and rear flash as a source states them. Without them a listing gets the
-    // generic defaults below (DOS/Rate#1739).
+    // Wi-Fi, rear flash and satellite positioning as a source states them (DOS/Rate#1739).
+    // Without them a listing gets none (DOS/Rate#1761).
     wlan?: string;
     flash?: string;
+    location?: string;
     // Spec text as the model's sourced seed states it, where the generic Apple default
     // below is wrong for the model (Camera Control, Dynamic Island, UWB and MagSafe on the
     // 16e/17e; two nano-SIMs, USB OTG and Ceramic Shield 1 are wrong too). `null` means the sources state none, so the listing gets no generic value.
     // Without them a listing gets the generic defaults below (DOS/Rate#1743), except the
-    // loudspeaker and SAR: a registry model gets only the ones set here (DOS/Rate#1748).
+    // loudspeaker and SAR (DOS/Rate#1748), and the jack, Bluetooth, audio and
+    // certifications (DOS/Rate#1761): a registry model gets only the ones set here.
     keys?: string;
     display_features?: string;
     charging?: string;
@@ -858,6 +890,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     storages_gb: [128, 256, 512],
     wlan: 'Wi-Fi 6 (802.11ax) with 2x2 MIMO',
     flash: 'True Tone flash',
+    location: 'GPS, GLONASS, Galileo, QZSS, BeiDou, NavIC',
     // As the sourced seed states them: no Camera Control, a notch instead of the Dynamic
     // Island, no Ultra Wideband chip and no MagSafe (Qi 7.5W). Its sources state no
     // loudspeaker layout, headphone jack or SAR (DOS/Rate#1743).
@@ -903,6 +936,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     storages_gb: [256, 512],
     wlan: 'Wi-Fi 6 (802.11ax) with 2x2 MIMO',
     flash: 'True Tone flash',
+    location: 'GPS, GLONASS, Galileo, QZSS, BeiDou, NavIC; digital compass; iBeacon microlocation',
     // As the seed states them: no Camera Control, no Dynamic Island stated, no Ultra
     // Wideband or satellite features listed for Vietnam. Its sources state no loudspeaker
     // layout, headphone jack or SAR (DOS/Rate#1743).
@@ -1425,6 +1459,15 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ip_rating: 'IP68 (up to 6 m for 30 min)',
     // As the sourced seed states it (DOS/Rate#1748).
     loudspeaker: 'Yes, stereo speakers',
+    // As the sourced seed states them (DOS/Rate#1761).
+    flash: 'Adaptive True Tone flash',
+    bluetooth: '6.0, A2DP, LE',
+    wlan: 'Wi-Fi 7 (802.11be) 2x2 MIMO, tri-band, hotspot (Apple N1 wireless chip)',
+    usb: 'USB-C, USB 3 (up to 10Gb/s), DisplayPort',
+    location: 'Dual-frequency GPS (L1+L5), GLONASS, Galileo, QZSS, BeiDou, NavIC',
+    headphone_jack_35mm: false,
+    audio_features: 'Spatial Audio recording, Audio Mix, wind noise reduction',
+    certifications: 'Vietnam model A3717 (apple.com/vn lists model versions A3714 and A3717)',
   },
   'apple:iphone-18-pro': {
     // Sourced with the seeds (flagship-seed-sourced-2026.ts); Apple and
@@ -1453,6 +1496,15 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ip_rating: 'IP68 (up to 6 m for 30 min)',
     // As the sourced seed states it (DOS/Rate#1748).
     loudspeaker: 'Yes, stereo speakers',
+    // As the sourced seed states them (DOS/Rate#1761).
+    flash: 'Adaptive True Tone flash',
+    bluetooth: '6.0, A2DP, LE',
+    wlan: 'Wi-Fi 7 (802.11be) 2x2 MIMO, tri-band, hotspot (Apple N1 wireless chip)',
+    usb: 'USB-C, USB 3 (up to 10Gb/s), DisplayPort',
+    location: 'Dual-frequency GPS (L1+L5), GLONASS, Galileo, QZSS, BeiDou, NavIC',
+    headphone_jack_35mm: false,
+    audio_features: 'Spatial Audio recording, Audio Mix, wind noise reduction',
+    certifications: 'Vietnam model A3714 (apple.com/vn lists model versions A3714 and A3717)',
   },
   'samsung:galaxy-s26-ultra': {
     // Sourced with the seeds (flagship-seed-sourced-2026.ts).
@@ -1482,6 +1534,15 @@ const CANONICAL_PHONE_REGISTRY: Record<
     loudspeaker: 'Yes, with stereo speakers',
     sar_head: '1.09 W/kg',
     sar_body: '1.19 W/kg',
+    // As the sourced seed states them (GSMArena); its sources state no certifications
+    // (DOS/Rate#1761).
+    flash: 'LED flash, laser AF, auto-HDR, panorama',
+    bluetooth: '6.0, A2DP, LE',
+    wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band, Wi-Fi Direct',
+    usb: 'USB Type-C 3.2, DisplayPort 1.2, OTG',
+    location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
+    headphone_jack_35mm: false,
+    audio_features: 'High-bitrate audio',
   },
   'oppo:find-x9-pro': {
     screen_size_inch: 6.82,
@@ -3096,7 +3157,11 @@ export class ProductNormalizer {
 
     // 6. Enrich with 10 Field Groups (PhoneArena structure + GSMArena depth)
     const isApple = brand === 'Apple';
-    const isSmartphone = categorySlug === 'smartphones';
+    // 'smartphones' is also the category of a title that names no category ("Loa JBL Charge
+    // 5", an air purifier): only a title that names a phone gets phone hardware text
+    // (DOS/Rate#1761).
+    const isSmartphone =
+      categorySlug === 'smartphones' && (benchmark !== undefined || namesPhone(title, model));
     // An iPhone outside the registry gets the iPhone-only text its generation's Apple Tech
     // Specs state, or none; a registry iPhone keeps its entry and the generic iPhone text
     // (DOS/Rate#1754).
@@ -3412,14 +3477,15 @@ export class ProductNormalizer {
         capacity_mah: batteryMah || undefined,
         type: 'Li-Ion, không thể tháo rời',
         // MagSafe/Qi2 and the satellite and UWB line below describe an iPhone, not an
-        // Apple laptop, tablet, watch or earbuds (DOS/Rate#1748).
+        // Apple laptop, tablet, watch or earbuds (DOS/Rate#1748); the USB-C PD/PPS and OTG
+        // text describes an Android phone, not another device (DOS/Rate#1761).
         charging:
           benchmark?.charging ??
-          (isApple
-            ? isSmartphone
+          (isSmartphone
+            ? isApple
               ? appleIphoneText('charging', 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2')
-              : undefined
-            : 'Sạc nhanh USB-C PD/PPS'),
+              : 'Sạc nhanh USB-C PD/PPS'
+            : undefined),
         fast_charging_w: fallbackChargingW,
         reverse_charging: false,
       },
@@ -3435,47 +3501,46 @@ export class ProductNormalizer {
         third_camera: benchmark?.third_camera || undefined,
         fourth_camera: benchmark?.fourth_camera || undefined,
         front_camera: benchmark?.front_camera || fallbackFrontCamera,
-        // A laptop, watch or earbuds has no rear flash or rear video, and iPads differ by
-        // model (the iPad Air has no flash): only phones and non-Apple tablets keep a
-        // default. An iPhone outside the registry gets none: no checked page states
-        // "Dual-LED" (DOS/Rate#1754).
+        // A laptop, watch or earbuds has no rear flash or rear video, and tablets differ
+        // by model (the iPad Air has no flash). No checked Apple page states "Dual-LED":
+        // an iPhone gets the flash its registry entry states or none (DOS/Rate#1754,
+        // #1761). Only a non-Apple phone keeps a default.
         flash:
           benchmark?.flash ??
-          (isSmartphone
-            ? isApple
-              ? iphoneSpecs
-                ? undefined
-                : 'True Tone Dual-LED'
-              : 'LED flash, auto-HDR, panorama'
-            : categorySlug === 'tablets' && !isApple
-              ? 'LED flash, auto-HDR, panorama'
-              : undefined),
+          (isSmartphone && !isApple ? 'LED flash, auto-HDR, panorama' : undefined),
         video_recording:
           isSmartphone || categorySlug === 'tablets'
             ? '4K@30/60fps, 1080p@30/60/120/240fps, HDR'
             : undefined,
       },
       connectivity: {
-        bluetooth: benchmark?.bluetooth ?? '5.3, A2DP, LE',
-        wlan: benchmark?.wlan ?? 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct',
-        usb: benchmark?.usb ?? 'USB Type-C, OTG',
+        // Bluetooth and Wi-Fi versions differ by model: only a registry entry states them.
+        // USB-C with OTG is Android phone text: an iPhone before the 15 has Lightning, an
+        // Apple Watch no port (DOS/Rate#1761).
+        bluetooth: benchmark?.bluetooth ?? undefined,
+        wlan: benchmark?.wlan ?? undefined,
+        usb: benchmark?.usb ?? (isSmartphone && !isApple ? 'USB Type-C, OTG' : undefined),
         sensors: isSmartphone
           ? (benchmark?.sensors ??
             (isApple
               ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
               : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn'))
           : undefined,
-        // An iPhone outside the registry gets no generic GNSS list either (DOS/Rate#1754).
+        // An iPhone gets the GNSS list its registry entry states or none: Apple's pages
+        // list NavIC or dual-frequency GPS by model (DOS/Rate#1754, #1761).
         location:
-          hasPhoneRadios && !iphoneSpecs ? 'GPS, GLONASS, Galileo, QZSS, BeiDou' : undefined,
+          benchmark?.location ??
+          (hasPhoneRadios && !(isApple && isSmartphone)
+            ? 'GPS, GLONASS, Galileo, QZSS, BeiDou'
+            : undefined),
         nfc: hasPhoneRadios ? true : undefined,
         other:
           benchmark?.connectivity_other ??
-          (isApple
-            ? isSmartphone
+          (isSmartphone
+            ? isApple
               ? appleIphoneText('connectivity_other', 'Ultra Wideband (UWB), SOS vệ tinh')
-              : undefined
-            : 'Hỗ trợ OTG, Chia sẻ nhanh'),
+              : 'Hỗ trợ OTG, Chia sẻ nhanh'
+            : undefined),
       },
       // Nothing is known about the network of a phone or tablet whose 5G is unknown.
       cellular:
@@ -3507,21 +3572,15 @@ export class ProductNormalizer {
         // A device gets only the loudspeaker and SAR its sources state (DOS/Rate#1748,
         // #1754); `null` in the registry means none is stated.
         loudspeaker: benchmark?.loudspeaker ?? undefined,
-        // A device outside the registry gets no jack value: many phones, tablets, headphones
-        // and most laptops have one (DOS/Rate#1754). A registry laptop gets one only from
-        // its entry; other registry devices keep "no jack" unless the entry says otherwise.
-        headphone_jack_35mm:
-          benchmark === undefined
-            ? undefined
-            : categorySlug === 'laptops'
-              ? (benchmark.headphone_jack_35mm ?? undefined)
-              : sourcedOr(benchmark.headphone_jack_35mm, false),
-        audio_features: benchmark?.audio_features ?? 'Dolby Atmos, Hi-Res Audio',
+        // A device gets a jack value, audio features and certifications only from its
+        // registry entry: many phones, tablets and most laptops have a jack, and no
+        // source states "Dolby Atmos, Hi-Res Audio" or "CE, FCC, RoHS" for every device
+        // (DOS/Rate#1754, #1761).
+        headphone_jack_35mm: benchmark?.headphone_jack_35mm ?? undefined,
+        audio_features: benchmark?.audio_features ?? undefined,
       },
       regulatory: {
-        certifications:
-          benchmark?.certifications ??
-          (isApple ? 'CE, FCC ID, Apple Eco Standards' : 'CE, FCC, RoHS'),
+        certifications: benchmark?.certifications ?? undefined,
         sar_head: isSmartphone ? (benchmark?.sar_head ?? undefined) : undefined,
         sar_body: isSmartphone ? (benchmark?.sar_body ?? undefined) : undefined,
       },

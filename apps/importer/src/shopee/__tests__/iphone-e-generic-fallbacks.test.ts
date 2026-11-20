@@ -110,7 +110,7 @@ test('fields no source states for the 16e and 17e get no generic value', () => {
   }
 });
 
-test('models without the new registry fields keep their previous output', () => {
+test('models without the new registry fields keep their other output', () => {
   for (const title of [
     'Apple iPhone 16 Pro Max 256GB',
     'Apple iPhone 16 128GB',
@@ -139,7 +139,8 @@ test('models without the new registry fields keep their previous output', () => 
       iphone11 ? 'Sạc không dây Qi' : 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2',
       title
     );
-    assert.equal(out.connectivity?.bluetooth, '5.3, A2DP, LE', title);
+    // No generic Bluetooth, jack, audio, USB or certification text (DOS/Rate#1761).
+    assert.equal(out.connectivity?.bluetooth, undefined, title);
     assert.equal(
       out.connectivity?.sensors,
       'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế',
@@ -152,14 +153,13 @@ test('models without the new registry fields keep their previous output', () => 
     );
     // No source states their loudspeaker or SAR: no generic value (DOS/Rate#1748).
     assert.equal(out.multimedia?.loudspeaker, undefined, title);
-    // The registry phones keep "no jack"; the iPhone 11 outside it gets none (DOS/Rate#1754).
-    assert.equal(out.multimedia?.headphone_jack_35mm, iphone11 ? undefined : false, title);
-    assert.equal(out.multimedia?.audio_features, 'Dolby Atmos, Hi-Res Audio', title);
+    assert.equal(out.multimedia?.headphone_jack_35mm, undefined, title);
+    assert.equal(out.multimedia?.audio_features, undefined, title);
     assert.equal(out.regulatory?.sar_head, undefined, title);
     assert.equal(out.regulatory?.sar_body, undefined, title);
     assert.equal(out.display?.protection, 'Ceramic Shield', title);
-    assert.equal(out.connectivity?.usb, 'USB Type-C, OTG', title);
-    assert.equal(out.regulatory?.certifications, 'CE, FCC ID, Apple Eco Standards', title);
+    assert.equal(out.connectivity?.usb, undefined, title);
+    assert.equal(out.regulatory?.certifications, undefined, title);
     // A phone whose 5G is unknown (iPhone 11, outside the registry) gets no cellular group.
     if (title !== 'Apple iPhone 11 64GB') {
       assert.equal(out.cellular?.sim_type, '2 Nano-SIM + eSIM', title);
@@ -180,7 +180,7 @@ test('models without the new registry fields keep their previous output', () => 
     assert.equal(out.multimedia?.loudspeaker, undefined, title);
     assert.equal(out.regulatory?.sar_head, undefined, title);
     assert.equal(out.display?.protection, 'Corning Gorilla Glass', title);
-    assert.equal(out.regulatory?.certifications, 'CE, FCC, RoHS', title);
+    assert.equal(out.regulatory?.certifications, undefined, title);
     // The Xiaomi is outside the registry and its 5G is unknown: no cellular group.
     assert.equal(
       out.cellular?.sim_type,
