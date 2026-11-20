@@ -191,6 +191,7 @@ test('a title that names no phone gets no phone hardware', () => {
     'Máy lọc không khí Xiaomi Smart Air Purifier 4',
     'Xiaomi Smart Air Purifier 4 Pro',
     'Robot hút bụi Xiaomi Vacuum S20',
+    'Xiaomi Mi Band 8',
     'Apple HomePod mini',
   ]) {
     const n = normalize(title);
@@ -217,6 +218,17 @@ test('a title that names no phone gets no phone hardware', () => {
     'Huawei Nova 12 256GB',
     'Galaxy Z Fold7 512GB',
     '[Chính hãng] Xiaomi Redmi Note 14 Pro 256GB',
+    // A gift that names another product, or a leading "Máy", leaves a phone a phone.
+    'Samsung Galaxy A15 tặng sạc dự phòng',
+    '[Tặng sạc dự phòng] Samsung Galaxy A35 5G 128GB',
+    'Xiaomi Redmi Note 13 kèm Power Bank',
+    'Máy Xiaomi Redmi 12C 4/128GB cũ',
+    'Máy Samsung Galaxy A54 5G 8/128GB',
+    // Phone makers outside PHONE_BRAND_RE.
+    'Asus Zenfone 11 Ultra',
+    'TCL 50 SE',
+    'Masstel Fami 12 4G',
+    'Cat S75',
   ]) {
     const out = normalize(title).specifications;
     assert.equal(out.camera?.flash, 'LED flash, auto-HDR, panorama', title);

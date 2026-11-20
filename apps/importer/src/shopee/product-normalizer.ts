@@ -394,27 +394,37 @@ const GIFT_PHRASE_END =
   /[)\]】,|]|(?<!\d) [-–] |(?<=\d) [-–] (?!\d{1,2}(?: ?(?:pro|plus|max|mini)(?![\p{L}\d])| ?(?:$|[,|)\]】])))/iu;
 
 /**
- * A product other than a phone, as the title names it, also when a phone brand makes it
- * ("Máy lọc không khí Xiaomi", "Xiaomi Smart Air Purifier 4") (DOS/Rate#1761). A
- * Vietnamese title opens with its product noun, so the short nouns ("loa", "màn hình",
- * which a phone title also uses for its own parts) count only at the start, after any
- * promo brackets; the longer names count anywhere.
+ * A product other than a phone, as the title's own part names it (a gift such as "tặng sạc
+ * dự phòng" is cut first), also when a phone brand makes it ("Máy lọc không khí Xiaomi",
+ * "Xiaomi Smart Air Purifier 4", "Xiaomi Mi Band 8") (DOS/Rate#1761). A Vietnamese title
+ * opens with its product noun, so the short nouns ("loa", "màn hình", which a phone title
+ * also uses for its own parts) count only at the start, after any promo brackets; the
+ * longer names count anywhere. A bare "Máy" opens phone titles too ("Máy Samsung Galaxy
+ * A54"), so only a named appliance counts.
  */
-const NON_PHONE_OPENING_RE =
-  /^(?:\s*(?:\[[^\]]*\]|【[^】]*】|\([^)]*\)))*\s*(?:máy(?! tính bảng| tính xách tay)|loa|speaker|soundbar|màn hình|monitor|tivi|tv|smart tv|quạt|đèn|bóng đèn|camera|router|bộ phát|bàn phím|keyboard|chuột|mouse|tay cầm|nồi|bếp|tủ lạnh|điều hòa|ổ cắm|bàn chải|cân|xe|robot|sạc dự phòng|pin dự phòng|power ?bank)(?![\p{L}\d])/iu;
+const LEADING_BRACKETS = String.raw`^(?:\s*(?:\[[^\]]*\]|【[^】]*】|\([^)]*\)))*\s*`;
+const NON_PHONE_OPENING_RE = new RegExp(
+  `${LEADING_BRACKETS}(?:loa|speaker|soundbar|màn hình|monitor|tivi|tv|smart tv|quạt|đèn|bóng đèn|camera|router|bộ phát|bàn phím|keyboard|chuột|mouse|tay cầm|nồi|bếp|tủ lạnh|điều hòa|ổ cắm|bàn chải|cân|xe|robot|sạc dự phòng|pin dự phòng|power ?bank)(?![\\p{L}\\d])`,
+  'iu'
+);
 const NON_PHONE_PRODUCT_RE =
-  /(?<![\p{L}\d])(?:máy lọc không khí|air purifier|robot hút bụi|robot vacuum|vacuum cleaner|bluetooth speaker|soundbar|smart tv|tv box|projector|máy chiếu|sạc dự phòng|pin dự phòng|power ?bank)(?![\p{L}\d])/iu;
+  /(?<![\p{L}\d])(?:máy (?:lọc|hút bụi|chiếu|sấy|cạo râu|giặt|lạnh|xay|pha|in|ảnh|quay phim|tạo ẩm|massage|rửa)|air purifier|robot hút bụi|robot vacuum|vacuum cleaner|bluetooth speaker|soundbar|smart tv|tv box|projector|sạc dự phòng|pin dự phòng|power ?bank|(?:mi|smart|redmi|huawei|honor) band)(?![\p{L}\d])/iu;
+const OPENS_WITH_PHONE_WORD_RE = new RegExp(`${LEADING_BRACKETS}điện thoại(?![\\p{L}\\d])`, 'iu');
+/** Phone makers PHONE_BRAND_RE leaves out (it decides categories, so it stays narrow). */
+const OTHER_PHONE_MAKER_RE =
+  /\b(?:huawei|vsmart|zte|nubia|meizu|itel|zenfone|tcl|hmd|aquos|ulefone|doogee|blackview|oukitel|masstel|sumo|fairphone|cat s\d{2}|alcatel|wiko|benco|lava|inoi|kyocera)\b/i;
 
-/** True when a title names a phone: an iPhone, "điện thoại", or a phone brand (DOS/Rate#1761). */
+/** True when a title names a phone: an iPhone, "điện thoại", or a phone maker (DOS/Rate#1761). */
 function namesPhone(title: string, model: string): boolean {
   if (/^iphone\b/i.test(model)) return true;
-  if (NON_PHONE_OPENING_RE.test(title) || NON_PHONE_PRODUCT_RE.test(title)) {
-    return /^(?:\s*(?:\[[^\]]*\]|【[^】]*】|\([^)]*\)))*\s*điện thoại(?![\p{L}\d])/iu.test(title);
+  const own = ownProductPart(title);
+  if (NON_PHONE_OPENING_RE.test(own) || NON_PHONE_PRODUCT_RE.test(own)) {
+    return OPENS_WITH_PHONE_WORD_RE.test(own);
   }
   return (
-    /(?<![\p{L}\d])(?:iphone|điện thoại|smartphone|phone)(?![\p{L}\d])/iu.test(title) ||
-    PHONE_BRAND_RE.test(title) ||
-    /\b(?:huawei|vsmart|zte|nubia|meizu|itel)\b/i.test(title)
+    /(?<![\p{L}\d])(?:iphone|điện thoại|smartphone|phone)(?![\p{L}\d])/iu.test(own) ||
+    PHONE_BRAND_RE.test(own) ||
+    OTHER_PHONE_MAKER_RE.test(own)
   );
 }
 
