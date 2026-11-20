@@ -231,7 +231,8 @@ test('a title that names no phone gets no phone hardware', () => {
     'Cat S75',
   ]) {
     const out = normalize(title).specifications;
-    assert.equal(out.camera?.flash, 'LED flash, auto-HDR, panorama', title);
+    // (A phone outside the registry no longer gets a generic flash, DOS/Rate#1787.)
+    assert.equal(out.design?.keys, 'Volume, Power', title);
     assert.equal(out.connectivity?.nfc, true, title);
     assert.equal(out.battery?.charging, 'Sạc nhanh USB-C PD/PPS', title);
   }

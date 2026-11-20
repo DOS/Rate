@@ -742,11 +742,14 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: string;
     screen_type: string;
     refresh_rate_hz?: number;
-    rear_camera: string;
+    // Cameras only, as a source states them. A watch or earbuds has none; a laptop has only
+    // its webcam (front). Ports, sensors, microphones, controls and flashes are not cameras
+    // (DOS/Rate#1787).
+    rear_camera?: string;
     second_camera?: string;
     third_camera?: string;
     fourth_camera?: string;
-    front_camera: string;
+    front_camera?: string;
     /** Wired charging wattage, when a source states it. */
     charging_w?: number;
     /** RAM of the storages that differ from `ram_gb` (the S26 Ultra 1TB has 16GB). */
@@ -772,6 +775,11 @@ const CANONICAL_PHONE_REGISTRY: Record<
     wlan?: string;
     flash?: string;
     location?: string;
+    // Body materials, biometrics and rear video as a source states them. Without them a
+    // listing gets none, except an iPhone's Apple text (DOS/Rate#1787).
+    materials?: string;
+    biometrics?: string;
+    video_recording?: string;
     // Spec text as the model's sourced seed states it, where the generic Apple default
     // below is wrong for the model (Camera Control, Dynamic Island, UWB and MagSafe on the
     // 16e/17e; two nano-SIMs, USB OTG and Ceramic Shield 1 are wrong too). `null` means the sources state none, so the listing gets no generic value.
@@ -908,6 +916,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
       'FDD-LTE 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 17, 18, 19, 20, 25, 26, 28, 29, 30, 32, 66, 71; TD-LTE 34, 38, 39, 40, 41, 42, 48, 53 - A3212',
     cellular_technology: 'GSM/EDGE / UMTS/HSPA+ / LTE / 5G (Apple C1 modem)',
     sim_type: 'Dual eSIM; models sold outside the U.S. also have a nano-SIM tray',
+    // As the sourced seed states it (DOS/Rate#1787).
+    video_recording:
+      '4K Dolby Vision 24/25/30/60fps, 1080p Dolby Vision 25/30/60fps, 720p Dolby Vision 30fps, slo-mo 1080p 120/240fps, Cinematic video stabilization, Spatial Audio and stereo recording',
     certifications:
       'Model numbers A3212 (United States, Puerto Rico), A3408 (Canada, Mexico, Middle East and others), A3410 (China mainland), A3409 (other countries and regions, which covers Vietnam)',
   },
@@ -953,6 +964,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
       'FDD-LTE 1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 66; TD-LTE 34, 38, 39, 40, 41, 42, 48, 53 - A3634',
     cellular_technology: 'GSM/EDGE / UMTS/HSPA+ / LTE / 5G (Apple C1X modem)',
     sim_type: 'Nano-SIM and eSIM; dual eSIM supported (A3634)',
+    // As the sourced seed states it (DOS/Rate#1787).
+    video_recording:
+      '4K Dolby Vision 24/25/30/60fps, 1080p Dolby Vision 25/30/60fps, 720p Dolby Vision 30fps, slo-mo 1080p 120/240fps, Cinematic video stabilization, Spatial Audio and stereo recording',
     certifications:
       'Model numbers A3575 (United States, Puerto Rico, Canada, Japan, Mexico and others), A3635 (China mainland), A3634 (other countries and regions, which covers Vietnam)',
   },
@@ -1174,7 +1188,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '2560 x 1664 pixels (~224 ppi)',
     screen_type: 'Liquid Retina IPS, 500 nits, Wide color (P3), True Tone',
     refresh_rate_hz: 60,
-    rear_camera: 'N/A',
     front_camera: '1080p FaceTime HD camera',
     charging_w: 70,
     has_5g: false,
@@ -1197,8 +1210,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '502 x 410 pixels (~338 ppi)',
     screen_type: 'Retina LTPO2 OLED, Sapphire crystal, 3000 nits (peak)',
     refresh_rate_hz: 60,
-    rear_camera: 'Optical Heart Sensor, ECG, Blood Oxygen, Depth Gauge',
-    front_camera: 'N/A',
     charging_w: 15,
     has_5g: true,
     release_date: 'September 2023',
@@ -1215,8 +1226,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '45.2 x 60.6 x 21.7 mm (Case)',
     resolution: 'Custom high-excursion Apple driver',
     screen_type: 'Active Noise Cancellation (2x ANC) + Adaptive Transparency',
-    rear_camera: 'Inward-facing microphone + skin-detect sensor',
-    front_camera: 'Beamforming dual microphones',
     charging_w: 5,
     has_5g: false,
     release_date: 'September 2023',
@@ -1232,9 +1241,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '64.6 x 40.0 x 26.5 mm (Case)',
     resolution: '8.4 mm Dynamic Driver X (20Hz-40,000Hz LDAC)',
     screen_type: 'Industry-leading Dual-Processor ANC + Bone Conduction Sensor',
-    rear_camera: 'Dual feedback microphones per earbud',
-    second_camera: 'Feed-forward & feedback 6-mic array',
-    front_camera: 'Bone conduction sensor + Wind noise reduction',
     charging_w: 5,
     has_5g: false,
     release_date: 'July 2023',
@@ -1295,8 +1301,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '2880 x 1800 pixels, 16:10 (3K Lumina OLED)',
     screen_type: 'ASUS Lumina OLED, 120Hz, 100% DCI-P3, DisplayHDR True Black 500',
     refresh_rate_hz: 120,
-    rear_camera: 'Ambient light & color sensor + Dual-fan vapor chamber thermal array',
-    second_camera: 'IR depth camera for Windows Hello facial recognition',
     front_camera: '1080p FHD AiSense IR Webcam with privacy shutter',
     charging_w: 65,
     has_5g: false,
@@ -1316,8 +1320,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '2880 x 1800 pixels, 16:10 (2.8K OLED Anti-Glare)',
     screen_type: '2.8K OLED, 120Hz, 400 nits, 100% DCI-P3, Dolby Vision, Eyesafe',
     refresh_rate_hz: 120,
-    rear_camera: 'Ultrasonic human presence detection & PrivacyGuard sensor',
-    second_camera: 'Discrete IR camera for Windows Hello + ThinkShutter',
     front_camera: 'FHD 1080p MIPI + IR discrete camera with physical shutter',
     charging_w: 65,
     has_5g: false,
@@ -1337,9 +1339,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '480 x 480 pixels (~327 ppi)',
     screen_type: 'Super AMOLED, Sapphire crystal glass, 3000 nits (peak)',
     refresh_rate_hz: 60,
-    rear_camera: 'Samsung BioActive Sensor (Optical Bio-signal + Electrical Heart Signal + BIA)',
-    second_camera: 'Infrared Temperature Sensor + Barometer + Altimeter',
-    front_camera: 'Ambient Light Sensor + Quick Button + 86dB Emergency Siren',
     charging_w: 10,
     has_5g: false,
     release_date: 'July 2024',
@@ -1359,9 +1358,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '416 x 416 pixels',
     screen_type: 'AMOLED Touchscreen, Corning Gorilla Glass 3, Always-On Option',
     refresh_rate_hz: 60,
-    rear_camera: 'Garmin Elevate Gen 4 Optical Heart Rate + Pulse Ox Blood Oxygen Sensor',
-    second_camera: 'Barometric Altimeter + Compass + Gyroscope + Thermometer',
-    front_camera: '5-Button Physical Lap/Start Control + AMOLED Touch',
     charging_w: 5,
     has_5g: false,
     release_date: 'March 2023',
@@ -1378,9 +1374,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '48.7 x 58.9 x 24.4 mm (Case)',
     resolution: 'Enhanced 2-Way Speaker (10.5mm Dynamic + 6.1mm Planar Tweeter)',
     screen_type: 'Blade Lights LED Indicator + Transparent Cradle Lid',
-    rear_camera: '3 High-SNR Microphones + VPU (Voice Pickup Unit)',
-    second_camera: 'In-canal feedback mic + Siren/Voice Detect AI sensor',
-    front_camera: 'Pinch & Swipe Blade Touch Controls',
     charging_w: 5,
     has_5g: false,
     release_date: 'July 2024',
@@ -1468,6 +1461,12 @@ const CANONICAL_PHONE_REGISTRY: Record<
     headphone_jack_35mm: false,
     audio_features: 'Spatial Audio recording, Audio Mix, wind noise reduction',
     certifications: 'Vietnam model A3717 (apple.com/vn lists model versions A3714 and A3717)',
+    // As the sourced seed states them (DOS/Rate#1787).
+    video_recording:
+      '4K Dolby Vision 24/25/30/60/100/120fps, 1080p 25/30/60/120/240fps, ProRes and ProRes RAW up to 4K120 (external recording), Apple Log 2, ACES, Genlock, spatial video, 4 studio-quality mics',
+    bands_4g:
+      '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 34, 38, 39, 40, 41, 42, 48, 53, 66, 106 - A3717',
+    sim_type: 'Nano-SIM + eSIM (dual eSIM supported)',
   },
   'apple:iphone-18-pro': {
     // Sourced with the seeds (flagship-seed-sourced-2026.ts); Apple and
@@ -1505,6 +1504,12 @@ const CANONICAL_PHONE_REGISTRY: Record<
     headphone_jack_35mm: false,
     audio_features: 'Spatial Audio recording, Audio Mix, wind noise reduction',
     certifications: 'Vietnam model A3714 (apple.com/vn lists model versions A3714 and A3717)',
+    // As the sourced seed states them (DOS/Rate#1787).
+    video_recording:
+      '4K Dolby Vision 24/25/30/60/100/120fps, 1080p 25/30/60/120/240fps, ProRes and ProRes RAW up to 4K120 (external recording), Apple Log 2, ACES, Genlock, spatial video, 4 studio-quality mics',
+    bands_4g:
+      '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 34, 38, 39, 40, 41, 42, 48, 53, 66, 106 - A3714',
+    sim_type: 'Nano-SIM + eSIM (dual eSIM supported)',
   },
   'samsung:galaxy-s26-ultra': {
     // Sourced with the seeds (flagship-seed-sourced-2026.ts).
@@ -1543,6 +1548,17 @@ const CANONICAL_PHONE_REGISTRY: Record<
     location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
     headphone_jack_35mm: false,
     audio_features: 'High-bitrate audio',
+    // As the sourced seed states them (GSMArena) (DOS/Rate#1787).
+    materials: 'Glass front (Gorilla Armor 2), glass back (Gorilla Glass Victus 2), aluminum frame',
+    biometrics: 'Fingerprint (under display, ultrasonic)',
+    display_features: 'Privacy display',
+    sensors:
+      'Fingerprint (under display, ultrasonic), accelerometer, gyro, proximity, compass, barometer',
+    video_recording:
+      '8K@24/30fps, 4K@30/60/120fps, 1080p@30/60/120/240fps, 10-bit HDR, HDR10+, stereo sound rec., gyro-EIS',
+    bands_4g:
+      '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 32, 38, 39, 40, 41, 66 (International)',
+    sim_type: 'Nano-SIM + Nano-SIM + eSIM (max 2 at a time) (International)',
   },
   'oppo:find-x9-pro': {
     screen_size_inch: 6.82,
@@ -1582,7 +1598,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
       'Ultra Retina XDR Tandem OLED, 120Hz ProMotion, HDR10, Dolby Vision, 1600 nits (peak)',
     refresh_rate_hz: 120,
     rear_camera: '12 MP, f/1.8, (wide), dual pixel PDAF + TOF 3D LiDAR scanner',
-    second_camera: 'Adaptive True Tone Flash for document scanning',
     front_camera: '12 MP, f/2.0, 122˚ (Landscape Center Stage Ultra-Wide) + Face ID',
     charging_w: 35,
     has_5g: true,
@@ -1623,8 +1638,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '2560 x 1664 pixels (~224 ppi)',
     screen_type: 'Liquid Retina IPS, 500 nits, Wide color (P3), True Tone',
     refresh_rate_hz: 60,
-    rear_camera: 'Dual external 6K display support with lid open + MagSafe 3',
-    second_camera: '3-mic array with directional beamforming & Voice Isolation',
     front_camera: '12MP Center Stage camera with Desk View (1080p HD)',
     charging_w: 70,
     has_5g: false,
@@ -1648,9 +1661,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     screen_type:
       'Liquid Retina XDR mini-LED, 120Hz ProMotion, 1600 nits (HDR peak), 1000 nits (SDR outdoor)',
     refresh_rate_hz: 120,
-    rear_camera: '3x Thunderbolt 5 (120Gb/s) + HDMI 2.1 + SDXC + MagSafe 3',
-    second_camera:
-      'Studio-quality 3-mic array + 6-speaker sound system with force-cancelling woofers',
     front_camera: '12MP Center Stage camera with Desk View (1080p HD)',
     charging_w: 96,
     has_5g: false,
@@ -1676,9 +1686,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '374 x 446 pixels (~326 ppi)',
     screen_type: 'Wide-angle LTPO3 OLED Always-On Retina display, 1-60Hz, 2000 nits (peak)',
     refresh_rate_hz: 60,
-    rear_camera: 'Optical Heart Sensor Gen 3 + Electrical Heart Sensor (ECG)',
-    second_camera: 'Depth gauge (6m) + Water temperature sensor',
-    front_camera: 'Ambient light & Double Tap gesture sensor',
     charging_w: 15,
     has_5g: false,
     release_date: 'September 2024',
@@ -1700,10 +1707,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '496 x 416 pixels (~326 ppi)',
     screen_type: 'Wide-angle LTPO3 OLED Always-On Retina, 2200 nits (peak)',
     refresh_rate_hz: 60,
-    rear_camera:
-      '3rd-gen Optical Heart Sensor + Electrical Heart Sensor (ECG) + Sleep Apnea Detection',
-    second_camera: 'Depth gauge (6m) + Water temperature sensor + Wrist temperature sensor',
-    front_camera: 'Double Tap gesture + Digital Crown with haptic feedback',
     charging_w: 15,
     has_5g: false,
     release_date: 'September 2025',
@@ -1723,10 +1726,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '502 x 410 pixels (~338 ppi)',
     screen_type: 'LTPO3 OLED Always-On Retina, Flat Sapphire Crystal, 3200 nits (peak)',
     refresh_rate_hz: 60,
-    rear_camera:
-      '3rd-gen Optical Heart + ECG + Blood Pressure Trend Alert + Oceanic+ Dive Computer',
-    second_camera: 'Depth gauge (40m EN13319 certified) + 86dB Emergency Siren',
-    front_camera: 'Customizable Action Button + Titanium Crown Guard',
     charging_w: 18,
     has_5g: true,
     release_date: 'September 2025',
@@ -1743,9 +1742,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '45.2 x 60.6 x 21.7 mm (USB-C MagSafe Case)',
     resolution: 'Custom High-Excursion Apple Driver + High Dynamic Range Amplifier',
     screen_type: 'Status LED + Built-in Find My Precision Speaker',
-    rear_camera: 'In-Ear Optical Heart-Rate & Body Temperature Sensor + 3x ANC Pro vs Gen 1',
-    second_camera: 'Clinical-Grade Hearing Aid Mode + Conversation Awareness + Voice Isolation',
-    front_camera: 'Capacitive Touch Stem (Swipe Volume + Press Control)',
     charging_w: 5,
     has_5g: false,
     release_date: 'September 2025',
@@ -1761,9 +1757,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '64.0 x 40.0 x 25.8 mm (Qi Wireless Case)',
     resolution: '8.4mm Dynamic Driver X (Dual-layer dome-edge diaphragm)',
     screen_type: 'Recessed Matte Acoustic Chassis + Multi-Point Status LED',
-    rear_camera: 'Dual Feedback + Feedforward 6-Mic Array + Bone Conduction Sensor',
-    second_camera: 'AI Beamforming Wind Noise Reduction + Speak-to-Chat + Head Gesture Control',
-    front_camera: 'Customizable Capacitive Touch Panels (L/R)',
     charging_w: 5,
     has_5g: false,
     release_date: 'June 2025',
@@ -3171,8 +3164,8 @@ export class ProductNormalizer {
       field: K,
       generic: string
     ): string | undefined => (iphoneSpecs ? iphoneSpecs[field] : generic);
-    // GPS and NFC are phone and watch hardware: a laptop, tablet or earbuds gets none
-    // unless a source states it (DOS/Rate#1754).
+    // NFC is phone and watch hardware: a laptop, tablet or earbuds gets none unless a
+    // source states it (DOS/Rate#1754).
     const hasPhoneRadios = isSmartphone || categorySlug === 'smartwatches';
 
     const titleScreenMatch =
@@ -3314,41 +3307,15 @@ export class ProductNormalizer {
                 ? 'Apple A-Series'
                 : 'Snapdragon / Dimensity';
 
-    const fallbackMainCamera =
-      categorySlug === 'laptops'
-        ? '1080p FHD Webcam with Dual-Array Mic'
-        : categorySlug === 'earbuds'
-          ? 'Multi-Mic Array + Active Noise Cancellation (ANC)'
-          : categorySlug === 'smartwatches'
-            ? 'Optical Heart Rate + SpO2 Blood Oxygen Sensor'
-            : '50 MP (wide, OIS)';
-
-    const fallbackSecondCamera =
-      categorySlug === 'laptops'
-        ? 'IR Camera / Privacy Shutter'
-        : categorySlug === 'earbuds'
-          ? 'Voice Pickup & Ambient Sound Sensor'
-          : categorySlug === 'smartwatches'
-            ? 'Accelerometer + Gyroscope + Altimeter'
-            : '12 MP (ultrawide)';
-
-    const fallbackFrontCamera =
-      categorySlug === 'laptops'
-        ? '1080p FHD Webcam'
-        : categorySlug === 'earbuds'
-          ? 'Capacitive Touch Controls'
-          : categorySlug === 'smartwatches'
-            ? 'AMOLED Touch + Physical Crown/Button'
-            : '12 MP';
-
-    const fallbackKeyCamera =
-      categorySlug === 'laptops'
-        ? '1080p FHD Webcam'
-        : categorySlug === 'earbuds'
-          ? 'Active Noise Cancellation (ANC)'
-          : categorySlug === 'smartwatches'
-            ? 'Optical HR + SpO2 Sensor'
-            : '50 MP OIS';
+    // Camera text comes only from a registry entry: no category guess (a laptop's "1080p
+    // FHD Webcam", an earbud's microphones, a watch's heart sensor, a phone's "50 MP") is a
+    // camera a source checked (DOS/Rate#1787).
+    const rearCameras = [
+      benchmark?.rear_camera,
+      benchmark?.second_camera,
+      benchmark?.third_camera,
+      benchmark?.fourth_camera,
+    ].filter((camera): camera is string => Boolean(camera));
 
     const fallbackBatteryMah =
       batteryMah ||
@@ -3379,14 +3346,9 @@ export class ProductNormalizer {
                 ? 25
                 : 45;
 
-    const cameraCount = benchmark
-      ? [
-          benchmark.rear_camera,
-          benchmark.second_camera,
-          benchmark.third_camera,
-          benchmark.fourth_camera,
-        ].filter(Boolean).length
-      : 2;
+    const cameraCount = rearCameras.length;
+    // A device no rear camera is known for (a watch, earbuds, a laptop, a listing outside
+    // the registry) gets no rear setup label.
     const rearSetupLabel =
       cameraCount >= 4
         ? 'Quad Camera'
@@ -3394,7 +3356,9 @@ export class ProductNormalizer {
           ? 'Triple Camera'
           : cameraCount === 2
             ? 'Dual Camera'
-            : 'Single Camera';
+            : cameraCount === 1
+              ? 'Single Camera'
+              : undefined;
 
     const rawPriceMinInput: unknown = safeRaw.priceMin;
     const rawPriceMin = typeof rawPriceMinInput === 'boolean' ? NaN : Number(rawPriceMinInput);
@@ -3413,19 +3377,18 @@ export class ProductNormalizer {
       design: {
         dimensions: (caseMismatch ? undefined : benchmark?.dimensions) || undefined,
         weight_g: (caseMismatch ? undefined : benchmark?.weight_g) || undefined,
+        // Materials, water resistance and biometrics differ by phone (an IP67 iPhone SE, a
+        // side-key fingerprint reader, a plastic back): a non-Apple phone gets only what
+        // its registry entry states, and no listing outside the registry gets an IP rating
+        // (DOS/Rate#1787).
         materials: isSmartphone
-          ? isApple
-            ? 'Ceramic Shield front, glass back, metal frame'
-            : 'Glass front/back, metal frame'
+          ? (benchmark?.materials ??
+            (isApple ? 'Ceramic Shield front, glass back, metal frame' : undefined))
           : undefined,
-        resistance:
-          benchmark?.ip_rating || (isSmartphone ? 'IP68 dust/water resistant' : undefined),
+        resistance: benchmark?.ip_rating || undefined,
         biometrics: isSmartphone
-          ? isApple
-            ? /^iPhone SE\b/i.test(model)
-              ? 'Touch ID'
-              : 'Face ID'
-            : 'Fingerprint (under display), Face unlock'
+          ? (benchmark?.biometrics ??
+            (isApple ? (/^iPhone SE\b/i.test(model) ? 'Touch ID' : 'Face ID') : undefined))
           : undefined,
         keys: isSmartphone
           ? (benchmark?.keys ??
@@ -3461,7 +3424,7 @@ export class ProductNormalizer {
                   'display_features',
                   'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
                 )
-              : 'Always-on display, HDR10+, Eye Comfort Shield'))
+              : undefined))
           : undefined,
       },
       hardware: {
@@ -3491,27 +3454,18 @@ export class ProductNormalizer {
       },
       camera: {
         rear_setup: rearSetupLabel,
-        main_camera: benchmark?.rear_camera || fallbackMainCamera,
         // A benchmark phone with one rear camera (iPhone 16e) gets no invented ultrawide
         // (DOS/Rate#1718): its 'Single Camera' label already exempts it from the audit.
-        second_camera:
-          isSmartphone && benchmark && cameraCount === 1
-            ? undefined
-            : benchmark?.second_camera || fallbackSecondCamera,
+        main_camera: benchmark?.rear_camera || undefined,
+        second_camera: benchmark?.second_camera || undefined,
         third_camera: benchmark?.third_camera || undefined,
         fourth_camera: benchmark?.fourth_camera || undefined,
-        front_camera: benchmark?.front_camera || fallbackFrontCamera,
-        // A laptop, watch or earbuds has no rear flash or rear video, and tablets differ
-        // by model (the iPad Air has no flash). No checked Apple page states "Dual-LED":
-        // an iPhone gets the flash its registry entry states or none (DOS/Rate#1754,
-        // #1761). Only a non-Apple phone keeps a default.
-        flash:
-          benchmark?.flash ??
-          (isSmartphone && !isApple ? 'LED flash, auto-HDR, panorama' : undefined),
-        video_recording:
-          isSmartphone || categorySlug === 'tablets'
-            ? '4K@30/60fps, 1080p@30/60/120/240fps, HDR'
-            : undefined,
+        front_camera: benchmark?.front_camera || undefined,
+        // Flash and video differ by model (the iPad Air has no flash; no checked Apple page
+        // states "Dual-LED"): a device gets the ones its registry entry states, or none
+        // (DOS/Rate#1754, #1761, #1787).
+        flash: benchmark?.flash ?? undefined,
+        video_recording: benchmark?.video_recording ?? undefined,
       },
       connectivity: {
         // Bluetooth and Wi-Fi versions differ by model: only a registry entry states them.
@@ -3524,15 +3478,11 @@ export class ProductNormalizer {
           ? (benchmark?.sensors ??
             (isApple
               ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
-              : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn'))
+              : undefined))
           : undefined,
-        // An iPhone gets the GNSS list its registry entry states or none: Apple's pages
-        // list NavIC or dual-frequency GPS by model (DOS/Rate#1754, #1761).
-        location:
-          benchmark?.location ??
-          (hasPhoneRadios && !(isApple && isSmartphone)
-            ? 'GPS, GLONASS, Galileo, QZSS, BeiDou'
-            : undefined),
+        // A device gets the GNSS list its registry entry states or none: the systems
+        // differ by model (NavIC, dual-frequency GPS, BDS) (DOS/Rate#1754, #1761, #1787).
+        location: benchmark?.location ?? undefined,
         nfc: hasPhoneRadios ? true : undefined,
         other:
           benchmark?.connectivity_other ??
@@ -3560,13 +3510,13 @@ export class ProductNormalizer {
             : {
                 has_5g: has5g,
                 bands_5g: has5g ? (benchmark?.bands_5g ?? 'SA/NSA/Sub6') : undefined,
-                bands_4g: benchmark?.bands_4g ?? 'LTE Cat 20',
+                // LTE bands, SIM slots, VoLTE and Wi-Fi calling differ by model and market:
+                // only a registry entry states them (DOS/Rate#1787).
+                bands_4g: benchmark?.bands_4g ?? undefined,
                 technology:
                   benchmark?.cellular_technology ??
                   (has5g ? 'GSM / HSPA / LTE / 5G' : 'GSM / HSPA / LTE'),
-                sim_type: benchmark?.sim_type ?? '2 Nano-SIM + eSIM',
-                volte: true,
-                vowifi: true,
+                sim_type: benchmark?.sim_type ?? undefined,
               },
       multimedia: {
         // A device gets only the loudspeaker and SAR its sources state (DOS/Rate#1748,
@@ -3592,7 +3542,8 @@ export class ProductNormalizer {
           ? benchmark?.screen_type?.split(',')[0] || 'TWS In-Ear + Charging Case'
           : `${fallbackScreenSize}" ${benchmark?.screen_type?.split(',')[0] || fallbackScreenType.split(',')[0]}`,
       chip: benchmark?.chipset?.split('(')[0]?.trim() || fallbackChip,
-      camera: benchmark?.rear_camera ? benchmark.rear_camera.split(',')[0] : fallbackKeyCamera,
+      // The main rear camera, or a laptop's webcam, as its registry entry states it.
+      camera: (benchmark?.rear_camera ?? benchmark?.front_camera)?.split(',')[0] || undefined,
       battery: `${fallbackBatteryMah} mAh${fallbackChargingW ? ` (${fallbackChargingW}W)` : ''}`,
       storage: storageDisplay,
       ram: ramGb ? `${ramGb}GB` : undefined,

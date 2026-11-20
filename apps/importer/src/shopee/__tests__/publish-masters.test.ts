@@ -216,6 +216,18 @@ test('a draft without the seed image, specs or category stops the run before any
   );
 });
 
+test('a phone draft with an empty camera group is never published (DOS/Rate#1787)', () => {
+  const row = draftRow(0);
+  const specs = row.specifications as Record<string, unknown>;
+  const problems = publishBlockers(
+    { ...row, specifications: { ...specs, camera: {} } } as never,
+    seeds[0]!,
+    'cat-1'
+  );
+  assert.ok(problems.includes('missing camera.main_camera'), problems.join('; '));
+  assert.deepEqual(publishBlockers(row as never, seeds[0]!, 'cat-1'), []);
+});
+
 test('a seed with no images is never published', () => {
   const seed = realSeeds[0]!;
   assert.deepEqual(

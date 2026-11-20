@@ -79,12 +79,14 @@ test('an iPhone outside the registry gets its generation’s Apple Tech Specs te
     assert.equal(out.connectivity?.location, undefined, title);
     assert.equal(out.multimedia?.headphone_jack_35mm, undefined, title);
     assert.equal(out.connectivity?.nfc, true, title);
-    // The battery, camera and connectivity groups stay non-empty for the catalog audit;
-    // no source fills multimedia, which stays empty (DOS/Rate#1761).
+    // The battery and connectivity groups keep the iPhone text; no source fills multimedia
+    // (DOS/Rate#1761) or the camera group (DOS/Rate#1787), which stay empty. The spec
+    // audit skips a camera group that states no rear camera.
     assert.equal(out.multimedia?.audio_features, undefined, title);
-    for (const name of ['battery', 'camera', 'connectivity'] as const) {
+    for (const name of ['battery', 'connectivity'] as const) {
       assert.equal(countPopulatedFieldGroups({ [name]: out[name] }), 1, `${title} ${name}`);
     }
+    assert.equal(countPopulatedFieldGroups({ camera: out.camera }), 0, title);
   }
 });
 
@@ -154,19 +156,20 @@ test('laptops, tablets and earbuds get no rear flash, GPS or NFC no source state
   ]) {
     const out = normalize(title).specifications;
     assert.equal(out.camera?.flash, undefined, title);
-    // Tablets record video; a laptop, watch or earbuds has no rear video.
-    if (!title.startsWith('iPad')) assert.equal(out.camera?.video_recording, undefined, title);
-    assert.equal(countPopulatedFieldGroups({ camera: out.camera }), 1, title);
+    assert.equal(out.camera?.video_recording, undefined, title);
+    // Only the MacBook Air M3's registry webcam fills the camera group (DOS/Rate#1787).
+    assert.equal(
+      countPopulatedFieldGroups({ camera: out.camera }),
+      title.includes('MacBook') ? 1 : 0,
+      title
+    );
   }
-  // A non-Apple phone keeps its flash; a tablet gets none (DOS/Rate#1761); a watch keeps
-  // GPS and NFC.
+  // No phone or tablet gets a generic flash (DOS/Rate#1761, #1787); a watch keeps NFC but
+  // gets no generic GNSS list (DOS/Rate#1787).
   assert.equal(normalize('Samsung Galaxy Tab A9 64GB').specifications.camera?.flash, undefined);
-  assert.equal(
-    normalize('Xiaomi Redmi Note 99 Pro 256GB').specifications.camera?.flash,
-    'LED flash, auto-HDR, panorama'
-  );
+  assert.equal(normalize('Xiaomi Redmi Note 99 Pro 256GB').specifications.camera?.flash, undefined);
   const watch = normalize('Apple Watch Ultra 2 49mm').specifications;
-  assert.equal(watch.connectivity?.location, 'GPS, GLONASS, Galileo, QZSS, BeiDou');
+  assert.equal(watch.connectivity?.location, undefined);
   assert.equal(watch.connectivity?.nfc, true);
 });
 
