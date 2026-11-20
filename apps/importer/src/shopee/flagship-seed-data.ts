@@ -133,7 +133,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
       cellular: {
         has_5g: true,
         bands_5g:
-          'SA/NSA/Sub6 (n1/n2/n3/n5/n7/n8/n12/n20/n25/n26/n28/n30/n38/n40/n41/n48/n66/n70/n77/n78/n79)',
+          'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n20/n25/n26/n28/n30/n66/n70/n75/n76; TDD-5G NR n38/n40/n41/n48/n53/n77/n78/n79',
         bands_4g: 'Gigabit LTE with 4x4 MIMO',
         technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
         data_speed: 'HSPA, LTE-A, 5G, EV-DO Rev.A 3.1 Mbps',
@@ -162,6 +162,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
       ram: '8GB',
     },
     sources: {
+      'cellular.bands_5g': 'https://support.apple.com/vi-vn/121029',
       'connectivity.bluetooth': 'https://support.apple.com/en-us/121029',
       'regulatory.sar_head': 'https://www.apple.com/legal/rfexposure/iphone17,3/en/',
       'regulatory.sar_body': 'https://www.apple.com/legal/rfexposure/iphone17,3/en/',
@@ -587,7 +588,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: true,
-        bands_5g: 'SA/NSA/Sub6 (Qualcomm Snapdragon X75 5G Modem)',
+        bands_5g:
+          'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n14/n20/n25/n26/n28/n29/n30/n66/n70/n71/n75/n76; TDD-5G NR n38/n40/n41/n48/n53/n77/n78/n79',
         bands_4g: 'Gigabit LTE with 4x4 MIMO',
         technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
         data_speed: 'HSPA, LTE-A, 5G',
@@ -616,6 +618,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       ram: '8GB',
     },
     sources: {
+      'cellular.bands_5g': 'https://support.apple.com/vi-vn/121032',
       'connectivity.bluetooth': 'https://support.apple.com/en-us/121032',
     },
   },
@@ -2909,7 +2912,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         technology: 'GSM / HSPA / LTE / 5G',
       },
       connectivity: {
-        bluetooth: '5.4, A2DP, LE',
+        bluetooth: '6',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, dual-band',
         usb: 'USB Type-C 4 (Thunderbolt 4 / DisplayPort, up to 40Gb/s)',
         nfc: false,
@@ -2934,6 +2937,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     },
     sources: {
       'cellular.data_speed': 'https://www.apple.com/ipad-pro/specs/',
+      'connectivity.bluetooth': 'https://www.apple.com/ipad-pro/specs/',
     },
   },
   // 30. Xiaomi Pad 7 Pro 256GB (2025/2026 Flagship Android Tablet)

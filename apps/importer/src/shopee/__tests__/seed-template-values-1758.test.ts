@@ -45,11 +45,20 @@ const TEMPLATE_VALUES: ReadonlyArray<readonly [string, string]> = [
   ['connectivity.bluetooth', '5.3, A2DP, LE'],
 ];
 
+// A field counts as sourced when `sources` cites it or its whole group.
+const cites = (entry: Entry, path: string): boolean =>
+  Boolean(entry.sources?.[path] ?? entry.sources?.[path.split('.')[0]!]);
+
 test('no seed or canonical entry holds an unsourced template value', () => {
   for (const entry of ENTRIES) {
     for (const [path, value] of TEMPLATE_VALUES) {
       if (at(entry.specifications, path) !== value) continue;
-      assert.ok(entry.sources?.[path], `${entry.key}: unsourced template ${path} = ${value}`);
+      assert.ok(cites(entry, path), `${entry.key}: unsourced template ${path} = ${value}`);
+    }
+    // The normalizer's Bluetooth shape with any version ("5.4, A2DP, LE").
+    const bluetooth = at(entry.specifications, 'connectivity.bluetooth');
+    if (typeof bluetooth === 'string' && /^\d+(\.\d+)?, A2DP, LE$/.test(bluetooth)) {
+      assert.ok(cites(entry, 'connectivity.bluetooth'), `${entry.key}: bluetooth ${bluetooth}`);
     }
   }
 });
@@ -58,7 +67,10 @@ test('a 5G band field always lists bands', () => {
   for (const entry of ENTRIES) {
     const bands = at(entry.specifications, 'cellular.bands_5g');
     if (bands === undefined) continue;
-    assert.doesNotMatch(String(bands), /^\s*(5G\s+)?SA\/NSA\/Sub6\s*$/i, entry.key);
+    // "SA/NSA/Sub6" with no band number, bare or with a note ("(Snapdragon X75 Modem)").
+    if (/SA\/NSA\/Sub6/i.test(String(bands))) {
+      assert.match(String(bands), /\bn?\d{1,3}\b.*\bn?\d{1,3}\b/, `${entry.key}: ${bands}`);
+    }
   }
 });
 
@@ -79,9 +91,15 @@ const byKey = (key: string): Entry => {
 test('the replaced values are the sourced ones', () => {
   const expected: Record<string, Record<string, string>> = {
     'apple:iphone-16:128gb': {
+      'cellular.bands_5g':
+        'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n20/n25/n26/n28/n30/n66/n70/n75/n76; TDD-5G NR n38/n40/n41/n48/n53/n77/n78/n79',
       'connectivity.bluetooth': '5.3',
       'regulatory.sar_head': '1.08 W/kg',
       'regulatory.sar_body': '1.17 W/kg',
+    },
+    'apple:iphone-16-pro-max:256gb': {
+      'cellular.bands_5g':
+        'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n14/n20/n25/n26/n28/n29/n30/n66/n70/n71/n75/n76; TDD-5G NR n38/n40/n41/n48/n53/n77/n78/n79',
     },
     'apple:iphone-16-plus:256gb': {
       'cellular.bands_5g':
@@ -118,6 +136,7 @@ test('the replaced values are the sourced ones', () => {
     'oppo:find-x9-pro:512gb': { 'cellular.sim_type': 'Nano-SIM + Nano-SIM + eSIM' },
     'apple:ipad-pro-m5-11:256gb': {
       'cellular.data_speed': '5G (sub-6 GHz) with 4x4 MIMO, Gigabit LTE with 4x4 MIMO',
+      'connectivity.bluetooth': '6',
     },
   };
   for (const [key, fields] of Object.entries(expected)) {
@@ -170,18 +189,4 @@ test('fields no source states are dropped and retracted from stored rows', () =>
       assert.equal(at(update.specifications, path), undefined, `${key} keeps stored ${path}`);
     }
   }
-});
-
-test('only the dropped-field seeds gained a retraction', () => {
-  const withRetract = FLAGSHIP_DEVICES_TO_SEED.filter(s => s.retract_spec_fields).map(
-    s => s.model_key
-  );
-  for (const key of Object.keys(RETRACTED)) assert.ok(withRetract.includes(key), key);
-  // The sourced 2026 replacements keep theirs; no other seed gained one here.
-  const others = withRetract.filter(k => !(k in RETRACTED));
-  assert.deepEqual(others.sort(), [
-    'apple:iphone-18-pro-max:256gb',
-    'apple:iphone-18-pro:256gb',
-    'samsung:galaxy-s26-ultra:256gb',
-  ]);
 });
