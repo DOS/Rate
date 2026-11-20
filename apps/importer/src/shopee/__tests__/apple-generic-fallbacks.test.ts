@@ -136,9 +136,10 @@ test('an Apple or registry phone gets only the loudspeaker and SAR its sources s
 
 test('non-Apple devices outside the registry, and other iPhones, keep their previous output', () => {
   const redmi = normalize('Xiaomi Redmi Note 99 Pro 256GB').specifications;
-  assert.equal(redmi.design?.keys, 'Volume, Power');
-  assert.equal(redmi.battery?.charging, 'Sạc nhanh USB-C PD/PPS');
-  assert.equal(redmi.connectivity?.other, 'Hỗ trợ OTG, Chia sẻ nhanh');
+  // No generic Android keys, charging or OTG text either (DOS/Rate#1790).
+  assert.equal(redmi.design?.keys, undefined);
+  assert.equal(redmi.battery?.charging, undefined);
+  assert.equal(redmi.connectivity?.other, undefined);
   // No source states its loudspeaker or SAR: none since DOS/Rate#1754.
   assert.equal(redmi.multimedia?.loudspeaker, undefined);
   assert.equal(redmi.regulatory?.sar_head, undefined);

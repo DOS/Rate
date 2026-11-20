@@ -13,7 +13,7 @@ import { biometricsFromSensors, parseGsmArenaHtmlToSpecs } from '../arena-spec-s
 import { SOURCED_SEEDS_2025 } from '../flagship-seed-sourced-2025.js';
 import { SOURCED_SEEDS_2026 } from '../flagship-seed-sourced-2026.js';
 import { SOURCED_SEEDS_IPHONE_17E } from '../flagship-seed-sourced-iphone-17e.js';
-import { ProductNormalizer } from '../product-normalizer.js';
+import { namesPhone, ProductNormalizer } from '../product-normalizer.js';
 import type { ShopeeProduct } from '../types.js';
 
 const normalizer = new ProductNormalizer();
@@ -165,11 +165,11 @@ test('a watch, tablet, laptop or earbuds gets no Android phone charging, OTG or 
     assert.notEqual(out.connectivity?.other, 'Hỗ trợ OTG, Chia sẻ nhanh', title);
     assert.notEqual(out.connectivity?.usb, 'USB Type-C, OTG', title);
   }
-  // A non-Apple phone keeps them.
+  // A non-Apple phone no longer gets them either (DOS/Rate#1790).
   const phone = normalize('Xiaomi Redmi Note 99 Pro 256GB').specifications;
-  assert.equal(phone.battery?.charging, 'Sạc nhanh USB-C PD/PPS');
-  assert.equal(phone.connectivity?.other, 'Hỗ trợ OTG, Chia sẻ nhanh');
-  assert.equal(phone.connectivity?.usb, 'USB Type-C, OTG');
+  assert.equal(phone.battery?.charging, undefined);
+  assert.equal(phone.connectivity?.other, undefined);
+  assert.equal(phone.connectivity?.usb, undefined);
 });
 
 test('a non-Apple tablet outside the registry gets no flash', () => {
@@ -197,6 +197,7 @@ test('a title that names no phone gets no phone hardware', () => {
     const n = normalize(title);
     // 'smartphones' is the category of a title that names no category.
     assert.equal(n.category_slug, 'smartphones', title);
+    assert.ok(!namesPhone(title, n.model), title);
     const out = n.specifications;
     assert.equal(out.camera?.flash, undefined, title);
     assert.equal(out.camera?.video_recording, undefined, title);
@@ -230,11 +231,14 @@ test('a title that names no phone gets no phone hardware', () => {
     'Masstel Fami 12 4G',
     'Cat S75',
   ]) {
-    const out = normalize(title).specifications;
-    // (A phone outside the registry no longer gets a generic flash, DOS/Rate#1787.)
-    assert.equal(out.design?.keys, 'Volume, Power', title);
-    assert.equal(out.connectivity?.nfc, true, title);
-    assert.equal(out.battery?.charging, 'Sạc nhanh USB-C PD/PPS', title);
+    const n = normalize(title);
+    assert.ok(namesPhone(title, n.model), title);
+    // A phone outside the registry no longer gets a generic flash (DOS/Rate#1787), keys,
+    // NFC or charging text (DOS/Rate#1790).
+    const out = n.specifications;
+    assert.equal(out.design?.keys, undefined, title);
+    assert.equal(out.connectivity?.nfc, undefined, title);
+    assert.equal(out.battery?.charging, undefined, title);
   }
   // An iPhone outside the registry is a phone by its model.
   assert.equal(normalize('Apple iPhone 13 128GB').specifications.connectivity?.nfc, true);

@@ -108,7 +108,6 @@ test('registry iPhones keep their iPhone text, without GNSS or jack no source st
   for (const [title, keys] of [
     ['Apple iPhone 16 Pro Max 256GB', CAMERA_CONTROL],
     ['Apple iPhone 16 128GB', CAMERA_CONTROL],
-    ['Apple iPhone 18 Pro 256GB', CAMERA_CONTROL],
     ['Apple iPhone 15 128GB', RING],
     ['Apple iPhone 15 Pro Max 256GB', ACTION],
   ] as const) {
@@ -119,15 +118,19 @@ test('registry iPhones keep their iPhone text, without GNSS or jack no source st
     assert.equal(out.connectivity?.other, UWB_SOS, title);
     // Apple's pages list NavIC or dual-frequency GPS by model: an entry gets the list its
     // sourced seed states (the 18 Pro) or none (DOS/Rate#1761).
-    const sourced = title.includes('iPhone 18 Pro');
-    assert.equal(
-      out.connectivity?.location,
-      sourced ? 'Dual-frequency GPS (L1+L5), GLONASS, Galileo, QZSS, BeiDou, NavIC' : undefined,
-      title
-    );
+    assert.equal(out.connectivity?.location, undefined, title);
     assert.equal(out.connectivity?.nfc, true, title);
-    assert.equal(out.multimedia?.headphone_jack_35mm, sourced ? false : undefined, title);
+    assert.equal(out.multimedia?.headphone_jack_35mm, undefined, title);
   }
+  // The 18 Pro takes its keys, display, charging and connectivity text from its sourced
+  // seed (DOS/Rate#1790, pinned in generic-values-1790.test.ts).
+  const pro18 = normalize('Apple iPhone 18 Pro 256GB').specifications;
+  assert.equal(
+    pro18.connectivity?.location,
+    'Dual-frequency GPS (L1+L5), GLONASS, Galileo, QZSS, BeiDou, NavIC'
+  );
+  assert.equal(pro18.connectivity?.nfc, true);
+  assert.equal(pro18.multimedia?.headphone_jack_35mm, false);
 });
 
 test('laptops, tablets and earbuds get no rear flash, GPS or NFC no source states', () => {
@@ -164,13 +167,13 @@ test('laptops, tablets and earbuds get no rear flash, GPS or NFC no source state
       title
     );
   }
-  // No phone or tablet gets a generic flash (DOS/Rate#1761, #1787); a watch keeps NFC but
-  // gets no generic GNSS list (DOS/Rate#1787).
+  // No phone or tablet gets a generic flash (DOS/Rate#1761, #1787); a watch gets no generic
+  // GNSS list (DOS/Rate#1787) and no NFC its registry entry does not state (DOS/Rate#1790).
   assert.equal(normalize('Samsung Galaxy Tab A9 64GB').specifications.camera?.flash, undefined);
   assert.equal(normalize('Xiaomi Redmi Note 99 Pro 256GB').specifications.camera?.flash, undefined);
   const watch = normalize('Apple Watch Ultra 2 49mm').specifications;
   assert.equal(watch.connectivity?.location, undefined);
-  assert.equal(watch.connectivity?.nfc, true);
+  assert.equal(watch.connectivity?.nfc, undefined);
 });
 
 test('MacBooks get the headphone jack Apple lists; a device outside the registry gets none', () => {
