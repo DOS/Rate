@@ -207,9 +207,10 @@ test('a non-Apple phone gets no generic Android design, sensor, GNSS, video or n
     if (!n.is_benchmark_enriched) assert.equal(out.design?.resistance, undefined, title);
     else assert.match(out.design?.resistance ?? '', /^IP6/, title);
   }
-  // An iPhone keeps Apple's materials and biometrics, but no generic IP rating or video.
+  // An iPhone keeps Apple's biometrics, but no generic IP rating or video, and outside the
+  // registry no Apple materials text (DOS/Rate#1790).
   const iphone = assertNoGeneric('Apple iPhone 13 128GB').specifications;
-  assert.equal(iphone.design?.materials, 'Ceramic Shield front, glass back, metal frame');
+  assert.equal(iphone.design?.materials, undefined);
   assert.equal(iphone.design?.biometrics, 'Face ID');
   assert.equal(iphone.design?.resistance, undefined);
   assert.equal(iphone.camera?.video_recording, undefined);

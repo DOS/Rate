@@ -84,16 +84,16 @@ test('models without the new registry fields get no generic Wi-Fi or iPhone flas
   // A non-Apple registry phone without a sourced flash gets none either (DOS/Rate#1787).
   assert.equal(samsung.specifications.camera?.flash, undefined);
 
-  // A phone outside the registry keeps the other category fallbacks, but no flash
-  // (DOS/Rate#1787).
+  // A phone outside the registry gets no flash (DOS/Rate#1787) and no category refresh
+  // rate (DOS/Rate#1790).
   const other = normalize('Xiaomi Redmi Note 99 Pro 256GB');
   assert.equal(other.is_benchmark_enriched, false);
-  assert.equal(other.specifications.display?.refresh_rate_hz, 120);
+  assert.equal(other.specifications.display?.refresh_rate_hz, undefined);
   assert.equal(other.specifications.connectivity?.wlan, undefined);
   assert.equal(other.specifications.camera?.flash, undefined);
   const otherApple = normalize('Apple iPhone 11 64GB');
   assert.equal(otherApple.is_benchmark_enriched, false);
-  assert.equal(otherApple.specifications.display?.refresh_rate_hz, 60);
+  assert.equal(otherApple.specifications.display?.refresh_rate_hz, undefined);
   // No checked Apple page states "Dual-LED": an iPhone outside the registry gets no flash
   // (DOS/Rate#1754).
   assert.equal(otherApple.specifications.camera?.flash, undefined);
