@@ -726,7 +726,9 @@ export function iphoneGenerationSpecs(model: string): {
     // Ultra Wideband from the 11, Emergency SOS via satellite from the 14.
     connectivity_other:
       generation >= 14 ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Ultra Wideband (UWB)',
-    // Every listed page lists NFC with reader mode (DOS/Rate#1790).
+    // NFC with reader mode, which Apple lists for every iPhone from the XS on. Added in
+    // DOS/Rate#1790 from Apple's iPhone Tech Specs, not re-read page by page like the
+    // fields above.
     nfc: true,
   };
 }
@@ -1300,7 +1302,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     charging_w: 45,
     has_5g: true,
     release_date: 'September 2024',
-    ip_rating: 'IP68 dust/water resistant (1.5m for 30 min) + Enhanced Armor Aluminum',
+    // Without the body materials or ear tips its entry also stated (DOS/Rate#1790).
+    ip_rating: 'IP68 dust/water resistant (1.5m for 30 min)',
   },
   'xiaomi:pad-6s-pro': {
     screen_size_inch: 12.4,
@@ -1377,7 +1380,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     charging_w: 10,
     has_5g: false,
     release_date: 'July 2024',
-    ip_rating: 'IP68 + 10ATM water resistant (100m, MIL-STD-810H, Titanium Grade 4)',
+    // Without the body materials or ear tips its entry also stated (DOS/Rate#1790).
+    ip_rating: 'IP68 + 10ATM water resistant (100m, MIL-STD-810H)',
     only_storage_gb: 32,
   },
   'garmin:forerunner-265': {
@@ -1396,7 +1400,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     charging_w: 5,
     has_5g: false,
     release_date: 'March 2023',
-    ip_rating: '5 ATM water resistant (50m swim-ready, fiber-reinforced polymer)',
+    // Without the body materials or ear tips its entry also stated (DOS/Rate#1790).
+    ip_rating: '5 ATM water resistant (50m swim-ready)',
     only_storage_gb: 8,
   },
   'samsung:galaxy-buds3-pro': {
@@ -1523,6 +1528,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
       'Li-Ion 5391 mAh (Nano-SIM model; 5567 mAh is the eSIM-only US model), non-removable',
     bands_5g:
       '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 30, 38, 40, 41, 48, 53, 66, 70, 75, 77, 78, 79 SA/NSA/Sub6 - A3717',
+    cellular_technology: 'GSM / HSPA / LTE / 5G (Apple C2 modem)',
   },
   'apple:iphone-18-pro': {
     // Sourced with the seeds (flagship-seed-sourced-2026.ts); Apple and
@@ -1587,6 +1593,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
       'Li-Ion 4056 mAh (Nano-SIM model; 4288 mAh is the eSIM-only model, unconfirmed), non-removable',
     bands_5g:
       '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 30, 38, 40, 41, 48, 53, 66, 70, 75, 77, 78, 79 SA/NSA/Sub6 - A3714',
+    cellular_technology: 'GSM / HSPA / LTE / 5G (Apple C2 modem)',
   },
   'samsung:galaxy-s26-ultra': {
     // Sourced with the seeds (flagship-seed-sourced-2026.ts).
@@ -1646,6 +1653,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     nfc: true,
     bands_5g:
       '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 38, 40, 41, 66, 75, 77, 78 SA/NSA/Sub6 (International)',
+    cellular_technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
   },
   'oppo:find-x9-pro': {
     screen_size_inch: 6.82,
@@ -1816,7 +1824,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     charging_w: 18,
     has_5g: true,
     release_date: 'September 2025',
-    ip_rating: 'IP6X + WR100 (100m water resistant, MIL-STD 810H, Aerospace Grade 5 Titanium)',
+    // Without the body materials or ear tips its entry also stated (DOS/Rate#1790).
+    ip_rating: 'IP6X + WR100 (100m water resistant, MIL-STD 810H)',
     only_storage_gb: 64,
   },
   'apple:airpods-pro-3': {
@@ -1847,7 +1856,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     charging_w: 5,
     has_5g: false,
     release_date: 'June 2025',
-    ip_rating: 'IPX4 splash and sweat resistant + Polyurethane Noise Isolation Tips',
+    // Without the body materials or ear tips its entry also stated (DOS/Rate#1790).
+    ip_rating: 'IPX4 splash and sweat resistant',
   },
 };
 
@@ -3477,8 +3487,8 @@ export class ProductNormalizer {
         location: benchmark?.location ?? undefined,
         // Not every phone or watch has NFC, and a laptop, tablet or earbuds gets none unless
         // a source states it (DOS/Rate#1754): a device gets the value its registry entry
-        // states; an iPhone keeps Apple's NFC in the registry or where its generation's
-        // checked page lists it (DOS/Rate#1790).
+        // states. A registry iPhone without an `nfc` field, or an iPhone 11 to 17 outside the
+        // registry, keeps NFC, which every iPhone from the XS on has (DOS/Rate#1790).
         nfc:
           benchmark?.nfc ??
           (isSmartphone && isApple ? (iphoneSpecs ? iphoneSpecs.nfc : true) : undefined),
@@ -3507,14 +3517,9 @@ export class ProductNormalizer {
                 // LTE bands, SIM slots, VoLTE and Wi-Fi calling differ by model and market:
                 // only a registry entry states them (DOS/Rate#1787).
                 bands_4g: benchmark?.bands_4g ?? undefined,
-                // The generic phone network text is no watch's (DOS/Rate#1790).
-                technology:
-                  benchmark?.cellular_technology ??
-                  (categorySlug === 'smartphones' || categorySlug === 'tablets'
-                    ? has5g
-                      ? 'GSM / HSPA / LTE / 5G'
-                      : 'GSM / HSPA / LTE'
-                    : undefined),
+                // The network technologies differ by model (CDMA, no 2G, a watch's LTE): only a
+                // registry entry states them, not "GSM / HSPA / LTE / 5G" (DOS/Rate#1790).
+                technology: benchmark?.cellular_technology ?? undefined,
                 sim_type: benchmark?.sim_type ?? undefined,
               },
       multimedia: {

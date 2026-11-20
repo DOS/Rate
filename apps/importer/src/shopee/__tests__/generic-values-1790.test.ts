@@ -109,6 +109,8 @@ const GENERIC = [
   'Bluetooth 5.3 ANC DSP',
   'Apple A-Series',
   'TWS In-Ear + Charging Case',
+  'GSM / HSPA / LTE / 5G',
+  'GSM / HSPA / LTE',
   '2024',
 ];
 
@@ -210,6 +212,7 @@ test('a registry model with a sourced seed gets the seed’s values', () => {
     assert.equal(out.connectivity?.nfc, s.connectivity?.nfc, title);
     assert.equal(out.connectivity?.other, s.connectivity?.other, title);
     assert.equal(out.cellular?.bands_5g, s.cellular?.bands_5g, title);
+    assert.equal(out.cellular?.technology, s.cellular?.technology, title);
     assert.equal(out.design?.keys, s.design?.keys, title);
   }
   for (const title of ['Apple iPhone 18 Pro Max 256GB', 'Apple iPhone 18 Pro 256GB']) {
@@ -246,10 +249,9 @@ test('a 5G device gets only the 5G bands its registry entry states', () => {
     const out = assertNoGeneric(title).specifications;
     assert.equal(out.cellular?.has_5g, true, title);
     assert.equal(out.cellular?.bands_5g, undefined, title);
+    // No generic network text either (a watch's LTE, a CDMA phone).
+    assert.equal(out.cellular?.technology, undefined, title);
   }
-  // A watch gets no generic phone network text.
-  const ultra3 = normalize('Apple Watch Ultra 3 49mm').specifications;
-  assert.equal(ultra3.cellular?.technology, undefined);
 });
 
 test('only a phone a source describes gets NFC', () => {
@@ -304,11 +306,16 @@ test('registry laptops and tablets have no materials text as water resistance', 
     assert.equal(n.is_benchmark_enriched, true, title);
     assert.equal(n.specifications.design?.resistance, undefined, title);
   }
-  // A real rating stays.
-  assert.match(
-    normalize('Samsung Galaxy Tab S10 Ultra 256GB').specifications.design?.resistance ?? '',
-    /^IP68/
-  );
+  // A real rating stays, without the materials or ear tips stated after it.
+  for (const [title, rating] of [
+    ['Samsung Galaxy Tab S10 Ultra 256GB', 'IP68 dust/water resistant (1.5m for 30 min)'],
+    ['Samsung Galaxy Watch Ultra 47mm', 'IP68 + 10ATM water resistant (100m, MIL-STD-810H)'],
+    ['Đồng hồ Garmin Forerunner 265', '5 ATM water resistant (50m swim-ready)'],
+    ['Apple Watch Ultra 3 49mm', 'IP6X + WR100 (100m water resistant, MIL-STD 810H)'],
+    ['Sony WF-1000XM6', 'IPX4 splash and sweat resistant'],
+  ] as const) {
+    assert.equal(assertNoGeneric(title).specifications.design?.resistance, rating, title);
+  }
 });
 
 test('an iPhone outside the registry gets no Apple materials or sensor text', () => {
