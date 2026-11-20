@@ -190,3 +190,55 @@ test('fields no source states are dropped and retracted from stored rows', () =>
     }
   }
 });
+
+// DOS/Rate#1785: `xiaomi:pad-7-pro:256gb` was labelled "8GB/256GB" while it stored 12GB of RAM
+// (Xiaomi ships 12GB only with 512GB). The backfill writes the label onto the master product,
+// so a label, `ram_gb`, `specifications.hardware.ram_gb` and `key_specs.ram` must agree.
+const labelRamGb = (variantName: string): number | null => {
+  const m = /(?:^|[^\d])(\d{1,2})\s*GB\s*[/+]\s*\d+\s*(?:GB|TB)\b/i.exec(variantName);
+  return m ? Number(m[1]) : null;
+};
+
+test('a seed variant label that names RAM agrees with every stored RAM value', () => {
+  assert.equal(labelRamGb('8GB/256GB'), 8);
+  assert.equal(labelRamGb('12GB + 512GB'), 12);
+  assert.equal(labelRamGb('256GB'), null);
+  assert.equal(labelRamGb('1TB'), null);
+  for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
+    const ram = labelRamGb(seed.variant_name);
+    if (ram === null) continue;
+    assert.equal(seed.ram_gb, ram, `${seed.model_key}: ram_gb vs "${seed.variant_name}"`);
+    const hardwareRam = (seed.specifications as { hardware?: { ram_gb?: unknown } }).hardware
+      ?.ram_gb;
+    if (hardwareRam !== undefined) {
+      assert.equal(
+        hardwareRam,
+        ram,
+        `${seed.model_key}: hardware.ram_gb vs "${seed.variant_name}"`
+      );
+    }
+    const keyRam = (seed.key_specs as { ram?: unknown }).ram;
+    if (typeof keyRam === 'string') {
+      // "12GB" or "16GB LPDDR5T": the leading size is what must agree.
+      const keyRamGb = /^\s*(\d{1,2})\s*GB\b/i.exec(keyRam);
+      assert.ok(keyRamGb, `${seed.model_key}: key_specs.ram "${keyRam}"`);
+      assert.equal(
+        Number(keyRamGb[1]),
+        ram,
+        `${seed.model_key}: key_specs.ram vs "${seed.variant_name}"`
+      );
+    }
+  }
+});
+
+test('xiaomi:pad-7-pro:256gb is the official 8GB + 256GB configuration', () => {
+  const seed = FLAGSHIP_DEVICES_TO_SEED.find(s => s.model_key === 'xiaomi:pad-7-pro:256gb');
+  assert.ok(seed);
+  assert.equal(seed.variant_name, '8GB/256GB');
+  assert.equal(seed.ram_gb, 8);
+  assert.equal(seed.key_specs.ram, '8GB');
+  assert.equal(
+    seed.sources?.['hardware.ram_gb'],
+    'https://www.mi.com/global/product/xiaomi-pad-7-pro/specs/'
+  );
+});
