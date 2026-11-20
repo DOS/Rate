@@ -24,8 +24,8 @@
  * - the seed has images, and the row's `images` and `thumbnail` are the seed's (so the
  *   scoped `backfill-specs.ts --apply` that writes them ran first);
  * - its specifications pass the same checks as the catalog audit (schema, the 10 groups,
- *   and, when the camera group states a rear camera, the main camera and a second camera
- *   unless the phone has one rear camera).
+ *   and, for a phone or tablet seed or a camera group that states a rear camera, the main
+ *   camera and a second camera unless the phone has one rear camera).
  * Any named master that fails stops the run before the first write. Each write is
  * `update ... where id = <id> and status = 'draft' and slug and thumbnail are the seed's`
  * and must touch exactly that row.
@@ -155,7 +155,11 @@ export function publishBlockers(
   for (const group of REQUIRED_10_SPEC_GROUPS) {
     if (!specs?.[group]) problems.push(`missing specification group "${group}"`);
   }
-  if (statesRearCamera(specs?.camera)) {
+  // A phone or tablet seed always lists its rear cameras: a draft whose camera group is
+  // empty never got the seed's specs. Other categories are audited only when their camera
+  // group states a rear camera (DOS/Rate#1787).
+  const rearCameraExpected = seed.categorySlug === 'smartphones' || seed.categorySlug === 'tablets';
+  if (rearCameraExpected || statesRearCamera(specs?.camera)) {
     if (!specs?.camera?.main_camera?.trim()) problems.push('missing camera.main_camera');
     if (!hasSingleRearCamera(specs?.camera) && !specs?.camera?.second_camera?.trim()) {
       problems.push('missing camera.second_camera');
