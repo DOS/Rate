@@ -288,4 +288,17 @@ test('the arena syncer writes no biometrics, 5G, SIM or card-slot text the page 
   );
   assert.equal(biometricsFromSensors('Accelerometer, gyro'), undefined);
   assert.equal(biometricsFromSensors(undefined), undefined);
+  // Nested parentheses stay in one part.
+  assert.equal(
+    biometricsFromSensors('Fingerprint (under display, ultrasonic (gen 2)), accelerometer'),
+    'Fingerprint (under display, ultrasonic (gen 2))'
+  );
+});
+
+test('the sensors split runs in linear time on a long run of "(" (CodeQL js/polynomial-redos)', () => {
+  for (const sensors of ['('.repeat(100_000), `(${'('.repeat(100_000)}x`, '(,'.repeat(50_000)]) {
+    const started = performance.now();
+    assert.equal(biometricsFromSensors(sensors), undefined);
+    assert.ok(performance.now() - started < 200, `${sensors.length} chars took too long`);
+  }
 });

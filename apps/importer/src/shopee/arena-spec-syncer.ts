@@ -139,7 +139,22 @@ function decodeArenaHtmlEntities(raw: string): string {
 export function biometricsFromSensors(sensors: string | undefined): string | undefined {
   if (!sensors) return undefined;
   // Split on commas outside parentheses: "Fingerprint (under display, ultrasonic)" is one.
-  const parts = sensors.match(/(?:[^,(]|\([^)]*\))+/g) ?? [];
+  // One pass over the characters, no regex: a split regex with nested quantifiers backtracks
+  // polynomially on a run of "(" (CodeQL js/polynomial-redos).
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  const text = sensors.slice(0, 2000);
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    else if (ch === ',' && depth === 0) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(text.slice(start));
   const found = parts
     .map(part => part.trim())
     .filter(part => /fingerprint|face\s*id|iris|face\s*unlock|3d\s*face/i.test(part));
