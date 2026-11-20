@@ -2563,7 +2563,8 @@ async function runSuite() {
   assert.equal(unbenchmarkedEarbuds.specifications.hardware?.os, 'Bluetooth 5.3 Audio DSP');
   assert.equal(unbenchmarkedEarbuds.specifications.cellular?.has_5g, false);
   assert.equal(unbenchmarkedEarbuds.specifications.cellular?.sim_type, 'No SIM');
-  assert.equal(unbenchmarkedEarbuds.key_specs.camera, 'Active Noise Cancellation (ANC)');
+  // Earbuds have no camera: no category guess (DOS/Rate#1787).
+  assert.equal(unbenchmarkedEarbuds.key_specs.camera, undefined);
 
   const unbenchmarkedLaptop = normalizer.normalize(
     createDummyShopeeProduct(
@@ -2579,7 +2580,8 @@ async function runSuite() {
   assert.equal(unbenchmarkedLaptop.specifications.cellular?.has_5g, false);
   assert.equal(unbenchmarkedLaptop.specifications.cellular?.sim_type, 'No SIM');
   assert.equal(unbenchmarkedLaptop.key_specs.chip, 'Intel Core / AMD Ryzen');
-  assert.equal(unbenchmarkedLaptop.key_specs.camera, '1080p FHD Webcam');
+  // A laptop outside the registry gets no guessed webcam (DOS/Rate#1787).
+  assert.equal(unbenchmarkedLaptop.key_specs.camera, undefined);
 
   const unbenchmarkedWatch = normalizer.normalize(
     createDummyShopeeProduct('Đồng hồ thông minh Huawei Watch GT 5 Pro 1,4 inch 32GB', 7490000)
@@ -2588,7 +2590,8 @@ async function runSuite() {
   assert.equal(unbenchmarkedWatch.specifications.category_slug, 'smartwatches');
   assert.equal(unbenchmarkedWatch.screen_size_inch, 1.4);
   assert.equal(unbenchmarkedWatch.specifications.hardware?.os, 'Wear OS 5');
-  assert.equal(unbenchmarkedWatch.key_specs.camera, 'Optical HR + SpO2 Sensor');
+  // A heart sensor is not a camera (DOS/Rate#1787).
+  assert.equal(unbenchmarkedWatch.key_specs.camera, undefined);
 
   const mergedWithCategorySlug = mergeProductSpecifications(unbenchmarkedLaptop.specifications, {
     hardware: { chipset: 'Intel Core Ultra 7 155H' },
@@ -2832,11 +2835,12 @@ async function runSuite() {
     assert.equal(watchUltra.specifications.design?.biometrics, undefined);
     assert.equal(watchUltra.specifications.regulatory?.sar_head, undefined);
 
-    // Smartphones retain their biometrics. A phone gets only a sourced SAR (DOS/Rate#1748,
-    // #1754): no template value, inside the registry or outside it.
+    // An iPhone keeps its biometrics; a non-Apple phone gets only sourced biometrics
+    // (DOS/Rate#1787). A phone gets only a sourced SAR (DOS/Rate#1748, #1754): no template
+    // value, inside the registry or outside it.
     assert.equal(s24.specifications.regulatory?.sar_head, undefined);
     assert.equal(s24.specifications.regulatory?.sar_body, undefined);
-    assert.equal(s24.specifications.design?.biometrics, 'Fingerprint (under display), Face unlock');
+    assert.equal(s24.specifications.design?.biometrics, undefined);
     const iphone16 = normalizer.normalize(createDummyShopeeProduct('iPhone 16 Pro Max 256GB'));
     assert.equal(iphone16.specifications.design?.biometrics, 'Face ID');
     assert.equal(iphone16.specifications.regulatory?.sar_head, undefined);

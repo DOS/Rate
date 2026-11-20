@@ -160,10 +160,12 @@ test('models without the new registry fields keep their other output', () => {
     assert.equal(out.display?.protection, 'Ceramic Shield', title);
     assert.equal(out.connectivity?.usb, undefined, title);
     assert.equal(out.regulatory?.certifications, undefined, title);
-    // A phone whose 5G is unknown (iPhone 11, outside the registry) gets no cellular group.
+    // A phone whose 5G is unknown (iPhone 11, outside the registry) gets no cellular group;
+    // a registry phone gets no generic SIM or LTE text (DOS/Rate#1787).
     if (title !== 'Apple iPhone 11 64GB') {
-      assert.equal(out.cellular?.sim_type, '2 Nano-SIM + eSIM', title);
-      assert.equal(out.cellular?.bands_4g, 'LTE Cat 20', title);
+      assert.equal(out.cellular?.has_5g, true, title);
+      assert.equal(out.cellular?.sim_type, undefined, title);
+      assert.equal(out.cellular?.bands_4g, undefined, title);
     } else {
       assert.deepEqual(out.cellular, {}, title);
     }
@@ -172,7 +174,8 @@ test('models without the new registry fields keep their other output', () => {
   for (const title of ['Samsung Galaxy S24 Ultra 256GB', 'Xiaomi Redmi Note 99 Pro 256GB']) {
     const out = normalize(title).specifications;
     assert.equal(out.design?.keys, 'Volume, Power', title);
-    assert.equal(out.display?.features, 'Always-on display, HDR10+, Eye Comfort Shield', title);
+    // No generic Android display features (DOS/Rate#1787).
+    assert.equal(out.display?.features, undefined, title);
     assert.equal(out.battery?.charging, 'Sạc nhanh USB-C PD/PPS', title);
     assert.equal(out.connectivity?.other, 'Hỗ trợ OTG, Chia sẻ nhanh', title);
     // No source states their loudspeaker or SAR: no generic value, inside the registry
@@ -181,11 +184,8 @@ test('models without the new registry fields keep their other output', () => {
     assert.equal(out.regulatory?.sar_head, undefined, title);
     assert.equal(out.display?.protection, 'Corning Gorilla Glass', title);
     assert.equal(out.regulatory?.certifications, undefined, title);
-    // The Xiaomi is outside the registry and its 5G is unknown: no cellular group.
-    assert.equal(
-      out.cellular?.sim_type,
-      title.startsWith('Samsung') ? '2 Nano-SIM + eSIM' : undefined,
-      title
-    );
+    // The Xiaomi is outside the registry and its 5G is unknown: no cellular group. The
+    // Samsung gets no generic SIM text (DOS/Rate#1787).
+    assert.equal(out.cellular?.sim_type, undefined, title);
   }
 });
