@@ -84,10 +84,14 @@ test('Apple laptops, tablets, watches and earbuds get no iPhone charging, UWB or
     assert.equal(out.connectivity?.other, undefined, title);
     assert.equal(out.multimedia?.loudspeaker, undefined, title);
     assert.equal(out.regulatory?.sar_head, undefined, title);
-    // The groups the catalog audit requires stay non-empty.
-    for (const name of ['battery', 'connectivity', 'multimedia', 'regulatory'] as const) {
-      assert.equal(countPopulatedFieldGroups({ [name]: out[name] }), 1, `${title} ${name}`);
-    }
+    // No iPhone USB, Bluetooth, Wi-Fi, audio or certification text either (DOS/Rate#1761).
+    assert.equal(out.connectivity?.usb, undefined, title);
+    assert.equal(out.connectivity?.bluetooth, undefined, title);
+    assert.equal(out.connectivity?.wlan, undefined, title);
+    assert.equal(out.multimedia?.audio_features, undefined, title);
+    assert.equal(out.regulatory?.certifications, undefined, title);
+    // The battery group the catalog audit counts stays non-empty.
+    assert.equal(countPopulatedFieldGroups({ battery: out.battery }), 1, title);
   }
 });
 
@@ -110,7 +114,8 @@ test('an Apple or registry phone gets only the loudspeaker and SAR its sources s
     '1.09 W/kg'
   );
 
-  // Unsourced: no generic value, while the multimedia and regulatory groups stay non-empty.
+  // Unsourced: no generic value. A group no source fills stays empty, so the catalog audit
+  // lists the model for a spec sync (DOS/Rate#1761).
   for (const title of [
     'Apple iPhone 15 128GB',
     'Apple iPhone 15 Pro Max 256GB',
@@ -123,8 +128,9 @@ test('an Apple or registry phone gets only the loudspeaker and SAR its sources s
     assert.equal(out.multimedia?.loudspeaker, undefined, title);
     assert.equal(out.regulatory?.sar_head, undefined, title);
     assert.equal(out.regulatory?.sar_body, undefined, title);
-    assert.ok(countPopulatedFieldGroups({ multimedia: out.multimedia }) === 1, title);
-    assert.ok(countPopulatedFieldGroups({ regulatory: out.regulatory }) === 1, title);
+    assert.equal(out.multimedia?.audio_features, undefined, title);
+    assert.equal(out.multimedia?.headphone_jack_35mm, undefined, title);
+    assert.equal(out.regulatory?.certifications, undefined, title);
   }
 });
 
@@ -138,12 +144,12 @@ test('non-Apple devices outside the registry, and other iPhones, keep their prev
   assert.equal(redmi.regulatory?.sar_head, undefined);
   assert.equal(redmi.regulatory?.sar_body, undefined);
 
-  // A non-Apple tablet keeps the non-Apple charging and connectivity defaults; as a registry
+  // A non-Apple tablet gets no phone charging or OTG text (DOS/Rate#1761); as a registry
   // device it gets no unsourced loudspeaker.
   const tab = normalize('Samsung Galaxy Tab S10 Ultra 256GB').specifications;
   assert.equal(tab.multimedia?.loudspeaker, undefined);
-  assert.equal(tab.battery?.charging, 'Sạc nhanh USB-C PD/PPS');
-  assert.equal(tab.connectivity?.other, 'Hỗ trợ OTG, Chia sẻ nhanh');
+  assert.equal(tab.battery?.charging, undefined);
+  assert.equal(tab.connectivity?.other, undefined);
 
   // The generic iPhone keys hold for the iPhone 16 line in the registry.
   for (const title of ['Apple iPhone 16 Pro Max 256GB', 'Apple iPhone 16 128GB']) {
