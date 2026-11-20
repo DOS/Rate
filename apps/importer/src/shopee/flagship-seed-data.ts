@@ -53,6 +53,11 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
     colors: string[];
     specifications: ProductSpecifications;
     key_specs: KeySpecs;
+    /**
+     * Where a spec value comes from: field path -> source URL (DOS/Rate#1758). Not written
+     * to the database; the backfill copies only the fields above.
+     */
+    sources?: Readonly<Record<string, string>>;
   }
 > = {
   'apple:iphone-16:128gb': {
@@ -117,7 +122,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
           '4K@24/25/30/60fps, 1080p@25/30/60/120/240fps, HDR, Dolby Vision HDR (up to 60fps), Spatial Video, Stereo sound rec.',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6/7, dual-band, hotspot',
         usb: 'USB Type-C 2.0 (480Mbps), DisplayPort',
         sensors: 'Face ID, accelerometer, gyro, proximity, compass, barometer',
@@ -128,7 +133,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
       cellular: {
         has_5g: true,
         bands_5g:
-          'SA/NSA/Sub6 (n1/n2/n3/n5/n7/n8/n12/n20/n25/n26/n28/n30/n38/n40/n41/n48/n66/n70/n77/n78/n79)',
+          'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n20/n25/n26/n28/n30/n66/n70/n75/n76; TDD-5G NR n38/n40/n41/n48/n53/n77/n78/n79',
         bands_4g: 'Gigabit LTE with 4x4 MIMO',
         technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
         data_speed: 'HSPA, LTE-A, 5G, EV-DO Rev.A 3.1 Mbps',
@@ -143,8 +148,8 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
       },
       regulatory: {
         fcc_approval: 'FCC ID BCG-E8692A',
-        sar_head: '1.14 W/kg',
-        sar_body: '1.15 W/kg',
+        sar_head: '1.08 W/kg',
+        sar_body: '1.17 W/kg',
         certifications: 'CE, FCC, RoHS, QCVN (Bộ TT&TT Việt Nam)',
       },
     },
@@ -155,6 +160,12 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
       battery: '3561 mAh (25W MagSafe)',
       storage: '128GB',
       ram: '8GB',
+    },
+    sources: {
+      'cellular.bands_5g': 'https://support.apple.com/vi-vn/121029',
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/121029',
+      'regulatory.sar_head': 'https://www.apple.com/legal/rfexposure/iphone17,3/en/',
+      'regulatory.sar_body': 'https://www.apple.com/legal/rfexposure/iphone17,3/en/',
     },
   },
   'apple:iphone-16-plus:256gb': {
@@ -217,7 +228,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
           '4K@24/25/30/60fps, 1080p@25/30/60/120/240fps, HDR, Dolby Vision HDR (up to 60fps), Spatial Video',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6/7, dual-band, hotspot',
         usb: 'USB Type-C 2.0 (480Mbps), DisplayPort',
         sensors: 'Face ID, accelerometer, gyro, proximity, compass, barometer',
@@ -227,7 +238,8 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
       },
       cellular: {
         has_5g: true,
-        bands_5g: 'SA/NSA/Sub6',
+        bands_5g:
+          'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n20/n25/n26/n28/n30/n66/n70/n75/n76; TDD-5G NR n38/n40/n41/n48/n53/n77/n78/n79',
         bands_4g: 'Gigabit LTE with 4x4 MIMO',
         technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
         data_speed: 'HSPA, LTE-A, 5G',
@@ -254,6 +266,10 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
       battery: '4674 mAh (25W MagSafe)',
       storage: '256GB',
       ram: '8GB',
+    },
+    sources: {
+      'cellular.bands_5g': 'https://support.apple.com/vi-vn/121030',
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/121030',
     },
   },
   'apple:iphone-15:128gb': {
@@ -314,7 +330,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
           '4K@24/25/30/60fps, 1080p@25/30/60/120/240fps, HDR, Dolby Vision HDR (up to 60fps), Cinematic mode (4K@30fps)',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6, dual-band, hotspot',
         usb: 'USB Type-C 2.0, DisplayPort',
         sensors: 'Face ID, accelerometer, gyro, proximity, compass, barometer',
@@ -324,7 +340,8 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
       },
       cellular: {
         has_5g: true,
-        bands_5g: 'SA/NSA/Sub6',
+        bands_5g:
+          '5G NR n1/n2/n3/n5/n7/n8/n12/n20/n25/n26/n28/n30/n38/n40/n41/n48/n53/n66/n70/n75/n76/n77/n78/n79',
         bands_4g: 'Gigabit LTE with 4x4 MIMO',
         technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
         data_speed: 'HSPA, LTE-A, 5G',
@@ -351,6 +368,10 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
       battery: '3349 mAh (20W PD)',
       storage: '128GB',
       ram: '6GB',
+    },
+    sources: {
+      'cellular.bands_5g': 'https://support.apple.com/vi-vn/111831',
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/111831',
     },
   },
 };
@@ -429,12 +450,12 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fourth_camera:
           '12 MP, f/2.2, 13mm, 120˚ (ultrawide), 1/2.55", 1.4µm, Dual Pixel PDAF, Super Steady video',
         front_camera: '12 MP, f/2.2, 26mm (wide), 1/3.2", 1.12µm, Dual Pixel PDAF',
-        flash: 'LED flash, auto-HDR, panorama',
+        flash: 'LED flash',
         video_recording:
           '8K@24/30fps, 4K@30/60/120fps, 1080p@30/60/240fps, HDR10+, stereo sound rec., gyro-EIS',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band, Wi-Fi Direct',
         usb: 'USB Type-C 3.2 Gen 1, DisplayPort 1.2, OTG',
         sensors:
@@ -445,7 +466,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: true,
-        bands_5g: 'SA/NSA/Sub6',
+        bands_5g:
+          'FDD Sub6 n1/n2/n3/n5/n7/n8/n12/n20/n25/n26/n28/n66; TDD Sub6 n38/n40/n41/n77/n78',
         bands_4g: 'LTE Cat20 (up to 2000 Mbps DL)',
         technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
         data_speed: 'HSPA, LTE-A (up to 7CA), 5G',
@@ -472,6 +494,11 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       battery: '5000 mAh (45W)',
       storage: '256GB',
       ram: '12GB',
+    },
+    sources: {
+      'camera.flash': 'https://www.samsung.com/vn/smartphones/galaxy-s24-ultra/specs/',
+      'cellular.bands_5g': 'https://www.samsung.com/vn/smartphones/galaxy-s24-ultra/specs/',
+      'connectivity.bluetooth': 'https://www.samsung.com/vn/smartphones/galaxy-s24-ultra/specs/',
     },
   },
 
@@ -550,7 +577,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
           '4K@24/25/30/60/100/120fps (Dolby Vision), 1080p@25/30/60/120/240fps, 10-bit HDR, ProRes, Apple Log, Spatial Video, 4-mic studio array',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7 (802.11be), tri-band, hotspot',
         usb: 'USB Type-C 3.2 Gen 2 (10Gbps), DisplayPort',
         sensors:
@@ -561,7 +588,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: true,
-        bands_5g: 'SA/NSA/Sub6 (Qualcomm Snapdragon X75 5G Modem)',
+        bands_5g:
+          'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n14/n20/n25/n26/n28/n29/n30/n66/n70/n71/n75/n76; TDD-5G NR n38/n40/n41/n48/n53/n77/n78/n79',
         bands_4g: 'Gigabit LTE with 4x4 MIMO',
         technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
         data_speed: 'HSPA, LTE-A, 5G',
@@ -588,6 +616,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       battery: '4685 mAh (30W PD / 25W MagSafe)',
       storage: '256GB',
       ram: '8GB',
+    },
+    sources: {
+      'cellular.bands_5g': 'https://support.apple.com/vi-vn/121032',
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/121032',
     },
   },
 
@@ -663,7 +695,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         video_recording: '4K@30fps, 1080p@30/60fps, gyro-EIS',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6, dual-band, Wi-Fi Direct',
         usb: 'USB Type-C 2.0, OTG',
         sensors:
@@ -674,7 +705,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: true,
-        bands_5g: 'SA/NSA/Sub6',
         bands_4g: 'LTE Cat18',
         technology: 'GSM / HSPA / LTE / 5G',
         data_speed: 'HSPA, LTE, 5G',
@@ -702,6 +732,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB',
       ram: '8GB',
     },
+    retract_spec_fields: ['cellular.bands_5g', 'connectivity.bluetooth'],
   },
 
   // 4. Xiaomi 14 Ultra 5G 16GB/512GB (Quad Camera Leica 1-inch Sensor Flagship)
@@ -794,7 +825,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: true,
-        bands_5g: 'SA/NSA/Sub6',
+        bands_5g:
+          '5G NR n1/n2/n3/n5/n7/n8/n20/n28/n38/n40/n41/n48/n66/n77/n78/n79 (n66 varies by region)',
         bands_4g: 'LTE-A Cat20',
         technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
         data_speed: 'HSPA, LTE, 5G',
@@ -821,6 +853,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       battery: '5000 mAh (90W Wired / 80W Wireless)',
       storage: '512GB',
       ram: '16GB',
+    },
+    sources: {
+      'cellular.bands_5g': 'https://www.mi.com/global/product/xiaomi-14-ultra/specs/',
     },
   },
 
@@ -908,11 +943,11 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: true,
-        bands_5g: 'SA/NSA/Sub6',
+        bands_5g: '5G NR n1/n2/n3/n5/n7/n8/n12/n20/n28/n38/n40/n41/n66/n77/n78',
         bands_4g: 'LTE-A',
         technology: 'GSM / HSPA / LTE / 5G',
         data_speed: 'HSPA, LTE, 5G',
-        sim_type: '2 Nano-SIM + eSIM',
+        sim_type: 'Nano-SIM + eSIM (dual SIM)',
         volte: true,
         vowifi: true,
       },
@@ -935,6 +970,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       battery: '5630 mAh Si/C (80W SUPERVOOC)',
       storage: '256GB',
       ram: '16GB',
+    },
+    sources: {
+      'cellular.bands_5g': 'https://www.oppo.com/vn/smartphones/series-find-x/find-x8/specs/',
+      'cellular.sim_type': 'https://www.oppo.com/vn/smartphones/series-find-x/find-x8/specs/',
     },
   },
 
@@ -1008,7 +1047,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         video_recording: '4K@24/25/30/60fps, ProRes 4K@30fps, 1080p@25/30/60/120/240fps, gyro-EIS',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e, dual-band (2.4GHz & 5GHz & 6GHz), MIMO',
         usb: 'Thunderbolt 3 / USB4 (40Gbps), DisplayPort, magnetic Smart Connector',
         sensors:
@@ -1042,6 +1081,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       battery: '31.29 Wh / 8160 mAh (10h)',
       storage: '256GB',
       ram: '8GB',
+    },
+    sources: {
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/119892',
     },
   },
 
@@ -1224,7 +1266,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
           '4K@24/25/30/60/100/120fps (Dolby Vision), ProRes, Apple Log, Spatial Video',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band',
         usb: 'USB Type-C 3.2 Gen 2 (10Gbps), DisplayPort',
         sensors: 'Face ID, LiDAR scanner, accelerometer, gyro, proximity, compass, barometer',
@@ -1234,7 +1276,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: true,
-        bands_5g: 'SA/NSA/Sub6',
+        bands_5g:
+          'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n14/n20/n25/n26/n28/n29/n30/n66/n70/n71/n75/n76; TDD-5G NR n38/n40/n41/n48/n53/n77/n78/n79',
         bands_4g: 'Gigabit LTE with 4x4 MIMO',
         technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
         data_speed: 'HSPA, LTE-A, 5G',
@@ -1249,8 +1292,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       regulatory: {
         fcc_approval: 'FCC ID BCG-E8694A',
-        sar_head: '1.15 W/kg',
-        sar_body: '1.16 W/kg',
+        sar_head: '1.09 W/kg',
+        sar_body: '1.19 W/kg',
         certifications: 'CE, FCC, RoHS, QCVN',
       },
     },
@@ -1261,6 +1304,12 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       battery: '3582 mAh (30W PD / 25W MagSafe)',
       storage: '256GB',
       ram: '8GB',
+    },
+    sources: {
+      'cellular.bands_5g': 'https://support.apple.com/vi-vn/121031',
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/121031',
+      'regulatory.sar_head': 'https://www.apple.com/legal/rfexposure/iphone17,1/en/',
+      'regulatory.sar_body': 'https://www.apple.com/legal/rfexposure/iphone17,1/en/',
     },
   },
 
@@ -1334,7 +1383,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         video_recording: 'Điều khiển quay video và chụp hẹn giờ trực tiếp trên iPhone',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 b/g/n (2.4GHz & 5GHz)',
         usb: 'Magnetic Fast Charger to USB-C Cable',
         sensors:
@@ -1369,6 +1418,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       battery: '327 mAh (Sạc 80% trong 30 phút)',
       storage: '64GB',
       ram: '2GB',
+    },
+    sources: {
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/121202',
     },
   },
 
@@ -1552,7 +1604,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         video_recording: '4K@30fps, 1080p@30fps',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band, Wi-Fi Direct',
         usb: 'USB Type-C 3.2, magnetic POGO connector',
         sensors: 'Fingerprint (under display, optical), accelerometer, gyro, proximity, compass',
@@ -1562,7 +1614,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: true,
-        bands_5g: 'SA/NSA/Sub6',
+        bands_5g: '5G (Sub-6)',
         bands_4g: 'LTE Cat20',
         technology: 'GSM / HSPA / LTE / 5G',
         sim_type: 'Nano-SIM and eSIM',
@@ -1587,6 +1639,12 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       battery: '11200 mAh (Sạc nhanh 45W)',
       storage: '256GB (+ microSD 1.5TB)',
       ram: '12GB',
+    },
+    sources: {
+      'cellular.bands_5g':
+        'https://samsungmobilepress.com/media-assets/galaxy-tab-s10-ultra?tab=specs',
+      'connectivity.bluetooth':
+        'https://samsungmobilepress.com/media-assets/galaxy-tab-s10-ultra?tab=specs',
     },
   },
 
@@ -1975,7 +2033,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         video_recording: 'Điều khiển từ xa Camera iPhone với khung ngắm trực tiếp',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 b/g/n, dual-band (2.4GHz & 5GHz)',
         usb: 'Magnetic Fast Charger to USB-C',
         sensors:
@@ -2012,6 +2070,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       battery: '564 mAh (36h chuẩn / 72h tiết kiệm pin)',
       storage: '64GB',
       ram: '2GB',
+    },
+    sources: {
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/111832',
     },
   },
 
@@ -2635,7 +2696,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       cellular: {
         has_5g: true,
         bands_5g: '1, 3, 5, 7, 8, 20, 28, 38, 40, 41, 66, 77, 78 SA/NSA/Sub6',
-        sim_type: 'Dual SIM (Nano-SIM + eSIM)',
         data_speed: 'HSPA, LTE-A, 5G',
         technology: 'GSM / HSPA / LTE / 5G',
       },
@@ -2651,7 +2711,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       multimedia: {
         loudspeaker: 'Yes, with stereo speakers (Dolby Atmos)',
         headphone_jack_35mm: false,
-        audio_features: '24-bit/192kHz Hi-Res & Hi-Res Wireless audio',
       },
       availability: {
         announced: '2025, September 25',
@@ -2661,9 +2720,13 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       regulatory: {
         sar_head: '0.99 W/kg',
         sar_body: '1.08 W/kg',
-        certifications: 'CE, FCC, RoHS, QCVN (BTTTT Vietnam)',
       },
     },
+    retract_spec_fields: [
+      'cellular.sim_type',
+      'multimedia.audio_features',
+      'regulatory.certifications',
+    ],
   },
   {
     categorySlug: 'smartphones',
@@ -2738,7 +2801,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       cellular: {
         has_5g: true,
         bands_5g: '1, 3, 5, 7, 8, 20, 28, 38, 40, 41, 66, 77, 78 SA/NSA/Sub6',
-        sim_type: 'Dual SIM (Nano-SIM + eSIM)',
+        sim_type: 'Nano-SIM + Nano-SIM + eSIM',
         data_speed: 'HSPA, LTE-A, 5G',
         technology: 'GSM / HSPA / LTE / 5G',
       },
@@ -2766,6 +2829,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         sar_body: '1.11 W/kg',
         certifications: 'CE, RoHS, QCVN (BTTTT Vietnam)',
       },
+    },
+    sources: {
+      'cellular.sim_type': 'https://www.oppo.com/vn/smartphones/series-find-x/find-x9-pro/specs/',
     },
   },
   // 29. Apple iPad Pro M5 11 inch 256GB (2025/2026 Flagship Tablet)
@@ -2842,11 +2908,11 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         bands_5g: '5G Sub-6GHz (trên bản Wi-Fi + Cellular)',
         bands_4g: 'Gigabit LTE',
         sim_type: 'eSIM',
-        data_speed: '5G, LTE-A',
+        data_speed: '5G (sub-6 GHz) with 4x4 MIMO, Gigabit LTE with 4x4 MIMO',
         technology: 'GSM / HSPA / LTE / 5G',
       },
       connectivity: {
-        bluetooth: '5.4, A2DP, LE',
+        bluetooth: '6',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, dual-band',
         usb: 'USB Type-C 4 (Thunderbolt 4 / DisplayPort, up to 40Gb/s)',
         nfc: false,
@@ -2868,6 +2934,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         sar_body: '1.12 W/kg',
         certifications: 'CE, FCC, Energy Star, QCVN (BTTTT Vietnam)',
       },
+    },
+    sources: {
+      'cellular.data_speed': 'https://www.apple.com/ipad-pro/specs/',
+      'connectivity.bluetooth': 'https://www.apple.com/ipad-pro/specs/',
     },
   },
   // 30. Xiaomi Pad 7 Pro 256GB (2025/2026 Flagship Android Tablet)
@@ -2955,7 +3025,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       multimedia: {
         loudspeaker: 'Yes, with stereo speakers (4 speakers, Dolby Atmos)',
         headphone_jack_35mm: false,
-        audio_features: '24-bit/192kHz Hi-Res & Hi-Res Wireless audio',
       },
       availability: {
         announced: '2024, October 29',
@@ -2967,6 +3036,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'CE, RoHS, TÜV Low Blue Light, QCVN (BTTTT Vietnam)',
       },
     },
+    retract_spec_fields: ['multimedia.audio_features'],
   },
   // 31. Apple MacBook Air M4 13 inch 256GB (2025/2026 Flagship Ultrabook)
   {
@@ -3238,7 +3308,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         technology: 'Wi-Fi + Bluetooth 5.3 + UWB Gen 2',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 b/g/n, dual-band',
         usb: 'Magnetic fast charging puck (USB-C)',
         nfc: true,
@@ -3263,6 +3333,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         sar_body: '0.45 W/kg',
         certifications: 'FDA Cleared ECG & Sleep Apnea, CE, FCC, QCVN (BTTTT Vietnam)',
       },
+    },
+    sources: {
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/125093',
     },
   },
   // 34. Apple Watch Ultra 3 49mm 64GB (2025/2026 Flagship Adventure Smartwatch)
@@ -3340,7 +3413,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         technology: 'GSM / HSPA / LTE / 5G RedCap / Satellite',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 b/g/n, dual-band',
         usb: 'Magnetic fast charging USB-C cable',
         nfc: true,
@@ -3364,6 +3437,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         sar_body: '0.52 W/kg',
         certifications: 'MIL-STD-810H, EN13319 Dive Certified, CE, FCC, QCVN (BTTTT Vietnam)',
       },
+    },
+    sources: {
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/125095',
     },
   },
   // 35. Apple AirPods Pro 3 USB-C (2025/2026 Flagship ANC Earbuds)
