@@ -1,4 +1,7 @@
-import { extractProductSignalFromDom } from '../extractors/ecommerce-detector.js';
+import {
+  extractProductSignalFromDom,
+  sanitizeProductUrl,
+} from '../extractors/ecommerce-detector.js';
 import {
   buildProductSignalSignature,
   formatSafeExtensionVnd,
@@ -42,7 +45,8 @@ function formatCurrencyVnd(amount: number | null | undefined): string {
  */
 function renderShadowTrustPill(
   lookup: ExtensionLookupData,
-  expectedGeneration = detectGeneration
+  expectedGeneration = detectGeneration,
+  expectedCanonicalUrl?: string
 ): void {
   if (!shouldRenderTrustPill(lookup)) {
     removeTrustPillHost();
@@ -51,6 +55,13 @@ function renderShadowTrustPill(
 
   requestAnimationFrame(() => {
     if (expectedGeneration !== detectGeneration) {
+      return;
+    }
+    if (
+      expectedCanonicalUrl &&
+      sanitizeProductUrl(window.location.href) !== expectedCanonicalUrl
+    ) {
+      void inspectCurrentPage();
       return;
     }
     let host = document.getElementById(HOST_ID);
@@ -290,12 +301,44 @@ function sendRuntimeMessageFireAndForget(
 let detectGeneration = 0;
 let lastProcessedSignature = '';
 let hasDetectedProduct = false;
+let prerenderListenerAttached = false;
 // After a rate limit the same product is looked up again once the wait is over
 // (DOS/Rate#1466).
 const rateLimitRetry = new RateLimitRetry();
 
+function deferWhilePrerendering(): boolean {
+  const prerenderingDoc = document as Document & {
+    prerendering?: boolean;
+    addEventListener?: (
+      type: string,
+      listener: () => void,
+      options?: { once?: boolean }
+    ) => void;
+  };
+  if (prerenderingDoc.prerendering !== true) {
+    return false;
+  }
+  if (
+    !prerenderListenerAttached &&
+    typeof prerenderingDoc.addEventListener === 'function'
+  ) {
+    prerenderListenerAttached = true;
+    prerenderingDoc.addEventListener(
+      'prerenderingchange',
+      () => {
+        prerenderListenerAttached = false;
+        void inspectCurrentPage();
+      },
+      { once: true }
+    );
+  }
+  return true;
+}
+
 async function inspectCurrentPage(): Promise<void> {
+  if (deferWhilePrerendering()) return;
   requestAnimationFrame(async () => {
+    if (deferWhilePrerendering()) return;
     const signal = extractProductSignalFromDom(document, window.location.href);
     if (!signal) {
       ++detectGeneration;
@@ -332,12 +375,22 @@ async function inspectCurrentPage(): Promise<void> {
       };
 
       if (generation !== detectGeneration || response?.stale === true) return;
+      if (sanitizeProductUrl(window.location.href) !== signal.canonicalUrl) {
+        void inspectCurrentPage();
+        return;
+      }
+      if (response?.ok === false && response.status === undefined) {
+        lastProcessedSignature = '';
+        hasDetectedProduct = false;
+        removeTrustPillHost();
+        return;
+      }
       rateLimitRetry.after(signature, response, () => {
         lastProcessedSignature = '';
         void inspectCurrentPage();
       });
       if (response?.ok && response.data) {
-        renderShadowTrustPill(response.data, generation);
+        renderShadowTrustPill(response.data, generation, signal.canonicalUrl);
       } else {
         // Nothing matched or the lookup failed: never leave the previous
         // product's pill on a single-page shop (DOS/Rate#1300).
@@ -351,22 +404,39 @@ async function inspectCurrentPage(): Promise<void> {
   });
 }
 
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleImmediateInspection(): void {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  void inspectCurrentPage();
+}
+
 // Initial inspection + lightweight observation for SPA route/variant selection changes
 void inspectCurrentPage();
 
-if (
-  typeof window !== 'undefined' &&
-  typeof window.addEventListener === 'function'
-) {
-  window.addEventListener('popstate', () => {
-    void inspectCurrentPage();
-  });
+if (typeof window !== 'undefined') {
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('popstate', scheduleImmediateInspection);
+    window.addEventListener('hashchange', scheduleImmediateInspection);
+  }
+  const nav = (
+    window as Window & {
+      navigation?: {
+        addEventListener?: (type: string, listener: () => void) => void;
+      };
+    }
+  ).navigation;
+  if (nav && typeof nav.addEventListener === 'function') {
+    nav.addEventListener('currententrychange', scheduleImmediateInspection);
+  }
 }
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 const observer = new MutationObserver(() => {
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
+    debounceTimer = null;
     void inspectCurrentPage();
   }, 700);
 });

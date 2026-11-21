@@ -8645,10 +8645,19 @@ async function runTests() {
       let shadowHtml = '';
       let mutCb: (() => void) | undefined;
       let popstateCb: (() => void) | undefined;
+      let navEntryChangeCb: (() => void) | undefined;
+      let prerenderChangeCb: (() => void) | undefined;
+      let isPrerendering = false;
       let currentHref = 'https://shopee.vn/Dien-thoai-iPhone-16-Pro-i.101.202';
       const h1Title = 'iPhone 16 Pro 256GB';
       const rafs: Array<() => unknown> = [];
-      const timers: Array<() => unknown> = [];
+      let nextTimerId = 1;
+      const plannedTimers = new Map<number, () => unknown>();
+      const drainTimers = () => {
+        const cbs = [...plannedTimers.values()];
+        plannedTimers.clear();
+        for (const cb of cbs) cb();
+      };
       const sentMessages: Array<{ type?: string; signal?: unknown }> = [];
       const pendingDetectResolvers: Array<
         (res: Record<string, unknown>) => void
@@ -8671,8 +8680,19 @@ async function runTests() {
         addEventListener: (ev: string, cb: () => void) => {
           if (ev === 'popstate') popstateCb = cb;
         },
+        navigation: {
+          addEventListener: (ev: string, cb: () => void) => {
+            if (ev === 'currententrychange') navEntryChangeCb = cb;
+          },
+        },
       };
       g.document = {
+        get prerendering() {
+          return isPrerendering;
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'prerenderingchange') prerenderChangeCb = cb;
+        },
         body: {
           appendChild: (el: { shadowRoot?: { innerHTML: string } }) => {
             pillHost = el;
@@ -8722,10 +8742,13 @@ async function runTests() {
         return rafs.length;
       };
       g.setTimeout = ((cb: () => unknown) => {
-        timers.push(cb);
-        return timers.length;
+        const id = nextTimerId++;
+        plannedTimers.set(id, cb);
+        return id;
       }) as unknown;
-      g.clearTimeout = () => {};
+      g.clearTimeout = ((id: number) => {
+        plannedTimers.delete(id);
+      }) as unknown;
       g.chrome = {
         runtime: {
           sendMessage: (msg: { type?: string; signal?: unknown }) => {
@@ -8769,29 +8792,33 @@ async function runTests() {
         0
       );
 
-      // Navigate SPA away to /search BEFORE the in-flight PDP lookup resolves.
+      // Navigate SPA away via pushState BEFORE the 700ms MutationObserver timer fires,
+      // then resolve the in-flight PDP lookup during the debounce window:
+      // canonicalUrl mismatch must discard the pill and immediately emit RATE_PRODUCT_CLEARED.
       currentHref = 'https://shopee.vn/search?keyword=iphone';
       mutCb!();
-      while (timers.length) timers.shift()!();
-      await flushContent();
       assert.equal(
-        sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
+        plannedTimers.size,
         1,
-        'leaving a detected PDP while lookup is in flight must emit RATE_PRODUCT_CLEARED'
+        '700ms MutationObserver debounce timer still pending'
       );
-
-      // Late resolution of the earlier PDP lookup must be discarded and never mount a pill.
       pendingDetectResolvers.shift()!(dealPayload);
       await flushContent();
       assert.equal(
         pillHost,
         null,
-        'in-flight PDP lookup resolving after SPA exit to /search must never render a pill'
+        'in-flight PDP lookup resolving during pushState debounce window must never render a pill'
+      );
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
+        1,
+        'URL mismatch on late lookup resolution must immediately inspect and emit RATE_PRODUCT_CLEARED'
       );
 
       // Extra DOM mutations while remaining on /search must NOT spam duplicate RATE_PRODUCT_CLEARED messages.
+      drainTimers();
       mutCb!();
-      while (timers.length) timers.shift()!();
+      drainTimers();
       await flushContent();
       assert.equal(
         sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
@@ -8799,10 +8826,9 @@ async function runTests() {
         'repeated non-PDP mutations must not re-send RATE_PRODUCT_CLEARED'
       );
 
-      // Navigating back to the same PDP renders the pill, and leaving via popstate to / clears it immediately.
+      // Navigating back to the same PDP renders the pill, and Navigation API currententrychange to / clears it immediately.
       currentHref = 'https://shopee.vn/Dien-thoai-iPhone-16-Pro-i.101.202';
-      mutCb!();
-      while (timers.length) timers.shift()!();
+      navEntryChangeCb!();
       await flushContent();
       assert.equal(pendingDetectResolvers.length, 1);
       pendingDetectResolvers.shift()!(dealPayload);
@@ -8810,7 +8836,7 @@ async function runTests() {
       assert.ok(pillHost, 'pill renders when returning to PDP');
 
       currentHref = 'https://shopee.vn/';
-      popstateCb!();
+      navEntryChangeCb!();
       await flushContent();
       assert.equal(pillHost, null, 'SPA exit to / must remove rendered pill');
       assert.equal(
@@ -8819,16 +8845,11 @@ async function runTests() {
         'transitioning away from rendered PDP to / must emit RATE_PRODUCT_CLEARED'
       );
 
-      // 429 reply arriving after SPA exit to /cart must not schedule a retry timer.
+      // Already-scheduled 429 rateLimitRetry timer is genuinely cancelled via clearTimeout on SPA exit to /cart.
       currentHref = 'https://shopee.vn/Dien-thoai-iPhone-16-Pro-i.101.202';
-      mutCb!();
-      while (timers.length) timers.shift()!();
-      await flushContent();
-      assert.equal(pendingDetectResolvers.length, 1);
-      currentHref = 'https://shopee.vn/cart';
       popstateCb!();
       await flushContent();
-      const timersBeforeLate429 = timers.length;
+      assert.equal(pendingDetectResolvers.length, 1);
       pendingDetectResolvers.shift()!({
         ok: false,
         status: 429,
@@ -8836,10 +8857,44 @@ async function runTests() {
       });
       await flushContent();
       assert.equal(
-        timers.length,
-        timersBeforeLate429,
-        'late 429 after SPA exit must not schedule a retry'
+        plannedTimers.size,
+        1,
+        '429 on PDP schedules one retry timer'
       );
+      currentHref = 'https://shopee.vn/cart';
+      popstateCb!();
+      await flushContent();
+      assert.equal(
+        plannedTimers.size,
+        0,
+        'SPA exit to /cart must cancel already-scheduled 429 retry timer via clearTimeout'
+      );
+      drainTimers();
+      await flushContent();
+      assert.equal(pendingDetectResolvers.length, 0);
+
+      // Speculation Rules prerendering defers detection until prerenderingchange fires.
+      isPrerendering = true;
+      currentHref = 'https://shopee.vn/Dien-thoai-Galaxy-S25-i.101.303';
+      navEntryChangeCb!();
+      await flushContent();
+      assert.equal(
+        pendingDetectResolvers.length,
+        0,
+        'prerendered document must defer RATE_PRODUCT_DETECTED until activated'
+      );
+      assert.ok(prerenderChangeCb, 'must attach prerenderingchange listener');
+      isPrerendering = false;
+      prerenderChangeCb!();
+      await flushContent();
+      assert.equal(
+        pendingDetectResolvers.length,
+        1,
+        'activating prerendered PDP must run inspectCurrentPage'
+      );
+      pendingDetectResolvers.shift()!(dealPayload);
+      await flushContent();
+      assert.ok(pillHost, 'pill renders after prerender activation');
     } finally {
       for (const [key, desc] of saved) {
         if (desc) Object.defineProperty(g, key, desc);
@@ -8860,11 +8915,20 @@ async function runTests() {
           ) => boolean | void)
         | undefined;
       const sessionStore = new Map<string, unknown>();
+      const sessionChangedEvents: Array<
+        Record<string, { oldValue?: unknown; newValue?: unknown }>
+      > = [];
       const badges = new Map<number, { text: string; color?: string }>();
       const sidePanelCalls: Array<Record<string, unknown>> = [];
       let sidePanelShouldReject = false;
-      const activeTabId = 42;
+      let activeTabId = 42;
       let allowSessionRemove = true;
+      let delaySessionGetOnce = false;
+      let onSessionGetBlocked: (() => void) | null = null;
+      let releaseSessionGet: (() => void) | null = null;
+      let delayLocalGetOnce = false;
+      let onLocalGetBlocked: (() => void) | null = null;
+      let releaseLocalGet: (() => void) | null = null;
       const fetchedUrls: string[] = [];
       let swFetchImpl: (u: string) => Promise<Response> = async (u) => {
         fetchedUrls.push(u);
@@ -8910,15 +8974,33 @@ async function runTests() {
         },
         storage: {
           local: {
-            get: async () => ({
-              apiBaseUrl: 'https://rate.vn',
-              crowdContributeOptIn: false,
-            }),
+            get: async () => {
+              if (delayLocalGetOnce) {
+                delayLocalGetOnce = false;
+                const gate = new Promise<void>((r) => {
+                  releaseLocalGet = r;
+                });
+                onLocalGetBlocked?.();
+                await gate;
+              }
+              return {
+                apiBaseUrl: 'https://rate.vn',
+                crowdContributeOptIn: false,
+              };
+            },
             set: async () => {},
             remove: async () => {},
           },
           session: {
             get: async (keys?: string | string[]) => {
+              if (delaySessionGetOnce) {
+                delaySessionGetOnce = false;
+                const gate = new Promise<void>((r) => {
+                  releaseSessionGet = r;
+                });
+                onSessionGetBlocked?.();
+                await gate;
+              }
               const list = Array.isArray(keys) ? keys : keys ? [keys] : [];
               return Object.fromEntries(
                 list
@@ -8927,13 +9009,40 @@ async function runTests() {
               );
             },
             set: async (obj: Record<string, unknown>) => {
-              for (const [k, v] of Object.entries(obj)) sessionStore.set(k, v);
+              const changes: Record<
+                string,
+                { oldValue?: unknown; newValue?: unknown }
+              > = {};
+              for (const [k, v] of Object.entries(obj)) {
+                const hadOld = sessionStore.has(k);
+                const oldVal = sessionStore.get(k);
+                sessionStore.set(k, v);
+                if (!hadOld || oldVal !== v) {
+                  changes[k] = {
+                    ...(hadOld ? { oldValue: oldVal } : {}),
+                    newValue: v,
+                  };
+                }
+              }
+              if (Object.keys(changes).length > 0) {
+                sessionChangedEvents.push(changes);
+              }
             },
             get remove() {
               if (!allowSessionRemove) return undefined;
               return async (keys: string | string[]) => {
+                const changes: Record<
+                  string,
+                  { oldValue?: unknown; newValue?: unknown }
+                > = {};
                 for (const k of Array.isArray(keys) ? keys : [keys]) {
-                  sessionStore.delete(k);
+                  if (sessionStore.has(k)) {
+                    changes[k] = { oldValue: sessionStore.get(k) };
+                    sessionStore.delete(k);
+                  }
+                }
+                if (Object.keys(changes).length > 0) {
+                  sessionChangedEvents.push(changes);
                 }
               };
             },
@@ -9168,7 +9277,10 @@ async function runTests() {
       );
       assert.ok(sessionStore.get('lookup_tab_latest'));
 
-      // (e) In-flight RATE_PRODUCT_DETECTED resolving after RATE_PRODUCT_CLEARED stays stale and writes nothing.
+      // (e) In-flight RATE_PRODUCT_DETECTED resolving after RATE_PRODUCT_CLEARED stays stale and writes nothing,
+      // and cold-session lookup_tab_latest === undefined still fires lookup_tab_latest storage.onChanged.
+      sessionStore.delete('lookup_tab_latest');
+      sessionChangedEvents.length = 0;
       let resolveSlowPill!: (res: Response) => void;
       swFetchImpl = () =>
         new Promise<Response>((resolve) => {
@@ -9194,6 +9306,11 @@ async function runTests() {
       assert.equal(badges.get(42)?.text, '');
       assert.equal(sessionStore.has('lookup_tab_42'), false);
       assert.equal(sessionStore.has('lookup_tab_latest'), false);
+      assert.equal(
+        sessionChangedEvents.some((ev) => 'lookup_tab_latest' in ev),
+        true,
+        'SPA exit before lookup_tab_latest was ever written must still fire lookup_tab_latest storage.onChanged'
+      );
 
       resolveSlowPill(
         new Response(
@@ -9232,6 +9349,73 @@ async function runTests() {
           { status: 200 }
         );
       };
+
+      // (e2) In-flight RATE_PRODUCT_CLEARED superseded by a newer RATE_PRODUCT_DETECTED must not wipe newer state.
+      delaySessionGetOnce = true;
+      const clearBlockedOnGet = new Promise<void>((r) => {
+        onSessionGetBlocked = r;
+      });
+      const supersededClearPromise = callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/search?keyword=phone',
+        }
+      );
+      await clearBlockedOnGet;
+      const newerDetectRes = await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      assert.equal(newerDetectRes.ok, true);
+      releaseSessionGet!();
+      const supersededClearRes = await supersededClearPromise;
+      assert.equal(supersededClearRes.stale, true);
+      assert.equal(badges.get(42)?.text, 'TỐT');
+      assert.ok(sessionStore.get('tab_42'));
+      assert.ok(sessionStore.get('tab_latest'));
+      assert.ok(sessionStore.get('lookup_tab_42'));
+      assert.ok(sessionStore.get('lookup_tab_latest'));
+
+      // (e3) In-flight RATE_SIDEPANEL_FETCH_FULL fallback (reading tab_latest from non-product active tab)
+      // superseded by RATE_PRODUCT_CLEARED must return stale: true and never resurrect tab_latest.
+      activeTabId = 88;
+      delayLocalGetOnce = true;
+      const fullBlockedOnSettings = new Promise<void>((r) => {
+        onLocalGetBlocked = r;
+      });
+      const fallbackFullPromise = callSw(
+        { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: '512GB' },
+        panelSender
+      );
+      await fullBlockedOnSettings;
+      await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/',
+        }
+      );
+      assert.equal(sessionStore.has('tab_latest'), false);
+      releaseLocalGet!();
+      const fallbackFullRes = await fallbackFullPromise;
+      assert.equal(
+        fallbackFullRes.stale,
+        true,
+        'fallback full lookup superseded by RATE_PRODUCT_CLEARED must be marked stale'
+      );
+      assert.equal(
+        sessionStore.has('tab_latest'),
+        false,
+        'superseded fallback overrideVariant write must not resurrect cleared tab_latest'
+      );
+      activeTabId = 42;
 
       // (f) chrome.sidePanel.open rejections on RATE_OPEN_SIDE_PANEL are caught cleanly without unhandledRejection.
       const unhandled: unknown[] = [];
@@ -9322,7 +9506,7 @@ async function runTests() {
         assert.equal(rejOpen.ok, false, `must reject open from ${badUrl}`);
       }
 
-      // Platform-mismatched sender.url vs signal.platform / signal.canonicalUrl on RATE_PRODUCT_DETECTED.
+      // Platform-mismatched and cross-origin sister-domain/subdomain sender.url on RATE_PRODUCT_DETECTED.
       for (const [mismatchSenderUrl, mismatchSignal] of [
         ['https://www.lazada.vn/products/p-i1-s2.html', shopeeSignal],
         ['https://shopee.vn/Phone-A-i.10.20', lazadaSignal],
@@ -9344,6 +9528,24 @@ async function runTests() {
           'https://shopee.vn/Phone-A-i.10.20',
           { ...shopeeSignal, canonicalUrl: '' },
         ],
+        [
+          'https://topzone.vn/iphone/iphone-16-pro-max',
+          {
+            ...shopeeSignal,
+            platform: 'tgdd',
+            canonicalUrl:
+              'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
+          },
+        ],
+        ['https://pages.lazada.vn/wow/gcp/vn', lazadaSignal],
+        [
+          'https://www.tiktok.com/@apple/product/12345',
+          {
+            ...shopeeSignal,
+            platform: 'tiktok',
+            canonicalUrl: 'https://shop.tiktok.com/view/product/12345',
+          },
+        ],
       ] as const) {
         const mismatchRes = await callSw(
           { type: 'RATE_PRODUCT_DETECTED', signal: mismatchSignal },
@@ -9360,7 +9562,63 @@ async function runTests() {
         );
       }
 
-      // Subframe sender (frameId !== 0) and foreign extension id must also be rejected.
+      // Missing/undefined signal, tabless sender, TAB_ID_NONE (-1), non-active documentLifecycle,
+      // subframe sender (frameId !== 0), opaque origin, and foreign extension id must all be rejected.
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_DETECTED' },
+            {
+              id: 'rate-ext-1809',
+              tab: { id: 42, active: true },
+              url: 'https://www.lazada.vn/products/Phone-B-i30-s40.html',
+            }
+          )
+        ).ok,
+        false,
+        'RATE_PRODUCT_DETECTED without signal must be rejected'
+      );
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_CLEARED' },
+            { id: 'rate-ext-1809' }
+          )
+        ).ok,
+        false,
+        'tabless sender must be rejected'
+      );
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_CLEARED' },
+            {
+              id: 'rate-ext-1809',
+              tab: { id: -1, active: true },
+              url: 'https://shopee.vn/search',
+            }
+          )
+        ).ok,
+        false,
+        'TAB_ID_NONE (-1) sender must be rejected'
+      );
+      for (const lifecycle of ['prerender', 'cached', 'pending_deletion']) {
+        assert.equal(
+          (
+            await callSw(
+              { type: 'RATE_PRODUCT_CLEARED' },
+              {
+                id: 'rate-ext-1809',
+                documentLifecycle: lifecycle,
+                tab: { id: 42, active: true },
+                url: 'https://shopee.vn/search',
+              }
+            )
+          ).ok,
+          false,
+          `inactive documentLifecycle ${lifecycle} must be rejected`
+        );
+      }
       assert.equal(
         (
           await callSw(
