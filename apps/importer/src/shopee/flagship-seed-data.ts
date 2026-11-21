@@ -1374,14 +1374,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fast_charging_w: 15,
         reverse_charging: false,
       },
-      camera: {
-        rear_setup: 'Remote Camera Viewfinder & Optical Health Array',
-        main_camera:
-          'Camera Remote kính ngắm từ xa cho iPhone + Cảm biến nhịp tim quang học thế hệ 3',
-        second_camera: 'Cảm biến điện tâm đồ (ECG) + Cảm biến nhiệt độ nước & độ sâu',
-        front_camera: 'Ambient light & Double Tap gesture sensor',
-        video_recording: 'Điều khiển quay video và chụp hẹn giờ trực tiếp trên iPhone',
-      },
+      // A watch has no camera, and its heart, ECG, depth and gesture sensors are not one. The group
+      // stays as {}, as the spec audit expects of a master with no category_slug in its specs
+      // (DOS/Rate#1796).
+      camera: {},
       connectivity: {
         bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 b/g/n (2.4GHz & 5GHz)',
@@ -1394,8 +1390,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        technology: 'GPS + Wi-Fi + Bluetooth',
-        sim_type: 'GPS Model (paired via iPhone)',
         volte: false,
         vowifi: true,
       },
@@ -1414,7 +1408,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     key_specs: {
       screen: '1.77" Wide-Angle LTPO3 OLED (2000 nits)',
       chip: 'Apple S10 SiP (4-core Neural Engine)',
-      camera: 'Optical Heart Gen 3 + ECG + Depth Sensor',
       battery: '327 mAh (Sạc 80% trong 30 phút)',
       storage: '64GB',
       ram: '2GB',
@@ -1422,6 +1415,18 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     sources: {
       'connectivity.bluetooth': 'https://support.apple.com/en-us/121202',
     },
+    // Health sensors as cameras, and Wi-Fi, Bluetooth and GPS as network values on a GPS model
+    // (DOS/Rate#1796).
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'camera.video_recording',
+      'key_specs.camera',
+      'cellular.technology',
+      'cellular.sim_type',
+    ],
   },
 
   // 10. Apple AirPods Pro 2 USB-C MagSafe (Earbuds Flagship)
@@ -2016,7 +2021,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         gpu: 'PowerVR GPU',
         ram_gb: 2,
         storage_gb: 64,
-        storage_expansion: 'Bộ nhớ trong 64GB',
         os: 'watchOS 11',
       },
       battery: {
@@ -2026,14 +2030,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fast_charging_w: 15,
         reverse_charging: false,
       },
-      camera: {
-        rear_setup: 'Multi-Spectral Biometric & Dive Array',
-        main_camera: '3rd-gen Optical Heart Sensor + Electrical Heart Sensor (ECG)',
-        second_camera:
-          'Blood Oxygen Sensor + Depth Gauge (±1m accuracy) + Water Temperature Sensor',
-        front_camera: 'Dual ambient light sensors + Double Tap gesture neural sensor',
-        video_recording: 'Điều khiển từ xa Camera iPhone với khung ngắm trực tiếp',
-      },
+      // A watch has no camera, and its heart, ECG, depth and gesture sensors are not one. The group
+      // stays as {}, as the spec audit expects of a master with no category_slug in its specs
+      // (DOS/Rate#1796).
+      camera: {},
       connectivity: {
         bluetooth: '5.3',
         wlan: 'Wi-Fi 802.11 b/g/n, dual-band (2.4GHz & 5GHz)',
@@ -2068,7 +2068,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     key_specs: {
       screen: '1.92" LTPO2 OLED Sapphire Phẳng (3000 nits)',
       chip: 'Apple S9 SiP + UWB Gen 2',
-      camera: 'ECG + SpO2 + Đo độ sâu lặn 40m + Còi 86dB',
       battery: '564 mAh (36h chuẩn / 72h tiết kiệm pin)',
       storage: '64GB',
       ram: '2GB',
@@ -2076,6 +2075,16 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     sources: {
       'connectivity.bluetooth': 'https://support.apple.com/en-us/111832',
     },
+    // Health sensors as cameras, and the internal storage as storage expansion (DOS/Rate#1796).
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'camera.video_recording',
+      'key_specs.camera',
+      'hardware.storage_expansion',
+    ],
   },
 
   // 16. Samsung Galaxy Watch Ultra 47mm LTE 32GB (Smartwatch Android Flagship)
@@ -2132,7 +2141,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         gpu: 'Mali-G68 MP2',
         ram_gb: 2,
         storage_gb: 32,
-        storage_expansion: 'Bộ nhớ trong 32GB',
         os: 'Wear OS 5, One UI Watch 6',
       },
       battery: {
@@ -2142,15 +2150,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fast_charging_w: 10,
         reverse_charging: false,
       },
-      camera: {
-        rear_setup: '13-LED BioActive & Environmental Sensor Array',
-        main_camera:
-          'BioActive Optical Heart Rate + Electrical Heart Signal (ECG) + Bioelectrical Impedance (BIA)',
-        second_camera: 'Infrared Skin Temperature Sensor + Barometric Altimeter + 3D Hall Sensor',
-        front_camera: 'Ambient Light Sensor + Double Pinch Gesture Control',
-        video_recording:
-          'Camera Controller điều khiển quay chụp và zoom trực tiếp cho dòng Galaxy S/Z',
-      },
+      // A watch has no camera, and its heart, ECG, depth and gesture sensors are not one. The group
+      // stays as {}, as the spec audit expects of a master with no category_slug in its specs
+      // (DOS/Rate#1796).
+      camera: {},
       connectivity: {
         bluetooth: '5.3, A2DP, AVRCP, HFP, HSP',
         wlan: 'Wi-Fi 802.11 a/b/g/n, dual-band (2.4GHz + 5GHz)',
@@ -2184,11 +2187,20 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     key_specs: {
       screen: '1.5" Super AMOLED Sapphire (3000 nits)',
       chip: 'Exynos W1000 (3 nm Penta-core)',
-      camera: 'BioActive 13-LED (ECG + BIA + Huyết áp + AGEs)',
       battery: '590 mAh (Lên đến 100h tiết kiệm pin)',
       storage: '32GB',
       ram: '2GB',
     },
+    // Health sensors as cameras, and the internal storage as storage expansion (DOS/Rate#1796).
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'camera.video_recording',
+      'key_specs.camera',
+      'hardware.storage_expansion',
+    ],
   },
 
   // 17. Garmin Forerunner 265 Music 46mm 8GB (Running Smartwatch Benchmark)
@@ -2241,7 +2253,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         gpu: 'AMOLED Graphics Accelerator',
         ram_gb: 1,
         storage_gb: 8,
-        storage_expansion: 'Bộ nhớ trong 8GB lưu trữ tới 500 bài hát Spotify/MP3 offline',
         os: 'Garmin OS (Hỗ trợ cả iOS & Android qua Garmin Connect)',
       },
       battery: {
@@ -2251,14 +2262,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fast_charging_w: 5,
         reverse_charging: false,
       },
-      camera: {
-        rear_setup: 'Garmin Elevate Gen 4 Biometric & Altimeter Array',
-        main_camera: 'Garmin Elevate v4 Optical HR + Pulse Ox Acclimation Sensor',
-        second_camera: 'Barometric Altimeter + Compass + Gyroscope + Accelerometer + Thermometer',
-        front_camera:
-          'Ambient Light Sensor + Running Dynamics Wrist Sensor (Cadence, Stride Length, Ground Contact Time)',
-        video_recording: 'Đồng bộ dữ liệu nhịp tim & pace trực tiếp lên video Garmin VIRB / Strava',
-      },
+      // A watch has no camera, and its heart, ECG, depth and gesture sensors are not one. The group
+      // stays as {}, as the spec audit expects of a master with no category_slug in its specs
+      // (DOS/Rate#1796).
+      camera: {},
       connectivity: {
         bluetooth: 'Bluetooth Smart (BLE) & ANT+',
         wlan: 'Wi-Fi 802.11 b/g/n (Đồng bộ nhạc Spotify & cập nhật phần mềm)',
@@ -2271,8 +2278,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        technology: 'ANT+ / Bluetooth Smart / Wi-Fi',
-        sim_type: 'No SIM (Kết nối iPhone & Android)',
         volte: false,
         vowifi: false,
       },
@@ -2289,11 +2294,23 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     key_specs: {
       screen: '1.3" AMOLED Cảm ứng + 5 Nút vật lý (47g)',
       chip: 'Garmin SatIQ Multi-Band GNSS + Firstbeat',
-      camera: 'Elevate Gen 4 HR + HRV + Training Readiness',
       battery: '13 ngày Smartwatch / 20 giờ GPS',
       storage: '8GB (Lưu nhạc Spotify Offline)',
       ram: '1GB',
     },
+    // Health sensors as cameras, Bluetooth, ANT+ and Wi-Fi as network values on a model with no
+    // SIM, and the internal storage as storage expansion (DOS/Rate#1796).
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'camera.video_recording',
+      'key_specs.camera',
+      'cellular.technology',
+      'cellular.sim_type',
+      'hardware.storage_expansion',
+    ],
   },
 
   // 18. Sony WF-1000XM5 (True Wireless ANC Earbuds Flagship)
@@ -3267,7 +3284,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       chip: 'Apple S11 SiP (64-bit Dual-core + 4-core Neural Engine)',
       ram: '2GB',
       storage: '64GB',
-      camera: 'ECG + Sleep Apnea + Depth Gauge 6m + Water Temp',
       battery: '345mAh (36h Low Power) Sạc nhanh 80% / 30p',
     },
     specifications: {
@@ -3289,12 +3305,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         storage_expansion: 'No',
         os: 'watchOS 12',
       },
-      camera: {
-        rear_setup: 'Multi-Modal Health & Marine Biosensor Array',
-        main_camera: '3rd-gen Optical Heart Sensor + Electrical Heart Sensor (ECG)',
-        second_camera: 'Sleep Apnea Notification + Wrist Temperature + Depth Gauge (6m)',
-        front_camera: 'Double Tap Gesture + Digital Crown with Haptic Feedback',
-      },
+      // A watch has no camera, and its heart, ECG, depth and gesture sensors are not one. The group
+      // stays as {}, as the spec audit expects of a master with no category_slug in its specs
+      // (DOS/Rate#1796).
+      camera: {},
       battery: {
         capacity_mah: 345,
         type: 'Li-Ion 345 mAh, non-removable',
@@ -3345,8 +3359,18 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     sources: {
       'connectivity.bluetooth': 'https://support.apple.com/en-us/125093',
     },
-    // Wi-Fi, Bluetooth and UWB, and an eSIM note, stored as network values (DOS/Rate#1793).
-    retract_spec_fields: ['cellular.sim_type', 'cellular.technology'],
+    // Health sensors as cameras, and Wi-Fi, Bluetooth and UWB and an eSIM note stored as network
+    // values (DOS/Rate#1796).
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'camera.video_recording',
+      'key_specs.camera',
+      'cellular.technology',
+      'cellular.sim_type',
+    ],
   },
   // 34. Apple Watch Ultra 3 49mm 64GB (2025/2026 Flagship Adventure Smartwatch)
   {
@@ -3371,7 +3395,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       chip: 'Apple S11 SiP + Satellite SOS & 5G RedCap',
       ram: '2GB',
       storage: '64GB',
-      camera: 'ECG + Dive Computer 40m EN13319 + 86dB Siren',
       battery: '580mAh (36h Normal / 72h Low Power)',
     },
     specifications: {
@@ -3393,12 +3416,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         storage_expansion: 'No',
         os: 'watchOS 12',
       },
-      camera: {
-        rear_setup: 'Pro Dive & Expedition Sensor Suite',
-        main_camera: '3rd-gen Optical Heart Sensor + ECG + Sleep Apnea + Blood Oxygen',
-        second_camera: 'EN13319 Dive Computer (40m Depth Gauge) + Water Temperature Sensor',
-        front_camera: 'Customizable International Orange Action Button + 86dB Emergency Siren',
-      },
+      // A watch has no camera, and its heart, ECG, depth and gesture sensors are not one. The group
+      // stays as {}, as the spec audit expects of a master with no category_slug in its specs
+      // (DOS/Rate#1796).
+      camera: {},
       battery: {
         capacity_mah: 580,
         type: 'Li-Ion 580 mAh, non-removable (up to 36h normal / 72h Low Power Mode)',
@@ -3451,6 +3472,15 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     sources: {
       'connectivity.bluetooth': 'https://support.apple.com/en-us/125095',
     },
+    // Health sensors as cameras (DOS/Rate#1796).
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'camera.video_recording',
+      'key_specs.camera',
+    ],
   },
   // 35. Apple AirPods Pro 3 USB-C (2025/2026 Flagship ANC Earbuds)
   {

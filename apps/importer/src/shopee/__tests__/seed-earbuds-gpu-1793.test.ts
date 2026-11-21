@@ -5,6 +5,11 @@
  * storage expansion, and the backfill wrote them to masters. Registry earbuds and a watch had
  * audio, LED or display controllers as their GPU, the Series 11 GPS seed had Wi-Fi and an eSIM
  * note as network values, and the iPad Pro M4 was registered without 5G.
+ *
+ * DOS/Rate#1796: the same for the six flagship seed smartwatches, which carried heart, ECG, depth,
+ * light and gesture sensors as camera fields and a camera key spec, and whose GPS-only or no-SIM
+ * seeds (Series 10, Series 11, Forerunner 265) carried Wi-Fi, Bluetooth and GPS text as network
+ * values.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -246,7 +251,8 @@ test('the Series 11 GPS seed has no Wi-Fi, Bluetooth or eSIM text as a network v
   const seed = seedOf('apple:watch-series-11-46mm:64gb');
   assert.equal(seed.has_5g, false);
   assert.deepEqual(seed.specifications.cellular, { has_5g: false });
-  assert.deepEqual(seed.retract_spec_fields, ['cellular.sim_type', 'cellular.technology']);
+  assert.ok(seed.retract_spec_fields?.includes('cellular.sim_type'));
+  assert.ok(seed.retract_spec_fields?.includes('cellular.technology'));
   const update = seedMasterSpecUpdate(
     {
       specifications: {
@@ -313,4 +319,177 @@ test('the iPad Pro M4 supports 5G, as Apple’s Tech Specs state for its cellula
   assert.equal(n.specifications.cellular?.has_5g, true);
   // The Wi-Fi seed stays without 5G.
   assert.equal(seedOf('apple:ipad-pro-m4-11:256gb').has_5g, false);
+});
+
+// DOS/Rate#1796: smartwatches.
+const WATCH_SEEDS = [
+  'apple:watch-series-10-42mm:64gb',
+  'apple:watch-ultra-2:64gb',
+  'samsung:galaxy-watch-ultra:32gb',
+  'garmin:forerunner-265:8gb',
+  'apple:watch-series-11-46mm:64gb',
+  'apple:watch-ultra-3-49mm:64gb',
+];
+
+/** The GPS-only or no-SIM seeds: their cellular group has no network text. */
+const WATCH_SEEDS_WITHOUT_CELLULAR = [
+  'apple:watch-series-10-42mm:64gb',
+  'garmin:forerunner-265:8gb',
+  'apple:watch-series-11-46mm:64gb',
+];
+
+/** The seeds whose storage_expansion held the internal storage, not a card slot. */
+const WATCH_SEEDS_WITH_STORAGE_TEXT = [
+  'apple:watch-ultra-2:64gb',
+  'samsung:galaxy-watch-ultra:32gb',
+  'garmin:forerunner-265:8gb',
+];
+
+const CAMERA_FIELDS = [
+  'rear_setup',
+  'main_camera',
+  'second_camera',
+  'front_camera',
+  'video_recording',
+] as const;
+
+test('every smartwatch seed is checked', () => {
+  assert.deepEqual(
+    FLAGSHIP_DEVICES_TO_SEED.filter(s => s.categorySlug === 'smartwatches')
+      .map(s => s.model_key)
+      .sort(),
+    [...WATCH_SEEDS].sort()
+  );
+});
+
+test('a smartwatch seed holds nothing the smartwatches template removes', () => {
+  for (const key of WATCH_SEEDS) {
+    const seed = seedOf(key);
+    const kept = applyCategorySpecTemplate(
+      'smartwatches',
+      { specifications: seed.specifications, key_specs: seed.key_specs },
+      { forStorage: true }
+    );
+    assert.deepEqual(
+      nonEmpty(kept.specifications),
+      nonEmpty(seed.specifications),
+      `${key}: specifications`
+    );
+    assert.deepEqual(kept.key_specs, seed.key_specs, `${key}: key_specs`);
+    // No sensor as a camera: the group stays as {} for the spec audit, and there is no key spec.
+    assert.deepEqual(seed.specifications.camera, {}, `${key}: camera`);
+    assert.equal((seed.key_specs as Record<string, unknown>).camera, undefined, key);
+    // What a watch has stays.
+    assert.ok(seed.specifications.display?.type, key);
+    assert.ok(seed.specifications.hardware?.chipset, key);
+    assert.ok(seed.specifications.battery?.capacity_mah, key);
+    assert.ok(seed.specifications.connectivity?.sensors, key);
+    assert.ok(seed.key_specs.screen && seed.key_specs.chip && seed.key_specs.battery, key);
+    assert.ok(seed.key_specs.storage && seed.key_specs.ram, key);
+  }
+});
+
+test('a watch with no SIM has no Wi-Fi, Bluetooth or GPS text as a network value', () => {
+  for (const key of WATCH_SEEDS_WITHOUT_CELLULAR) {
+    const cellular = seedOf(key).specifications.cellular as Record<string, unknown>;
+    assert.equal(cellular.technology, undefined, key);
+    assert.equal(cellular.sim_type, undefined, key);
+    assert.equal(cellular.has_5g, false, key);
+  }
+  // A cellular watch keeps its network.
+  for (const key of ['apple:watch-ultra-2:64gb', 'samsung:galaxy-watch-ultra:32gb']) {
+    const cellular = seedOf(key).specifications.cellular as Record<string, unknown>;
+    assert.ok(cellular.technology && cellular.sim_type, key);
+  }
+});
+
+test('no smartwatch seed states its internal storage as storage expansion', () => {
+  for (const key of WATCH_SEEDS) {
+    const text = seedOf(key).specifications.hardware?.storage_expansion;
+    if (WATCH_SEEDS_WITH_STORAGE_TEXT.includes(key)) assert.equal(text, undefined, key);
+    // What stays says that there is no card slot.
+    else if (text !== undefined) assert.match(text, /^(No|Không hỗ trợ thẻ nhớ)/, key);
+  }
+});
+
+// What every earlier watch seed wrote, as stored on its master.
+const STORED_WATCH_TEXT = {
+  specifications: {
+    camera: {
+      rear_setup: 'Multi-Spectral Biometric & Dive Array',
+      main_camera: '3rd-gen Optical Heart Sensor + Electrical Heart Sensor (ECG)',
+      second_camera: 'Blood Oxygen Sensor + Depth Gauge',
+      front_camera: 'Dual ambient light sensors + Double Tap gesture neural sensor',
+      video_recording: 'Điều khiển từ xa Camera iPhone với khung ngắm trực tiếp',
+    },
+    hardware: {
+      chipset: 'Old chip text',
+      storage_expansion: 'Bộ nhớ trong 64GB',
+    },
+    cellular: {
+      has_5g: false,
+      technology: 'GPS + Wi-Fi + Bluetooth',
+      sim_type: 'GPS Model (paired via iPhone)',
+    },
+  },
+  key_specs: { screen: 'Old screen', camera: 'ECG + SpO2 + Đo độ sâu lặn 40m + Còi 86dB' },
+};
+
+test('the backfill removes the stored smartwatch camera text from masters and Items', async () => {
+  for (const key of WATCH_SEEDS) {
+    const seed = seedOf(key);
+    const retracted = new Set(seed.retract_spec_fields ?? []);
+    for (const field of CAMERA_FIELDS)
+      assert.ok(retracted.has(`camera.${field}`), `${key}: ${field}`);
+    assert.ok(retracted.has('key_specs.camera'), key);
+    assert.equal(retracted.has('cellular.technology'), WATCH_SEEDS_WITHOUT_CELLULAR.includes(key));
+    assert.equal(
+      retracted.has('hardware.storage_expansion'),
+      WATCH_SEEDS_WITH_STORAGE_TEXT.includes(key),
+      key
+    );
+
+    const update = seedMasterSpecUpdate(structuredClone(STORED_WATCH_TEXT), seed) as {
+      specifications: ProductSpecifications;
+      key_specs: Record<string, unknown>;
+    };
+    assert.deepEqual(stored(update.specifications.camera), {}, `${key}: stored camera`);
+    assert.equal(stored(update.key_specs).camera, undefined, `${key}: stored key_specs.camera`);
+    assert.equal(
+      update.specifications.cellular?.technology === undefined,
+      WATCH_SEEDS_WITHOUT_CELLULAR.includes(key) || !seed.specifications.cellular?.technology,
+      `${key}: stored cellular.technology`
+    );
+    assert.equal(
+      stored(update.specifications).hardware?.storage_expansion === undefined,
+      WATCH_SEEDS_WITH_STORAGE_TEXT.includes(key) ||
+        !seed.specifications.hardware?.storage_expansion,
+      `${key}: stored storage_expansion`
+    );
+    assert.equal(update.specifications.hardware?.chipset, seed.specifications.hardware?.chipset);
+
+    // The Item update removes them too.
+    const item = flagshipSeedsByItem().find(i => key.startsWith(`${i.itemKey}:`));
+    assert.ok(item, key);
+    let written: { specifications: ProductSpecifications; key_specs: Record<string, unknown> };
+    const client = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: { id: 'i1', ...structuredClone(STORED_WATCH_TEXT) },
+              error: null,
+            }),
+          }),
+        }),
+        update: (row: typeof written) => {
+          written = row;
+          return { eq: async () => ({ error: null }) };
+        },
+      }),
+    };
+    await syncItemSeedSpecs(client as never, { apply: true, seeds: [item], itemModel: 'item' });
+    assert.deepEqual(stored(written!.specifications.camera), {}, `${key}: Item camera`);
+    assert.equal(written!.key_specs.camera, undefined, `${key}: Item key_specs.camera`);
+  }
 });
