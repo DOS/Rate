@@ -23,9 +23,10 @@
 //
 // The status label replaces any other status:* label, the agent label
 // (agent:<nick>) is created when missing, a claim adds the PO line label
-// (po:claude or po:qwen) of the claimant's tool, and an issue not yet on the
-// board is added to it. An issue another agent, session or PO line holds is
-// refused unless --take-over is passed (a hand-over or JOY's assignment).
+// (po:claude, po:qwen or po:antigravity) of the claimant's tool, and an issue
+// not yet on the board is added to it. An issue another agent, session or PO
+// line holds is refused unless --take-over is passed (a hand-over or JOY's
+// assignment).
 
 import { parseArgs } from 'node:util';
 import { lockRef, poLabel, poTool, resolveClaimant } from '../claim-lock.mjs';
@@ -66,11 +67,11 @@ export const isPoNick = (nick) => nick.trim().toLowerCase() === 'po';
 /**
  * Label edits that leave exactly one status label and one agent label, plus,
  * when `po` names the claimant's PO line, that line's `po:*` label.
- * An issue claimed by another agent or dispatched by the other PO is never
+ * An issue claimed by another agent or dispatched by another PO is never
  * taken silently (AGENTS.md sections 1 and 6): that needs `takeOver`, and the
  * other claim label is then removed. `staleClaim` (a claim, and a merged PR
  * closed the issue after its lock was taken) waives that for the agent
- * label, which is as stale as the lock, but not for the other PO's line.
+ * label, which is as stale as the lock, but not for another PO's line.
  */
 export function labelChanges(
   current,

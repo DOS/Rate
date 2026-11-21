@@ -31,13 +31,14 @@ export const lockRef = (number) => `${LOCK_REF_PREFIX}${number}`;
 
 /**
  * A claimant names one session: `<tool>:<session id>`, for example
- * `claude:local_ad470353-...` or `qwen:<session id>`.
+ * `claude:local_ad470353-...`, `qwen:<session id>` or
+ * `antigravity:<conversation id>`.
  */
 export const CLAIMANT_RE =
   /^[a-z][a-z0-9-]{1,19}:[A-Za-z0-9][A-Za-z0-9._-]{3,99}$/;
 
 /** The tools that run a Product Owner, each with its `po:<tool>` label. */
-export const PO_TOOLS = ['claude', 'qwen'];
+export const PO_TOOLS = ['claude', 'qwen', 'antigravity'];
 export const poLabel = (tool) => `po:${tool}`;
 
 export function isClaimant(value) {
@@ -56,8 +57,8 @@ export function poTool(claimant) {
  * to message this one), else the Claude Code session id, else
  * `RATE_CLAIMANT`. The Claude ids win over `RATE_CLAIMANT` so that a value
  * left in a shell profile can never make every Claude session share one
- * claimant. Qwen Code and other tools pass `--claimant`; `RATE_CLAIMANT`
- * must be set per session, never in a shared profile.
+ * claimant. Qwen Code, Antigravity and other tools pass `--claimant`;
+ * `RATE_CLAIMANT` must be set per session, never in a shared profile.
  */
 export function resolveClaimant({ flag, env = {} } = {}) {
   const sources = [
@@ -79,7 +80,7 @@ export function resolveClaimant({ flag, env = {} } = {}) {
     throw new Error(
       'no claimant: pass --claimant <tool>:<session id> ' +
         '(Claude Code sessions get claude:<session id> automatically; ' +
-        'Qwen Code sessions use qwen:<session id>)'
+        'Qwen Code and Antigravity sessions pass qwen:<session id> or antigravity:<conversation id>)'
     );
   }
   if (!isClaimant(value)) {

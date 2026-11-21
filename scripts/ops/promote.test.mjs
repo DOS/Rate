@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  PROMOTER_TOOL,
   ownPromotionPr,
   promoterClaimant,
   promotionBody,
@@ -64,7 +65,8 @@ test('a fork PR from its own dev is never taken as the promotion', () => {
   assert.equal(ownPromotionPr([]), null);
 });
 
-test('only a Claude Code session may promote (DOS/Rate#1675)', () => {
+test('only a Claude Code session may promote (DOS/Rate#1675, DOS/Rate#1805)', () => {
+  assert.equal(PROMOTER_TOOL, 'claude');
   assert.equal(
     promoterClaimant({
       env: { CLAUDE_CODE_HOST_SESSION_ID: 'local_abcd1234' },
@@ -82,6 +84,23 @@ test('only a Claude Code session may promote (DOS/Rate#1675)', () => {
   assert.throws(
     () => promoterClaimant({ env: { RATE_CLAIMANT: 'qwen:abcd1234' } }),
     /only the Claude Code PO promotes/
+  );
+  assert.throws(
+    () =>
+      promoterClaimant({
+        flag: 'antigravity:d0dc3655-856b-4c89-b2bd-3283a4e5e3da',
+        env: {},
+      }),
+    /only the Claude Code PO promotes.*antigravity: one/
+  );
+  assert.throws(
+    () =>
+      promoterClaimant({
+        env: {
+          RATE_CLAIMANT: 'antigravity:d0dc3655-856b-4c89-b2bd-3283a4e5e3da',
+        },
+      }),
+    /only the Claude Code PO promotes.*antigravity: one/
   );
   // No claimant at all: refused, not assumed to be Claude.
   assert.throws(() => promoterClaimant({ env: {} }), /no claimant/);
