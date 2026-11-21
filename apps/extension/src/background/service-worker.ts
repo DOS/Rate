@@ -24,6 +24,8 @@ import {
   ONBOARDING_PAGE_PATH,
   sanitizeExtensionProductSignal,
   selectFreshestSessionSignal,
+  sliceCodePoints,
+  stripLoneSurrogates,
 } from '../security-guards.js';
 import { LookupCooldown } from '../rate-limit.js';
 import {
@@ -865,10 +867,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const cleanedVariant =
           typeof message.selectedVariant === 'string'
-            ? message.selectedVariant
-                .replace(/\p{Cc}+/gu, ' ')
-                .trim()
-                .slice(0, 200)
+            ? sliceCodePoints(
+                stripLoneSurrogates(message.selectedVariant)
+                  .replace(/\p{Cc}+/gu, ' ')
+                  .trim(),
+                200
+              )
             : '';
         const overrideVariant = cleanedVariant || null;
         const [activeTab] = await chrome.tabs.query({
@@ -1061,10 +1065,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const rawQuery =
           typeof message.query === 'string'
-            ? message.query
-                .replace(/\p{Cc}+/gu, ' ')
-                .trim()
-                .slice(0, 500)
+            ? sliceCodePoints(
+                stripLoneSurrogates(message.query)
+                  .replace(/\p{Cc}+/gu, ' ')
+                  .trim(),
+                500
+              )
             : '';
         const settings = await getSettings();
         if (!rawQuery) {
