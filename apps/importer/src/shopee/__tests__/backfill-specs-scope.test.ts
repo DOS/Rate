@@ -8,9 +8,11 @@ import {
   parseBackfillSpecsArgs,
   runMasterSpecsBackfill,
   runMasterSpecsBackfillWith,
+  selectOnlyScope,
   selectOnlySeeds,
   type BackfillSpecsDeps,
 } from '../jobs/backfill-specs.js';
+import type { ProductSpecifications } from '@repo/shared-data';
 import type { RateSupabaseClient } from '../types.js';
 
 // The three masters of JOY's approved Production fix (DOS/Rate#1464).
@@ -249,7 +251,7 @@ test('an unknown --only key fails before any read or write', async () => {
       only: [APPROVED[0]!, 'apple:iphone-99:1tb'],
       expect: 2,
     }),
-    /no seed: "apple:iphone-99:1tb"/
+    /no seed and no canonical entry: "apple:iphone-99:1tb"/
   );
   assert.equal(ops.length, 0, 'the client is never called');
   assert.throws(() => selectOnlySeeds(['']), /no seed/);
@@ -525,5 +527,198 @@ test('parseBackfillSpecsArgs reads --expect-inserts (#1739)', () => {
   assert.throws(
     () => parseBackfillSpecsArgs(['--audit-only', '--expect-inserts', '0']),
     /--audit-only/
+  );
+});
+
+// The three published canonical masters #1803 found out of reach of a scoped run (DOS/Rate#1804).
+const CANONICAL = ['apple:iphone-15:128gb', 'apple:iphone-16:128gb', 'apple:iphone-16-plus:256gb'];
+// The full master list read of an unscoped run.
+const FULL_LIST_COLUMNS = 'id, name, model_key, key_specs, specifications';
+
+/** The canonical masters as Production held them before #1758: template values. */
+function canonicalExisting(): Record<string, Record<string, unknown>> {
+  const rows: Record<string, Record<string, unknown>> = {};
+  CANONICAL.forEach((key, i) => {
+    rows[key] = {
+      id: `canon-${i}`,
+      name: `Canonical ${i}`,
+      specifications: {
+        connectivity: { bluetooth: '5.3, A2DP, LE' },
+        cellular: { bands_5g: 'SA/NSA/Sub6' },
+      },
+      key_specs: {},
+      battery_mah: 1,
+    };
+  });
+  return rows;
+}
+
+function captureLogs<T>(run: () => Promise<T>): Promise<{ result: T; text: string }> {
+  const lines: string[] = [];
+  const original = { log: console.log, warn: console.warn };
+  console.log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
+  console.warn = (...args: unknown[]) => lines.push(args.map(String).join(' '));
+  return run()
+    .then(result => ({ result, text: lines.join('\n') }))
+    .finally(() => {
+      console.log = original.log;
+      console.warn = original.warn;
+    });
+}
+
+test('selectOnlyScope splits seeds from canonical keys and refuses anything else (#1804)', () => {
+  assert.ok(
+    CANONICAL.every(k => Object.hasOwn(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY, k)),
+    'the #1803 keys are canonical entries'
+  );
+  const scope = selectOnlyScope([APPROVED[0]!, ...CANONICAL]);
+  assert.deepEqual(
+    scope.seeds.map(s => s.model_key),
+    [APPROVED[0]]
+  );
+  assert.deepEqual(scope.canonicalKeys, CANONICAL);
+  assert.throws(
+    () => selectOnlyScope([CANONICAL[0]!, 'apple:iphone-99:1tb', '']),
+    /2 key\(s\) with no seed and no canonical entry: "apple:iphone-99:1tb", ""/
+  );
+  // A key that is a seed and a canonical entry stays a seed, as in an unscoped run.
+  const seed = FLAGSHIP_DEVICES_TO_SEED[0]!;
+  const both = selectOnlyScope([seed.model_key], FLAGSHIP_DEVICES_TO_SEED, {
+    [seed.model_key]: CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[CANONICAL[0]!]!,
+  });
+  assert.deepEqual(
+    both.seeds.map(s => s.model_key),
+    [seed.model_key]
+  );
+  assert.deepEqual(both.canonicalKeys, []);
+  // The publish job still takes seeds only.
+  assert.throws(() => selectOnlySeeds([CANONICAL[0]!]), /no seed/);
+});
+
+test('--only reaches the named canonical masters and nothing else (#1804)', async () => {
+  const otherCanonical = { id: 'canon-other', name: 'Other', model_key: 'acme:canon:1gb' };
+  const { client, ops, writes } = mockClient({ ...allSeedsExisting(), ...canonicalExisting() }, [
+    otherCanonical,
+    { id: 'ai', name: 'AI', model_key: 'acme:phone:64gb' },
+  ]);
+  const enrichCalls: string[] = [];
+  const only = [APPROVED[0]!, ...CANONICAL];
+  const result = await runMasterSpecsBackfillWith(
+    client,
+    { ...deps(enrichCalls), enricher: { isConfigured: () => true } },
+    { apply: true, only, expect: 4 }
+  );
+  assert.equal(result.planned, 4);
+  assert.equal(result.catalogUpdated, 4);
+  assert.equal(result.catalogInserted, 0);
+  assert.equal(result.itemsUpdated, 0);
+
+  const lookedUp = ops
+    .filter(o => o.op === 'select' && o.filters.some(([c]) => c === 'model_key'))
+    .map(o => o.filters.find(([c]) => c === 'model_key')![1]);
+  assert.deepEqual([...lookedUp].sort(), [...only].sort(), 'only the named masters are read');
+  assert.equal(
+    ops.some(o => o.columns === FULL_LIST_COLUMNS),
+    false,
+    'no full master list read'
+  );
+  assert.equal(
+    ops.some(o => o.table === 'items'),
+    false,
+    'no rate.items read or write'
+  );
+  assert.deepEqual(enrichCalls, [], 'no AI enrichment');
+
+  const canon = canonicalExisting();
+  const w = writes();
+  assert.ok(w.every(o => o.table === 'master_products' && o.op === 'update'));
+  assert.deepEqual(
+    w.map(o => o.filters[0]![1]),
+    [allSeedsExisting()[APPROVED[0]!]!.id, ...CANONICAL.map(k => canon[k]!.id)],
+    'the seed, then the canonical masters in --only order'
+  );
+  for (const [i, key] of CANONICAL.entries()) {
+    const entry = CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[key]!;
+    const payload = w[i + 1]!.payload!;
+    assert.deepEqual(
+      Object.keys(payload).sort(),
+      [
+        'battery_mah',
+        'colors',
+        'has_5g',
+        'key_specs',
+        'ram_gb',
+        'screen_size_inch',
+        'specifications',
+        'storage_gb',
+        'updated_at',
+      ],
+      `${key}: the canonical value columns only (no name, slug, status or category)`
+    );
+    assert.equal(payload.battery_mah, entry.battery_mah);
+    const specs = payload.specifications as ProductSpecifications;
+    assert.equal(specs.connectivity?.bluetooth, entry.specifications.connectivity?.bluetooth);
+    assert.equal(specs.cellular?.bands_5g, entry.specifications.cellular?.bands_5g);
+    assert.notEqual(specs.connectivity?.bluetooth, '5.3, A2DP, LE');
+  }
+});
+
+test('a scoped canonical dry run plans, diffs and checks --expect like a seed (#1804)', async () => {
+  const { client, writes } = mockClient(canonicalExisting());
+  const { result, text } = await captureLogs(() =>
+    runMasterSpecsBackfillWith(client, deps(), { only: CANONICAL, expect: 2 })
+  );
+  assert.equal(result.apply, false);
+  assert.equal(result.planned, 3);
+  assert.deepEqual(writes(), [], 'a dry run never writes');
+  assert.match(text, /Plan \[mode=DRY-RUN, scoped\]: 3 master\(s\) to update or insert/);
+  assert.match(text, /not the expected 2/);
+  for (const key of CANONICAL) {
+    assert.ok(text.includes(`[Canonical Specs] ${key}: would change`), `${key}: would change`);
+  }
+  assert.match(
+    text,
+    /specifications\.connectivity\.bluetooth: \\?"5\.3, A2DP, LE\\?" -> \\?"5\.3\\?"/
+  );
+  assert.match(text, /specifications\.cellular\.bands_5g: \\?"SA\/NSA\/Sub6\\?" -> /);
+
+  // The same --expect mismatch stops an --apply before the first write.
+  const live = mockClient(canonicalExisting());
+  await assert.rejects(
+    runMasterSpecsBackfillWith(live.client, deps(), { apply: true, only: CANONICAL, expect: 2 }),
+    /--expect 2 does not match the plan of 3 master\(s\) \(apple:iphone-15:128gb, apple:iphone-16:128gb, apple:iphone-16-plus:256gb\): stopped before any write/
+  );
+  assert.deepEqual(live.writes(), []);
+});
+
+test('a named canonical key with no master row is never inserted (#1804)', async () => {
+  const existing = canonicalExisting();
+  delete existing[CANONICAL[1]!];
+  for (const options of [
+    { apply: true, only: CANONICAL, expect: 2 },
+    { apply: true, only: CANONICAL, expect: 3, insertMissing: true },
+  ]) {
+    const live = mockClient(existing);
+    await assert.rejects(
+      runMasterSpecsBackfillWith(live.client, deps(), options),
+      new RegExp(
+        `no master row for canonical key\\(s\\) ${CANONICAL[1]!}; a canonical entry is never inserted: stopped before any write`
+      )
+    );
+    assert.deepEqual(live.writes(), [], 'no insert, no update');
+  }
+  const dry = mockClient(existing);
+  const { result, text } = await captureLogs(() =>
+    runMasterSpecsBackfillWith(dry.client, deps(), { only: CANONICAL })
+  );
+  assert.deepEqual(dry.writes(), []);
+  assert.equal(result.planned, 2);
+  assert.match(text, /a canonical entry is never inserted; an --apply would stop before any write/);
+});
+
+test('the CLI parser passes canonical keys through --only (#1804)', () => {
+  assert.deepEqual(
+    parseBackfillSpecsArgs(['--only', CANONICAL.join(','), '--apply', '--expect', '3']),
+    { apply: true, auditOnly: false, only: CANONICAL, expect: 3 }
   );
 });
