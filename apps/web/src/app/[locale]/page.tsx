@@ -10,7 +10,16 @@ import {
   EMPTY_RATE_PLATFORM_STATS,
   getMasterProductHref,
 } from '@/lib/rate-api';
-import { buildPopular1v1BattlesForCategory } from '@/lib/leaderboard-engine';
+import {
+  buildPopular1v1BattlesForCategory,
+  rankMasterProductsForLeaderboard,
+} from '@/lib/leaderboard-engine';
+import {
+  canonicalVersusOrder,
+  isParseableVersusPair,
+  itemSlugFromProductAnswer,
+  versusHref,
+} from '@/lib/item-compare';
 import {
   getCachedMasterProducts,
   getCachedMerchantsList,
@@ -18,6 +27,7 @@ import {
   getCrossPlatformDealRadar,
   groupCatalogRowsByItem,
   type CrossPlatformDealRadarResponse,
+  type ItemCatalogRow,
   type MerchantSummary,
   type RatePlatformStats,
 } from '@/server/rate';
@@ -287,6 +297,89 @@ export function loadHomeMasterProducts(
   return readProducts({ categorySlug: 'all', limit: 24 });
 }
 
+export function buildHomePopularBattles(
+  products: MasterProduct[],
+  maxPairs = 3
+) {
+  const itemSlugBySlug = Object.create(null) as Record<string, string>;
+  for (const row of products) {
+    if (!row || typeof row.slug !== 'string' || !row.slug) continue;
+    const itemSlug = (row as ItemCatalogRow).item_slug;
+    if (typeof itemSlug === 'string' && itemSlug) {
+      itemSlugBySlug[row.slug] = itemSlug;
+    }
+  }
+
+  const ranked = rankMasterProductsForLeaderboard(products, {
+    category: 'smartphones',
+    criterion: 'combined',
+  });
+  const seenSides = new Set<string>();
+  const sideByVariantSlug = Object.create(null) as Record<string, string>;
+  const uniqueCandidates: MasterProduct[] = [];
+
+  for (const entry of ranked) {
+    const slug = entry.slug;
+    if (!slug) continue;
+    const rawItemSlug = (entry.product as ItemCatalogRow).item_slug;
+    if (
+      typeof rawItemSlug === 'string' &&
+      rawItemSlug.toLowerCase().includes('-vs-')
+    ) {
+      continue;
+    }
+    const effectiveSide = rawItemSlug
+      ? itemSlugFromProductAnswer(
+          { ok: true, data: { item: { slug: rawItemSlug } } },
+          slug
+        )
+      : slug;
+    if (!effectiveSide || effectiveSide.toLowerCase().includes('-vs-')) {
+      continue;
+    }
+    const sideKey = effectiveSide.toLowerCase();
+    if (seenSides.has(sideKey)) continue;
+    seenSides.add(sideKey);
+    sideByVariantSlug[slug] = effectiveSide;
+    uniqueCandidates.push(entry.product);
+  }
+
+  const rawBattles = buildPopular1v1BattlesForCategory(
+    uniqueCandidates,
+    'smartphones',
+    20
+  );
+  const seenHrefs = new Set<string>();
+  const resolved: typeof rawBattles = [];
+  for (const battle of rawBattles) {
+    const slugA = battle.productA.slug;
+    const slugB = battle.productB.slug;
+    const sideA = sideByVariantSlug[slugA];
+    const sideB = sideByVariantSlug[slugB];
+    if (!sideA || !sideB || sideA.toLowerCase() === sideB.toLowerCase()) {
+      continue;
+    }
+    const [first, second] = canonicalVersusOrder(sideA, sideB);
+    if (
+      !isParseableVersusPair(first, second) ||
+      !isParseableVersusPair(first.toLowerCase(), second.toLowerCase())
+    ) {
+      continue;
+    }
+    const href = versusHref(slugA, slugB, itemSlugBySlug);
+    const hrefKey = href.toLowerCase();
+    if (seenHrefs.has(hrefKey)) continue;
+    seenHrefs.add(hrefKey);
+    resolved.push({
+      ...battle,
+      versusSlug: href.replace(/^\/compare\//, ''),
+      versusHref: href,
+    });
+    if (resolved.length >= maxPairs) break;
+  }
+  return resolved;
+}
+
 export async function resolveHomeGroupedCatalog(
   masterProducts: MasterProduct[],
   groupByItem: typeof groupCatalogRowsByItem = groupCatalogRowsByItem
@@ -295,11 +388,7 @@ export async function resolveHomeGroupedCatalog(
   const gridProducts = await groupByItem(masterProducts).catch(
     () => masterProducts
   );
-  const popularHomeBattles = buildPopular1v1BattlesForCategory(
-    gridProducts,
-    'smartphones',
-    3
-  );
+  const popularHomeBattles = buildHomePopularBattles(gridProducts, 3);
   return { gridProducts, popularHomeBattles };
 }
 

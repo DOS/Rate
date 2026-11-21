@@ -292,8 +292,11 @@ async function main() {
   );
   await installCssExtensionStub();
 
-  const { loadHomeMasterProducts, resolveHomeGroupedCatalog } =
-    await import('../../app/[locale]/page');
+  const {
+    buildHomePopularBattles,
+    loadHomeMasterProducts,
+    resolveHomeGroupedCatalog,
+  } = await import('../../app/[locale]/page');
   const { loadDealsCatalogProducts } =
     await import('../../app/[locale]/deals/page');
   const { loadContactHeroProducts } =
@@ -398,116 +401,252 @@ async function main() {
   );
   assert.equal(recoveredHome.gridProducts, CATALOG_ROWS);
 
-  // 3. /deals applies groupCatalogRowsByItem consistently with category pages
-  // under RATE_ITEM_MODEL, collapsing storage variants while keeping Radar &
-  // canonical Item links intact.
-  process.env.RATE_ITEM_MODEL = 'item';
-  rpcCalls = [];
-  const dealsProducts = await loadDealsCatalogProducts();
-  assert.equal(rpcCalls.length, 1);
-  assert.deepEqual(rpcCalls[0]?.body, {
-    p_sort: 'rating_desc',
-    p_limit: 100,
-    p_offset: 0,
-  });
+  // Edge cases in buildHomePopularBattles:
+  // - skips Items whose item_slug contains "-vs-" (would 404 on /compare/[versus])
+  // - falls back to variant slug when item_slug fails isSafeVersusItemSlug (>120 chars / sentinel)
+  // - deduplicates nullable_variant collision between an Item row and an unlinked master sharing side slug
+  // - skips unparseable pairs where both sides end with "-vs"
+  const overlongItemSlug = `apple-iphone-${'x'.repeat(120)}`;
+  const edgeBattles = buildHomePopularBattles([
+    {
+      ...makePhone(
+        'edge-1',
+        'bad-vs-item-256gb',
+        'Bad VS Item',
+        'Test',
+        25_000_000,
+        25_000_000,
+        5.0,
+        9.6
+      ),
+      item_slug: 'bad-vs-slug',
+    } as MasterProduct,
+    {
+      ...makePhone(
+        'edge-2',
+        'xiaomi-15-ultra-256gb',
+        'Xiaomi 15 Ultra',
+        'Xiaomi',
+        24_000_000,
+        24_000_000,
+        4.9,
+        9.4
+      ),
+      item_slug: 'xiaomi-15-ultra',
+    } as MasterProduct,
+    // Unlinked master colliding with Xiaomi 15 Ultra's item_slug during nullable_variant
+    makePhone(
+      'edge-3',
+      'xiaomi-15-ultra',
+      'Xiaomi 15 Ultra Legacy',
+      'Xiaomi',
+      24_500_000,
+      24_500_000,
+      4.85,
+      9.3
+    ),
+    {
+      ...makePhone(
+        'edge-4',
+        'overlong-phone-256gb',
+        'Overlong Slug Phone',
+        'Apple',
+        23_000_000,
+        23_000_000,
+        4.8,
+        9.2
+      ),
+      item_slug: overlongItemSlug,
+    } as MasterProduct,
+  ]);
+  assert.equal(edgeBattles.length, 1);
   assert.equal(
-    dealsProducts.length,
-    3,
-    '/deals must group duplicate storage variants into one Item row'
+    edgeBattles[0]?.versusHref,
+    '/compare/overlong-phone-256gb-vs-xiaomi-15-ultra',
+    'skips -vs- item_slug, deduplicates colliding side slugs, and falls back to variant slug for >120-char item_slug'
   );
 
-  const rankedDeals = rankProductsForDealFinder(dealsProducts, {
-    categoryFilter: 'all',
-    persona: 'default',
-    maxBudgetVnd: 65_000_000,
-    searchQuery: '',
-  });
-  assert.equal(rankedDeals.length, 3);
+  const unparseableVsSuffixBattles = buildHomePopularBattles([
+    makePhone(
+      'edge-vs-1',
+      'alpha-vs',
+      'Alpha VS',
+      'Test',
+      20_000_000,
+      20_000_000,
+      4.9,
+      9.0
+    ),
+    makePhone(
+      'edge-vs-2',
+      'beta-vs',
+      'Beta VS',
+      'Test',
+      21_000_000,
+      21_000_000,
+      4.8,
+      8.9
+    ),
+  ]);
   assert.deepEqual(
-    rankedDeals.map((d) => ({
-      name: d.name,
-      slug: d.slug,
-      href: d.productHref,
-      minPrice: d.minPrice,
-      spreadSavingsVnd: d.spreadSavingsVnd,
-      merchantCount: d.merchantCount,
-    })),
-    [
-      {
-        name: 'Apple iPhone 16 Pro Max',
-        slug: 'apple-iphone-16-pro-max-256gb',
-        href: '/smartphones/apple-iphone-16-pro-max',
-        minPrice: 29_990_000,
-        spreadSavingsVnd: 7_000_000,
-        merchantCount: 8,
-      },
-      {
-        name: 'Samsung Galaxy S25 Ultra',
-        slug: 'samsung-galaxy-s25-ultra-256gb',
-        href: '/smartphones/samsung-galaxy-s25-ultra',
-        minPrice: 27_990_000,
-        spreadSavingsVnd: 6_000_000,
-        merchantCount: 6,
-      },
-      {
-        name: 'Xiaomi 15 Ultra',
-        slug: 'xiaomi-15-ultra',
-        href: '/smartphones/xiaomi-15-ultra',
-        minPrice: 24_990_000,
-        spreadSavingsVnd: 1_000_000,
-        merchantCount: 3,
-      },
-    ]
+    unparseableVsSuffixBattles,
+    [],
+    'two slugs ending in -vs have no parseable versus URL in either order and must be skipped'
   );
 
-  // Variant-keyed Deal Radar signal still attaches to the Item-grouped deal card.
-  const radarIndex = buildRadarIndex({
-    generatedAt: '2026-11-21T00:00:00Z',
-    categoryFilter: 'all',
-    totalClustersAnalyzed: 3,
-    totalOffersAnalyzed: 10,
-    totalMerchantsAnalyzed: 8,
-    genuineDeals: [
-      {
-        id: 'offer-1',
-        verdict: 'genuine_all_time_low',
-        verdictBadgeVi: 'Đáy giá đa sàn',
-        productSlug: 'apple-iphone-16-pro-max-256gb',
-        productName: 'Apple iPhone 16 Pro Max 256GB',
-        productHref: '/smartphones/apple-iphone-16-pro-max',
-        imageUrl: null,
-        brand: 'Apple',
-        categorySlug: 'smartphones',
-        platform: 'shopee',
-        merchantId: 'm-1',
-        merchantName: 'Apple Flagship Store',
-        isOfficialMall: true,
-        merchantRiskScore: 5,
-        priceCurrent: 29_990_000,
-        priceOriginal: 32_990_000,
-        marketMedianPrice: 33_490_000,
-        marketMinPrice: 29_990_000,
-        marketMaxPrice: 36_990_000,
-        savingsVsMedianVnd: 3_500_000,
-        savingsVsMedianPct: 10.5,
-        marketOfferCount: 4,
-        claimedDiscountPct: 9.1,
-        fakeMarkupPct: 0,
-        jreviewsScore10: 9.4,
-        offerUrl: 'https://shopee.vn/item',
-        explanationVi: 'Thấp hơn trung vị 10.5%',
-      },
-    ],
-    fakeSaleTraps: [],
-    priceSpreadLeaders: [],
-  });
-  assert.equal(
-    getRadarSignal(radarIndex, rankedDeals[0]!.slug).verdict,
-    'genuine_deal'
-  );
+  // 3. /deals applies groupCatalogRowsByItem consistently with category pages
+  // under RATE_ITEM_MODEL ('item' and 'nullable_variant'), collapsing storage
+  // variants while preserving per-variant cross-platform spreadSavingsVnd,
+  // Radar badges, and canonical Item links.
+  for (const mode of ['item', 'nullable_variant'] as const) {
+    process.env.RATE_ITEM_MODEL = mode;
+    rpcCalls = [];
+    const dealsProducts = await loadDealsCatalogProducts();
+    assert.equal(rpcCalls.length, 1);
+    assert.deepEqual(rpcCalls[0]?.body, {
+      p_sort: 'rating_desc',
+      p_limit: 100,
+      p_offset: 0,
+    });
+    assert.equal(
+      dealsProducts.length,
+      3,
+      `[${mode}] /deals must group duplicate storage variants into one Item row`
+    );
+
+    const rankedDeals = rankProductsForDealFinder(dealsProducts, {
+      categoryFilter: 'all',
+      persona: 'default',
+      maxBudgetVnd: 65_000_000,
+      searchQuery: '',
+    });
+    assert.equal(rankedDeals.length, 3);
+    assert.deepEqual(
+      rankedDeals.map((d) => ({
+        name: d.name,
+        slug: d.slug,
+        href: d.productHref,
+        minPrice: d.minPrice,
+        spreadSavingsVnd: d.spreadSavingsVnd,
+        merchantCount: d.merchantCount,
+      })),
+      [
+        {
+          name: 'Apple iPhone 16 Pro Max',
+          slug: 'apple-iphone-16-pro-max-256gb',
+          href: '/smartphones/apple-iphone-16-pro-max',
+          minPrice: 29_990_000,
+          spreadSavingsVnd: 2_000_000,
+          merchantCount: 8,
+        },
+        {
+          name: 'Samsung Galaxy S25 Ultra',
+          slug: 'samsung-galaxy-s25-ultra-256gb',
+          href: '/smartphones/samsung-galaxy-s25-ultra',
+          minPrice: 27_990_000,
+          spreadSavingsVnd: 6_000_000,
+          merchantCount: 6,
+        },
+        {
+          name: 'Xiaomi 15 Ultra',
+          slug: 'xiaomi-15-ultra',
+          href: '/smartphones/xiaomi-15-ultra',
+          minPrice: 24_990_000,
+          spreadSavingsVnd: 1_000_000,
+          merchantCount: 3,
+        },
+      ]
+    );
+
+    // Uniform-price storage variants (0 cross-store spread on each size) must
+    // report spreadSavingsVnd = 0 rather than 512GB price minus 256GB price.
+    const uniformSizeDeals = await loadDealsCatalogProducts(async () => [
+      makePhone(
+        V_IPHONE_256,
+        'apple-iphone-16-pro-max-256gb',
+        'Apple iPhone 16 Pro Max 256GB',
+        'Apple',
+        29_990_000,
+        29_990_000,
+        4.9,
+        9.4,
+        256
+      ),
+      makePhone(
+        V_IPHONE_512,
+        'apple-iphone-16-pro-max-512gb',
+        'Apple iPhone 16 Pro Max 512GB',
+        'Apple',
+        34_990_000,
+        34_990_000,
+        4.9,
+        9.4,
+        512
+      ),
+    ]);
+    const uniformRanked = rankProductsForDealFinder(uniformSizeDeals, {
+      categoryFilter: 'all',
+      persona: 'default',
+      maxBudgetVnd: 65_000_000,
+      searchQuery: '',
+    });
+    assert.equal(uniformRanked.length, 1);
+    assert.equal(
+      uniformRanked[0]?.spreadSavingsVnd,
+      0,
+      `[${mode}] storage capacity delta must not be reported as cross-platform savings`
+    );
+
+    // Variant-keyed Deal Radar signal still attaches to the Item-grouped deal card.
+    const radarIndex = buildRadarIndex({
+      generatedAt: '2026-11-21T00:00:00Z',
+      categoryFilter: 'all',
+      totalClustersAnalyzed: 3,
+      totalOffersAnalyzed: 10,
+      totalMerchantsAnalyzed: 8,
+      genuineDeals: [
+        {
+          id: 'offer-1',
+          verdict: 'genuine_all_time_low',
+          verdictBadgeVi: 'Đáy giá đa sàn',
+          productSlug: 'apple-iphone-16-pro-max-256gb',
+          productName: 'Apple iPhone 16 Pro Max 256GB',
+          productHref: '/smartphones/apple-iphone-16-pro-max',
+          imageUrl: null,
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          platform: 'shopee',
+          merchantId: 'm-1',
+          merchantName: 'Apple Flagship Store',
+          isOfficialMall: true,
+          merchantRiskScore: 5,
+          priceCurrent: 29_990_000,
+          priceOriginal: 32_990_000,
+          marketMedianPrice: 33_490_000,
+          marketMinPrice: 29_990_000,
+          marketMaxPrice: 36_990_000,
+          savingsVsMedianVnd: 3_500_000,
+          savingsVsMedianPct: 10.5,
+          marketOfferCount: 4,
+          claimedDiscountPct: 9.1,
+          fakeMarkupPct: 0,
+          jreviewsScore10: 9.4,
+          offerUrl: 'https://shopee.vn/item',
+          explanationVi: 'Thấp hơn trung vị 10.5%',
+        },
+      ],
+      fakeSaleTraps: [],
+      priceSpreadLeaders: [],
+    });
+    assert.equal(
+      getRadarSignal(radarIndex, rankedDeals[0]!.slug).verdict,
+      'genuine_deal'
+    );
+  }
 
   // /deals fallback when Item endpoint errors: returns ungrouped rows cleanly,
   // while a primary catalog read failure still rejects so ISR keeps the last good page.
+  process.env.RATE_ITEM_MODEL = 'item';
   itemsEndpointFailing = true;
   const fallbackDeals = await loadDealsCatalogProducts(async () => [
     makePhone(
@@ -536,8 +675,9 @@ async function main() {
 
   delete process.env.RATE_ITEM_MODEL;
 
-  // 4. Cached catalog helper usage on / and /contact-us: exact arguments,
-  // React.cache deduplication, and rate:products tag participation.
+  // 4. Cached catalog helper usage on / and /contact-us: default helper wiring,
+  // RPC parameter parity with getCachedMasterProducts, canonical cache key
+  // serialization, and rate:products revalidation tag participation.
   const homeCapturedArgs: unknown[] = [];
   await loadHomeMasterProducts(async (params) => {
     homeCapturedArgs.push(params);

@@ -6,6 +6,7 @@ import {
   getCachedMasterProducts,
   getCrossPlatformDealRadar,
   groupCatalogRowsByItem,
+  type ItemCatalogRow,
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import PageShell from '../components/page-shell';
@@ -44,7 +45,26 @@ export async function loadDealsCatalogProducts(
     sort: 'rating_desc',
   });
   // RATE_ITEM_MODEL on: one ranked deal card per Item (DOS/Rate#1155, #1808).
-  return groupByItem(rows).catch(() => rows);
+  const grouped = await groupByItem(rows).catch((): ItemCatalogRow[] => rows);
+  if (grouped === rows) return rows;
+  // DealFinderWorkspace reports max_price - min_price as cross-platform savings
+  // for the standing (cheapest) variant, so keep that variant's own max_price
+  // rather than the multi-capacity range groupRowsByItem builds for ProductCard.
+  const variantById = new Map(rows.map((r) => [r.id, r]));
+  return grouped.map((row) => {
+    if (!row.item_slug || !row.id) return row;
+    const standing = variantById.get(row.id);
+    if (!standing) return row;
+    const min = Number(row.min_price) || 0;
+    const rawStandingMax = Number(standing.max_price);
+    const standingMax =
+      Number.isFinite(rawStandingMax) && rawStandingMax > 0
+        ? Math.max(rawStandingMax, min)
+        : min;
+    return standingMax === row.max_price
+      ? row
+      : { ...row, max_price: standingMax };
+  });
 }
 
 export default async function DealsPage({ params }: PageProps) {
