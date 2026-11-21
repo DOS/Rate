@@ -40,8 +40,8 @@ import { resolveBackfillSupabaseTarget } from '../paging.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
 import {
-  REQUIRED_10_SPEC_GROUPS,
   hasSingleRearCamera,
+  requiredSpecGroups,
   selectOnlySeeds,
   statesRearCamera,
 } from './backfill-specs.js';
@@ -152,7 +152,7 @@ export function publishBlockers(
   if (!ProductSpecificationsSchema.safeParse(specs).success) {
     problems.push('specifications fail ProductSpecificationsSchema');
   }
-  for (const group of REQUIRED_10_SPEC_GROUPS) {
+  for (const group of requiredSpecGroups(seed.categorySlug)) {
     if (!specs?.[group]) problems.push(`missing specification group "${group}"`);
   }
   // A phone or tablet seed always lists its rear cameras: a draft whose camera group is
