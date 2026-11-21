@@ -1982,7 +1982,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     storage_gb: 64,
     screen_size_inch: 1.92,
     battery_mah: 564,
-    has_5g: true,
+    has_5g: false,
     colors: ['Titan Tự Nhiên', 'Titan Đen'],
     images: [
       'https://store.storeimages.cdn-apple.com/8756/as-images.apple.com/is/watch-ultra2-digitalmat-gallery-1-202409?wid=800&hei=800&fmt=png-alpha',
@@ -2046,7 +2046,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
           '2nd-gen Ultra Wideband (UWB) chip, Crash Detection, Fall Detection, 86dB Emergency Siren',
       },
       cellular: {
-        has_5g: true,
+        has_5g: false,
         bands_4g: 'LTE and UMTS built-in',
         technology: 'LTE / UMTS Multi-band eSIM',
         sim_type: 'eSIM (Viettel / VinaPhone / MobiFone)',
@@ -2074,6 +2074,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     },
     sources: {
       'connectivity.bluetooth': 'https://support.apple.com/en-us/111832',
+      // Apple Tech Specs, Connectivity: "LTE and UMTS". The Ultra 2 has no 5G (DOS/Rate#1798).
+      'cellular.has_5g': 'https://support.apple.com/en-us/111832',
     },
     // Health sensors as cameras, and the internal storage as storage expansion (DOS/Rate#1796).
     retract_spec_fields: [
@@ -2167,7 +2169,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       cellular: {
         has_5g: false,
         bands_4g: 'LTE Band 1/3/5/7/8/20/28/40',
-        technology: '4G LTE eSIM獨立',
         sim_type: 'eSIM',
         volte: true,
         vowifi: true,
@@ -2200,6 +2201,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'camera.video_recording',
       'key_specs.camera',
       'hardware.storage_expansion',
+      // Stray CJK text, and no Samsung spec page value for it (DOS/Rate#1798).
+      'cellular.technology',
     ],
   },
 

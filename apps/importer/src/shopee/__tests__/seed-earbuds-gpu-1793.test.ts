@@ -10,6 +10,10 @@
  * light and gesture sensors as camera fields and a camera key spec, and whose GPS-only or no-SIM
  * seeds (Series 10, Series 11, Forerunner 265) carried Wi-Fi, Bluetooth and GPS text as network
  * values.
+ *
+ * DOS/Rate#1798: what DOS/Rate#1796 left in two smartwatch seeds. The Apple Watch Ultra 2 seed
+ * had 5G although its cellular models are LTE and UMTS only (Apple Tech Specs, which the registry
+ * entry already states), and the Galaxy Watch Ultra seed had a CJK `cellular.technology`.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -396,11 +400,20 @@ test('a watch with no SIM has no Wi-Fi, Bluetooth or GPS text as a network value
     assert.equal(cellular.sim_type, undefined, key);
     assert.equal(cellular.has_5g, false, key);
   }
-  // A cellular watch keeps its network.
-  for (const key of ['apple:watch-ultra-2:64gb', 'samsung:galaxy-watch-ultra:32gb']) {
-    const cellular = seedOf(key).specifications.cellular as Record<string, unknown>;
-    assert.ok(cellular.technology && cellular.sim_type, key);
-  }
+  // A cellular watch keeps its network. The Galaxy Watch Ultra has no technology text: the one
+  // it had was stray CJK, and no Samsung spec page value replaces it (DOS/Rate#1798).
+  const ultra2 = seedOf('apple:watch-ultra-2:64gb').specifications.cellular as Record<
+    string,
+    unknown
+  >;
+  assert.ok(ultra2.technology && ultra2.sim_type);
+  const galaxy = seedOf('samsung:galaxy-watch-ultra:32gb').specifications.cellular as Record<
+    string,
+    unknown
+  >;
+  assert.equal(galaxy.technology, undefined);
+  assert.equal(galaxy.sim_type, 'eSIM');
+  assert.equal(galaxy.bands_4g, 'LTE Band 1/3/5/7/8/20/28/40');
 });
 
 test('no smartwatch seed states its internal storage as storage expansion', () => {
@@ -442,7 +455,11 @@ test('the backfill removes the stored smartwatch camera text from masters and It
     for (const field of CAMERA_FIELDS)
       assert.ok(retracted.has(`camera.${field}`), `${key}: ${field}`);
     assert.ok(retracted.has('key_specs.camera'), key);
-    assert.equal(retracted.has('cellular.technology'), WATCH_SEEDS_WITHOUT_CELLULAR.includes(key));
+    assert.equal(
+      retracted.has('cellular.technology'),
+      WATCH_SEEDS_WITHOUT_CELLULAR.includes(key) || key === 'samsung:galaxy-watch-ultra:32gb',
+      key
+    );
     assert.equal(
       retracted.has('hardware.storage_expansion'),
       WATCH_SEEDS_WITH_STORAGE_TEXT.includes(key),
@@ -492,4 +509,87 @@ test('the backfill removes the stored smartwatch camera text from masters and It
     assert.deepEqual(stored(written!.specifications.camera), {}, `${key}: Item camera`);
     assert.equal(written!.key_specs.camera, undefined, `${key}: Item key_specs.camera`);
   }
+});
+
+// DOS/Rate#1798.
+const NON_LATIN_ALLOWED = /^[µ]$/u; // the micro sign of a pixel size ("1.12µm")
+
+/** Every string in a value, with its path. */
+const strings = (value: unknown, path: string): Array<[string, string]> =>
+  typeof value === 'string'
+    ? [[path, value]]
+    : Array.isArray(value)
+      ? value.flatMap((v, i) => strings(v, `${path}.${i}`))
+      : value && typeof value === 'object'
+        ? Object.entries(value).flatMap(([k, v]) => strings(v, `${path}.${k}`))
+        : [];
+
+test('no seed spec value holds non-Latin text', () => {
+  for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
+    for (const [path, text] of [
+      ...strings(seed.specifications, 'specifications'),
+      ...strings(seed.key_specs, 'key_specs'),
+    ]) {
+      const stray = [...text].filter(
+        ch => /\p{L}/u.test(ch) && !/\p{Script=Latin}/u.test(ch) && !NON_LATIN_ALLOWED.test(ch)
+      );
+      assert.deepEqual(stray, [], `${seed.model_key} ${path}: ${text}`);
+    }
+  }
+  // The scan finds the value #1798 removed.
+  assert.deepEqual(
+    strings({ cellular: { technology: '4G LTE eSIM獨立' } }, 'specifications').filter(([, text]) =>
+      [...text].some(ch => /\p{Script=Han}/u.test(ch))
+    ).length,
+    1
+  );
+});
+
+test('a seed with 5G is a model the registry gives 5G', () => {
+  // The registry holds one entry per model, so a GPS or Wi-Fi seed of a model with a cellular
+  // variant may say no where the registry says yes; the other way round is wrong.
+  for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
+    const cellular = seed.specifications.cellular?.has_5g;
+    if (cellular !== undefined) assert.equal(cellular, seed.has_5g, `${seed.model_key}: cellular`);
+    const n = normalize(`${seed.brand} ${seed.model} ${seed.variant_name}`);
+    if (!n.is_benchmark_enriched || n.has_5g === undefined) continue;
+    if (seed.has_5g) assert.equal(n.has_5g, true, `${seed.model_key}: registry says no 5G`);
+  }
+  // The Ultra 2 is LTE and UMTS only, and its seed agrees with its registry entry.
+  const ultra2 = normalize('Apple Watch Ultra 2 49mm');
+  assert.equal(ultra2.is_benchmark_enriched, true);
+  assert.equal(ultra2.has_5g, seedOf('apple:watch-ultra-2:64gb').has_5g);
+  assert.equal(ultra2.specifications.cellular?.has_5g, false);
+});
+
+test('the Apple Watch Ultra 2 seed cites Apple for LTE and UMTS, without 5G', () => {
+  const seed = seedOf('apple:watch-ultra-2:64gb');
+  assert.equal(seed.has_5g, false);
+  assert.equal(seed.specifications.cellular?.has_5g, false);
+  assert.equal(seed.sources?.['cellular.has_5g'], 'https://support.apple.com/en-us/111832');
+});
+
+test('the backfill replaces the stored watch 5G flag and CJK network text', () => {
+  const storedOld = {
+    has_5g: true,
+    specifications: {
+      cellular: { has_5g: true, technology: '4G LTE eSIM獨立', sim_type: 'eSIM' },
+    },
+    key_specs: {},
+  };
+  const ultra2 = seedMasterSpecUpdate(
+    structuredClone(storedOld),
+    seedOf('apple:watch-ultra-2:64gb')
+  ) as { has_5g: boolean; specifications: ProductSpecifications };
+  assert.equal(ultra2.has_5g, false);
+  assert.equal(ultra2.specifications.cellular?.has_5g, false);
+
+  const galaxy = seedMasterSpecUpdate(
+    structuredClone(storedOld),
+    seedOf('samsung:galaxy-watch-ultra:32gb')
+  ) as { has_5g: boolean; specifications: ProductSpecifications };
+  assert.equal(galaxy.has_5g, false);
+  assert.equal(galaxy.specifications.cellular?.has_5g, false);
+  assert.equal(stored(galaxy.specifications).cellular?.technology, undefined);
+  assert.equal(galaxy.specifications.cellular?.sim_type, 'eSIM');
 });
