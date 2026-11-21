@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
+import type { MasterProduct } from '@repo/shared-data';
 import {
   getCachedMasterProducts,
   getCrossPlatformDealRadar,
+  groupCatalogRowsByItem,
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import PageShell from '../components/page-shell';
@@ -32,17 +34,26 @@ export async function generateMetadata({
   };
 }
 
+export async function loadDealsCatalogProducts(
+  readProducts: typeof getCachedMasterProducts = getCachedMasterProducts,
+  groupByItem: typeof groupCatalogRowsByItem = groupCatalogRowsByItem
+): Promise<MasterProduct[]> {
+  const rows = await readProducts({
+    categorySlug: 'all',
+    limit: 100,
+    sort: 'rating_desc',
+  });
+  // RATE_ITEM_MODEL on: one ranked deal card per Item (DOS/Rate#1155, #1808).
+  return groupByItem(rows).catch(() => rows);
+}
+
 export default async function DealsPage({ params }: PageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'deals' });
   const [products, dealRadar] = await Promise.all([
-    getCachedMasterProducts({
-      categorySlug: 'all',
-      limit: 100,
-      sort: 'rating_desc',
-    }),
+    loadDealsCatalogProducts(),
     getCrossPlatformDealRadar({
       categorySlug: 'all',
       // Max page size so every ranked card gets its own Radar badge.

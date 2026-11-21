@@ -9,10 +9,10 @@ import PageShell from './components/page-shell';
 import {
   EMPTY_RATE_PLATFORM_STATS,
   getMasterProductHref,
-  getMasterProducts,
 } from '@/lib/rate-api';
 import { buildPopular1v1BattlesForCategory } from '@/lib/leaderboard-engine';
 import {
+  getCachedMasterProducts,
   getCachedMerchantsList,
   getCachedRatePlatformStats,
   getCrossPlatformDealRadar,
@@ -279,6 +279,28 @@ export function buildHomeQuickCompareSlugs(
     if (slugs.length >= limit) break;
   }
   return slugs;
+}
+
+export function loadHomeMasterProducts(
+  readProducts: typeof getCachedMasterProducts = getCachedMasterProducts
+) {
+  return readProducts({ categorySlug: 'all', limit: 24 });
+}
+
+export async function resolveHomeGroupedCatalog(
+  masterProducts: MasterProduct[],
+  groupByItem: typeof groupCatalogRowsByItem = groupCatalogRowsByItem
+) {
+  // RATE_ITEM_MODEL on: one grid card and one 1v1 battle slot per Item (DOS/Rate#1155, #1808).
+  const gridProducts = await groupByItem(masterProducts).catch(
+    () => masterProducts
+  );
+  const popularHomeBattles = buildPopular1v1BattlesForCategory(
+    gridProducts,
+    'smartphones',
+    3
+  );
+  return { gridProducts, popularHomeBattles };
 }
 
 export function sanitizeHomeReviewStars(value: unknown): number | null {
@@ -861,7 +883,7 @@ export default async function Home({
   // it) must not blank the sections that did load.
   const [productsRes, merchantsRes, statsRes, radarRes] =
     await Promise.allSettled([
-      getMasterProducts({ categorySlug: 'all', limit: 24 }),
+      loadHomeMasterProducts(),
       getCachedMerchantsList(),
       getCachedRatePlatformStats(),
       getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 }),
@@ -879,11 +901,6 @@ export default async function Home({
     }
   }
 
-  const popularHomeBattles = buildPopular1v1BattlesForCategory(
-    masterProducts,
-    'smartphones',
-    3
-  );
   const radarIndex = buildHomeRadarIndex(dealRadar);
 
   const catSlugById = new Map<string, string>();
@@ -891,10 +908,9 @@ export default async function Home({
     catSlugById.set(c.id, c.slug);
   }
 
-  // RATE_ITEM_MODEL on: one grid card per Item (DOS/Rate#1155).
-  const gridProducts = await groupCatalogRowsByItem(masterProducts).catch(
-    () => masterProducts
-  );
+  // RATE_ITEM_MODEL on: one grid card and one 1v1 battle slot per Item (DOS/Rate#1155, #1808).
+  const { gridProducts, popularHomeBattles } =
+    await resolveHomeGroupedCatalog(masterProducts);
   const quickCompareSlugs = buildHomeQuickCompareSlugs(
     gridProducts,
     catSlugById
