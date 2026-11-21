@@ -1187,6 +1187,10 @@ async function main() {
     )
   );
 
+  const { runInspectVerdictGuardsSuite } =
+    await import('./inspect-verdict-guards.test');
+  await runInspectVerdictGuardsSuite();
+
   console.warn('✅ Offer plausibility suite passed');
 }
 
