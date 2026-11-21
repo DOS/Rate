@@ -9,15 +9,25 @@ import PageShell from './components/page-shell';
 import {
   EMPTY_RATE_PLATFORM_STATS,
   getMasterProductHref,
-  getMasterProducts,
 } from '@/lib/rate-api';
-import { buildPopular1v1BattlesForCategory } from '@/lib/leaderboard-engine';
 import {
+  buildPopular1v1BattlesForCategory,
+  rankMasterProductsForLeaderboard,
+} from '@/lib/leaderboard-engine';
+import {
+  canonicalVersusOrder,
+  isParseableVersusPair,
+  itemSlugFromProductAnswer,
+  versusHref,
+} from '@/lib/item-compare';
+import {
+  getCachedMasterProducts,
   getCachedMerchantsList,
   getCachedRatePlatformStats,
   getCrossPlatformDealRadar,
   groupCatalogRowsByItem,
   type CrossPlatformDealRadarResponse,
+  type ItemCatalogRow,
   type MerchantSummary,
   type RatePlatformStats,
 } from '@/server/rate';
@@ -279,6 +289,107 @@ export function buildHomeQuickCompareSlugs(
     if (slugs.length >= limit) break;
   }
   return slugs;
+}
+
+export function loadHomeMasterProducts(
+  readProducts: typeof getCachedMasterProducts = getCachedMasterProducts
+) {
+  return readProducts({ categorySlug: 'all', limit: 24 });
+}
+
+export function buildHomePopularBattles(
+  products: MasterProduct[],
+  maxPairs = 3
+) {
+  const itemSlugBySlug = Object.create(null) as Record<string, string>;
+  for (const row of products) {
+    if (!row || typeof row.slug !== 'string' || !row.slug) continue;
+    const itemSlug = (row as ItemCatalogRow).item_slug;
+    if (typeof itemSlug === 'string' && itemSlug) {
+      itemSlugBySlug[row.slug] = itemSlug;
+    }
+  }
+
+  const ranked = rankMasterProductsForLeaderboard(products, {
+    category: 'smartphones',
+    criterion: 'combined',
+  });
+  const seenSides = new Set<string>();
+  const sideByVariantSlug = Object.create(null) as Record<string, string>;
+  const uniqueCandidates: MasterProduct[] = [];
+
+  for (const entry of ranked) {
+    const slug = entry.slug;
+    if (!slug) continue;
+    const rawItemSlug = (entry.product as ItemCatalogRow).item_slug;
+    if (
+      typeof rawItemSlug === 'string' &&
+      rawItemSlug.toLowerCase().includes('-vs-')
+    ) {
+      continue;
+    }
+    const effectiveSide = rawItemSlug
+      ? itemSlugFromProductAnswer(
+          { ok: true, data: { item: { slug: rawItemSlug } } },
+          slug
+        )
+      : slug;
+    if (!effectiveSide || effectiveSide.toLowerCase().includes('-vs-')) {
+      continue;
+    }
+    const sideKey = effectiveSide.toLowerCase();
+    if (seenSides.has(sideKey)) continue;
+    seenSides.add(sideKey);
+    sideByVariantSlug[slug] = effectiveSide;
+    uniqueCandidates.push(entry.product);
+  }
+
+  const rawBattles = buildPopular1v1BattlesForCategory(
+    uniqueCandidates,
+    'smartphones',
+    20
+  );
+  const seenHrefs = new Set<string>();
+  const resolved: typeof rawBattles = [];
+  for (const battle of rawBattles) {
+    const slugA = battle.productA.slug;
+    const slugB = battle.productB.slug;
+    const sideA = sideByVariantSlug[slugA];
+    const sideB = sideByVariantSlug[slugB];
+    if (!sideA || !sideB || sideA.toLowerCase() === sideB.toLowerCase()) {
+      continue;
+    }
+    const [first, second] = canonicalVersusOrder(sideA, sideB);
+    if (
+      !isParseableVersusPair(first, second) ||
+      !isParseableVersusPair(first.toLowerCase(), second.toLowerCase())
+    ) {
+      continue;
+    }
+    const href = versusHref(slugA, slugB, itemSlugBySlug);
+    const hrefKey = href.toLowerCase();
+    if (seenHrefs.has(hrefKey)) continue;
+    seenHrefs.add(hrefKey);
+    resolved.push({
+      ...battle,
+      versusSlug: href.replace(/^\/compare\//, ''),
+      versusHref: href,
+    });
+    if (resolved.length >= maxPairs) break;
+  }
+  return resolved;
+}
+
+export async function resolveHomeGroupedCatalog(
+  masterProducts: MasterProduct[],
+  groupByItem: typeof groupCatalogRowsByItem = groupCatalogRowsByItem
+) {
+  // RATE_ITEM_MODEL on: one grid card and one 1v1 battle slot per Item (DOS/Rate#1155, #1808).
+  const gridProducts = await groupByItem(masterProducts).catch(
+    () => masterProducts
+  );
+  const popularHomeBattles = buildHomePopularBattles(gridProducts, 3);
+  return { gridProducts, popularHomeBattles };
 }
 
 export function sanitizeHomeReviewStars(value: unknown): number | null {
@@ -861,7 +972,7 @@ export default async function Home({
   // it) must not blank the sections that did load.
   const [productsRes, merchantsRes, statsRes, radarRes] =
     await Promise.allSettled([
-      getMasterProducts({ categorySlug: 'all', limit: 24 }),
+      loadHomeMasterProducts(),
       getCachedMerchantsList(),
       getCachedRatePlatformStats(),
       getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 }),
@@ -879,11 +990,6 @@ export default async function Home({
     }
   }
 
-  const popularHomeBattles = buildPopular1v1BattlesForCategory(
-    masterProducts,
-    'smartphones',
-    3
-  );
   const radarIndex = buildHomeRadarIndex(dealRadar);
 
   const catSlugById = new Map<string, string>();
@@ -891,10 +997,9 @@ export default async function Home({
     catSlugById.set(c.id, c.slug);
   }
 
-  // RATE_ITEM_MODEL on: one grid card per Item (DOS/Rate#1155).
-  const gridProducts = await groupCatalogRowsByItem(masterProducts).catch(
-    () => masterProducts
-  );
+  // RATE_ITEM_MODEL on: one grid card and one 1v1 battle slot per Item (DOS/Rate#1155, #1808).
+  const { gridProducts, popularHomeBattles } =
+    await resolveHomeGroupedCatalog(masterProducts);
   const quickCompareSlugs = buildHomeQuickCompareSlugs(
     gridProducts,
     catSlugById
