@@ -120,12 +120,18 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    const top3Slugs = items.slice(0, 3).map((x) => x.slug);
     const compareCategory =
       category === 'all' ? items[0]?.category || 'smartphones' : category;
+    const top3Slugs = (
+      category === 'all'
+        ? items.slice(0, 3).filter((x) => x.category === compareCategory)
+        : items.slice(0, 3)
+    )
+      .map((x) => x.slug)
+      .filter(Boolean);
     const compareTop3Url =
       top3Slugs.length >= 2
-        ? `/compare?cat=${compareCategory}&slugs=${top3Slugs.join(',')}`
+        ? `/compare?cat=${compareCategory}&slugs=${top3Slugs.map(encodeURIComponent).join(',')}`
         : null;
 
     const payload = {

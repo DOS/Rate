@@ -38,56 +38,62 @@ function fail(status: number, code: string, error: string) {
  * ids are left out of the answer.
  */
 export async function POST(request: Request) {
-  const auth = await authenticateRateRequest(
-    request,
-    'read your review values',
-    MY_VALUES_HEADERS
-  );
-  if (!auth.ok) return auth.response;
-
-  const body = await readBoundedJsonBody(request, 8 * 1024);
-  if (body.tooLarge) return payloadTooLargeResponse(MY_VALUES_HEADERS);
-  const ids = parseReviewIds(
-    body.value && typeof body.value === 'object' && !Array.isArray(body.value)
-      ? (body.value as { ids?: unknown }).ids
-      : undefined
-  );
-  if (!ids) {
-    return fail(400, 'INVALID_IDS', 'Provide ids: up to 100 review uuids');
-  }
-  if (ids.length === 0) {
-    return NextResponse.json(
-      { ok: true, values: [] },
-      { headers: MY_VALUES_HEADERS }
+  try {
+    const body = await readBoundedJsonBody(request, 8 * 1024);
+    if (body.tooLarge) return payloadTooLargeResponse(MY_VALUES_HEADERS);
+    const ids = parseReviewIds(
+      body.value && typeof body.value === 'object' && !Array.isArray(body.value)
+        ? (body.value as { ids?: unknown }).ids
+        : undefined
     );
-  }
+    if (!ids) {
+      return fail(400, 'INVALID_IDS', 'Provide ids: up to 100 review uuids');
+    }
 
-  const { data, error } = await auth.rateClient.rpc('my_review_values', {
-    p_review_ids: ids,
-  });
-  if (error) {
-    if (isMissingRpcError(error)) {
-      return fail(
-        503,
-        'REVIEW_VALUES_UNAVAILABLE',
-        'Review values unavailable'
+    const auth = await authenticateRateRequest(
+      request,
+      'read your review values',
+      MY_VALUES_HEADERS
+    );
+    if (!auth.ok) return auth.response;
+
+    if (ids.length === 0) {
+      return NextResponse.json(
+        { ok: true, values: [] },
+        { headers: MY_VALUES_HEADERS }
       );
     }
-    log.error('my_review_values failed', { error: serializeError(error) });
-    return fail(502, 'READ_FAILED', 'Could not read review values');
-  }
 
-  const asked = new Set(ids);
-  const values = [];
-  for (const row of Array.isArray(data) ? data : []) {
-    const id =
-      typeof row?.review_id === 'string' ? row.review_id.toLowerCase() : '';
-    if (!asked.has(id)) continue;
-    const value = parseMyReviewValue(row.value_score, row.value_breakdown);
-    if (value) values.push({ id, ...value });
+    const { data, error } = await auth.rateClient.rpc('my_review_values', {
+      p_review_ids: ids,
+    });
+    if (error) {
+      if (isMissingRpcError(error)) {
+        return fail(
+          503,
+          'REVIEW_VALUES_UNAVAILABLE',
+          'Review values unavailable'
+        );
+      }
+      log.error('my_review_values failed', { error: serializeError(error) });
+      return fail(502, 'READ_FAILED', 'Could not read review values');
+    }
+
+    const asked = new Set(ids);
+    const values = [];
+    for (const row of Array.isArray(data) ? data : []) {
+      const id =
+        typeof row?.review_id === 'string' ? row.review_id.toLowerCase() : '';
+      if (!asked.has(id)) continue;
+      const value = parseMyReviewValue(row.value_score, row.value_breakdown);
+      if (value) values.push({ id, ...value });
+    }
+    return NextResponse.json(
+      { ok: true, values },
+      { headers: MY_VALUES_HEADERS }
+    );
+  } catch (error) {
+    log.error('POST failed', { error: serializeError(error) });
+    return fail(500, 'INTERNAL_ERROR', 'Could not read review values');
   }
-  return NextResponse.json(
-    { ok: true, values },
-    { headers: MY_VALUES_HEADERS }
-  );
 }

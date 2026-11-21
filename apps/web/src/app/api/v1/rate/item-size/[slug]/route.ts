@@ -14,6 +14,13 @@ export function generateStaticParams(): { slug: string }[] {
   return [];
 }
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
+}
+
 type RouteContext = { params: Promise<{ slug: string }> };
 
 /**
