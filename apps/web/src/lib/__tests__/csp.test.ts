@@ -192,7 +192,7 @@ async function main() {
     'utf8'
   );
   const rule = nextConfig.match(
-    /source: ("[^"]+"),\s*headers: \[\s*\{\s*key: "Content-Security-Policy",\s*value:\s*("[^"]+")/
+    /source:\s*("[^"]+"),\s*headers: \[\s*\{\s*key: "Content-Security-Policy",\s*value:\s*("[^"]+")/
   );
   assert.ok(rule, 'next.config.mjs has one Content-Security-Policy rule');
   assert.equal(JSON.parse(rule[2]!), STATIC_CSP, 'the same static policy');
@@ -219,6 +219,14 @@ async function main() {
     '/',
     '/smartphones',
     '/smartphones/iphone-16-pro-max-256gb',
+    '/smartphones/nokia-8.1',
+    '/en/smartphones/nokia-8.1',
+    '/merchants/anker.vn',
+    '/merchants/viettel.store',
+    '/en/merchants/anker.vn',
+    '/cs/merchants/anker.vn',
+    '/compare/nokia-7.2-vs-nokia-8.1',
+    '/en/compare/nokia-7.2-vs-nokia-8.1',
     '/inspect',
     '/compare',
     '/api/health',
@@ -233,6 +241,8 @@ async function main() {
     '/sitemap.xml',
     '/monitoring',
     '/img/logo.png',
+    '/unknown/asset.js',
+    '/en/foo.png',
   ]) {
     const byProxy = proxied.some((re) => re.test(p));
     assert.notEqual(

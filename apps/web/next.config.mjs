@@ -157,9 +157,11 @@ const nextConfig = {
       // Every path the proxy does not serve (its matcher in src/proxy.ts):
       // pages get it in a <meta> tag (PAGE_META_CSP). Vercel copies config
       // headers onto the request, and an enforcing policy there hides the
-      // report-only one Next.js reads the nonce from (DOS/Rate#1345).
+      // report-only one Next.js reads the nonce from (DOS/Rate#1345). Dotted
+      // dynamic page slugs stay with the proxy (DOS/Rate#1807).
       {
-        source: "/:path((?:_next|_vercel|api|monitoring|sitemap|.*\\.).*)",
+        source:
+          "/:path((?:_next|_vercel|api|monitoring|sitemap|(?!(?:(?:cs|en|vi)/)?(?:merchants|compare|smartphones|laptops|tablets|smartwatches|earbuds)/(?![.])[^/]+/?$)[^.]*\\.).*)",
         headers: [
           {
             key: "Content-Security-Policy",
@@ -199,11 +201,13 @@ const nextConfig = {
       // Sent to a path no route matches, it gets app/not-found.tsx rendered
       // on the server with status 404 instead. These rewrites run after
       // public files and static routes (robots.txt, icon.png, sitemap.xml),
-      // so those still load; Next and Vercel assets and the API are left
-      // alone. Only a dot in the last segment counts: "/a.b/smartphones"
-      // still lands on [locale] and gets the shell (status 404).
+      // so those still load; Next and Vercel assets, the API and dotted
+      // dynamic page slugs (/merchants/:id, /compare/:versus, /:category/:slug,
+      // DOS/Rate#1807) are left alone. Only a dot in the last segment counts:
+      // "/a.b/smartphones" still lands on [locale] and gets the shell (status 404).
       {
-        source: "/:path((?!_next/|_vercel/|api/)(?:.*/)?[^/]*[.][^/]*)",
+        source:
+          "/:path((?!_next/|_vercel/|api/|(?:(?:cs|en|vi)/)?(?:merchants|compare|smartphones|laptops|tablets|smartwatches|earbuds)/(?![.])[^/]+/?$)(?:[^/]*/)*[^/.]*[.][^/]*)",
         destination: "/vi/__not-found",
       },
     ]

@@ -63,9 +63,9 @@ export function localeProxy(req: NextRequest): NextResponse {
 
   // Strip any explicit /vi, /en, /cs URL prefix so URLs never contain a locale slug
   const pathname = req.nextUrl.pathname;
-  const localePrefixMatch = pathname.match(/^\/(vi|en|cs)(\/.*)?$/);
+  const localePrefixMatch = pathname.match(/^\/(vi|en|cs)(\/.*)?$/i);
   if (localePrefixMatch) {
-    const matchedLocale = localePrefixMatch[1]!;
+    const matchedLocale = localePrefixMatch[1]!.toLowerCase();
     // One leading slash: "/en//host" must not become a protocol-relative Location.
     const cleanPath = `/${(localePrefixMatch[2] ?? '').replace(/^\/+/, '')}`;
     const redirectUrl = req.nextUrl.clone();
@@ -115,10 +115,13 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
   return response;
 }
 
+// Dotted slugs under dynamic page routes (/merchants/:id, /compare/:versus, and
+// /:category/:slug, with or without a /vi|/en|/cs prefix) are pages rather than
+// static files, so they still run through the proxy for locale routing and CSP
+// nonces (DOS/Rate#1807); next.config.mjs mirrors this in headers() and rewrites().
 export const config = {
   matcher: [
     '/',
-    '/(cs|en|vi)/:path*',
-    '/((?!_next|_vercel|api|monitoring|sitemap|.*\\..*).*)',
+    '/((?!_next|_vercel|api|monitoring|sitemap|(?!(?:(?:cs|en|vi)/)?(?:merchants|compare|smartphones|laptops|tablets|smartwatches|earbuds)/(?![.])[^/]+/?$)[^.]*\\..*).*)',
   ],
 };
