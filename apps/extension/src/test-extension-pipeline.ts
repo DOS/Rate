@@ -8624,6 +8624,1083 @@ async function runTests() {
       }
     }
   }
+
+  // DOS/Rate#1809: clear stale pill, badge, and session lookup state on SPA exit,
+  // catch chrome.sidePanel.open rejections, and validate sender.url on content-script messages.
+  {
+    const g = globalThis as Record<string, unknown>;
+    const saved = [
+      'chrome',
+      'document',
+      'window',
+      'fetch',
+      'MutationObserver',
+      'requestAnimationFrame',
+      'setTimeout',
+      'clearTimeout',
+    ].map((k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const);
+    try {
+      // 1. Content-script SPA exit: in-flight PDP lookup discarded, pill removed, and RATE_PRODUCT_CLEARED emitted once.
+      let pillHost: { shadowRoot?: { innerHTML: string } } | null = null;
+      let shadowHtml = '';
+      let mutCb: (() => void) | undefined;
+      let popstateCb: (() => void) | undefined;
+      let navEntryChangeCb: (() => void) | undefined;
+      let prerenderChangeCb: (() => void) | undefined;
+      let isPrerendering = false;
+      let currentHref = 'https://shopee.vn/Dien-thoai-iPhone-16-Pro-i.101.202';
+      const h1Title = 'iPhone 16 Pro 256GB';
+      const rafs: Array<() => unknown> = [];
+      let nextTimerId = 1;
+      const plannedTimers = new Map<number, () => unknown>();
+      const drainTimers = () => {
+        const cbs = [...plannedTimers.values()];
+        plannedTimers.clear();
+        for (const cb of cbs) cb();
+      };
+      const sentMessages: Array<{ type?: string; signal?: unknown }> = [];
+      const pendingDetectResolvers: Array<
+        (res: Record<string, unknown>) => void
+      > = [];
+      const flushContent = async () => {
+        for (let i = 0; i < 6; i++) {
+          while (rafs.length) void rafs.shift()!();
+          await Promise.resolve();
+        }
+      };
+      g.window = {
+        location: {
+          get href() {
+            return currentHref;
+          },
+          set href(v: string) {
+            currentHref = v;
+          },
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'popstate') popstateCb = cb;
+        },
+        navigation: {
+          addEventListener: (ev: string, cb: () => void) => {
+            if (ev === 'currententrychange') navEntryChangeCb = cb;
+          },
+        },
+      };
+      g.document = {
+        get prerendering() {
+          return isPrerendering;
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'prerenderingchange') prerenderChangeCb = cb;
+        },
+        body: {
+          appendChild: (el: { shadowRoot?: { innerHTML: string } }) => {
+            pillHost = el;
+          },
+        },
+        getElementById: (id: string) =>
+          id === 'rate-vn-trust-pill-host' ? pillHost : null,
+        createElement: () => {
+          const shadow = {
+            get innerHTML() {
+              return shadowHtml;
+            },
+            set innerHTML(v: string) {
+              shadowHtml = v;
+            },
+            getElementById: () => ({ addEventListener() {} }),
+          };
+          const el = {
+            id: '',
+            shadowRoot: null as typeof shadow | null,
+            attachShadow() {
+              el.shadowRoot = shadow;
+              return shadow;
+            },
+            remove() {
+              pillHost = null;
+            },
+          };
+          return el;
+        },
+        querySelectorAll: () => [],
+        querySelector: (s: string) =>
+          s === 'h1'
+            ? { textContent: h1Title }
+            : s === '.pqTWkA'
+              ? { textContent: '28.990.000₫' }
+              : null,
+      };
+      g.MutationObserver = class {
+        constructor(cb: () => void) {
+          mutCb = cb;
+        }
+        observe() {}
+      };
+      g.requestAnimationFrame = (cb: () => unknown) => {
+        rafs.push(cb);
+        return rafs.length;
+      };
+      g.setTimeout = ((cb: () => unknown) => {
+        const id = nextTimerId++;
+        plannedTimers.set(id, cb);
+        return id;
+      }) as unknown;
+      g.clearTimeout = ((id: number) => {
+        plannedTimers.delete(id);
+      }) as unknown;
+      g.chrome = {
+        runtime: {
+          sendMessage: (msg: { type?: string; signal?: unknown }) => {
+            sentMessages.push(msg);
+            if (msg.type === 'RATE_PRODUCT_DETECTED') {
+              return new Promise<Record<string, unknown>>((resolve) => {
+                pendingDetectResolvers.push(resolve);
+              });
+            }
+            return Promise.resolve({ ok: true });
+          },
+        },
+      };
+
+      const dealPayload = {
+        ok: true,
+        data: {
+          matchStatus: 'exact_listing',
+          isAccessoryOrPart: false,
+          priceAssessment: {
+            verdict: 'genuine_deal',
+            badgeLabel: 'Good deal',
+            explanation: 'Good deal',
+            cheaperOfferCount: 0,
+            maxSavingsAmount: 0,
+            marketMinPrice: 28_990_000,
+          },
+          masterProduct: { rating_score_5: 4.9 },
+          reviewSummary: null,
+          radarSignal: null,
+        },
+      };
+
+      await import(
+        new URL('./content/content-script.js?case=1809', import.meta.url).href
+      );
+      await flushContent();
+      assert.equal(pendingDetectResolvers.length, 1);
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
+        0
+      );
+
+      // Navigate SPA away via pushState BEFORE the 700ms MutationObserver timer fires,
+      // then resolve the in-flight PDP lookup during the debounce window:
+      // canonicalUrl mismatch must discard the pill and immediately emit RATE_PRODUCT_CLEARED.
+      currentHref = 'https://shopee.vn/search?keyword=iphone';
+      mutCb!();
+      assert.equal(
+        plannedTimers.size,
+        1,
+        '700ms MutationObserver debounce timer still pending'
+      );
+      pendingDetectResolvers.shift()!(dealPayload);
+      await flushContent();
+      assert.equal(
+        pillHost,
+        null,
+        'in-flight PDP lookup resolving during pushState debounce window must never render a pill'
+      );
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
+        1,
+        'URL mismatch on late lookup resolution must immediately inspect and emit RATE_PRODUCT_CLEARED'
+      );
+
+      // Extra DOM mutations while remaining on /search must NOT spam duplicate RATE_PRODUCT_CLEARED messages.
+      drainTimers();
+      mutCb!();
+      drainTimers();
+      await flushContent();
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
+        1,
+        'repeated non-PDP mutations must not re-send RATE_PRODUCT_CLEARED'
+      );
+
+      // Navigating back to the same PDP renders the pill, and Navigation API currententrychange to / clears it immediately.
+      currentHref = 'https://shopee.vn/Dien-thoai-iPhone-16-Pro-i.101.202';
+      navEntryChangeCb!();
+      await flushContent();
+      assert.equal(pendingDetectResolvers.length, 1);
+      pendingDetectResolvers.shift()!(dealPayload);
+      await flushContent();
+      assert.ok(pillHost, 'pill renders when returning to PDP');
+
+      currentHref = 'https://shopee.vn/';
+      navEntryChangeCb!();
+      await flushContent();
+      assert.equal(pillHost, null, 'SPA exit to / must remove rendered pill');
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
+        2,
+        'transitioning away from rendered PDP to / must emit RATE_PRODUCT_CLEARED'
+      );
+
+      // Already-scheduled 429 rateLimitRetry timer is genuinely cancelled via clearTimeout on SPA exit to /cart.
+      currentHref = 'https://shopee.vn/Dien-thoai-iPhone-16-Pro-i.101.202';
+      popstateCb!();
+      await flushContent();
+      assert.equal(pendingDetectResolvers.length, 1);
+      pendingDetectResolvers.shift()!({
+        ok: false,
+        status: 429,
+        retryAfterSeconds: 5,
+      });
+      await flushContent();
+      assert.equal(
+        plannedTimers.size,
+        1,
+        '429 on PDP schedules one retry timer'
+      );
+      currentHref = 'https://shopee.vn/cart';
+      popstateCb!();
+      await flushContent();
+      assert.equal(
+        plannedTimers.size,
+        0,
+        'SPA exit to /cart must cancel already-scheduled 429 retry timer via clearTimeout'
+      );
+      drainTimers();
+      await flushContent();
+      assert.equal(pendingDetectResolvers.length, 0);
+
+      // Speculation Rules prerendering defers detection until prerenderingchange fires.
+      isPrerendering = true;
+      currentHref = 'https://shopee.vn/Dien-thoai-Galaxy-S25-i.101.303';
+      navEntryChangeCb!();
+      await flushContent();
+      assert.equal(
+        pendingDetectResolvers.length,
+        0,
+        'prerendered document must defer RATE_PRODUCT_DETECTED until activated'
+      );
+      assert.ok(prerenderChangeCb, 'must attach prerenderingchange listener');
+      isPrerendering = false;
+      prerenderChangeCb!();
+      await flushContent();
+      assert.equal(
+        pendingDetectResolvers.length,
+        1,
+        'activating prerendered PDP must run inspectCurrentPage'
+      );
+      pendingDetectResolvers.shift()!(dealPayload);
+      await flushContent();
+      assert.ok(pillHost, 'pill renders after prerender activation');
+    } finally {
+      for (const [key, desc] of saved) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+
+    const savedSw = ['chrome', 'fetch'].map(
+      (k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const
+    );
+    try {
+      // 2. Service worker: RATE_PRODUCT_CLEARED, sidePanel.open rejection handling, and sender.url validation.
+      let swOnMsg:
+        | ((
+            m: Record<string, unknown>,
+            s: Record<string, unknown>,
+            cb: (r: unknown) => void
+          ) => boolean | void)
+        | undefined;
+      const sessionStore = new Map<string, unknown>();
+      const sessionChangedEvents: Array<
+        Record<string, { oldValue?: unknown; newValue?: unknown }>
+      > = [];
+      const badges = new Map<number, { text: string; color?: string }>();
+      const sidePanelCalls: Array<Record<string, unknown>> = [];
+      let sidePanelShouldReject = false;
+      let activeTabId = 42;
+      let allowSessionRemove = true;
+      let delaySessionGetOnce = false;
+      let onSessionGetBlocked: (() => void) | null = null;
+      let releaseSessionGet: (() => void) | null = null;
+      let delayLocalGetOnce = false;
+      let onLocalGetBlocked: (() => void) | null = null;
+      let releaseLocalGet: (() => void) | null = null;
+      const fetchedUrls: string[] = [];
+      let swFetchImpl: (u: string) => Promise<Response> = async (u) => {
+        fetchedUrls.push(u);
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              matchStatus: 'exact_listing',
+              isAccessoryOrPart: false,
+              priceAssessment: { verdict: 'genuine_deal' },
+              queryIndex: fetchedUrls.length,
+            },
+          }),
+          { status: 200 }
+        );
+      };
+      g.chrome = {
+        runtime: {
+          id: 'rate-ext-1809',
+          getManifest: () => ({ version: '2.0.0' }),
+          onStartup: { addListener() {} },
+          onInstalled: { addListener() {} },
+          onMessage: {
+            addListener(fn: NonNullable<typeof swOnMsg>) {
+              swOnMsg = fn;
+            },
+          },
+          getURL: (p: string) => `chrome-extension://rate-ext-1809/${p}`,
+        },
+        sidePanel: {
+          setPanelBehavior: async () => {},
+          open: (opts: Record<string, unknown>) => {
+            sidePanelCalls.push(opts);
+            if (sidePanelShouldReject) {
+              return Promise.reject(
+                new Error(
+                  'sidePanel.open() may only be called in response to a user gesture'
+                )
+              );
+            }
+            return Promise.resolve();
+          },
+        },
+        storage: {
+          local: {
+            get: async () => {
+              if (delayLocalGetOnce) {
+                delayLocalGetOnce = false;
+                const gate = new Promise<void>((r) => {
+                  releaseLocalGet = r;
+                });
+                onLocalGetBlocked?.();
+                await gate;
+              }
+              return {
+                apiBaseUrl: 'https://rate.vn',
+                crowdContributeOptIn: false,
+              };
+            },
+            set: async () => {},
+            remove: async () => {},
+          },
+          session: {
+            get: async (keys?: string | string[]) => {
+              if (delaySessionGetOnce) {
+                delaySessionGetOnce = false;
+                const gate = new Promise<void>((r) => {
+                  releaseSessionGet = r;
+                });
+                onSessionGetBlocked?.();
+                await gate;
+              }
+              const list = Array.isArray(keys) ? keys : keys ? [keys] : [];
+              return Object.fromEntries(
+                list
+                  .filter((k) => sessionStore.has(k))
+                  .map((k) => [k, sessionStore.get(k)])
+              );
+            },
+            set: async (obj: Record<string, unknown>) => {
+              const changes: Record<
+                string,
+                { oldValue?: unknown; newValue?: unknown }
+              > = {};
+              for (const [k, v] of Object.entries(obj)) {
+                const hadOld = sessionStore.has(k);
+                const oldVal = sessionStore.get(k);
+                sessionStore.set(k, v);
+                if (!hadOld || oldVal !== v) {
+                  changes[k] = {
+                    ...(hadOld ? { oldValue: oldVal } : {}),
+                    newValue: v,
+                  };
+                }
+              }
+              if (Object.keys(changes).length > 0) {
+                sessionChangedEvents.push(changes);
+              }
+            },
+            get remove() {
+              if (!allowSessionRemove) return undefined;
+              return async (keys: string | string[]) => {
+                const changes: Record<
+                  string,
+                  { oldValue?: unknown; newValue?: unknown }
+                > = {};
+                for (const k of Array.isArray(keys) ? keys : [keys]) {
+                  if (sessionStore.has(k)) {
+                    changes[k] = { oldValue: sessionStore.get(k) };
+                    sessionStore.delete(k);
+                  }
+                }
+                if (Object.keys(changes).length > 0) {
+                  sessionChangedEvents.push(changes);
+                }
+              };
+            },
+          },
+        },
+        action: {
+          setBadgeText: async ({
+            text,
+            tabId,
+          }: {
+            text: string;
+            tabId?: number;
+          }) => {
+            if (tabId) badges.set(tabId, { ...badges.get(tabId), text });
+          },
+          setBadgeBackgroundColor: async ({
+            color,
+            tabId,
+          }: {
+            color: string;
+            tabId?: number;
+          }) => {
+            if (tabId) {
+              badges.set(tabId, {
+                text: badges.get(tabId)?.text ?? '',
+                color,
+              });
+            }
+          },
+          onClicked: { addListener() {} },
+        },
+        tabs: {
+          query: async () => [{ id: activeTabId, active: true }],
+          create: async () => ({ id: 1 }),
+        },
+      };
+      g.fetch = ((u: string | URL) => swFetchImpl(String(u))) as unknown;
+      await import(
+        new URL('./background/service-worker.js?case=1809', import.meta.url)
+          .href
+      );
+      assert.ok(swOnMsg, 'service worker registered onMessage');
+
+      const callSw = (
+        msg: Record<string, unknown>,
+        sender: Record<string, unknown>
+      ) =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          swOnMsg!(msg, sender, (r) => resolve(r as Record<string, unknown>));
+        });
+      const panelSender = {
+        id: 'rate-ext-1809',
+        tab: undefined,
+        url: 'chrome-extension://rate-ext-1809/sidepanel/sidepanel.html',
+      };
+      const shopeeSignal = {
+        platform: 'shopee',
+        canonicalUrl: 'https://shopee.vn/Phone-A-i.10.20',
+        externalItemId: '20',
+        externalShopId: '10',
+        title: 'Phone A 256GB',
+        selectedVariant: '256GB',
+        price: 25_990_000,
+        originalPrice: 29_990_000,
+        ratingStar: 4.9,
+        ratingCount: 100,
+      };
+
+      // (a) PDP -> /search clears badge, tab_42, lookup_tab_42, tab_latest, and lookup_tab_latest.
+      const detectRes = await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20?sp_atk=abc',
+        }
+      );
+      assert.equal(detectRes.ok, true);
+      assert.equal(badges.get(42)?.text, 'TỐT');
+      assert.ok(sessionStore.get('tab_42'));
+      assert.ok(sessionStore.get('lookup_tab_42'));
+      assert.ok(sessionStore.get('tab_latest'));
+      assert.ok(sessionStore.get('lookup_tab_latest'));
+
+      const clearRes = await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/search?keyword=phone',
+        }
+      );
+      assert.equal(clearRes.ok, true);
+      assert.equal(badges.get(42)?.text, '');
+      assert.equal(sessionStore.has('tab_42'), false);
+      assert.equal(sessionStore.has('lookup_tab_42'), false);
+      assert.equal(sessionStore.has('tab_latest'), false);
+      assert.equal(sessionStore.has('lookup_tab_latest'), false);
+
+      const fullAfterClear = await callSw(
+        { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: null },
+        panelSender
+      );
+      assert.equal(fullAfterClear.ok, true);
+      assert.equal(fullAfterClear.signal, null);
+      assert.equal(fullAfterClear.data, null);
+
+      // (b) PDP -> manual quick_query -> /search clears tab_42 & badge while preserving newer quick_query tab_latest.
+      await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      assert.equal(badges.get(42)?.text, 'TỐT');
+      const quickRes = await callSw(
+        { type: 'RATE_SIDEPANEL_QUICK_QUERY', query: 'Galaxy S25 Ultra' },
+        panelSender
+      );
+      assert.equal(quickRes.ok, true);
+      const fetchCountAfterQuick = fetchedUrls.length;
+
+      const clearAfterQuick = await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/',
+        }
+      );
+      assert.equal(clearAfterQuick.ok, true);
+      assert.equal(
+        badges.get(42)?.text,
+        '',
+        'tab badge must still clear on SPA exit even when quick_query owns tab_latest'
+      );
+      assert.equal(sessionStore.has('tab_42'), false);
+      assert.equal(sessionStore.has('lookup_tab_42'), false);
+      assert.equal(
+        (sessionStore.get('tab_latest') as { source?: string })?.source,
+        'quick_query',
+        'newer quick_query tab_latest must be preserved across SPA exit'
+      );
+      assert.deepEqual(sessionStore.get('lookup_tab_latest'), quickRes.data);
+
+      const fullUsingPreservedQuick = await callSw(
+        { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: null },
+        panelSender
+      );
+      assert.equal(fullUsingPreservedQuick.ok, true);
+      assert.deepEqual(fullUsingPreservedQuick.data, quickRes.data);
+      assert.equal(
+        fetchedUrls.length,
+        fetchCountAfterQuick,
+        'pendingQuickQueryReceipt must remain intact when SPA exit preserves quick_query'
+      );
+
+      // (c) Minimal storage mock without session.remove clears keys to null cleanly.
+      allowSessionRemove = false;
+      await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/cart',
+        }
+      );
+      assert.equal(sessionStore.get('tab_42'), null);
+      assert.equal(sessionStore.get('lookup_tab_42'), null);
+      assert.equal(sessionStore.get('tab_latest'), null);
+      assert.equal(sessionStore.get('lookup_tab_latest'), null);
+      allowSessionRemove = true;
+      sessionStore.clear();
+
+      // (d) Background tab RATE_PRODUCT_CLEARED clears only its own tab state without wiping active tab_latest.
+      await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      const lazadaSignal = {
+        ...shopeeSignal,
+        platform: 'lazada',
+        canonicalUrl: 'https://www.lazada.vn/products/Phone-B-i30-s40.html',
+        externalItemId: '30',
+        externalShopId: '40',
+        title: 'Phone B',
+      };
+      await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: lazadaSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 99, active: false },
+          url: 'https://www.lazada.vn/products/Phone-B-i30-s40.html',
+        }
+      );
+      assert.equal(badges.get(99)?.text, 'TỐT');
+      assert.ok(sessionStore.get('tab_99'));
+
+      await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 99, active: false },
+          url: 'https://www.lazada.vn/cart',
+        }
+      );
+      assert.equal(badges.get(99)?.text, '');
+      assert.equal(sessionStore.has('tab_99'), false);
+      assert.equal(sessionStore.has('lookup_tab_99'), false);
+      assert.equal(
+        (
+          sessionStore.get('tab_latest') as {
+            signal?: { canonicalUrl?: string };
+          }
+        )?.signal?.canonicalUrl,
+        shopeeSignal.canonicalUrl,
+        'background tab SPA exit must not wipe active tab_latest'
+      );
+      assert.ok(sessionStore.get('lookup_tab_latest'));
+
+      // (e) In-flight RATE_PRODUCT_DETECTED resolving after RATE_PRODUCT_CLEARED stays stale and writes nothing,
+      // and cold-session lookup_tab_latest === undefined still fires lookup_tab_latest storage.onChanged.
+      sessionStore.delete('lookup_tab_latest');
+      sessionChangedEvents.length = 0;
+      let resolveSlowPill!: (res: Response) => void;
+      swFetchImpl = () =>
+        new Promise<Response>((resolve) => {
+          resolveSlowPill = resolve;
+        });
+      const slowDetectPromise = callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      await new Promise((r) => setImmediate(r));
+      await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/search?keyword=phone',
+        }
+      );
+      assert.equal(badges.get(42)?.text, '');
+      assert.equal(sessionStore.has('lookup_tab_42'), false);
+      assert.equal(sessionStore.has('lookup_tab_latest'), false);
+      assert.equal(
+        sessionChangedEvents.some((ev) => 'lookup_tab_latest' in ev),
+        true,
+        'SPA exit before lookup_tab_latest was ever written must still fire lookup_tab_latest storage.onChanged'
+      );
+
+      resolveSlowPill(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              matchStatus: 'exact_listing',
+              isAccessoryOrPart: false,
+              priceAssessment: { verdict: 'inflated_fake_sale' },
+            },
+          }),
+          { status: 200 }
+        )
+      );
+      const slowDetectRes = await slowDetectPromise;
+      assert.equal(slowDetectRes.stale, true);
+      assert.equal(
+        badges.get(42)?.text,
+        '',
+        'superseded PDP lookup must not restore stale badge after RATE_PRODUCT_CLEARED'
+      );
+      assert.equal(sessionStore.has('lookup_tab_42'), false);
+      assert.equal(sessionStore.has('lookup_tab_latest'), false);
+
+      swFetchImpl = async (u) => {
+        fetchedUrls.push(u);
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              matchStatus: 'exact_listing',
+              isAccessoryOrPart: false,
+              priceAssessment: { verdict: 'genuine_deal' },
+            },
+          }),
+          { status: 200 }
+        );
+      };
+
+      // (e2) In-flight RATE_PRODUCT_CLEARED superseded by a newer RATE_PRODUCT_DETECTED must not wipe newer state.
+      delaySessionGetOnce = true;
+      const clearBlockedOnGet = new Promise<void>((r) => {
+        onSessionGetBlocked = r;
+      });
+      const supersededClearPromise = callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/search?keyword=phone',
+        }
+      );
+      await clearBlockedOnGet;
+      const newerDetectRes = await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      assert.equal(newerDetectRes.ok, true);
+      releaseSessionGet!();
+      const supersededClearRes = await supersededClearPromise;
+      assert.equal(supersededClearRes.stale, true);
+      assert.equal(badges.get(42)?.text, 'TỐT');
+      assert.ok(sessionStore.get('tab_42'));
+      assert.ok(sessionStore.get('tab_latest'));
+      assert.ok(sessionStore.get('lookup_tab_42'));
+      assert.ok(sessionStore.get('lookup_tab_latest'));
+
+      // (e3) In-flight RATE_SIDEPANEL_FETCH_FULL fallback (reading tab_latest from non-product active tab)
+      // superseded by RATE_PRODUCT_CLEARED must return stale: true and never resurrect tab_latest.
+      activeTabId = 88;
+      delayLocalGetOnce = true;
+      const fullBlockedOnSettings = new Promise<void>((r) => {
+        onLocalGetBlocked = r;
+      });
+      const fallbackFullPromise = callSw(
+        { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: '512GB' },
+        panelSender
+      );
+      await fullBlockedOnSettings;
+      await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/',
+        }
+      );
+      assert.equal(sessionStore.has('tab_latest'), false);
+      releaseLocalGet!();
+      const fallbackFullRes = await fallbackFullPromise;
+      assert.equal(
+        fallbackFullRes.stale,
+        true,
+        'fallback full lookup superseded by RATE_PRODUCT_CLEARED must be marked stale'
+      );
+      assert.equal(
+        sessionStore.has('tab_latest'),
+        false,
+        'superseded fallback overrideVariant write must not resurrect cleared tab_latest'
+      );
+      activeTabId = 42;
+
+      // (f) chrome.sidePanel.open rejections on RATE_OPEN_SIDE_PANEL are caught cleanly without unhandledRejection.
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown) => {
+        unhandled.push(reason);
+      };
+      process.on('unhandledRejection', onUnhandled);
+      try {
+        sidePanelShouldReject = true;
+        sidePanelCalls.length = 0;
+        const openTabRes = await callSw(
+          { type: 'RATE_OPEN_SIDE_PANEL' },
+          {
+            id: 'rate-ext-1809',
+            tab: { id: 42, windowId: 7 },
+            url: 'https://shopee.vn/Phone-A-i.10.20',
+          }
+        );
+        const openWindowRes = await callSw(
+          { type: 'RATE_OPEN_SIDE_PANEL' },
+          {
+            id: 'rate-ext-1809',
+            tab: { windowId: 7 },
+            url: 'https://www.topzone.vn/iphone/iphone-16-pro-max',
+          }
+        );
+        await new Promise((r) => setTimeout(r, 20));
+        assert.equal(openTabRes.ok, true);
+        assert.equal(openWindowRes.ok, true);
+        assert.deepEqual(sidePanelCalls, [{ tabId: 42 }, { windowId: 7 }]);
+        assert.equal(
+          unhandled.length,
+          0,
+          'rejected chrome.sidePanel.open must never trigger unhandledRejection'
+        );
+      } finally {
+        sidePanelShouldReject = false;
+        process.off('unhandledRejection', onUnhandled);
+      }
+
+      // (g) sender.url origin & platform validation on RATE_PRODUCT_DETECTED, RATE_PRODUCT_CLEARED, and RATE_OPEN_SIDE_PANEL.
+      await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      assert.equal(badges.get(42)?.text, 'TỐT');
+      const fetchesBeforeUntrusted = fetchedUrls.length;
+      sidePanelCalls.length = 0;
+
+      for (const badUrl of [
+        'https://evil.example.com/Phone-A-i.10.20',
+        'https://shopee.vn.evil.com/Phone-A-i.10.20',
+        'https://evilshopee.vn/Phone-A-i.10.20',
+        'https://rate.vn/smartphones/iphone-16',
+        'https://www.rate.vn/',
+        'http://shopee.vn/Phone-A-i.10.20',
+        'https://shopee.vn:8443/Phone-A-i.10.20',
+        'https://user:pass@shopee.vn/Phone-A-i.10.20',
+        'https://m.tiktok.com/v/12345',
+        'chrome-extension://rate-ext-1809/onboarding/onboarding.html',
+        'chrome-extension://rate-ext-1809/sidepanel/sidepanel.html',
+        'about:blank',
+        '',
+      ]) {
+        const badSender = {
+          id: 'rate-ext-1809',
+          tab: { id: 42, windowId: 7, active: true },
+          url: badUrl,
+        };
+        const rejDetect = await callSw(
+          { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+          badSender
+        );
+        const rejClear = await callSw(
+          { type: 'RATE_PRODUCT_CLEARED' },
+          badSender
+        );
+        const rejOpen = await callSw(
+          { type: 'RATE_OPEN_SIDE_PANEL' },
+          badSender
+        );
+        assert.equal(rejDetect.ok, false, `must reject detect from ${badUrl}`);
+        assert.equal(rejClear.ok, false, `must reject clear from ${badUrl}`);
+        assert.equal(rejOpen.ok, false, `must reject open from ${badUrl}`);
+      }
+
+      // Platform-mismatched and cross-origin sister-domain/subdomain sender.url on RATE_PRODUCT_DETECTED.
+      for (const [mismatchSenderUrl, mismatchSignal] of [
+        ['https://www.lazada.vn/products/p-i1-s2.html', shopeeSignal],
+        ['https://shopee.vn/Phone-A-i.10.20', lazadaSignal],
+        [
+          'https://shopee.vn/Phone-A-i.10.20',
+          {
+            ...shopeeSignal,
+            canonicalUrl: 'https://www.lazada.vn/products/p-i1-s2.html',
+          },
+        ],
+        [
+          'https://shopee.vn/Phone-A-i.10.20',
+          {
+            ...shopeeSignal,
+            canonicalUrl: 'https://evil.example.com/p-i.10.20',
+          },
+        ],
+        [
+          'https://shopee.vn/Phone-A-i.10.20',
+          { ...shopeeSignal, canonicalUrl: '' },
+        ],
+        [
+          'https://topzone.vn/iphone/iphone-16-pro-max',
+          {
+            ...shopeeSignal,
+            platform: 'tgdd',
+            canonicalUrl:
+              'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
+          },
+        ],
+        ['https://pages.lazada.vn/wow/gcp/vn', lazadaSignal],
+        [
+          'https://www.tiktok.com/@apple/product/12345',
+          {
+            ...shopeeSignal,
+            platform: 'tiktok',
+            canonicalUrl: 'https://shop.tiktok.com/view/product/12345',
+          },
+        ],
+      ] as const) {
+        const mismatchRes = await callSw(
+          { type: 'RATE_PRODUCT_DETECTED', signal: mismatchSignal },
+          {
+            id: 'rate-ext-1809',
+            tab: { id: 42, active: true },
+            url: mismatchSenderUrl,
+          }
+        );
+        assert.equal(
+          mismatchRes.ok,
+          false,
+          `must reject mismatched sender ${mismatchSenderUrl}`
+        );
+      }
+
+      // Missing/undefined signal, tabless sender, TAB_ID_NONE (-1), non-active documentLifecycle,
+      // subframe sender (frameId !== 0), opaque origin, and foreign extension id must all be rejected.
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_DETECTED' },
+            {
+              id: 'rate-ext-1809',
+              tab: { id: 42, active: true },
+              url: 'https://www.lazada.vn/products/Phone-B-i30-s40.html',
+            }
+          )
+        ).ok,
+        false,
+        'RATE_PRODUCT_DETECTED without signal must be rejected'
+      );
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_CLEARED' },
+            { id: 'rate-ext-1809' }
+          )
+        ).ok,
+        false,
+        'tabless sender must be rejected'
+      );
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_CLEARED' },
+            {
+              id: 'rate-ext-1809',
+              tab: { id: -1, active: true },
+              url: 'https://shopee.vn/search',
+            }
+          )
+        ).ok,
+        false,
+        'TAB_ID_NONE (-1) sender must be rejected'
+      );
+      for (const lifecycle of ['prerender', 'cached', 'pending_deletion']) {
+        assert.equal(
+          (
+            await callSw(
+              { type: 'RATE_PRODUCT_CLEARED' },
+              {
+                id: 'rate-ext-1809',
+                documentLifecycle: lifecycle,
+                tab: { id: 42, active: true },
+                url: 'https://shopee.vn/search',
+              }
+            )
+          ).ok,
+          false,
+          `inactive documentLifecycle ${lifecycle} must be rejected`
+        );
+      }
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_CLEARED' },
+            {
+              id: 'rate-ext-1809',
+              frameId: 1,
+              tab: { id: 42, active: true },
+              url: 'https://shopee.vn/search',
+            }
+          )
+        ).ok,
+        false
+      );
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_OPEN_SIDE_PANEL' },
+            {
+              id: 'foreign-ext-id',
+              tab: { id: 42, windowId: 7 },
+              url: 'https://shopee.vn/Phone-A-i.10.20',
+            }
+          )
+        ).ok,
+        false
+      );
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_CLEARED' },
+            {
+              id: 'rate-ext-1809',
+              origin: 'null',
+              tab: { id: 42, active: true },
+              url: 'https://shopee.vn/search',
+            }
+          )
+        ).ok,
+        false
+      );
+
+      assert.equal(
+        fetchedUrls.length,
+        fetchesBeforeUntrusted,
+        'rejected senders must never trigger lookup network requests'
+      );
+      assert.equal(
+        sidePanelCalls.length,
+        0,
+        'rejected senders must never invoke chrome.sidePanel.open'
+      );
+      assert.equal(
+        badges.get(42)?.text,
+        'TỐT',
+        'rejected RATE_PRODUCT_CLEARED/DETECTED must not mutate existing badge or session state'
+      );
+      assert.ok(sessionStore.get('tab_42'));
+      assert.ok(sessionStore.get('lookup_tab_42'));
+
+      // Valid TikTok SPA exit to /foryou on www.tiktok.com is accepted on RATE_PRODUCT_CLEARED.
+      const tiktokClearRes = await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://www.tiktok.com/foryou',
+        }
+      );
+      assert.equal(tiktokClearRes.ok, true);
+      assert.equal(badges.get(42)?.text, '');
+
+      console.log(
+        '  ✅ [SPA exit stale pill/badge/session cleanup, sidePanel.open catch & sender.url checks (#1809)] Verified'
+      );
+    } finally {
+      for (const [key, desc] of savedSw) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 
