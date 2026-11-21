@@ -40,13 +40,19 @@ function formatCurrencyVnd(amount: number | null | undefined): string {
  * Render an isolated Shadow DOM Floating Trust Pill on supported e-commerce pages.
  * Zero host CSS pollution; clicking opens the Chrome Native Side Panel.
  */
-function renderShadowTrustPill(lookup: ExtensionLookupData): void {
+function renderShadowTrustPill(
+  lookup: ExtensionLookupData,
+  expectedGeneration = detectGeneration
+): void {
   if (!shouldRenderTrustPill(lookup)) {
     removeTrustPillHost();
     return;
   }
 
   requestAnimationFrame(() => {
+    if (expectedGeneration !== detectGeneration) {
+      return;
+    }
     let host = document.getElementById(HOST_ID);
     if (!host) {
       host = document.createElement('div');
@@ -254,7 +260,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
     const trigger = shadow.getElementById('rate-pill-trigger');
     if (trigger) {
       const openSidePanel = () => {
-        void chrome.runtime.sendMessage({ type: 'RATE_OPEN_SIDE_PANEL' });
+        sendRuntimeMessageFireAndForget({ type: 'RATE_OPEN_SIDE_PANEL' });
       };
       trigger.addEventListener('click', openSidePanel);
       trigger.addEventListener('keydown', (event: KeyboardEvent) => {
@@ -267,10 +273,23 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
   });
 }
 
+function sendRuntimeMessageFireAndForget(
+  payload: Record<string, unknown>
+): void {
+  try {
+    void Promise.resolve(chrome.runtime.sendMessage(payload)).catch(() => {
+      // Ignore messaging rejections during page unload or worker restart
+    });
+  } catch {
+    // Ignore synchronous messaging errors if extension context was invalidated
+  }
+}
+
 // Lookups sent from this page, so a late answer for an earlier product is
-// ignored (DOS/Rate#1300).
+// ignored (DOS/Rate#1300, #1809).
 let detectGeneration = 0;
 let lastProcessedSignature = '';
+let hasDetectedProduct = false;
 // After a rate limit the same product is looked up again once the wait is over
 // (DOS/Rate#1466).
 const rateLimitRetry = new RateLimitRetry();
@@ -279,15 +298,22 @@ async function inspectCurrentPage(): Promise<void> {
   requestAnimationFrame(async () => {
     const signal = extractProductSignalFromDom(document, window.location.href);
     if (!signal) {
+      ++detectGeneration;
+      const shouldNotifyCleared = hasDetectedProduct;
+      hasDetectedProduct = false;
       lastProcessedSignature = '';
       rateLimitRetry.track('');
       removeTrustPillHost();
+      if (shouldNotifyCleared) {
+        sendRuntimeMessageFireAndForget({ type: 'RATE_PRODUCT_CLEARED' });
+      }
       return;
     }
 
     const signature = buildProductSignalSignature(signal);
     if (signature === lastProcessedSignature) return;
     lastProcessedSignature = signature;
+    hasDetectedProduct = true;
     rateLimitRetry.track(signature);
     // Only the latest page's answer may draw or clear the pill: on a
     // single-page shop an earlier lookup can answer after a later one.
@@ -311,7 +337,7 @@ async function inspectCurrentPage(): Promise<void> {
         void inspectCurrentPage();
       });
       if (response?.ok && response.data) {
-        renderShadowTrustPill(response.data);
+        renderShadowTrustPill(response.data, generation);
       } else {
         // Nothing matched or the lookup failed: never leave the previous
         // product's pill on a single-page shop (DOS/Rate#1300).
@@ -327,6 +353,15 @@ async function inspectCurrentPage(): Promise<void> {
 
 // Initial inspection + lightweight observation for SPA route/variant selection changes
 void inspectCurrentPage();
+
+if (
+  typeof window !== 'undefined' &&
+  typeof window.addEventListener === 'function'
+) {
+  window.addEventListener('popstate', () => {
+    void inspectCurrentPage();
+  });
+}
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 const observer = new MutationObserver(() => {
