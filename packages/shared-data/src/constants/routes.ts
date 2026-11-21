@@ -24,12 +24,28 @@ export const RATE_ROUTES = {
   CONTACT_US: '/contact-us',
 } as const;
 
+// Unpaired UTF-16 surrogates cause encodeURIComponent to throw URIError.
+const LONE_SURROGATE_RE =
+  /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+function sliceUtf16Safe(value: string, maxLen: number): string {
+  if (!Number.isFinite(maxLen) || maxLen <= 0) return '';
+  const limit = Math.floor(maxLen);
+  if (value.length <= limit) return value;
+  const sliced = value.slice(0, limit);
+  const lastCode = sliced.charCodeAt(sliced.length - 1);
+  return lastCode >= 0xd800 && lastCode <= 0xdbff
+    ? sliced.slice(0, -1)
+    : sliced;
+}
+
 function sanitizePathSegment(raw: unknown, maxLen: number): string {
   if (typeof raw !== 'string') return '';
-  const cleaned = raw
+  const stripped = raw
+    .replace(LONE_SURROGATE_RE, '')
     .replace(/\p{Cc}+/gu, '')
-    .trim()
-    .slice(0, maxLen);
+    .trim();
+  const cleaned = sliceUtf16Safe(stripped, maxLen).trim();
   if (!cleaned || cleaned === '.' || cleaned === '..') return '';
   return cleaned;
 }
