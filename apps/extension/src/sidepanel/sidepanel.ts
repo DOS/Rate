@@ -48,6 +48,13 @@ function formatVnd(val: number | null | undefined): string {
   return formatSafeExtensionVnd(val);
 }
 
+function cleanUrlSegment(raw: unknown, maxCodePoints: number): string {
+  if (typeof raw !== 'string') return '';
+  const cleaned = stripLoneSurrogates(raw).trim();
+  if (!cleaned) return '';
+  return sliceCodePoints(cleaned, maxCodePoints).trim();
+}
+
 interface DealRadarFeedItem {
   id: string;
   verdict: string;
@@ -91,9 +98,7 @@ async function fetchAndRenderDealRadar(
   slot.innerHTML = '';
 
   try {
-    const safeCategory = categorySlug
-      ? sliceCodePoints(String(categorySlug).trim(), 120)
-      : '';
+    const safeCategory = cleanUrlSegment(categorySlug, 120);
     const catParam = safeCategory
       ? `&category=${encodeSurrogateSafeUriComponent(safeCategory)}`
       : '';
@@ -210,7 +215,7 @@ async function fetchAndRenderDealRadar(
         ${sections
           .map((section, idx) =>
             idx === 0
-              ? section
+              ? `<div>${section}</div>`
               : `<div style="margin-top:10px;padding-top:8px;border-top:1px solid #2a2f3a;">${section}</div>`
           )
           .join('')}
@@ -288,10 +293,8 @@ async function fetchAndRenderMerchantTrustDirectory(
         ${sorted
           .slice(0, 5)
           .map((m) => {
-            const merchantSegment = sliceCodePoints(
-              String(m.slug || m.id || '').trim(),
-              200
-            );
+            const merchantSegment =
+              cleanUrlSegment(m.slug, 200) || cleanUrlSegment(m.id, 200);
             const detailHref = resolveSafeApiRelativeUrl(
               settings.apiBaseUrl,
               merchantSegment
@@ -555,11 +558,10 @@ function renderPanelContent(
         `/compare?category=${categorySlug}`
       )
     : null;
-  const rawInspectTarget = signal.canonicalUrl
-    ? sliceCodePoints(String(signal.canonicalUrl).trim(), 2048)
-    : master?.slug
-      ? sliceCodePoints(String(master.slug).trim(), 200)
-      : sliceCodePoints(String(signal.title ?? '').trim(), 500);
+  const rawInspectTarget =
+    cleanUrlSegment(signal.canonicalUrl, 2048) ||
+    cleanUrlSegment(master?.slug, 200) ||
+    cleanUrlSegment(signal.title, 500);
   const inspectUrl = resolveSafeApiRelativeUrl(
     settings.apiBaseUrl,
     rawInspectTarget
@@ -570,10 +572,7 @@ function renderPanelContent(
   // Alerts are per size: an Item page with no stated size adds nothing until
   // a size is picked (DOS/Rate#1158).
   const sizeUnknown = Boolean(lookup.item) && !lookup.selectedVariant;
-  const watchlistSlug =
-    master?.slug && !sizeUnknown
-      ? sliceCodePoints(String(master.slug).trim(), 200)
-      : '';
+  const watchlistSlug = !sizeUnknown ? cleanUrlSegment(master?.slug, 200) : '';
   const watchlistUrl = resolveSafeApiRelativeUrl(
     settings.apiBaseUrl,
     watchlistSlug
@@ -664,11 +663,14 @@ const OPT_IN_CONSENT_VERSION = 2;
 
 let panelLoadGeneration = 0;
 let consentHydrated = false;
+let apiBaseHydrated = false;
 let sawRawConsentStorage = false;
 let storedOptIn = false;
 let storedConsentVersion = 0;
 let lastConfirmedOptIn = false;
 let consentMutationSeq = 0;
+let optInOpCounter = 0;
+let lastConfirmedOptInSeq = 0;
 let optInSaveInFlight = 0;
 let bufferedConsentUpdate: {
   hasOptIn: boolean;
@@ -678,7 +680,10 @@ let bufferedConsentUpdate: {
 } | null = null;
 
 let lastConfirmedApiBaseUrl = DEFAULT_API_BASE_URL;
+let lastLoadedPanelApiBaseUrl = DEFAULT_API_BASE_URL;
 let apiBaseMutationSeq = 0;
+let apiBaseOpCounter = 0;
+let lastConfirmedApiBaseSeq = 0;
 let apiBaseSaveInFlight = 0;
 
 function isEffectiveConsentOptIn(): boolean {
@@ -739,6 +744,7 @@ async function loadSidePanel(
       apiBaseUrl: normalizeAllowedApiBaseUrl(rawSettings?.apiBaseUrl),
       crowdContributeOptIn: rawSettings?.crowdContributeOptIn === true,
     };
+    lastLoadedPanelApiBaseUrl = settings.apiBaseUrl;
 
     if (
       rawSettings &&
@@ -747,23 +753,23 @@ async function loadSidePanel(
     ) {
       if (!sawRawConsentStorage) {
         storedOptIn = settings.crowdContributeOptIn;
-        storedConsentVersion = settings.crowdContributeOptIn
-          ? OPT_IN_CONSENT_VERSION
-          : 0;
+        storedConsentVersion = 0;
         lastConfirmedOptIn = settings.crowdContributeOptIn;
+        if (chkOptIn) {
+          chkOptIn.checked = settings.crowdContributeOptIn;
+        }
       } else if (consentHydrated) {
         lastConfirmedOptIn = isEffectiveConsentOptIn();
-      }
-      if (chkOptIn && (consentHydrated || !sawRawConsentStorage)) {
-        chkOptIn.checked = sawRawConsentStorage
-          ? isEffectiveConsentOptIn()
-          : settings.crowdContributeOptIn;
+        if (chkOptIn) {
+          chkOptIn.checked = lastConfirmedOptIn;
+        }
       }
     } else if (
       !rawSettings &&
       chkOptIn &&
       optInSaveInFlight === 0 &&
-      consentHydrated
+      consentHydrated &&
+      sawRawConsentStorage
     ) {
       chkOptIn.checked = isEffectiveConsentOptIn();
     }
@@ -914,18 +920,24 @@ document.addEventListener('DOMContentLoaded', () => {
     typeof chrome.storage?.local?.get === 'function';
 
   consentHydrated = !hasLocalStorageGet;
+  apiBaseHydrated = !hasLocalStorageGet;
   sawRawConsentStorage = hasLocalStorageGet;
   storedOptIn = false;
   storedConsentVersion = 0;
   lastConfirmedOptIn = false;
   consentMutationSeq = 0;
+  optInOpCounter = 0;
+  lastConfirmedOptInSeq = 0;
   optInSaveInFlight = 0;
   bufferedConsentUpdate = null;
 
   lastConfirmedApiBaseUrl = inpApiBase?.value.trim()
     ? normalizeAllowedApiBaseUrl(inpApiBase.value)
     : DEFAULT_API_BASE_URL;
+  lastLoadedPanelApiBaseUrl = lastConfirmedApiBaseUrl;
   apiBaseMutationSeq = 0;
+  apiBaseOpCounter = 0;
+  lastConfirmedApiBaseSeq = 0;
   apiBaseSaveInFlight = 0;
   if (chkOptIn) {
     chkOptIn.checked = false;
@@ -942,18 +954,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  const finishConsentHydration = (
+  const finishStorageHydration = (
     stored: Record<string, unknown> | undefined
   ) => {
-    if (consentHydrated) return;
-    const buffered = bufferedConsentUpdate;
-    bufferedConsentUpdate = null;
-    const hasStoredConsentKeys = Boolean(
-      stored &&
-      (Object.prototype.hasOwnProperty.call(stored, 'crowdContributeOptIn') ||
-        Object.prototype.hasOwnProperty.call(stored, 'crowdConsentVersion'))
-    );
-    if (hasStoredConsentKeys || buffered) {
+    if (!consentHydrated) {
+      const buffered = bufferedConsentUpdate;
+      bufferedConsentUpdate = null;
       sawRawConsentStorage = true;
       const baseOptIn = stored?.crowdContributeOptIn === true;
       const baseVersion =
@@ -969,21 +975,22 @@ document.addEventListener('DOMContentLoaded', () => {
       if (optInSaveInFlight === 0 && chkOptIn) {
         chkOptIn.checked = lastConfirmedOptIn;
       }
-    } else {
-      sawRawConsentStorage = false;
-      consentHydrated = true;
     }
 
-    if (
-      stored &&
-      typeof stored.apiBaseUrl === 'string' &&
-      stored.apiBaseUrl.trim() &&
-      apiBaseSaveInFlight === 0
-    ) {
-      const normalized = normalizeAllowedApiBaseUrl(stored.apiBaseUrl);
-      lastConfirmedApiBaseUrl = normalized;
-      if (inpApiBase && !inpApiBase.value.trim()) {
-        inpApiBase.value = normalized;
+    if (!apiBaseHydrated) {
+      apiBaseHydrated = true;
+      if (
+        apiBaseMutationSeq === 0 &&
+        apiBaseSaveInFlight === 0 &&
+        stored &&
+        typeof stored.apiBaseUrl === 'string' &&
+        stored.apiBaseUrl.trim()
+      ) {
+        const normalized = normalizeAllowedApiBaseUrl(stored.apiBaseUrl);
+        lastConfirmedApiBaseUrl = normalized;
+        if (inpApiBase && !inpApiBase.value.trim()) {
+          inpApiBase.value = normalized;
+        }
       }
     }
   };
@@ -997,10 +1004,10 @@ document.addEventListener('DOMContentLoaded', () => {
       ])
     )
       .then((stored) => {
-        finishConsentHydration(stored);
+        finishStorageHydration(stored);
       })
       .catch(() => {
-        finishConsentHydration(undefined);
+        finishStorageHydration(undefined);
       });
   }
 
@@ -1013,18 +1020,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (areaName !== 'local') return;
 
-    if (
-      Object.prototype.hasOwnProperty.call(changes, 'apiBaseUrl') &&
-      apiBaseSaveInFlight === 0
-    ) {
+    if (Object.prototype.hasOwnProperty.call(changes, 'apiBaseUrl')) {
       const rawNewApiBase = changes.apiBaseUrl?.newValue;
       const nextApiBase = normalizeAllowedApiBaseUrl(
         typeof rawNewApiBase === 'string' ? rawNewApiBase : null
       );
-      apiBaseMutationSeq += 1;
+      apiBaseHydrated = true;
       lastConfirmedApiBaseUrl = nextApiBase;
-      if (inpApiBase) {
-        inpApiBase.value = nextApiBase;
+      if (apiBaseSaveInFlight === 0) {
+        apiBaseMutationSeq += 1;
+        if (inpApiBase) {
+          inpApiBase.value = nextApiBase;
+        }
       }
     }
 
@@ -1053,7 +1060,7 @@ document.addEventListener('DOMContentLoaded', () => {
         storedOptIn = nextOptInValue;
         storedConsentVersion = nextVersionValue;
         lastConfirmedOptIn = isEffectiveConsentOptIn();
-        if (chkOptIn) {
+        if (optInSaveInFlight === 0 && chkOptIn) {
           chkOptIn.checked = lastConfirmedOptIn;
         }
         return;
@@ -1073,7 +1080,7 @@ document.addEventListener('DOMContentLoaded', () => {
         (hasVersion && nextVersionValue !== OPT_IN_CONSENT_VERSION)
       ) {
         lastConfirmedOptIn = false;
-        if (chkOptIn) {
+        if (optInSaveInFlight === 0 && chkOptIn) {
           chkOptIn.checked = false;
         }
       }
@@ -1087,18 +1094,15 @@ document.addEventListener('DOMContentLoaded', () => {
       storedConsentVersion = nextVersionValue;
     }
     lastConfirmedOptIn = isEffectiveConsentOptIn();
-    if (chkOptIn) {
+    if (optInSaveInFlight === 0 && chkOptIn) {
       chkOptIn.checked = lastConfirmedOptIn;
     }
   });
 
   chkOptIn?.addEventListener('change', async () => {
     const desired = Boolean(chkOptIn.checked);
-    const rollbackValue =
-      sawRawConsentStorage && consentHydrated
-        ? isEffectiveConsentOptIn()
-        : lastConfirmedOptIn;
-    const mutationAtStart = ++consentMutationSeq;
+    consentMutationSeq += 1;
+    const opSeq = ++optInOpCounter;
     optInSaveInFlight += 1;
     try {
       const res = (await chrome.runtime.sendMessage({
@@ -1113,32 +1117,35 @@ document.addEventListener('DOMContentLoaded', () => {
       ) {
         throw new Error('Settings update failed');
       }
-      if (consentMutationSeq === mutationAtStart) {
+      if (opSeq >= lastConfirmedOptInSeq) {
+        lastConfirmedOptInSeq = opSeq;
         consentHydrated = true;
         bufferedConsentUpdate = null;
+        sawRawConsentStorage = true;
         storedOptIn = desired;
         storedConsentVersion = desired ? OPT_IN_CONSENT_VERSION : 0;
         lastConfirmedOptIn = desired;
-        chkOptIn.checked = desired;
       }
     } catch {
-      if (consentMutationSeq === mutationAtStart) {
+      // Reconciled against latest confirmed state in finally once in-flight saves settle.
+    } finally {
+      optInSaveInFlight = Math.max(0, optInSaveInFlight - 1);
+      if (optInSaveInFlight === 0 && chkOptIn) {
         chkOptIn.checked =
           sawRawConsentStorage && consentHydrated
             ? isEffectiveConsentOptIn()
-            : rollbackValue;
+            : lastConfirmedOptIn;
       }
-    } finally {
-      optInSaveInFlight = Math.max(0, optInSaveInFlight - 1);
     }
   });
 
   inpApiBase?.addEventListener('change', async () => {
     const rawInput = inpApiBase.value.trim();
     const requestedApiBase = rawInput || DEFAULT_API_BASE_URL;
-    const rollbackApiBase = lastConfirmedApiBaseUrl;
-    const mutationAtStart = ++apiBaseMutationSeq;
+    apiBaseMutationSeq += 1;
+    const opSeq = ++apiBaseOpCounter;
     apiBaseSaveInFlight += 1;
+    let succeeded = false;
     if (!rawInput) {
       inpApiBase.value = DEFAULT_API_BASE_URL;
     }
@@ -1158,17 +1165,27 @@ document.addEventListener('DOMContentLoaded', () => {
       const savedApiBase = normalizeAllowedApiBaseUrl(
         updated.settings.apiBaseUrl
       );
-      if (apiBaseMutationSeq === mutationAtStart) {
+      succeeded = true;
+      apiBaseHydrated = true;
+      if (opSeq >= lastConfirmedApiBaseSeq) {
+        lastConfirmedApiBaseSeq = opSeq;
         lastConfirmedApiBaseUrl = savedApiBase;
-        inpApiBase.value = savedApiBase;
       }
-      void loadSidePanel();
     } catch {
-      if (apiBaseMutationSeq === mutationAtStart) {
-        inpApiBase.value = rollbackApiBase;
-      }
+      // Reconciled against lastConfirmedApiBaseUrl in finally once in-flight saves settle.
     } finally {
       apiBaseSaveInFlight = Math.max(0, apiBaseSaveInFlight - 1);
+      if (apiBaseSaveInFlight === 0) {
+        if (inpApiBase) {
+          inpApiBase.value = lastConfirmedApiBaseUrl;
+        }
+        if (
+          succeeded ||
+          lastConfirmedApiBaseUrl !== lastLoadedPanelApiBaseUrl
+        ) {
+          void loadSidePanel();
+        }
+      }
     }
   });
 

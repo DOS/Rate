@@ -10271,6 +10271,11 @@ async function runTests() {
         true,
         'first rendered radar section must not carry a leading separator border'
       );
+      assert.match(
+        radarSlot.innerHTML,
+        /<div class="card">\s*<div>\s*<div class="card-title"/,
+        'first rendered radar section must be wrapped in a <div> so .offer-item:last-child prevents double borders'
+      );
       assert.ok(
         trustSlot.innerHTML.includes('<span aria-hidden="true">🛡️ </span>')
       );
@@ -10507,11 +10512,411 @@ async function runTests() {
         'buffered opt-in true + hydrated crowdConsentVersion === 2 must reconcile chkOptIn to true'
       );
 
+      // (h) Whitespace/lone-surrogate-only canonicalUrl, master.slug, and m.slug fall back cleanly without trailing %20.
+      merchantsJsonPayload = {
+        ok: true,
+        data: [
+          {
+            id: 'merchant-fallback-id',
+            platform: 'shopee',
+            name: 'Fallback Shop',
+            slug: ' \uD83D \uDC00 '.slice(0, 3),
+            is_official: false,
+            dosafe_risk_score: 10,
+            review_risk_score: 10,
+            risk_score: 10,
+            trust_score: 90,
+            product_count: 5,
+          },
+        ],
+      };
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: DEFAULT_API_BASE_URL,
+              crowdContributeOptIn: false,
+            },
+            signal: {
+              platform: 'shopee',
+              canonicalUrl: ' \uD83D ',
+              externalItemId: '2',
+              externalShopId: '1',
+              title: 'Phone 16 \uD83D',
+              selectedVariant: null,
+              price: 25_990_000,
+              originalPrice: null,
+              ratingStar: null,
+              ratingCount: null,
+            },
+            data: {
+              ...matchedLookupWithAstral,
+              masterProduct: {
+                ...matchedLookupWithAstral.masterProduct!,
+                slug: ' \uDC00 ',
+              },
+            },
+          };
+        }
+        return baseImpl(msg);
+      };
+      latestStorageListener({ lookup_tab_latest: { newValue: 9 } }, 'session');
+      await settle();
+      assert.ok(
+        root.innerHTML.includes('href="https://rate.vn/inspect?q=Phone%2016"'),
+        'whitespace/lone-surrogate canonicalUrl and master.slug must fall back to trimmed signal.title without trailing %20'
+      );
+      assert.ok(
+        root.innerHTML.includes('href="https://rate.vn/watchlist"'),
+        'lone-surrogate-only master.slug must fall back to /watchlist without ?add=%20'
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes(
+          'href="https://rate.vn/merchants/merchant-fallback-id"'
+        ),
+        'lone-surrogate-only m.slug must fall back to m.id'
+      );
+
+      // (i) Fail-closed v2 consent when local.get rejects or returns {}: unversioned res.settings.crowdContributeOptIn
+      //     and partial storage.onChanged without crowdConsentVersion === 2 must NEVER check chkOptIn.
+      localGetImpl = async () => {
+        throw new Error('storage read error');
+      };
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: DEFAULT_API_BASE_URL,
+              crowdContributeOptIn: true,
+            },
+            signal: null,
+            data: null,
+          };
+        }
+        return baseImpl(msg);
+      };
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1812c', import.meta.url).href
+      );
+      onDomReady!();
+      await settle();
+      const listener1812c = storageListeners.at(-1)!;
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'rejected storage.local.get must fail closed even if res.settings claims crowdContributeOptIn: true'
+      );
+      listener1812c({ crowdContributeOptIn: { newValue: true } }, 'local');
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'partial crowdContributeOptIn without crowdConsentVersion === 2 after rejected hydration must remain unchecked'
+      );
+
+      // (j) Overlapping inpApiBase and chkOptIn saves reconcile to latest persisted value without mid-flight flicker.
+      localGetImpl = async () => ({
+        apiBaseUrl: DEFAULT_API_BASE_URL,
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 0,
+      });
+      sendMessageImpl = baseImpl;
+      storedLocalState.apiBaseUrl = DEFAULT_API_BASE_URL;
+      storedLocalState.crowdContributeOptIn = false;
+      storedLocalState.crowdConsentVersion = 0;
+      chkHandlers.length = 0;
+      apiHandlers.length = 0;
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1812d', import.meta.url).href
+      );
+      onDomReady!();
+      await settle();
+      const listener1812d = storageListeners.at(-1)!;
+
+      // Overlapping inpApiBase saves: Save #1 (http://localhost:3000) succeeds while Save #2 (https://www.rate.vn) fails.
+      let resolveApiSave1!: (v: unknown) => void;
+      let rejectApiSave2!: (e: Error) => void;
+      let apiCallIdx = 0;
+      sendMessageImpl = (msg) => {
+        if (msg.type === 'RATE_UPDATE_SETTINGS' && 'apiBaseUrl' in msg) {
+          apiCallIdx += 1;
+          if (apiCallIdx === 1) {
+            return new Promise((r) => {
+              resolveApiSave1 = r;
+            });
+          }
+          return new Promise((_, rej) => {
+            rejectApiSave2 = rej;
+          });
+        }
+        return baseImpl(msg);
+      };
+      sentMessages.length = 0;
+      inpApiBase.value = 'http://localhost:3000';
+      const pApi1 = apiHandlers[0]!();
+      inpApiBase.value = 'https://www.rate.vn';
+      const pApi2 = apiHandlers[0]!();
+      storedLocalState.apiBaseUrl = 'http://localhost:3000';
+      listener1812d(
+        { apiBaseUrl: { newValue: 'http://localhost:3000' } },
+        'local'
+      );
+      assert.equal(
+        inpApiBase.value,
+        'https://www.rate.vn',
+        'in-flight second inpApiBase edit must not flicker when first save fires onChanged'
+      );
+      resolveApiSave1({
+        ok: true,
+        settings: {
+          apiBaseUrl: 'http://localhost:3000',
+          crowdContributeOptIn: false,
+        },
+      });
+      await pApi1;
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_SIDEPANEL_FETCH_FULL')
+          .length,
+        0,
+        'superseded first inpApiBase save must not trigger premature reload while second save is in flight'
+      );
+      rejectApiSave2(new Error('save 2 failed'));
+      await pApi2;
+      await settle();
+      assert.equal(
+        inpApiBase.value,
+        'http://localhost:3000',
+        'failed second inpApiBase save must roll back to Save #1 persisted URL, not pre-Save-#1 URL'
+      );
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_SIDEPANEL_FETCH_FULL')
+          .length,
+        1,
+        'panel must reload once against Save #1 persisted URL after Save #2 settles'
+      );
+
+      // Overlapping chkOptIn saves: Toggle #1 (true) succeeds while Toggle #2 (false) fails -> reconciles to true without mid-flight flicker.
+      let resolveChk1!: (v: unknown) => void;
+      let resolveChk2!: (v: unknown) => void;
+      let chkCallIdx = 0;
+      sendMessageImpl = (msg) => {
+        if (
+          msg.type === 'RATE_UPDATE_SETTINGS' &&
+          'crowdContributeOptIn' in msg
+        ) {
+          chkCallIdx += 1;
+          if (chkCallIdx === 1) {
+            return new Promise((r) => {
+              resolveChk1 = r;
+            });
+          }
+          return new Promise((r) => {
+            resolveChk2 = r;
+          });
+        }
+        return baseImpl(msg);
+      };
+      chkOptIn.checked = true;
+      const pChk1 = chkHandlers[0]!();
+      chkOptIn.checked = false;
+      const pChk2 = chkHandlers[0]!();
+      listener1812d(
+        {
+          crowdContributeOptIn: { newValue: true },
+          crowdConsentVersion: { newValue: 2 },
+        },
+        'local'
+      );
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'chkOptIn must not flicker back to true while Toggle #2 (false) is still in flight'
+      );
+      resolveChk1({
+        ok: true,
+        settings: {
+          apiBaseUrl: 'http://localhost:3000',
+          crowdContributeOptIn: true,
+        },
+      });
+      await pChk1;
+      resolveChk2({ ok: false, error: 'toggle 2 failed' });
+      await pChk2;
+      assert.equal(
+        chkOptIn.checked,
+        true,
+        'failed Toggle #2 must reconcile chkOptIn to Toggle #1 persisted true state'
+      );
+
       assert.equal(
         unhandled1812.length,
         0,
         'side panel settings failures must never trigger unhandledRejection'
       );
+
+      // 3. Service worker serialization of concurrent RATE_UPDATE_SETTINGS & astral 200/500 bounds.
+      {
+        let swMsgHandler:
+          | ((
+              msg: Record<string, unknown>,
+              sender: Record<string, unknown>,
+              sendResponse: (res: unknown) => void
+            ) => unknown)
+          | undefined;
+        const swLocal = new Map<string, unknown>([
+          ['apiBaseUrl', 'https://rate.vn'],
+          ['crowdContributeOptIn', false],
+        ]);
+        const swSession = new Map<string, unknown>();
+        let delayCooldownClearOnce = true;
+        let releaseCooldownClear!: () => void;
+        let onCooldownPaused: (() => void) | undefined;
+
+        g.chrome = {
+          runtime: {
+            id: 'rate-ext-1812-sw',
+            getURL: (p: string) => `chrome-extension://rate-ext-1812-sw/${p}`,
+            getManifest: () => ({ version: '2.1.0' }),
+            onInstalled: { addListener() {} },
+            onStartup: { addListener() {} },
+            onMessage: {
+              addListener: (fn: typeof swMsgHandler) => {
+                swMsgHandler = fn;
+              },
+            },
+          },
+          sidePanel: {
+            setPanelBehavior: async () => {},
+            open: async () => {},
+          },
+          storage: {
+            local: {
+              get: async (keys?: string | string[]) => {
+                const list = Array.isArray(keys) ? keys : keys ? [keys] : [];
+                return Object.fromEntries(
+                  list
+                    .filter((k) => swLocal.has(k))
+                    .map((k) => [k, swLocal.get(k)])
+                );
+              },
+              set: async (obj: Record<string, unknown>) => {
+                for (const [k, v] of Object.entries(obj)) swLocal.set(k, v);
+              },
+              remove: async (keys: string | string[]) => {
+                for (const k of Array.isArray(keys) ? keys : [keys]) {
+                  swLocal.delete(k);
+                }
+              },
+            },
+            session: {
+              get: async (keys?: string | string[]) => {
+                const list = Array.isArray(keys) ? keys : keys ? [keys] : [];
+                return Object.fromEntries(
+                  list
+                    .filter((k) => swSession.has(k))
+                    .map((k) => [k, swSession.get(k)])
+                );
+              },
+              set: async (obj: Record<string, unknown>) => {
+                if (
+                  delayCooldownClearOnce &&
+                  obj.lookup_rate_limited_until === 0
+                ) {
+                  delayCooldownClearOnce = false;
+                  const gate = new Promise<void>((r) => {
+                    releaseCooldownClear = r;
+                  });
+                  onCooldownPaused?.();
+                  await gate;
+                }
+                for (const [k, v] of Object.entries(obj)) swSession.set(k, v);
+              },
+            },
+          },
+          action: {
+            setBadgeText: async () => {},
+            setBadgeBackgroundColor: async () => {},
+            onClicked: { addListener() {} },
+          },
+          tabs: {
+            query: async () => [{ id: 1, active: true }],
+            create: async () => ({ id: 2 }),
+          },
+        };
+        g.fetch = async () =>
+          new Response(JSON.stringify({ ok: true, data: null }), {
+            status: 200,
+          });
+
+        await import(
+          new URL('./background/service-worker.js?case=1812sw', import.meta.url)
+            .href
+        );
+        const callSw1812 = (msg: Record<string, unknown>) =>
+          new Promise<Record<string, unknown>>((resolve) => {
+            swMsgHandler!(
+              msg,
+              {
+                id: 'rate-ext-1812-sw',
+                tab: undefined,
+                url: 'chrome-extension://rate-ext-1812-sw/sidepanel/sidepanel.html',
+              },
+              (r) => resolve(r as Record<string, unknown>)
+            );
+          });
+
+        // Concurrent RATE_UPDATE_SETTINGS: Request 1 (localhost) pauses at lookupCooldown.clear() while Request 2 (reset to https://rate.vn) is queued behind it.
+        const pausedOnClear = new Promise<void>((r) => {
+          onCooldownPaused = r;
+        });
+        const req1 = callSw1812({
+          type: 'RATE_UPDATE_SETTINGS',
+          apiBaseUrl: 'http://localhost:3000',
+          crowdContributeOptIn: true,
+        });
+        const req2 = callSw1812({
+          type: 'RATE_UPDATE_SETTINGS',
+          apiBaseUrl: DEFAULT_API_BASE_URL,
+          crowdContributeOptIn: false,
+        });
+        await pausedOnClear;
+        releaseCooldownClear();
+        const [res1, res2] = await Promise.all([req1, req2]);
+        assert.equal(res1.ok, true);
+        assert.equal(res2.ok, true);
+        assert.equal(
+          swLocal.get('apiBaseUrl'),
+          DEFAULT_API_BASE_URL,
+          'serialized RATE_UPDATE_SETTINGS must preserve later reset to DEFAULT_API_BASE_URL'
+        );
+        assert.equal(
+          swLocal.get('crowdContributeOptIn'),
+          false,
+          'serialized RATE_UPDATE_SETTINGS must preserve later opt-out'
+        );
+        assert.equal(swLocal.get('crowdConsentVersion'), null);
+
+        // Service worker quick query (500 limit) & selectedVariant override (200 limit) preserve astral pairs cleanly.
+        const quickAstralRes = await callSw1812({
+          type: 'RATE_SIDEPANEL_QUICK_QUERY',
+          query: `${'k'.repeat(499)}🔥 extra`,
+        });
+        assert.equal(quickAstralRes.ok, true);
+        const quickSig = quickAstralRes.signal as { title: string };
+        assert.equal(quickSig.title, `${'k'.repeat(499)}🔥`);
+        assert.equal(hasLoneSurrogate(quickSig.title), false);
+
+        const fullAstralRes = await callSw1812({
+          type: 'RATE_SIDEPANEL_FETCH_FULL',
+          selectedVariant: `${'s'.repeat(199)}🔥 extra`,
+        });
+        assert.equal(fullAstralRes.ok, true);
+        const fullSig = fullAstralRes.signal as { selectedVariant: string };
+        assert.equal(fullSig.selectedVariant, `${'s'.repeat(199)}🔥`);
+        assert.equal(hasLoneSurrogate(fullSig.selectedVariant), false);
+      }
+
       console.log(
         '  ✅ [Surrogate-safe URL encoding, consent v2 sync, settings rollback & Deal Radar UI/a11y (#1812)] Verified'
       );

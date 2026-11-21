@@ -219,6 +219,7 @@ let fullLookupRequestCounter = 0;
 const latestFullLookupByTab = new Map<number, number>();
 let latestSelectionCounter = 0;
 let latestPageSelectionCounter = 0;
+let settingsUpdateChain: Promise<void> = Promise.resolve();
 let pendingQuickQueryReceipt: {
   updatedAt: number;
   apiBaseUrl: string;
@@ -1196,7 +1197,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return false;
     }
-    (async () => {
+    const runSettingsUpdate = async (): Promise<void> => {
       try {
         const nextSettings: Partial<ExtensionSettings> = {};
         let serverChanged = false;
@@ -1238,7 +1239,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           error: err instanceof Error ? err.message : 'Settings update failed',
         });
       }
-    })();
+    };
+    settingsUpdateChain = settingsUpdateChain.then(
+      runSettingsUpdate,
+      runSettingsUpdate
+    );
     return true;
   }
 
