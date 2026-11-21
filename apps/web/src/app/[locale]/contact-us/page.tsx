@@ -4,8 +4,7 @@ import { Link } from '@/lib/navigation';
 import PageShell from '../components/page-shell';
 import HeroSearchInspector from '@/components/home/HeroSearchInspector';
 import CommunityQuarantineSubmitForm from '@/components/contact/CommunityQuarantineSubmitForm';
-import { getMasterProducts } from '@/lib/rate-api';
-import { getCachedMerchantsList } from '@/server/rate';
+import { getCachedMasterProducts, getCachedMerchantsList } from '@/server/rate';
 import {
   BsCodeSquare,
   BsEnvelopeAt,
@@ -42,6 +41,12 @@ export async function generateMetadata({
   };
 }
 
+export function loadContactHeroProducts(
+  readProducts: typeof getCachedMasterProducts = getCachedMasterProducts
+) {
+  return readProducts({ limit: 6 });
+}
+
 export default async function ContactUsPage({
   params,
 }: {
@@ -50,7 +55,7 @@ export default async function ContactUsPage({
   const { locale } = await params;
   setRequestLocale(locale);
   const [products, merchants, t] = await Promise.all([
-    getMasterProducts({ limit: 6 }),
+    loadContactHeroProducts(),
     getCachedMerchantsList(),
     getTranslations({ locale, namespace: 'staticPages' }),
   ]);

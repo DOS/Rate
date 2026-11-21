@@ -1,8 +1,13 @@
 import { RATE_API_V1_ENDPOINTS } from '@repo/shared-data';
+import {
+  EXTENSION_MARKETPLACES,
+  isExtensionMarketplaceHost,
+} from '@repo/shared-data/rules';
 import type {
   ExtensionLookupData,
   ExtensionSettings,
   ExtractedPageProductSignal,
+  SupportedEcommercePlatform,
 } from '../types.js';
 import {
   detectEcommercePlatform,
@@ -205,17 +210,218 @@ function normalizeQuickQueryBareMarketplaceUrl(
   return sanitizeProductUrl(`https://${hostAndPath}`);
 }
 
-// The latest product lookup per tab (DOS/Rate#1300, #1664).
+// The latest product lookup per tab (DOS/Rate#1300, #1664, #1809).
 let detectRequestCounter = 0;
 const latestDetectByTab = new Map<number, number>();
 let fullLookupRequestCounter = 0;
 const latestFullLookupByTab = new Map<number, number>();
 let latestSelectionCounter = 0;
+let latestPageSelectionCounter = 0;
 let pendingQuickQueryReceipt: {
   updatedAt: number;
   apiBaseUrl: string;
   data: ExtensionLookupData | null;
 } | null = null;
+
+interface VerifiedMarketplaceUrl {
+  marketplace: SupportedEcommercePlatform;
+  origin: string;
+}
+
+function resolvePositiveIntId(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function resolveMarketplaceFromHttpsUrl(
+  rawUrl: unknown
+): VerifiedMarketplaceUrl | null {
+  if (typeof rawUrl !== 'string') return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed || trimmed.length > 8192 || /[\s\p{Cc}]/u.test(trimmed)) {
+    return null;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (
+      parsed.protocol !== 'https:' ||
+      parsed.username ||
+      parsed.password ||
+      parsed.port !== ''
+    ) {
+      return null;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..')
+    ) {
+      return null;
+    }
+    for (const marketplace of EXTENSION_MARKETPLACES) {
+      if (isExtensionMarketplaceHost(marketplace, host)) {
+        return { marketplace, origin: parsed.origin.toLowerCase() };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+interface ContentScriptMessageSender {
+  id?: string;
+  frameId?: number;
+  documentLifecycle?: string;
+  origin?: string;
+  tab?: unknown;
+  url?: string;
+}
+
+function validateContentScriptSender(
+  sender: ContentScriptMessageSender | null | undefined,
+  options?: { requireSignal?: boolean; rawSignal?: unknown }
+): { ok: true } | { ok: false; error: string } {
+  if (!sender || typeof sender !== 'object' || Array.isArray(sender)) {
+    return { ok: false, error: 'Invalid message sender' };
+  }
+  const runtimeId =
+    typeof chrome !== 'undefined' &&
+    typeof chrome.runtime?.id === 'string' &&
+    chrome.runtime.id.length > 0
+      ? chrome.runtime.id
+      : undefined;
+  if (
+    runtimeId &&
+    typeof sender.id === 'string' &&
+    sender.id.length > 0 &&
+    sender.id !== runtimeId
+  ) {
+    return { ok: false, error: 'Untrusted extension sender' };
+  }
+  if (typeof sender.frameId === 'number' && sender.frameId !== 0) {
+    return {
+      ok: false,
+      error: 'Subframe content-script messages are not allowed',
+    };
+  }
+  if (
+    typeof sender.documentLifecycle === 'string' &&
+    sender.documentLifecycle !== 'active'
+  ) {
+    return {
+      ok: false,
+      error: 'Inactive document lifecycle messages are not allowed',
+    };
+  }
+  if (
+    !sender.tab ||
+    typeof sender.tab !== 'object' ||
+    Array.isArray(sender.tab)
+  ) {
+    return {
+      ok: false,
+      error: 'Content-script messages must originate from a browser tab',
+    };
+  }
+  const senderTab = sender.tab as {
+    id?: unknown;
+    windowId?: unknown;
+    url?: unknown;
+  };
+  if (
+    resolvePositiveIntId(senderTab.id) === undefined &&
+    resolvePositiveIntId(senderTab.windowId) === undefined
+  ) {
+    return {
+      ok: false,
+      error: 'Content-script sender tab lacks a valid positive identifier',
+    };
+  }
+  let senderIdentity: VerifiedMarketplaceUrl | null = null;
+  if (sender.url !== undefined && sender.url !== null) {
+    senderIdentity = resolveMarketplaceFromHttpsUrl(sender.url);
+    if (!senderIdentity) {
+      return {
+        ok: false,
+        error: 'Sender URL is not an allowed marketplace origin',
+      };
+    }
+  }
+  if (sender.origin !== undefined && sender.origin !== null) {
+    const originIdentity = resolveMarketplaceFromHttpsUrl(sender.origin);
+    if (
+      !originIdentity ||
+      (senderIdentity !== null &&
+        (originIdentity.marketplace !== senderIdentity.marketplace ||
+          originIdentity.origin !== senderIdentity.origin))
+    ) {
+      return {
+        ok: false,
+        error: 'Sender origin is not an allowed marketplace origin',
+      };
+    }
+    senderIdentity ??= originIdentity;
+  }
+  if (
+    senderIdentity === null &&
+    senderTab.url !== undefined &&
+    senderTab.url !== null
+  ) {
+    senderIdentity = resolveMarketplaceFromHttpsUrl(senderTab.url);
+    if (!senderIdentity) {
+      return {
+        ok: false,
+        error: 'Sender tab URL is not an allowed marketplace origin',
+      };
+    }
+  }
+  if (options?.requireSignal) {
+    const rawSignal = options.rawSignal;
+    if (
+      !rawSignal ||
+      typeof rawSignal !== 'object' ||
+      Array.isArray(rawSignal)
+    ) {
+      return { ok: false, error: 'Invalid product signal' };
+    }
+    const candidate = rawSignal as {
+      platform?: unknown;
+      canonicalUrl?: unknown;
+    };
+    const declaredPlatform =
+      typeof candidate.platform === 'string'
+        ? candidate.platform.trim().toLowerCase()
+        : '';
+    const canonicalIdentity = resolveMarketplaceFromHttpsUrl(
+      candidate.canonicalUrl
+    );
+    if (
+      !canonicalIdentity ||
+      declaredPlatform !== canonicalIdentity.marketplace
+    ) {
+      return {
+        ok: false,
+        error:
+          'Signal platform and canonicalUrl must match an allowed marketplace',
+      };
+    }
+    if (
+      senderIdentity !== null &&
+      (declaredPlatform !== senderIdentity.marketplace ||
+        canonicalIdentity.origin !== senderIdentity.origin)
+    ) {
+      return {
+        ok: false,
+        error: 'Sender URL origin or platform does not match product signal',
+      };
+    }
+  }
+  return { ok: true };
+}
 async function maybeSendOptInCrowdSignal(
   rawSignal: ExtractedPageProductSignal
 ): Promise<void> {
@@ -358,25 +564,181 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // CRITICAL MV3 Rule: Call chrome.sidePanel.open synchronously in the first turn
   // before any await so the user gesture from clicking the Shadow DOM Pill is preserved!
   if (msgType === 'RATE_OPEN_SIDE_PANEL') {
-    const tabId = sender.tab?.id;
-    const windowId = sender.tab?.windowId;
-    if (tabId) {
-      void chrome.sidePanel.open({ tabId });
-    } else if (windowId) {
-      void chrome.sidePanel.open({ windowId });
+    const senderCheck = validateContentScriptSender(sender);
+    if (!senderCheck.ok) {
+      sendResponse({ ok: false, error: senderCheck.error });
+      return false;
+    }
+    const tabId = resolvePositiveIntId(sender.tab?.id);
+    const windowId = resolvePositiveIntId(sender.tab?.windowId);
+    try {
+      if (tabId) {
+        void Promise.resolve(chrome.sidePanel.open({ tabId })).catch(() => {
+          // Ignore rejections when user gesture expired or tab closed
+        });
+      } else if (windowId) {
+        void Promise.resolve(chrome.sidePanel.open({ windowId })).catch(() => {
+          // Ignore rejections when user gesture expired or window closed
+        });
+      }
+    } catch {
+      // Ignore synchronous errors if sidePanel API is unavailable
     }
     sendResponse({ ok: true });
     return false;
   }
 
+  if (msgType === 'RATE_PRODUCT_CLEARED') {
+    const senderCheck = validateContentScriptSender(sender);
+    if (!senderCheck.ok) {
+      sendResponse({ ok: false, error: senderCheck.error });
+      return false;
+    }
+    const clearId = ++detectRequestCounter;
+    const tabId = resolvePositiveIntId(sender.tab?.id);
+    const isBackgroundTab = Boolean(sender.tab && sender.tab.active === false);
+    const clearPageSeq = !isBackgroundTab ? ++latestPageSelectionCounter : null;
+    const selectionAtClearEntry = latestSelectionCounter;
+    if (tabId) latestDetectByTab.set(tabId, clearId);
+    const isLatestClear = () =>
+      tabId
+        ? latestDetectByTab.get(tabId) === clearId
+        : clearPageSeq !== null &&
+          latestPageSelectionCounter === clearPageSeq &&
+          latestSelectionCounter === selectionAtClearEntry;
+    (async () => {
+      try {
+        await updateActionBadge(tabId, null, isLatestClear);
+        if (!isLatestClear()) {
+          sendResponse({ ok: true, stale: true });
+          return;
+        }
+        const readKeys = tabId
+          ? [`tab_${tabId}`, 'tab_latest', 'lookup_tab_latest']
+          : ['tab_latest', 'lookup_tab_latest'];
+        const sessionData = await chrome.storage.session.get(readKeys);
+        if (!isLatestClear()) {
+          sendResponse({ ok: true, stale: true });
+          return;
+        }
+        const tabEntry = tabId
+          ? (sessionData[`tab_${tabId}`] as
+              | {
+                  signal?: ExtractedPageProductSignal;
+                  updatedAt?: number;
+                  source?: 'page' | 'quick_query';
+                }
+              | undefined)
+          : undefined;
+        const latestEntry = sessionData.tab_latest as
+          | {
+              signal?: ExtractedPageProductSignal;
+              updatedAt?: number;
+              source?: 'page' | 'quick_query';
+            }
+          | undefined;
+        const hasNewerQuickQuery =
+          latestEntry?.source === 'quick_query' &&
+          Boolean(latestEntry.signal) &&
+          (typeof latestEntry.updatedAt !== 'number' ||
+            typeof tabEntry?.updatedAt !== 'number' ||
+            latestEntry.updatedAt >= tabEntry.updatedAt);
+        const canClearLatestNow = () =>
+          !hasNewerQuickQuery &&
+          latestSelectionCounter === selectionAtClearEntry &&
+          (clearPageSeq !== null
+            ? latestPageSelectionCounter === clearPageSeq
+            : Boolean(
+                tabEntry?.signal &&
+                latestEntry?.signal &&
+                tabEntry.updatedAt !== undefined &&
+                tabEntry.updatedAt === latestEntry.updatedAt &&
+                tabEntry.signal.canonicalUrl === latestEntry.signal.canonicalUrl
+              ));
+
+        const ownsCurrentLatest = canClearLatestNow();
+        if (ownsCurrentLatest) {
+          pendingQuickQueryReceipt = null;
+        }
+        const sessionStorage = chrome.storage
+          .session as typeof chrome.storage.session & {
+          remove?: (keys: string | string[]) => Promise<void>;
+        };
+        if (typeof sessionStorage.remove === 'function') {
+          if (
+            ownsCurrentLatest &&
+            sessionData.lookup_tab_latest === undefined
+          ) {
+            await sessionStorage.set({ lookup_tab_latest: null });
+            if (!isLatestClear()) {
+              sendResponse({ ok: true, stale: true });
+              return;
+            }
+          }
+          const finalKeysToClear: string[] = [];
+          if (tabId) {
+            finalKeysToClear.push(`tab_${tabId}`, `lookup_tab_${tabId}`);
+          }
+          if (canClearLatestNow()) {
+            pendingQuickQueryReceipt = null;
+            finalKeysToClear.push('tab_latest', 'lookup_tab_latest');
+          }
+          if (finalKeysToClear.length > 0) {
+            await sessionStorage.remove(finalKeysToClear);
+          }
+        } else {
+          if (ownsCurrentLatest && sessionData.lookup_tab_latest === null) {
+            await sessionStorage.set({ lookup_tab_latest: false });
+            if (!isLatestClear()) {
+              sendResponse({ ok: true, stale: true });
+              return;
+            }
+          }
+          const keysToNull: string[] = [];
+          if (tabId) {
+            keysToNull.push(`tab_${tabId}`, `lookup_tab_${tabId}`);
+          }
+          if (canClearLatestNow()) {
+            pendingQuickQueryReceipt = null;
+            keysToNull.push('tab_latest', 'lookup_tab_latest');
+          }
+          if (keysToNull.length > 0) {
+            await sessionStorage.set(
+              Object.fromEntries(keysToNull.map((k) => [k, null]))
+            );
+          }
+        }
+        sendResponse({ ok: true });
+      } catch (err) {
+        sendResponse({
+          ok: false,
+          error:
+            err instanceof Error ? err.message : 'Product state clear failed',
+        });
+      }
+    })();
+    return true;
+  }
+
   if (msgType === 'RATE_PRODUCT_DETECTED') {
+    const senderCheck = validateContentScriptSender(sender, {
+      requireSignal: true,
+      rawSignal: (message as { signal?: unknown }).signal,
+    });
+    if (!senderCheck.ok) {
+      sendResponse({ ok: false, error: senderCheck.error });
+      return false;
+    }
     const requestId = ++detectRequestCounter;
-    const tabId = sender.tab?.id;
+    const tabId = resolvePositiveIntId(sender.tab?.id);
     const isBackgroundTab = Boolean(sender.tab && sender.tab.active === false);
     const latestOwnerSeq = !isBackgroundTab ? ++latestSelectionCounter : null;
+    const pageOwnerSeq = !isBackgroundTab ? ++latestPageSelectionCounter : null;
     if (tabId) latestDetectByTab.set(tabId, requestId);
     const ownsTabLatest = () =>
-      latestOwnerSeq !== null && latestSelectionCounter === latestOwnerSeq;
+      latestOwnerSeq !== null &&
+      latestSelectionCounter === latestOwnerSeq &&
+      latestPageSelectionCounter === pageOwnerSeq;
     // Only the tab's latest lookup may set its badge, stored lookup or
     // panel: an earlier one can answer after a later one (DOS/Rate#1300).
     const isLatest = () =>
@@ -497,6 +859,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     const fullSeq = ++fullLookupRequestCounter;
     const detectSnapshotAtEntry = new Map(latestDetectByTab);
+    const selectionAtEntry = latestSelectionCounter;
+    const pageSelectionAtEntry = latestPageSelectionCounter;
     (async () => {
       try {
         const cleanedVariant =
@@ -569,6 +933,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           trackedTabId !== undefined &&
           latestDetectByTab.get(trackedTabId) === detectSeqAtEntry &&
           latestFullLookupByTab.get(trackedTabId) === fullSeq;
+        const isCurrentFallbackLookup = () =>
+          fullSeq === fullLookupRequestCounter &&
+          latestSelectionCounter === selectionAtEntry &&
+          (isQuickQuerySelected ||
+            latestPageSelectionCounter === pageSelectionAtEntry);
 
         const effectiveSignal: ExtractedPageProductSignal = overrideVariant
           ? { ...baseSignal, selectedVariant: overrideVariant }
@@ -591,7 +960,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 },
               });
             }
-          } else if (fullSeq === fullLookupRequestCounter) {
+          } else if (isCurrentFallbackLookup()) {
             await chrome.storage.session.set({
               tab_latest: {
                 signal: effectiveSignal,
@@ -609,7 +978,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           latestEntry?.updatedAt === pendingQuickQueryReceipt.updatedAt &&
           settings.apiBaseUrl === pendingQuickQueryReceipt.apiBaseUrl
         ) {
-          if (fullSeq !== fullLookupRequestCounter) {
+          if (!isCurrentFallbackLookup()) {
             sendResponse({
               ok: true,
               settings,
@@ -646,7 +1015,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         const stale = isActiveTabPageSignal
           ? !isCurrentTabLookup()
-          : fullSeq !== fullLookupRequestCounter;
+          : !isCurrentFallbackLookup();
         sendResponse(
           outcome.ok
             ? {
