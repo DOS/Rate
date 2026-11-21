@@ -3599,11 +3599,13 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     screen_size_inch: null,
     battery_mah: 550,
     has_5g: false,
-    // "Platinum Silver" is Sony's name for the second colour (DOS/Rate#1800); an earlier version
-    // wrote a stray Cyrillic word into it.
-    colors: ['Đen (Black)', 'Bạc (Platinum Silver)', 'Hồng Khói (Smoky Pink)'],
+    // Sony lists two colours for the XM6, Black and Platinum Silver; "Smoky Pink" was an XM5
+    // colour, and an earlier version of this seed wrote a stray Cyrillic word into the second
+    // one (DOS/Rate#1800).
+    colors: ['Đen (Black)', 'Bạc (Platinum Silver)'],
     sources: {
       colors: 'https://www.sony.ca/en/audio/headphones/all-headphones/p/wf1000xm6-s',
+      'design.colors': 'https://www.sony.co.uk/headphones/products/wf-1000xm6',
     },
     images: ['/img/devices/sony-wf-1000xm6.jpg'],
     description:
@@ -3634,7 +3636,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
           'Recycled ABS matte texture body + Polyurethane foam noise isolation earbud tips (SS, S, M, L)',
         resistance: 'IPX4 splash and sweat resistant',
         keys: 'Left/Right capacitive touch sensors, Case pairing button',
-        colors: ['Black', 'Platinum Silver', 'Smoky Pink'],
+        colors: ['Black', 'Platinum Silver'],
       },
       cellular: {},
       connectivity: {

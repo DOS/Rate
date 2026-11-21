@@ -608,23 +608,30 @@ test('the backfill replaces the stored watch 5G flag and CJK network text', () =
   assert.equal(galaxy.specifications.cellular?.sim_type, 'eSIM');
 });
 
-test('the backfill replaces the stored WF-1000XM6 colours, Cyrillic word included', () => {
-  // DOS/Rate#1800: the old seed's second colour, as stored on its master.
+test('the backfill replaces the stored WF-1000XM6 colours, Cyrillic word and Smoky Pink included', () => {
+  // DOS/Rate#1800: the old seed's colours, as stored on its master. Sony lists only Black and
+  // Platinum Silver for the XM6 (sony.ca, sony.co.uk).
+  const seed = seedOf('sony:wf-1000xm6:standard');
   const update = seedMasterSpecUpdate(
     {
-      specifications: {},
+      specifications: {
+        design: {
+          colors: ['Đen (Black)', 'Bạc Платина (Platinum Silver)', 'Hồng Khói (Smoky Pink)'],
+        },
+      },
       key_specs: {},
       colors: ['Đen (Black)', 'Bạc Платина (Platinum Silver)', 'Hồng Khói (Smoky Pink)'],
     } as never,
-    seedOf('sony:wf-1000xm6:standard')
-  ) as { colors: string[] };
-  assert.deepEqual(update.colors, [
-    'Đen (Black)',
-    'Bạc (Platinum Silver)',
-    'Hồng Khói (Smoky Pink)',
-  ]);
+    seed
+  ) as { colors: string[]; specifications: ProductSpecifications };
+  const expected = ['Đen (Black)', 'Bạc (Platinum Silver)'];
+  assert.deepEqual(seed.colors, expected);
+  assert.deepEqual(update.colors, expected);
+  assert.deepEqual(update.specifications.design?.colors, expected);
+  assert.deepEqual(seed.specifications.design?.colors, ['Black', 'Platinum Silver']);
+  assert.ok(!JSON.stringify(seed).includes('Smoky Pink'));
   assert.equal(
-    seedOf('sony:wf-1000xm6:standard').sources?.colors,
+    seed.sources?.colors,
     'https://www.sony.ca/en/audio/headphones/all-headphones/p/wf1000xm6-s'
   );
 });
