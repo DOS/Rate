@@ -11,6 +11,8 @@ const MISSING = [
   '/site.webmanifest',
   '/browserconfig.xml',
   '/unknown/asset.js',
+  '/compare/100%25.png',
+  '/smartphones/foo..bar',
 ];
 
 for (const path of MISSING) {
@@ -102,6 +104,13 @@ test('unsorted dotted versus slug reaches VersusComparePage and 308s to canonica
 for (const [prefixedPath, cleanPath, locale, expectedH1, expectedTitle] of [
   [
     '/en/merchants/anker.vn',
+    '/merchants/anker.vn',
+    'en',
+    'Page not found',
+    'Merchant not found | Rate.vn',
+  ],
+  [
+    '/EN/merchants/anker.vn',
     '/merchants/anker.vn',
     'en',
     'Page not found',

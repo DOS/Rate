@@ -49,39 +49,48 @@ async function main() {
     'next.config.mjs defines the dotted-path /vi/__not-found rewrite'
   );
 
-  const compile = (source: string) =>
+  // Next.js compiles routes-manifest.json custom routes with caseSensitive: false
+  // (/i), whereas functions-config-manifest.json middleware matchers execute via
+  // new RegExp(matcher.regexp) with no /i flag.
+  const compileCustomRoute = (source: string) =>
     pathToRegexp(source, [], {
       strict: true,
       sensitive: false,
       delimiter: '/',
     }) as RegExp;
 
-  const proxyPathRegexes = proxyConfig.matcher.map(compile);
   const middlewareRegexes = getMiddlewareMatchers(proxyConfig.matcher, {
     i18n: undefined,
   }).map((m) => new RegExp(m.regexp));
-  const staticCspRegex = compile(JSON.parse(cspRule[1]!));
-  const notFoundRewriteRegex = compile(JSON.parse(notFoundRewriteRule[1]!));
+  const staticCspRegex = compileCustomRoute(JSON.parse(cspRule[1]!));
+  const notFoundRewriteRegex = compileCustomRoute(
+    JSON.parse(notFoundRewriteRule[1]!)
+  );
 
-  const byProxy = (p: string) => proxyPathRegexes.some((re) => re.test(p));
   const byMiddleware = (p: string) =>
     middlewareRegexes.some((re) => re.test(p));
 
   const dottedDynamicPagePaths = [
     '/merchants/anker.vn',
+    '/merchants/Anker.VN',
     '/merchants/viettel.store',
     '/merchants/didongthongminhchinhhang.vn',
     '/merchants/samsung.official.vn',
+    '/merchants/shop_1.vn',
     '/merchants/anker.vn/',
+    '/Merchants/anker.vn',
     '/vi/merchants/anker.vn',
     '/en/merchants/anker.vn',
+    '/EN/merchants/anker.vn',
     '/cs/merchants/anker.vn',
+    '/CS/Merchants/anker.vn',
     '/smartphones/nokia-8.1',
     '/laptops/thinkpad-x1-carbon-11.2',
     '/tablets/ipad-pro-12.9',
     '/smartwatches/watch-gt4-46.0mm',
     '/earbuds/airpods-pro-bt5.3',
     '/vi/smartphones/nokia-8.1',
+    '/Vi/smartphones/nokia-8.1',
     '/en/laptops/thinkpad-x1-carbon-11.2',
     '/cs/tablets/ipad-pro-12.9',
     '/en/smartwatches/watch-gt4-46.0mm',
@@ -90,10 +99,10 @@ async function main() {
     '/vi/compare/nokia-7.2-vs-nokia-8.1',
     '/en/compare/nokia-7.2-vs-nokia-8.1',
     '/cs/compare/nokia-7.2-vs-nokia-8.1',
+    '/CS/compare/nokia-7.2-vs-nokia-8.1',
   ];
 
   for (const p of dottedDynamicPagePaths) {
-    assert.equal(byProxy(p), true, `${p} must match proxy.ts config.matcher`);
     assert.equal(
       byMiddleware(p),
       true,
@@ -122,20 +131,27 @@ async function main() {
     '/unknown/asset.js',
     '/sitemap_index.xml',
     '/en/foo.png',
+    '/EN/foo.png',
     '/vi/ads.txt',
     '/cs/unknown/asset.js',
     '/merchants/.',
     '/merchants/..',
     '/merchants/.env',
+    '/merchants/anker.',
+    '/merchants/foo..bar',
+    '/merchants/-bad.vn',
     '/smartphones/.git',
+    '/smartphones/foo..bar',
+    '/smartphones/nokia.',
     '/compare/..hidden',
+    '/compare/100%25.png',
+    '/compare/nokia-8.1%25-vs-nokia-7.2',
     '/merchants/anker.vn/logo.png',
     '/smartphones/nokia-8.1/photo.jpg',
     '/compare/nokia-7.2-vs-nokia-8.1/extra.json',
   ];
 
   for (const p of staticAssetFourOhFourPaths) {
-    assert.equal(byProxy(p), false, `${p} must skip proxy.ts`);
     assert.equal(
       byMiddleware(p),
       false,
@@ -155,16 +171,24 @@ async function main() {
 
   const reservedNonPagePaths = [
     '/_next/static/chunks/main.js',
+    '/_NEXT/static/chunks/main.js',
     '/_vercel/insights/script.js',
+    '/_VERCEL/insights/script.js',
+    '/api/health',
+    '/API/health',
     '/api/v1/rate/openapi.json',
     '/api/v1/rate/merchants/anker.vn',
+    '/API/v1/rate/merchants/anker.vn',
     '/api/v1/rate/products/nokia-8.1',
+    '/Monitoring',
+    '/Sitemap',
+    '/APIsomething',
     '/a.b/smartphones',
     '/merchants/a.b/extra',
   ];
 
   for (const p of reservedNonPagePaths) {
-    assert.equal(byProxy(p), false, `${p} must skip proxy.ts`);
+    assert.equal(byMiddleware(p), false, `${p} must skip proxy.ts`);
     assert.equal(
       staticCspRegex.test(p),
       true,
@@ -259,14 +283,16 @@ async function main() {
     );
   }
 
-  // Linear-time guard against ReDoS on long adversarial inputs.
+  // Linear-time guard against ReDoS across all compiled matchers.
   for (const input of [
     `/${'a'.repeat(20_000)}`,
     `/merchants/${'a.'.repeat(10_000)}/c`,
     `/${'a.'.repeat(10_000)}/c`,
+    `/merchants/${'.segments/'.repeat(2_000)}tail`,
+    `/${'a'.repeat(10_000)}\nb.png`,
   ]) {
     const start = performance.now();
-    byProxy(input);
+    byMiddleware(input);
     staticCspRegex.test(input);
     notFoundRewriteRegex.test(input);
     const elapsedMs = performance.now() - start;
