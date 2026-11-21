@@ -3599,7 +3599,12 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     screen_size_inch: null,
     battery_mah: 550,
     has_5g: false,
-    colors: ['Đen (Black)', 'Bạc Платина (Platinum Silver)', 'Hồng Khói (Smoky Pink)'],
+    // "Platinum Silver" is Sony's name for the second colour (DOS/Rate#1800); an earlier version
+    // wrote a stray Cyrillic word into it.
+    colors: ['Đen (Black)', 'Bạc (Platinum Silver)', 'Hồng Khói (Smoky Pink)'],
+    sources: {
+      colors: 'https://www.sony.ca/en/audio/headphones/all-headphones/p/wf1000xm6-s',
+    },
     images: ['/img/devices/sony-wf-1000xm6.jpg'],
     description:
       'Sony WF-1000XM6 trang bị bộ đôi chip xử lý Integrated Processor V3 và QN3e HD Noise Cancelling Processor cùng màng loa Dynamic Driver X 8.4mm thế hệ mới, hỗ trợ Hi-Res Audio Wireless LDAC 990kbps, DSEE Ultimate AI và pin 8.5 giờ bật ANC.',

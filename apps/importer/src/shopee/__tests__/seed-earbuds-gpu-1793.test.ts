@@ -524,18 +524,32 @@ const strings = (value: unknown, path: string): Array<[string, string]> =>
         ? Object.entries(value).flatMap(([k, v]) => strings(v, `${path}.${k}`))
         : [];
 
-test('no seed spec value holds non-Latin text', () => {
+/** The non-Latin letters of a text, bar the micro sign. */
+const strayLetters = (text: string) =>
+  [...text].filter(
+    ch => /\p{L}/u.test(ch) && !/\p{Script=Latin}/u.test(ch) && !NON_LATIN_ALLOWED.test(ch)
+  );
+
+test('no seed text value holds non-Latin text', () => {
   for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
+    // DOS/Rate#1800: the top-level text fields too (colors, variant_name, name, ...), not only
+    // the spec groups.
+    const { specifications, key_specs, ...topLevel } = seed;
     for (const [path, text] of [
-      ...strings(seed.specifications, 'specifications'),
-      ...strings(seed.key_specs, 'key_specs'),
+      ...strings(specifications, 'specifications'),
+      ...strings(key_specs, 'key_specs'),
+      ...strings(topLevel, 'seed'),
     ]) {
-      const stray = [...text].filter(
-        ch => /\p{L}/u.test(ch) && !/\p{Script=Latin}/u.test(ch) && !NON_LATIN_ALLOWED.test(ch)
-      );
-      assert.deepEqual(stray, [], `${seed.model_key} ${path}: ${text}`);
+      assert.deepEqual(strayLetters(text), [], `${seed.model_key} ${path}: ${text}`);
     }
   }
+  // The scan finds the colour DOS/Rate#1800 corrected.
+  assert.deepEqual(
+    strings({ colors: ['Đen (Black)', 'Bạc Платина (Platinum Silver)'] }, 'seed')
+      .flatMap(([, text]) => strayLetters(text))
+      .join(''),
+    'Платина'
+  );
   // The scan finds the value #1798 removed.
   assert.deepEqual(
     strings({ cellular: { technology: '4G LTE eSIM獨立' } }, 'specifications').filter(([, text]) =>
@@ -592,4 +606,25 @@ test('the backfill replaces the stored watch 5G flag and CJK network text', () =
   assert.equal(galaxy.specifications.cellular?.has_5g, false);
   assert.equal(stored(galaxy.specifications).cellular?.technology, undefined);
   assert.equal(galaxy.specifications.cellular?.sim_type, 'eSIM');
+});
+
+test('the backfill replaces the stored WF-1000XM6 colours, Cyrillic word included', () => {
+  // DOS/Rate#1800: the old seed's second colour, as stored on its master.
+  const update = seedMasterSpecUpdate(
+    {
+      specifications: {},
+      key_specs: {},
+      colors: ['Đen (Black)', 'Bạc Платина (Platinum Silver)', 'Hồng Khói (Smoky Pink)'],
+    } as never,
+    seedOf('sony:wf-1000xm6:standard')
+  ) as { colors: string[] };
+  assert.deepEqual(update.colors, [
+    'Đen (Black)',
+    'Bạc (Platinum Silver)',
+    'Hồng Khói (Smoky Pink)',
+  ]);
+  assert.equal(
+    seedOf('sony:wf-1000xm6:standard').sources?.colors,
+    'https://www.sony.ca/en/audio/headphones/all-headphones/p/wf1000xm6-s'
+  );
 });
