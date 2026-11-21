@@ -958,7 +958,11 @@ export async function runMasterSpecsBackfillWith(
       scopedCanonicalMissing.push(modelKey);
       continue;
     }
-    const row = existing as unknown as { id: string; name?: unknown } & Record<string, unknown>;
+    const row = existing as unknown as { id: unknown; name?: unknown } & Record<string, unknown>;
+    // The update goes by id: an id the unscoped run would skip stops the plan instead.
+    if (typeof row.id !== 'string' || !row.id.trim() || /\p{Cc}/u.test(row.id)) {
+      throw new Error(`Master product ${modelKey} has no usable id: stopped before any write`);
+    }
     const update = canonicalMasterUpdate(
       row as { specifications?: unknown; key_specs?: unknown },
       entry

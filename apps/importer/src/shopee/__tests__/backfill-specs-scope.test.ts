@@ -37,7 +37,9 @@ interface Op {
  */
 function mockClient(
   existing: Record<string, Record<string, unknown>>,
-  masters: Array<Record<string, unknown>> = []
+  masters: Array<Record<string, unknown>> = [],
+  /** model_keys whose lookup returns a database error. */
+  failKeys: readonly string[] = []
 ) {
   const ops: Op[] = [];
   const client = {
@@ -71,6 +73,9 @@ function mockClient(
         },
         maybeSingle() {
           const key = op.filters.find(([c]) => c === 'model_key')?.[1];
+          if (typeof key === 'string' && failKeys.includes(key)) {
+            return Promise.resolve({ data: null, error: { message: 'boom' } });
+          }
           const row =
             table === 'master_products' && typeof key === 'string' ? existing[key] : undefined;
           return Promise.resolve({ data: row ?? null, error: null });
@@ -372,6 +377,27 @@ test('an unscoped backfill updates masters only and never inserts a seed (#1739)
       ['update', 'canon'],
     ],
     'the existing seed, then the canonical master, in order; no insert'
+  );
+  // The canonical payload of an unscoped run (pinned for the #1804 refactor).
+  const canonEntry = CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[canonicalKey]!;
+  const canonPayload = live.writes()[1]!.payload!;
+  assert.deepEqual(Object.keys(canonPayload), [
+    'ram_gb',
+    'storage_gb',
+    'screen_size_inch',
+    'battery_mah',
+    'has_5g',
+    'colors',
+    'specifications',
+    'key_specs',
+    'updated_at',
+  ]);
+  assert.equal(canonPayload.battery_mah, canonEntry.battery_mah);
+  assert.equal(canonPayload.has_5g, canonEntry.has_5g);
+  assert.deepEqual(canonPayload.colors, canonEntry.colors);
+  assert.equal(
+    (canonPayload.specifications as ProductSpecifications).cellular?.bands_5g,
+    canonEntry.specifications.cellular?.bands_5g
   );
   assert.equal(
     live.writes().some(o => o.op === 'insert'),
@@ -721,4 +747,76 @@ test('the CLI parser passes canonical keys through --only (#1804)', () => {
     parseBackfillSpecsArgs(['--only', CANONICAL.join(','), '--apply', '--expect', '3']),
     { apply: true, auditOnly: false, only: CANONICAL, expect: 3 }
   );
+});
+
+test('a canonical master that is not named is neither read nor written (#1804)', async () => {
+  const [named1, named2, unnamed] = CANONICAL as [string, string, string];
+  const existing = canonicalExisting();
+  const { client, ops, writes } = mockClient(existing, [
+    { id: existing[unnamed]!.id, name: 'Unnamed', model_key: unnamed, specifications: {} },
+  ]);
+  const result = await runMasterSpecsBackfillWith(client, deps(), {
+    apply: true,
+    only: [named2, named1],
+    expect: 2,
+  });
+  assert.equal(result.planned, 2);
+  assert.equal(
+    ops.some(o => o.filters.some(([, v]) => v === unnamed || v === existing[unnamed]!.id)),
+    false,
+    `${unnamed} is never read or written`
+  );
+  assert.deepEqual(
+    writes().map(o => o.filters[0]![1]),
+    [existing[named2]!.id, existing[named1]!.id]
+  );
+});
+
+test('a canonical problem stops the named seeds too, before any write (#1804)', async () => {
+  const seedKey = APPROVED[0]!;
+  const only = [seedKey, ...CANONICAL];
+  const withSeed = () => ({ ...allSeedsExisting(), ...canonicalExisting() });
+
+  // A missing canonical row: the seed update is not written either.
+  const missing = withSeed();
+  delete missing[CANONICAL[2]!];
+  const a = mockClient(missing);
+  await assert.rejects(
+    runMasterSpecsBackfillWith(a.client, deps(), { apply: true, only, expect: 3 }),
+    /no master row for canonical key\(s\).*stopped before any write/
+  );
+  assert.deepEqual(a.writes(), []);
+
+  // A lookup error on a canonical key.
+  const b = mockClient(withSeed(), [], [CANONICAL[1]!]);
+  await assert.rejects(
+    runMasterSpecsBackfillWith(b.client, deps(), { apply: true, only, expect: 4 }),
+    new RegExp(`Failed to look up master product ${CANONICAL[1]!}: boom`)
+  );
+  assert.deepEqual(b.writes(), []);
+
+  // A row with no usable id.
+  for (const id of ['', ' ', 42, null]) {
+    const badId = withSeed();
+    badId[CANONICAL[0]!] = { ...badId[CANONICAL[0]!]!, id };
+    const c = mockClient(badId);
+    await assert.rejects(
+      runMasterSpecsBackfillWith(c.client, deps(), { apply: true, only, expect: 4 }),
+      new RegExp(`${CANONICAL[0]!} has no usable id: stopped before any write`),
+      String(id)
+    );
+    assert.deepEqual(c.writes(), [], `id ${JSON.stringify(id)}: nothing written`);
+  }
+});
+
+test('repeated or padded canonical keys plan each master once (#1804)', async () => {
+  const { client, writes } = mockClient(canonicalExisting());
+  const key = CANONICAL[0]!;
+  const result = await runMasterSpecsBackfillWith(client, deps(), {
+    apply: true,
+    only: [key, ` ${key} `, key],
+    expect: 1,
+  });
+  assert.equal(result.planned, 1);
+  assert.equal(writes().length, 1);
 });
