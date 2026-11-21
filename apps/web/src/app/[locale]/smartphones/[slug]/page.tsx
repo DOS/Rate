@@ -17,9 +17,13 @@ import {
 } from '@/server/rate/item-page';
 import {
   buildItemProductGroupNode,
+  buildPeerItemSlugMap,
   itemVariantLabel,
   itemFromStats,
-  withoutItemSiblings,
+  resolveCanonicalPeerSlug,
+  resolvePeerCompareToken,
+  resolvePeerVersusHref,
+  withoutCurrentItemPeers,
 } from '@/lib/item-page';
 import ItemVariantPicker from '@/components/product/item/ItemVariantPicker';
 import ItemVariantPanels from '@/components/product/item/ItemVariantPanels';
@@ -37,6 +41,7 @@ import {
   getCachedMasterProductReviewSummary,
   getCachedMasterProductSiblings,
   getCachedMasterProducts,
+  groupCatalogRowsByItem,
   computeProductRadarSignal,
 } from '@/server/rate';
 import { computeBayesianRatingSummary } from '@/lib/rate-api';
@@ -138,7 +143,8 @@ import {
   formatPriceVnd,
 } from '@/lib/locale-format';
 import { displayedScore5, formatRatingValue } from '@/lib/rating-display';
-import { versusHref } from '@/lib/item-compare';
+import { catalogRowSlug } from '@/lib/item-directory';
+import { isParseableVersusPair, versusHref } from '@/lib/item-compare';
 import StarRating from '@/components/elementary/StarRating';
 
 // Cached after the first request, refreshed every 5 minutes or when the
@@ -452,20 +458,43 @@ export async function ProductDetailView({
       getCachedMasterProductReviewSummary(product.id, reviews)
     )
   );
+  const currentItemSlug =
+    itemRoute?.kind === 'render' ? itemRoute.itemSlug : null;
+  const currentSiblingSlugs = [
+    ...(itemRoute?.kind === 'render'
+      ? itemRoute.variants.map((v) => v.slug)
+      : []),
+    ...itemVariants.map((v) => v.variant.slug),
+    ...itemVariants.map((v) => v.product.slug),
+  ];
+  const currentSiblingIds = [
+    ...(itemRoute?.kind === 'render'
+      ? itemRoute.variants.map((v) => v.id)
+      : []),
+    ...itemVariants.map((v) => v.variant.id),
+    ...itemVariants.map((v) => v.product.id),
+  ];
   const competitorsRead = peersRead.then(async (storedCategoryPeers) => {
-    const categoryPeers = storedCategoryPeers.map((peer) =>
-      applyCategorySpecTemplate(categorySlug, peer)
+    // RATE_ITEM_MODEL on: group category peers into one row per Item and drop
+    // the current Item's sizes before standing and competitor rankings (#1819).
+    const groupedCategoryPeers =
+      await groupCatalogRowsByItem(storedCategoryPeers);
+    const categoryPeers = withoutCurrentItemPeers(
+      groupedCategoryPeers.map((peer) =>
+        applyCategorySpecTemplate(categorySlug, peer)
+      ),
+      {
+        productId: product.id,
+        productSlug: product.slug,
+        itemSlug: currentItemSlug,
+        siblingSlugs: currentSiblingSlugs,
+        siblingIds: currentSiblingIds,
+      }
     );
-    // An Item's other sizes are the same device, not competitors (#1154).
     // "From" price: the stored stats every other page shows (in-stock
     // listings, no bait prices), not the offer list (DOS/Rate#1141).
     const relatedCompetitors = rankRelatedCompetitors(
-      itemPage
-        ? withoutItemSiblings(
-            categoryPeers,
-            itemVariants.map((v) => v.variant.slug)
-          )
-        : categoryPeers,
+      categoryPeers,
       product.slug,
       currentMinPrice
     );
@@ -605,11 +634,14 @@ export async function ProductDetailView({
           worstRating: 1,
         }
       : null;
-  const jsonLdImages = usableImageUrls(product.images).map(absoluteUrl);
-  // The product node names a credited photo's licence (DOS/Rate#1756).
-  const jsonLdProductImages = usableImageUrls(product.images).map((src) =>
-    deviceImageJsonLd(src, absoluteUrl(src))
-  );
+  // Both Product and ProductGroup nodes name a credited photo's licence (#1756, #1819).
+  const toProductJsonLdImages = (
+    rawImages: Parameters<typeof usableImageUrls>[0]
+  ) =>
+    usableImageUrls(rawImages).map((src) =>
+      deviceImageJsonLd(src, absoluteUrl(src))
+    );
+  const jsonLdProductImages = toProductJsonLdImages(product.images);
   const itemGroupNode =
     itemPage && isItemGroup
       ? buildItemProductGroupNode({
@@ -628,15 +660,17 @@ export async function ProductDetailView({
                   name: displayName,
                   brand: itemPage.item.brand || product.brand,
                 }),
-          images: jsonLdImages,
+          images: jsonLdProductImages,
           variants: itemVariants.map((v) => {
             const stats = productMarketStats(v.product);
+            const variantImages = toProductJsonLdImages(v.product.images);
             return {
               variantKey: v.variant.variant_key,
               label: itemVariantLabel(v.variant),
               minPrice: stats.minPrice,
               maxPrice: stats.maxPrice,
               sellerCount: stats.sellerCount,
+              ...(variantImages.length > 0 ? { images: variantImages } : {}),
             };
           }),
           aggregateRating,
@@ -927,6 +961,26 @@ export async function ProductDetailView({
         </div>
       </div>
     ) : null;
+
+  const peerItemSlugMap = buildPeerItemSlugMap(
+    { slug: product.slug, itemSlug: currentItemSlug },
+    relatedCompetitors
+  );
+  const currentCompareToken = resolvePeerCompareToken({
+    id: product.id,
+    slug: product.slug,
+    item_slug: currentItemSlug,
+    ...(isItemGroup && defaultVariantKey
+      ? { variant_key: defaultVariantKey }
+      : {}),
+  });
+  const compareAllTokens = [
+    currentCompareToken,
+    ...relatedCompetitors.map((c) => resolvePeerCompareToken(c)),
+  ]
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((token) => encodeURIComponent(token).replace(/%40/gi, '@'));
 
   return (
     <ClientMessages scope="productDetail">
@@ -1377,7 +1431,7 @@ export async function ProductDetailView({
                     {t('tenSpecGroupsBtn')}
                   </a>
                   <Link
-                    href={`/compare?slugs=${product.slug}`}
+                    href={`/compare?slugs=${encodeURIComponent(currentCompareToken).replace(/%40/gi, '@')}`}
                     className="btn btn-outline-light"
                   >
                     {t('headToHeadCompareBtn')}
@@ -1637,11 +1691,11 @@ export async function ProductDetailView({
                     {t('dealHub10PlatformsBtn')}
                   </Link>
                   <Link
-                    href={`/compare?slugs=${[product.slug, ...relatedCompetitors.map((c) => c.slug)].slice(0, 4).join(',')}`}
+                    href={`/compare?slugs=${compareAllTokens.join(',')}`}
                     className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
                   >
                     {t('compareAllPeersBtn', {
-                      count: Math.min(4, relatedCompetitors.length + 1),
+                      count: compareAllTokens.length,
                     })}
                   </Link>
                 </div>
@@ -1652,6 +1706,30 @@ export async function ProductDetailView({
                 data-testid="same-category-value-alternatives"
               >
                 {relatedCompetitors.map((peer) => {
+                  const peerCanonicalSlug = resolveCanonicalPeerSlug({
+                    slug: peer.slug,
+                    item_slug: catalogRowSlug(peer),
+                  });
+                  const peerDetailHref = `${categoryBasePath}/${encodeURIComponent(peerCanonicalSlug)}`;
+                  const rawVersusHref = peerItemSlugMap
+                    ? versusHref(product.slug, peer.slug, peerItemSlugMap)
+                    : versusHref(product.slug, peer.slug);
+                  const rawVersusSides = rawVersusHref
+                    .replace(/^\/compare\//, '')
+                    .split('-vs-');
+                  const peerVersusHref =
+                    resolvePeerVersusHref(
+                      product.slug,
+                      peer.slug,
+                      peerItemSlugMap
+                    ) &&
+                    rawVersusSides.length === 2 &&
+                    isParseableVersusPair(
+                      rawVersusSides[0]!,
+                      rawVersusSides[1]!
+                    )
+                      ? rawVersusHref
+                      : null;
                   const peerPrice = Number(peer.min_price || 0);
                   const priceDelta = peerPriceDelta(peerPrice, currentMinPrice);
                   const peerThumb = productImageUrl(peer);
@@ -1722,7 +1800,7 @@ export async function ProductDetailView({
                             </div>
                             <h4 className="h6 fw-bold text-truncate mb-1">
                               <Link
-                                href={`${categoryBasePath}/${peer.slug}`}
+                                href={peerDetailHref}
                                 className="text-dark text-decoration-none"
                               >
                                 {peer.name}
@@ -1774,15 +1852,17 @@ export async function ProductDetailView({
                         </div>
 
                         <div className="d-flex mt-auto gap-2">
-                          <IntentLink
-                            href={versusHref(product.slug, peer.slug)}
-                            className="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1"
-                          >
-                            {t('compare1v1Btn')}
-                          </IntentLink>
+                          {peerVersusHref && (
+                            <IntentLink
+                              href={peerVersusHref}
+                              className="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1"
+                            >
+                              {t('compare1v1Btn')}
+                            </IntentLink>
+                          )}
                           <Link
-                            href={`${categoryBasePath}/${peer.slug}`}
-                            className="btn btn-sm btn-light rounded-pill border px-3"
+                            href={peerDetailHref}
+                            className={`btn btn-sm btn-light rounded-pill border px-3${peerVersusHref ? '' : ' flex-grow-1'}`}
                           >
                             {t('detailsBtn')}
                           </Link>
