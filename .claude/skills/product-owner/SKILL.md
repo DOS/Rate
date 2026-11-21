@@ -7,8 +7,9 @@ user-invocable: true
 
 # Product Owner
 
-One Claude Desktop session per product line is its Product Owner. The PO
-coordinates; the sub-sessions it starts do the investigation and the work.
+One session per product line and PO runtime (Claude Desktop, Qwen Code Desktop,
+or Antigravity) is its Product Owner. The PO coordinates; the sub-sessions it
+starts do the investigation and the work.
 `AGENTS.md` and the documents it routes to win over this skill. This skill
 adds the PO role on top of Rate's existing protocol (`AGENTS.md` sections 0,
 1 and 5, `Docs/Resources/RELEASE.md`); it does not replace the claim labels,
@@ -47,10 +48,12 @@ like this:
   that runs no PO (for example `codex:...`) gets no `po:*` label and is not
   refused by line; such an agent still respects the labels by this rule.
 - **Separate state.** Each PO keeps its own state and check-in file, named
-  per tool (`po-state.claude.md`, `po-state.qwen.md`, or
-  `dos-rate-core-antigravity-po-checkin.md` under `~/.claude/po-state/` for
-  Antigravity), outside the repository (in that PO's own notes or `po-state`
-  folder), never committed, and never writes another PO's file.
+  per tool and per line (`po-state.claude.md`, `po-state.qwen.md`, or
+  per-line `*-antigravity-po-checkin.md` under `~/.claude/po-state/` for
+  Antigravity: `dos-rate-core-antigravity-po-checkin.md` for Rate Core and
+  `dos-rate-services-services-antigravity-po-checkin.md` for Rate Services),
+  outside the repository (in that PO's own notes or `po-state` folder), never
+  committed, and never writes another PO's or line's file.
 - **One promoter.** Only the Claude Code PO runs `promote.mjs` and the
   `verify-live.mjs` check after it. The Qwen and Antigravity POs ask the
   Claude Code PO (or JOY, if they cannot reach it) when their merged work
@@ -339,8 +342,9 @@ claim.
 Use `start_session` with a fresh context and its own worktree. Use
 `initiation: "user_asked"` only when JOY told the PO to dispatch work in the
 PO chat; otherwise the session is a proposal card JOY has to start. Worktree:
-(`<repo>/.claude/worktrees/<task>`, `AGENTS.md` 0.5). The brief is the only
-context the session gets, so it carries:
+(`<repo>/.claude/worktrees/<task>` or `<repo>/.gemini/worktrees/<task>` by
+runtime, `AGENTS.md` 0.5). The brief is the only context the session gets, so
+it carries:
 
 - **Task**: the issue link, the problem in a few lines, and the acceptance
   from the issue.
@@ -374,9 +378,9 @@ context the session gets, so it carries:
   or the shared notes folder, not here.
 - **Reporting**: the wrap-up is a recap only, never a question or buttons for
   JOY. Decisions, approvals and access needs go to the PO with SendMessage
-  (`to`: the PO's `local_...` session id). Reports are in Vietnamese with full
-  diacritics and no em-dashes or en-dashes; the first line says complete,
-  running or stopped.
+  (`to`: the PO's `local_...` session id or Antigravity `conversationId`).
+  Reports are in Vietnamese with full diacritics and no em-dashes or
+  en-dashes; the first line says complete, running or stopped.
 
 ## Review gate
 

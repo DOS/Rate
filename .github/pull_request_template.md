@@ -12,7 +12,7 @@ Claimant: <tool>:<session id>
 
 <!-- task-claim (AGENTS.md section 1): replace the line above with the claimant
 scripts/ops/board.mjs printed when this session claimed the issue, for example
-claude:local_1234abcd or qwen:5678efgh. -->
+claude:local_1234abcd, qwen:5678efgh or antigravity:<conversation id>. -->
 
 ## Checklist
 - [ ] Build passes: `pnpm --filter <package> build`

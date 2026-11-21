@@ -67,11 +67,11 @@ export const isPoNick = (nick) => nick.trim().toLowerCase() === 'po';
 /**
  * Label edits that leave exactly one status label and one agent label, plus,
  * when `po` names the claimant's PO line, that line's `po:*` label.
- * An issue claimed by another agent or dispatched by the other PO is never
+ * An issue claimed by another agent or dispatched by another PO is never
  * taken silently (AGENTS.md sections 1 and 6): that needs `takeOver`, and the
  * other claim label is then removed. `staleClaim` (a claim, and a merged PR
  * closed the issue after its lock was taken) waives that for the agent
- * label, which is as stale as the lock, but not for the other PO's line.
+ * label, which is as stale as the lock, but not for another PO's line.
  */
 export function labelChanges(
   current,

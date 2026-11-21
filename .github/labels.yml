@@ -67,12 +67,15 @@
   color: 5319e7
   description: Task completed and verified
 
-# Product Owner line, AGENTS.md section 6 (DOS/Rate#1673): which PO
-# dispatched the issue. A PO dispatches only issues with its own label or
-# none; scripts/ops/board.mjs adds the claimant's line on a claim.
+# Product Owner line, AGENTS.md section 6 (DOS/Rate#1673, DOS/Rate#1805):
+# which PO dispatched the issue. A PO dispatches only issues with its own
+# label or none; scripts/ops/board.mjs adds the claimant's line on a claim.
 - name: po:claude
   color: 0052cc
   description: Dispatched by the Claude Code Product Owner
 - name: po:qwen
   color: 0052cc
   description: Dispatched by the Qwen Code Product Owner
+- name: po:antigravity
+  color: 0052cc
+  description: Dispatched by the Antigravity Product Owner
