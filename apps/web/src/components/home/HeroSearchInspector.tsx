@@ -13,8 +13,15 @@ import { Link, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import type { KeySpecs } from '@repo/shared-data';
 import {
+  IMPLAUSIBLY_LOW_RATIO,
+  MINIMUM_DEVICE_PRICE_FLOOR_VND,
+  MINIMUM_EARBUDS_PRICE_FLOOR_VND,
   implausiblyLowOfferIds,
+  isImplausiblyLowPrice,
   isOfferImplausiblyLowAgainstInStock,
+  minimumListingPriceVnd,
+  normalizeOfferId,
+  plausibleMinPrice,
   plausibleOffers,
 } from '@repo/shared-data/rules';
 import type { HeroProductSuggestion } from '@/lib/hero-products';
@@ -244,20 +251,113 @@ export function buildHeroCompareItem(
   };
 }
 
-export function resolveHeroInspectDiscountAnalysis(
+function resolveHeroListingPriceFloorVnd(params: {
+  masterProduct?: {
+    name?: string | null;
+    slug?: string | null;
+    category_id?: string | null;
+    metadata?: Record<string, unknown> | null;
+    specifications?: Record<string, unknown> | null;
+  } | null;
+  offerTitle?: string | null;
+  offerUrl?: string | null;
+}): number {
+  const { masterProduct, offerTitle, offerUrl } = params;
+  if (!masterProduct) {
+    return MINIMUM_EARBUDS_PRICE_FLOOR_VND;
+  }
+  const categorySlug = getMasterProductCategorySlug(
+    masterProduct as Parameters<typeof getMasterProductCategorySlug>[0]
+  );
+  if (categorySlug === 'earbuds') {
+    return MINIMUM_EARBUDS_PRICE_FLOOR_VND;
+  }
+  const texts = [
+    masterProduct.name ?? '',
+    masterProduct.slug ?? '',
+    offerTitle ?? '',
+    offerUrl ?? '',
+  ].filter(Boolean);
+  return texts.length > 0
+    ? minimumListingPriceVnd(texts)
+    : MINIMUM_DEVICE_PRICE_FLOOR_VND;
+}
+
+export function resolveHeroInspectBestPriceVnd(
   inspectResult:
     | {
-        matchedOffer?: {
-          id?: string | null;
-          price_current?: unknown;
-          availability?: OfferAvailability | null;
-          implausiblyLow?: boolean | null;
+        masterProduct?: {
+          min_price?: unknown;
+          name?: string | null;
+          slug?: string | null;
+          category_id?: string | null;
+          metadata?: Record<string, unknown> | null;
+          specifications?: Record<string, unknown> | null;
         } | null;
         allOffers?:
           | readonly {
               id: string;
               price_current: number;
               availability?: OfferAvailability | null;
+              implausiblyLow?: boolean | null;
+              title?: string | null;
+              url?: string | null;
+            }[]
+          | null;
+      }
+    | null
+    | undefined
+): number {
+  const minFloor = resolveHeroListingPriceFloorVnd({
+    masterProduct: inspectResult?.masterProduct,
+  });
+  const rawMasterMin = sanitizeHeroInspectorPriceVnd(
+    inspectResult?.masterProduct?.min_price
+  );
+  const safeOffers = Array.isArray(inspectResult?.allOffers)
+    ? inspectResult.allOffers
+    : [];
+  if (safeOffers.length === 0) {
+    return rawMasterMin >= minFloor ? rawMasterMin : 0;
+  }
+  const pricedInStockOffers = safeOffers.filter((o) => {
+    if (isOfferUnavailable(o) || o.implausiblyLow === true) return false;
+    const price = sanitizeHeroInspectorPriceVnd(o.price_current);
+    return price >= minFloor;
+  });
+  if (pricedInStockOffers.length === 0) {
+    return 0;
+  }
+  return plausibleMinPrice(0, pricedInStockOffers);
+}
+
+export function resolveHeroInspectDiscountAnalysis(
+  inspectResult:
+    | {
+        masterProduct?: {
+          min_price?: unknown;
+          name?: string | null;
+          slug?: string | null;
+          category_id?: string | null;
+          metadata?: Record<string, unknown> | null;
+          specifications?: Record<string, unknown> | null;
+        } | null;
+        matchedOffer?: {
+          id?: string | null;
+          price_current?: unknown;
+          availability?: OfferAvailability | null;
+          implausiblyLow?: boolean | null;
+          title?: string | null;
+          url?: string | null;
+        } | null;
+        allOffers?:
+          | readonly {
+              id: string;
+              price_current: number;
+              availability?: OfferAvailability | null;
+              implausiblyLow?: boolean | null;
+              title?: string | null;
+              url?: string | null;
             }[]
           | null;
         discountAnalysis?: OfferDiscountAnalysis | null;
@@ -268,17 +368,74 @@ export function resolveHeroInspectDiscountAnalysis(
   const analysis = inspectResult?.discountAnalysis ?? null;
   if (!analysis) return null;
 
+  const matchedOffer = inspectResult?.matchedOffer ?? null;
+  const minFloor = resolveHeroListingPriceFloorVnd({
+    masterProduct: inspectResult?.masterProduct,
+    offerTitle: matchedOffer?.title,
+    offerUrl: matchedOffer?.url,
+  });
+  const safeAnalysisPrice = sanitizeHeroInspectorPriceVnd(
+    analysis.price_current
+  );
+  if (safeAnalysisPrice < minFloor) {
+    return null;
+  }
+
   const safeOffers = Array.isArray(inspectResult?.allOffers)
     ? inspectResult.allOffers
     : [];
   const inStockOffers = safeOffers.filter((o) => !isOfferUnavailable(o));
-  const matchedOffer = inspectResult?.matchedOffer ?? null;
+  const plausibilityOffers =
+    inStockOffers.length > 0 ? inStockOffers : safeOffers;
+  const implausibleOfferIds = implausiblyLowOfferIds(plausibilityOffers);
+
+  const safeBestPrice = resolveHeroInspectBestPriceVnd(inspectResult);
+  if (
+    safeBestPrice >= MINIMUM_EARBUDS_PRICE_FLOOR_VND &&
+    safeAnalysisPrice < safeBestPrice * IMPLAUSIBLY_LOW_RATIO
+  ) {
+    return null;
+  }
+  if (
+    isOfferImplausiblyLowAgainstInStock(
+      {
+        id: typeof analysis.product_id === 'string' ? analysis.product_id : '',
+        price_current: safeAnalysisPrice,
+      },
+      plausibilityOffers,
+      implausibleOfferIds
+    )
+  ) {
+    return null;
+  }
 
   if (!matchedOffer) {
-    if (sanitizeHeroInspectorPriceVnd(analysis.price_current) <= 0) {
+    const pricedPlausibleInStock = plausibleOffers(inStockOffers).filter(
+      (o) =>
+        o.implausiblyLow !== true &&
+        sanitizeHeroInspectorPriceVnd(o.price_current) >= minFloor
+    );
+    if (safeOffers.length > 0 && pricedPlausibleInStock.length === 0) {
       return null;
     }
-    if (safeOffers.length > 0 && plausibleOffers(inStockOffers).length === 0) {
+    const analysisCanonicalId = normalizeOfferId(analysis.product_id);
+    const linkedOffer = safeOffers.find(
+      (o) =>
+        o.id === analysis.product_id ||
+        (analysisCanonicalId !== '' &&
+          normalizeOfferId(o.id) === analysisCanonicalId)
+    );
+    if (
+      linkedOffer &&
+      (isOfferUnavailable(linkedOffer) ||
+        linkedOffer.implausiblyLow === true ||
+        sanitizeHeroInspectorPriceVnd(linkedOffer.price_current) < minFloor ||
+        isOfferImplausiblyLowAgainstInStock(
+          linkedOffer,
+          plausibilityOffers,
+          implausibleOfferIds
+        ))
+    ) {
       return null;
     }
     return analysis;
@@ -290,16 +447,19 @@ export function resolveHeroInspectDiscountAnalysis(
   const safeOfferPrice = sanitizeHeroInspectorPriceVnd(
     matchedOffer.price_current
   );
-  if (safeOfferPrice <= 0) {
+  if (safeOfferPrice < minFloor) {
     return null;
   }
   if (matchedOffer.implausiblyLow === true) {
     return null;
   }
+  if (
+    safeBestPrice >= MINIMUM_EARBUDS_PRICE_FLOOR_VND &&
+    safeOfferPrice < safeBestPrice * IMPLAUSIBLY_LOW_RATIO
+  ) {
+    return null;
+  }
 
-  const plausibilityOffers =
-    inStockOffers.length > 0 ? inStockOffers : safeOffers;
-  const implausibleOfferIds = implausiblyLowOfferIds(plausibilityOffers);
   const candidate =
     typeof matchedOffer.price_current === 'number'
       ? (matchedOffer as {
@@ -319,6 +479,25 @@ export function resolveHeroInspectDiscountAnalysis(
       implausibleOfferIds
     )
   ) {
+    return null;
+  }
+
+  const matchedCanonicalId = normalizeOfferId(matchedOffer.id);
+  const peerReferenceOffers = plausibleOffers(
+    plausibilityOffers.filter((o) => {
+      if (o === matchedOffer) return false;
+      if (
+        (o.id === matchedOffer.id ||
+          (matchedCanonicalId !== '' &&
+            normalizeOfferId(o.id) === matchedCanonicalId)) &&
+        sanitizeHeroInspectorPriceVnd(o.price_current) === safeOfferPrice
+      ) {
+        return false;
+      }
+      return true;
+    })
+  );
+  if (isImplausiblyLowPrice(safeOfferPrice, peerReferenceOffers)) {
     return null;
   }
 
@@ -1039,9 +1218,8 @@ export default function HeroSearchInspector({
                           </h2>
 
                           {(() => {
-                            const safeBestPrice = sanitizeHeroInspectorPriceVnd(
-                              inspectResult.masterProduct.min_price
-                            );
+                            const safeBestPrice =
+                              resolveHeroInspectBestPriceVnd(inspectResult);
                             const safeLowestEver =
                               sanitizeHeroInspectorPriceVnd(
                                 inspectResult.priceHistory?.lowestEverPrice

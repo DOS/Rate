@@ -117,13 +117,19 @@ export async function runInspectVerdictGuardsSuite() {
     };
   }
 
-  const { default: HeroSearchInspector, resolveHeroInspectDiscountAnalysis } =
-    await import('../../components/home/HeroSearchInspector');
+  const {
+    default: HeroSearchInspector,
+    resolveHeroInspectBestPriceVnd,
+    resolveHeroInspectDiscountAnalysis,
+  } = await import('../../components/home/HeroSearchInspector');
   const {
     default: DeepInspectWorkspace,
     buildInspectMarkdownPriceLines,
+    isInspectOfferBait,
+    resolveInspectMasterMinPriceVnd,
     resolveInspectPriceVerdictPrices,
     resolveInspectVerdictPrices,
+    sanitizeInspectOriginalPriceVnd,
   } = await import('../../components/inspect/DeepInspectWorkspace');
 
   assert.equal(
@@ -286,7 +292,98 @@ export async function runInspectVerdictGuardsSuite() {
       analysis,
       `plausible in-stock offer keeps ${verdict}`
     );
+
+    // Round 1 coverage: 1-offer and 2-offer 1,000 VND bait clusters, malformed
+    // analysis.price_current, null matchedOffer with bait/unavailable linked ID,
+    // unpriced in-stock peers, and ID-collision overrides.
+    assert.equal(
+      resolveHeroInspectDiscountAnalysis({
+        matchedOffer: bait1000Offer,
+        allOffers: [bait1000Offer],
+        discountAnalysis: makeDiscountAnalysis(verdict, 1_000, 25_000_000),
+      }),
+      null,
+      `1-offer 1,000 VND bait cluster must suppress ${verdict}`
+    );
+    assert.equal(
+      resolveHeroInspectDiscountAnalysis({
+        matchedOffer: bait1000Offer,
+        allOffers: [bait1000Offer, inStockPeerA],
+        discountAnalysis: makeDiscountAnalysis(verdict, 1_000, 25_000_000),
+      }),
+      null,
+      `2-offer 1,000 VND bait cluster must suppress ${verdict}`
+    );
+    assert.equal(
+      resolveHeroInspectDiscountAnalysis({
+        matchedOffer: inStockPeerA,
+        allOffers: [inStockPeerA, inStockPeerB],
+        discountAnalysis: makeDiscountAnalysis(verdict, 0, 25_000_000),
+      }),
+      null,
+      `zero analysis.price_current must suppress ${verdict}`
+    );
+    assert.equal(
+      resolveHeroInspectDiscountAnalysis({
+        matchedOffer: inStockPeerA,
+        allOffers: [inStockPeerA, inStockPeerB],
+        discountAnalysis: makeDiscountAnalysis(verdict, 1_000, 25_000_000),
+      }),
+      null,
+      `bait analysis.price_current must suppress ${verdict}`
+    );
+    assert.equal(
+      resolveHeroInspectDiscountAnalysis({
+        matchedOffer: null,
+        allOffers: [soldOutOffer, inStockPeerA, inStockPeerB],
+        discountAnalysis: {
+          ...analysis,
+          product_id: soldOutOffer.id,
+        },
+      }),
+      null,
+      `null matchedOffer linked to unavailable product_id must suppress ${verdict}`
+    );
+    assert.equal(
+      resolveHeroInspectDiscountAnalysis({
+        matchedOffer: null,
+        allOffers: [makeOffer('unpriced-in-stock', 0, 'in_stock')],
+        discountAnalysis: analysis,
+      }),
+      null,
+      `unpriced 0 VND in-stock cluster must suppress ${verdict}`
+    );
+    assert.equal(
+      resolveHeroInspectDiscountAnalysis({
+        matchedOffer: {
+          id: 'peer-a',
+          price_current: 500_000,
+          availability: 'in_stock',
+        },
+        allOffers: [inStockPeerA, inStockPeerB],
+        discountAnalysis: makeDiscountAnalysis(verdict, 500_000, 25_000_000),
+      }),
+      null,
+      `ID-colliding overridden bait offer must suppress ${verdict}`
+    );
   }
+
+  assert.equal(
+    resolveHeroInspectBestPriceVnd({
+      masterProduct: { min_price: 15_000_000, slug: 'iphone-16' },
+      allOffers: [soldOutOffer, makeOffer('unpriced-0', 0, 'in_stock')],
+    }),
+    0,
+    'HeroSearchInspector best price suppresses stale min_price when no priced in-stock offer exists'
+  );
+  assert.equal(
+    resolveHeroInspectBestPriceVnd({
+      masterProduct: { min_price: 1_000, slug: 'iphone-16' },
+      allOffers: [bait1000Offer, inStockPeerA],
+    }),
+    20_000_000,
+    'HeroSearchInspector best price excludes 1,000 VND bait in 2-offer cluster'
+  );
 
   // 2. HeroSearchInspector SSR HTML across vi/en/cs & home/contact scopes.
   const baseMaster = {
@@ -649,7 +746,199 @@ export async function runInspectVerdictGuardsSuite() {
       false,
       `${locale}: Verdict Card suppresses fakeSaleWarning on bait offer`
     );
+
+    // 2-offer 1,000 VND bait cluster + equal-orig table row in DeepInspectWorkspace SSR:
+    const bait1000EqualOrig = makeOffer('bait-1k-eq', 1_000, 'in_stock', 1_000);
+    const twoOfferBaitHtml = renderInspect({
+      query: bait1000EqualOrig.url,
+      matchedType: 'product_listing',
+      parsedUrl: parseEcommerceUrlOrQuery(bait1000EqualOrig.url),
+      masterProduct: { ...baseMaster, min_price: 1_000 },
+      matchedOffer: bait1000EqualOrig,
+      allOffers: [
+        bait1000EqualOrig,
+        makeOffer('equal-orig', 20_000_000, 'in_stock', 20_000_000),
+      ],
+      discountAnalysis: makeDiscountAnalysis('genuine_deal', 1_000, 25_000_000),
+      priceHistory: null,
+      reviewSummary: null,
+      merchantProfile: null,
+      suggestions: [],
+    });
+    const [twoOfferVerdictHtml, twoOfferTableRest] =
+      twoOfferBaitHtml.split('<table');
+    assert.ok(twoOfferVerdictHtml && twoOfferTableRest);
+    assert.ok(
+      twoOfferVerdictHtml.includes('data-testid="inspect-implausibly-low"'),
+      `${locale}: 2-offer 1,000 VND bait cluster shows inspect-implausibly-low`
+    );
+    assert.equal(
+      twoOfferVerdictHtml.includes(formatPriceVnd(1_000, locale)),
+      false,
+      `${locale}: 2-offer Verdict Card never leaks 1,000 VND`
+    );
+    assert.equal(
+      twoOfferTableRest.includes('text-decoration-line-through'),
+      false,
+      `${locale}: Offers Table omits strikethrough when price_original <= price_current`
+    );
+
+    // Sold-out / discontinued offers with fake_discount or suspicious_discount
+    // render inspect-unavailable and never show fakeSaleWarning or sold-out prices in Verdict Card.
+    for (const [unavailableOffer, staleVerdict] of [
+      [soldOutOffer, 'fake_discount'],
+      [discontinuedOffer, 'suspicious_discount'],
+    ] as const) {
+      const unavailableHtml = renderInspect({
+        query: unavailableOffer.url,
+        matchedType: 'product_listing',
+        parsedUrl: parseEcommerceUrlOrQuery(unavailableOffer.url),
+        masterProduct: { ...baseMaster, min_price: 15_000_000 },
+        matchedOffer: unavailableOffer,
+        allOffers: [unavailableOffer, inStockPeerA, inStockPeerB],
+        discountAnalysis: makeDiscountAnalysis(
+          staleVerdict,
+          unavailableOffer.price_current,
+          unavailableOffer.price_original
+        ),
+        priceHistory: {
+          points: [],
+          byOffer: {},
+          lowestEverPrice: 19_500_000,
+          lowestEverDate: null,
+          lowestEverMerchant: null,
+          highestEverPrice: 21_500_000,
+          currentMinPrice: 20_000_000,
+          fakeDiscountCount: 1,
+          genuineDealCount: 0,
+        },
+        reviewSummary: null,
+        merchantProfile: null,
+        suggestions: [],
+      });
+      const [unavailVerdictCardHtml] = unavailableHtml.split('<table');
+      assert.ok(unavailVerdictCardHtml);
+      assert.ok(
+        unavailVerdictCardHtml.includes('data-testid="inspect-unavailable"'),
+        `${locale}: ${unavailableOffer.id} renders inspect-unavailable badge`
+      );
+      assert.ok(
+        unavailVerdictCardHtml.includes(formatPriceVnd(20_000_000, locale)),
+        `${locale}: ${unavailableOffer.id} Verdict Card replaces stale 15M master.min_price with 20M in-stock min_price`
+      );
+      assert.equal(
+        unavailVerdictCardHtml.includes(
+          formatPriceVnd(unavailableOffer.price_current, locale)
+        ),
+        false,
+        `${locale}: ${unavailableOffer.id} Verdict Card excludes unavailable price`
+      );
+      assert.equal(
+        unavailVerdictCardHtml.includes(
+          formatPriceVnd(unavailableOffer.price_original ?? 0, locale)
+        ),
+        false,
+        `${locale}: ${unavailableOffer.id} Verdict Card excludes unavailable strikethrough`
+      );
+      assert.equal(
+        unavailVerdictCardHtml.includes(inspectMsgs.fakeSaleWarning),
+        false,
+        `${locale}: ${unavailableOffer.id} Verdict Card suppresses fakeSaleWarning`
+      );
+      assert.equal(
+        unavailVerdictCardHtml.includes(inspectMsgs.genuineDiscountBadge),
+        false,
+        `${locale}: ${unavailableOffer.id} Verdict Card suppresses genuineDiscountBadge`
+      );
+    }
+
+    // All-sold-out cluster with null matchedOffer and stale genuine_deal + stale master.min_price:
+    // suppresses genuineDiscountBadge and hides PriceWatchButton.
+    const watchlistMsgs = messagesForLocale(locale).watchlist;
+    const allSoldOutNullMatchHtml = renderInspect({
+      query: 'iphone-all-sold-out',
+      matchedType: 'master_product',
+      parsedUrl: parseEcommerceUrlOrQuery('iphone-all-sold-out'),
+      masterProduct: { ...baseMaster, min_price: 15_000_000 },
+      matchedOffer: null,
+      allOffers: [soldOutOffer, makeOffer('unpriced-in-stock', 0, 'in_stock')],
+      discountAnalysis: makeDiscountAnalysis(
+        'genuine_deal',
+        15_000_000,
+        25_000_000
+      ),
+      priceHistory: {
+        points: [],
+        byOffer: {},
+        lowestEverPrice: 15_000_000,
+        lowestEverDate: null,
+        lowestEverMerchant: null,
+        highestEverPrice: 16_000_000,
+        currentMinPrice: null,
+        fakeDiscountCount: 0,
+        genuineDealCount: 0,
+      },
+      reviewSummary: null,
+      merchantProfile: null,
+      suggestions: [],
+    });
+    const [allSoldOutCardHtml] = allSoldOutNullMatchHtml.split('<table');
+    assert.ok(allSoldOutCardHtml);
+    assert.equal(
+      allSoldOutCardHtml.includes(inspectMsgs.genuineDiscountBadge),
+      false,
+      `${locale}: all-sold-out null matchedOffer suppresses genuineDiscountBadge`
+    );
+    assert.equal(
+      allSoldOutNullMatchHtml.includes(`>${watchlistMsgs.btnWatch}<`),
+      false,
+      `${locale}: all-sold-out product with stale master.min_price hides PriceWatchButton`
+    );
   }
+
+  // 5. Additional pure helper checks for Round 1 edge cases.
+  assert.equal(sanitizeInspectOriginalPriceVnd(20_000_000, 20_000_000), 0);
+  assert.equal(sanitizeInspectOriginalPriceVnd(18_000_000, 20_000_000), 0);
+  assert.equal(sanitizeInspectOriginalPriceVnd(25_000_000, 0), 0);
+  assert.equal(
+    sanitizeInspectOriginalPriceVnd(25_000_000, 20_000_000),
+    25_000_000
+  );
+  assert.equal(isInspectOfferBait(bait1000Offer, new Set(), []), true);
+  assert.equal(
+    resolveInspectMasterMinPriceVnd({
+      matchedOffer: bait1000Offer,
+      allOffers: [bait1000Offer, inStockPeerA],
+      master: { min_price: 1_000 },
+    }),
+    20_000_000
+  );
+  assert.equal(
+    resolveInspectMasterMinPriceVnd({
+      matchedOffer: bait1000Offer,
+      allOffers: [bait1000Offer],
+      master: { min_price: 1_000 },
+    }),
+    0
+  );
+  assert.deepEqual(
+    resolveInspectVerdictPrices({
+      matchedOffer: {
+        id: 'peer-a',
+        price_current: 500_000,
+        price_original: 25_000_000,
+      },
+      allOffers: [inStockPeerA, inStockPeerB],
+      master: { min_price: 20_000_000, max_price: 21_500_000 },
+      priceHistory: null,
+    }),
+    {
+      currentPriceVnd: 20_000_000,
+      claimedOriginalVnd: 0,
+      historicalLowVnd: 20_000_000,
+      historicalHighVnd: 21_500_000,
+    }
+  );
 }
 
 if (typeof require !== 'undefined' && require.main === module) {

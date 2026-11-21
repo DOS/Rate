@@ -64,7 +64,9 @@ import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
 import { SAMPLE_AUDIT_URLS } from '@/lib/inspect-samples';
 import {
-  implausiblyLowOfferIds,
+  IMPLAUSIBLY_LOW_RATIO,
+  MINIMUM_EARBUDS_PRICE_FLOOR_VND,
+  implausiblyLowIndexes,
   isImplausiblyLowPrice,
   isOfferImplausiblyLowAgainstInStock,
   normalizeOfferId,
@@ -243,29 +245,97 @@ export function orderInspectOffers<
 } {
   const safeOffers = Array.isArray(offers) ? offers : [];
   const inStockOffers = safeOffers.filter((o) => !isOfferUnavailable(o));
-  const plausibilityOffers =
-    inStockOffers.length > 0 ? inStockOffers : safeOffers;
-  const implausibleOfferIds = implausiblyLowOfferIds(plausibilityOffers);
-  const listedOffers = [...safeOffers].sort((a, b) => {
-    const unavailableA = isOfferUnavailable(a) ? 1 : 0;
-    const unavailableB = isOfferUnavailable(b) ? 1 : 0;
-    if (unavailableA !== unavailableB) return unavailableA - unavailableB;
-    const implausibleA = isInspectOfferBait(
-      a,
-      implausibleOfferIds,
-      plausibilityOffers
-    )
-      ? 1
-      : 0;
-    const implausibleB = isInspectOfferBait(
-      b,
-      implausibleOfferIds,
-      plausibilityOffers
-    )
-      ? 1
-      : 0;
-    return implausibleA - implausibleB;
-  });
+  const hasInStock = inStockOffers.length > 0;
+  const plausibilityOffers = hasInStock ? inStockOffers : safeOffers;
+  const flaggedIndexes = implausiblyLowIndexes(
+    plausibilityOffers.map((o) => o?.price_current)
+  );
+  const implausibleOfferIds = new Set<string>();
+  for (const idx of flaggedIndexes) {
+    const cleanId = normalizeOfferId(plausibilityOffers[idx]?.id);
+    if (cleanId) implausibleOfferIds.add(cleanId);
+  }
+
+  let plausibleCutoff = 0;
+  if (hasInStock && flaggedIndexes.size === 0 && inStockOffers.length >= 2) {
+    const validPrices: number[] = [];
+    for (let i = 0; i < inStockOffers.length; i++) {
+      const p = inStockOffers[i]!.price_current;
+      if (
+        typeof p === 'number' &&
+        Number.isFinite(p) &&
+        p > 0 &&
+        p <= MAX_VALID_VND_PRICE
+      ) {
+        validPrices.push(p);
+      } else {
+        const sp = sanitizeInspectPriceVnd(p);
+        if (sp > 0) validPrices.push(sp);
+      }
+    }
+    if (validPrices.length >= 2) {
+      validPrices.sort((a, b) => a - b);
+      plausibleCutoff =
+        validPrices[Math.floor((validPrices.length - 1) / 2)]! *
+        IMPLAUSIBLY_LOW_RATIO;
+    }
+  }
+
+  const inStockPlausible: T[] = [];
+  const inStockBait: T[] = [];
+  const unavailablePlausible: T[] = [];
+  const unavailableBait: T[] = [];
+  let inStockCursor = 0;
+  for (let i = 0; i < safeOffers.length; i++) {
+    const offer = safeOffers[i]!;
+    const unavailable = isOfferUnavailable(offer);
+    const rawPrice = offer.price_current;
+    const safePrice =
+      typeof rawPrice === 'number'
+        ? Number.isFinite(rawPrice) &&
+          rawPrice > 0 &&
+          rawPrice <= MAX_VALID_VND_PRICE
+          ? Math.round(rawPrice)
+          : 0
+        : sanitizeInspectPriceVnd(rawPrice);
+    const subFloorOrExplicit =
+      (offer as { implausiblyLow?: boolean | null }).implausiblyLow === true ||
+      (safePrice > 0 && safePrice < MINIMUM_EARBUDS_PRICE_FLOOR_VND);
+
+    if (!unavailable) {
+      const idx = inStockCursor++;
+      if (subFloorOrExplicit || flaggedIndexes.has(idx)) {
+        inStockBait.push(offer);
+      } else {
+        inStockPlausible.push(offer);
+      }
+    } else if (!hasInStock) {
+      if (subFloorOrExplicit || flaggedIndexes.has(i)) {
+        unavailableBait.push(offer);
+      } else {
+        unavailablePlausible.push(offer);
+      }
+    } else if (subFloorOrExplicit) {
+      unavailableBait.push(offer);
+    } else if (
+      flaggedIndexes.size === 0 &&
+      !(plausibleCutoff > 0 && safePrice > 0 && safePrice < plausibleCutoff)
+    ) {
+      unavailablePlausible.push(offer);
+    } else if (
+      isInspectOfferBait(offer, implausibleOfferIds, plausibilityOffers)
+    ) {
+      unavailableBait.push(offer);
+    } else {
+      unavailablePlausible.push(offer);
+    }
+  }
+  const listedOffers = [
+    ...inStockPlausible,
+    ...inStockBait,
+    ...unavailablePlausible,
+    ...unavailableBait,
+  ];
   return {
     inStockOffers,
     plausibilityOffers,
@@ -301,6 +371,105 @@ export function inspectMarkdownPriceVerdict(
   return `**${copy.label}** (${copy.explanation})`;
 }
 
+export function sanitizeInspectOriginalPriceVnd(
+  priceOriginal: unknown,
+  priceCurrent: unknown
+): number {
+  const safeCurrent = sanitizeInspectPriceVnd(priceCurrent);
+  const safeOrig = sanitizeInspectPriceVnd(priceOriginal);
+  return safeCurrent > 0 && safeOrig > safeCurrent ? safeOrig : 0;
+}
+
+export function resolveInspectMasterMinPriceVnd(params: {
+  matchedOffer?: {
+    id?: string | null;
+    price_current?: unknown;
+    availability?: OfferAvailability | null;
+    implausiblyLow?: boolean | null;
+  } | null;
+  allOffers?:
+    | readonly {
+        id: string;
+        price_current: number;
+        availability?: OfferAvailability | null;
+        implausiblyLow?: boolean | null;
+      }[]
+    | null;
+  inStockOffers?:
+    | readonly {
+        id?: string | null;
+        price_current: number;
+        availability?: OfferAvailability | null;
+        implausiblyLow?: boolean | null;
+      }[]
+    | null;
+  offerImplausiblyLow?: boolean;
+  master?: {
+    min_price?: unknown;
+  } | null;
+}): number {
+  const { matchedOffer, allOffers, master } = params;
+  const rawMasterMin = sanitizeInspectPriceVnd(master?.min_price);
+  const safeOfferCurrent = sanitizeInspectPriceVnd(matchedOffer?.price_current);
+  const hasAllOffers = Array.isArray(allOffers) && allOffers.length > 0;
+  const hasExplicitInStock =
+    Array.isArray(params.inStockOffers) && params.inStockOffers.length > 0;
+
+  if (!hasAllOffers && !hasExplicitInStock) {
+    if (rawMasterMin > 0 && rawMasterMin < MINIMUM_EARBUDS_PRICE_FLOOR_VND) {
+      return 0;
+    }
+    const explicitBait =
+      params.offerImplausiblyLow === true ||
+      matchedOffer?.implausiblyLow === true ||
+      (safeOfferCurrent > 0 &&
+        safeOfferCurrent < MINIMUM_EARBUDS_PRICE_FLOOR_VND);
+    if (
+      explicitBait &&
+      safeOfferCurrent > 0 &&
+      rawMasterMin === safeOfferCurrent
+    ) {
+      return 0;
+    }
+    return rawMasterMin;
+  }
+
+  const candidateOffers = hasExplicitInStock
+    ? params.inStockOffers!
+    : allOffers!;
+  const matchedCanonicalId = normalizeOfferId(matchedOffer?.id);
+  const excludeMatchedBait =
+    params.offerImplausiblyLow === true ||
+    matchedOffer?.implausiblyLow === true ||
+    (safeOfferCurrent > 0 &&
+      safeOfferCurrent < MINIMUM_EARBUDS_PRICE_FLOOR_VND);
+
+  const pricedNonBaitInStock = candidateOffers.filter((o) => {
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return false;
+    if (isOfferUnavailable(o)) return false;
+    if (o.implausiblyLow === true) return false;
+    const price = sanitizeInspectPriceVnd(o.price_current);
+    if (price < MINIMUM_EARBUDS_PRICE_FLOOR_VND) return false;
+    if (excludeMatchedBait && matchedOffer) {
+      if (o === matchedOffer) return false;
+      if (
+        price === safeOfferCurrent &&
+        ((typeof o.id === 'string' && o.id === matchedOffer.id) ||
+          (matchedCanonicalId !== '' &&
+            normalizeOfferId(o.id) === matchedCanonicalId))
+      ) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  if (pricedNonBaitInStock.length === 0) {
+    return 0;
+  }
+  return plausibleMinPrice(0, pricedNonBaitInStock);
+}
+
 export function resolveInspectPriceVerdictPrices(params: {
   matchedOffer?: {
     id?: string | null;
@@ -314,12 +483,15 @@ export function resolveInspectPriceVerdictPrices(params: {
         id: string;
         price_current: number;
         availability?: OfferAvailability | null;
+        implausiblyLow?: boolean | null;
       }[]
     | null;
   inStockOffers?:
     | readonly {
         id?: string | null;
         price_current: number;
+        availability?: OfferAvailability | null;
+        implausiblyLow?: boolean | null;
       }[]
     | null;
   offerUnavailable?: boolean;
@@ -340,6 +512,7 @@ export function resolveInspectPriceVerdictPrices(params: {
 } {
   const { matchedOffer, allOffers, master, priceHistory } = params;
   const safeOfferCurrent = sanitizeInspectPriceVnd(matchedOffer?.price_current);
+  const rawMasterMin = sanitizeInspectPriceVnd(master?.min_price);
   const hasAllOffers = Array.isArray(allOffers) && allOffers.length > 0;
   let cachedOrdered: ReturnType<typeof orderInspectOffers> | null = null;
   const getOrdered = () => {
@@ -358,6 +531,19 @@ export function resolveInspectPriceVerdictPrices(params: {
     if (
       params.offerImplausiblyLow === true ||
       matchedOffer?.implausiblyLow === true
+    ) {
+      return true;
+    }
+    if (
+      safeOfferCurrent > 0 &&
+      safeOfferCurrent < MINIMUM_EARBUDS_PRICE_FLOOR_VND
+    ) {
+      return true;
+    }
+    if (
+      rawMasterMin >= MINIMUM_EARBUDS_PRICE_FLOOR_VND &&
+      safeOfferCurrent > 0 &&
+      safeOfferCurrent < rawMasterMin * IMPLAUSIBLY_LOW_RATIO
     ) {
       return true;
     }
@@ -380,65 +566,72 @@ export function resolveInspectPriceVerdictPrices(params: {
             price_current: safeOfferCurrent,
             availability: matchedOffer.availability ?? null,
           };
+    const matchedCanonicalId = normalizeOfferId(matchedOffer.id);
+    const isPeerOffer = (o: { id?: string | null; price_current: number }) => {
+      if (o === matchedOffer) return false;
+      if (
+        ((typeof o.id === 'string' && o.id === matchedOffer.id) ||
+          (matchedCanonicalId !== '' &&
+            normalizeOfferId(o.id) === matchedCanonicalId)) &&
+        sanitizeInspectPriceVnd(o.price_current) === safeOfferCurrent
+      ) {
+        return false;
+      }
+      return true;
+    };
+
     const ordered = getOrdered();
     if (ordered) {
-      return isInspectOfferBait(
-        candidate,
-        ordered.implausibleOfferIds,
-        ordered.plausibilityOffers
+      if (
+        isInspectOfferBait(
+          candidate,
+          ordered.implausibleOfferIds,
+          ordered.plausibilityOffers
+        )
+      ) {
+        return true;
+      }
+      return isImplausiblyLowPrice(
+        safeOfferCurrent,
+        plausibleOffers(ordered.plausibilityOffers.filter(isPeerOffer))
       );
     }
     if (
       Array.isArray(params.inStockOffers) &&
       params.inStockOffers.length > 0
     ) {
-      return isOfferImplausiblyLowAgainstInStock(
-        candidate,
-        params.inStockOffers
+      if (
+        isOfferImplausiblyLowAgainstInStock(candidate, params.inStockOffers)
+      ) {
+        return true;
+      }
+      return isImplausiblyLowPrice(
+        safeOfferCurrent,
+        plausibleOffers(params.inStockOffers.filter(isPeerOffer))
       );
     }
     return false;
   })();
 
-  const resolvedInStockOffers = Array.isArray(params.inStockOffers)
-    ? params.inStockOffers
-    : hasAllOffers
-      ? (getOrdered()?.inStockOffers ?? null)
-      : null;
-
-  const rawMasterMin = sanitizeInspectPriceVnd(master?.min_price);
-  const safeFallbackMin = (() => {
-    if (
-      hasAllOffers &&
-      resolvedInStockOffers &&
-      resolvedInStockOffers.length === 0
-    ) {
-      return 0;
-    }
-    if (
-      resolvedInStockOffers &&
-      resolvedInStockOffers.length > 0 &&
-      rawMasterMin > 0 &&
-      isImplausiblyLowPrice(
-        rawMasterMin,
-        plausibleOffers(resolvedInStockOffers)
-      )
-    ) {
-      return plausibleMinPrice(rawMasterMin, resolvedInStockOffers);
-    }
-    return rawMasterMin;
-  })();
+  const safeFallbackMin = resolveInspectMasterMinPriceVnd({
+    matchedOffer,
+    allOffers,
+    inStockOffers:
+      params.inStockOffers ??
+      (hasAllOffers ? (getOrdered()?.inStockOffers ?? null) : null),
+    offerImplausiblyLow: bait,
+    master,
+  });
 
   const suppressOfferPrices = unavailable || bait;
   const currentPriceVnd =
     (suppressOfferPrices ? 0 : safeOfferCurrent) || safeFallbackMin;
-  const rawClaimedOriginal = suppressOfferPrices
+  const claimedOriginalVnd = suppressOfferPrices
     ? 0
-    : sanitizeInspectPriceVnd(matchedOffer?.price_original);
-  const claimedOriginalVnd =
-    currentPriceVnd > 0 && rawClaimedOriginal > currentPriceVnd
-      ? rawClaimedOriginal
-      : 0;
+    : sanitizeInspectOriginalPriceVnd(
+        matchedOffer?.price_original,
+        currentPriceVnd
+      );
 
   return {
     currentPriceVnd,
@@ -509,7 +702,20 @@ export function isInspectOfferBait(
   implausibleOfferIds: ReadonlySet<string>,
   inStockOffers: readonly { id?: string | null; price_current: number }[]
 ): boolean {
-  if (offer?.implausiblyLow === true) return true;
+  if (!offer) return false;
+  if (offer.implausiblyLow === true) return true;
+  const rawPrice = offer.price_current;
+  const safePrice =
+    typeof rawPrice === 'number'
+      ? Number.isFinite(rawPrice) &&
+        rawPrice > 0 &&
+        rawPrice <= MAX_VALID_VND_PRICE
+        ? Math.round(rawPrice)
+        : 0
+      : sanitizeInspectPriceVnd(rawPrice);
+  if (safePrice > 0 && safePrice < MINIMUM_EARBUDS_PRICE_FLOOR_VND) {
+    return true;
+  }
   return isOfferImplausiblyLowAgainstInStock(
     offer,
     inStockOffers,
@@ -690,24 +896,87 @@ export default function DeepInspectWorkspace({
     implausibleOfferIds,
     listedOffers,
   } = useMemo(() => orderInspectOffers(result?.allOffers), [result?.allOffers]);
-  // A sold-out listing is never the fallback match (DOS/Rate#1177).
+  // A sold-out, unpriced, or bait listing is never the fallback match (DOS/Rate#1177, #1810).
   const matchedOffer =
-    result?.matchedOffer ?? plausibleOffers(inStockOffers)[0] ?? null;
+    result?.matchedOffer ??
+    plausibleOffers(
+      inStockOffers.filter(
+        (o) =>
+          sanitizeInspectPriceVnd(o.price_current) >=
+            MINIMUM_EARBUDS_PRICE_FLOOR_VND &&
+          !isInspectOfferBait(o, implausibleOfferIds, plausibilityOffers)
+      )
+    )[0] ??
+    null;
+  const apiVerdictImplausiblyLow = Boolean(
+    (
+      result as {
+        priceVerdict?: { implausiblyLow?: boolean | null } | null;
+      } | null
+    )?.priceVerdict?.implausiblyLow === true
+  );
+  const rawMasterMinForBait = sanitizeInspectPriceVnd(master?.min_price);
+  const safeMatchedOfferPrice = sanitizeInspectPriceVnd(
+    matchedOffer?.price_current
+  );
   // Judged among in-stock listings, as the product page's offers table does (#797, #1141).
-  const offerImplausiblyLow = isInspectOfferBait(
-    matchedOffer,
-    implausibleOfferIds,
-    plausibilityOffers
+  const offerImplausiblyLow = Boolean(
+    matchedOffer &&
+    (apiVerdictImplausiblyLow ||
+      isInspectOfferBait(
+        matchedOffer,
+        implausibleOfferIds,
+        plausibilityOffers
+      ) ||
+      (rawMasterMinForBait >= MINIMUM_EARBUDS_PRICE_FLOOR_VND &&
+        safeMatchedOfferPrice > 0 &&
+        safeMatchedOfferPrice < rawMasterMinForBait * IMPLAUSIBLY_LOW_RATIO))
+  );
+  const hasAllOffersList = Boolean(
+    Array.isArray(result?.allOffers) && result.allOffers.length > 0
+  );
+  const allOffersUnavailable = Boolean(
+    hasAllOffersList &&
+    !inStockOffers.some((o) => sanitizeInspectPriceVnd(o.price_current) > 0)
   );
   const matchedOfferUnavailable = Boolean(
-    matchedOffer && isOfferUnavailable(matchedOffer)
+    (matchedOffer && isOfferUnavailable(matchedOffer)) ||
+    (!matchedOffer && allOffersUnavailable)
   );
-  const discount = offerImplausiblyLow
-    ? null
-    : filterInspectOfferDiscount(
-        result?.discountAnalysis,
-        matchedOfferUnavailable
-      );
+  const discount = (() => {
+    const rawDiscount = result?.discountAnalysis ?? null;
+    if (!rawDiscount || offerImplausiblyLow || matchedOfferUnavailable) {
+      return null;
+    }
+    if (
+      matchedOffer &&
+      safeMatchedOfferPrice < MINIMUM_EARBUDS_PRICE_FLOOR_VND
+    ) {
+      return null;
+    }
+    const safeDiscountPrice = sanitizeInspectPriceVnd(
+      rawDiscount.price_current
+    );
+    if (safeDiscountPrice < MINIMUM_EARBUDS_PRICE_FLOOR_VND) {
+      return null;
+    }
+    if (
+      isInspectOfferBait(
+        {
+          id:
+            typeof rawDiscount.product_id === 'string'
+              ? rawDiscount.product_id
+              : '',
+          price_current: safeDiscountPrice,
+        },
+        implausibleOfferIds,
+        plausibilityOffers
+      )
+    ) {
+      return null;
+    }
+    return filterInspectOfferDiscount(rawDiscount, matchedOfferUnavailable);
+  })();
   const priceHistory = result?.priceHistory ?? null;
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
@@ -726,11 +995,15 @@ export default function DeepInspectWorkspace({
     master,
     priceHistory,
   });
+  const safeMasterMinPriceVnd = resolveInspectMasterMinPriceVnd({
+    matchedOffer,
+    allOffers: result?.allOffers,
+    inStockOffers,
+    offerImplausiblyLow,
+    master,
+  });
   const watchableMinPriceVnd =
-    sanitizeInspectPriceVnd(master?.min_price) ||
-    (!offerImplausiblyLow && !matchedOfferUnavailable
-      ? sanitizeInspectPriceVnd(matchedOffer?.price_current)
-      : 0);
+    safeMasterMinPriceVnd || verdictPrices.currentPriceVnd;
   const rawMerchantTrust = parseInspectFiniteNumber(merchant?.trust_score);
   const safeMerchantTrust =
     rawMerchantTrust == null
@@ -874,7 +1147,7 @@ export default function DeepInspectWorkspace({
       ).toUpperCase(),
       o.title || master?.name || cleanQuery,
       sanitizeInspectPriceVnd(o.price_current),
-      sanitizeInspectPriceVnd(o.price_original),
+      sanitizeInspectOriginalPriceVnd(o.price_original, o.price_current),
       histLow,
       histHigh,
       matchedPriceSpread?.spreadPct ?? 0,
@@ -895,9 +1168,12 @@ export default function DeepInspectWorkspace({
             ? byOfferMap[canonicalOfferId]
             : undefined;
         const rawAnalysis =
-          directByOffer ??
-          canonicalByOffer ??
-          (o.id === matchedOffer?.id ? discount : null);
+          sanitizeInspectPriceVnd(o.price_current) >=
+          MINIMUM_EARBUDS_PRICE_FLOOR_VND
+            ? (directByOffer ??
+              canonicalByOffer ??
+              (o.id === matchedOffer?.id ? result?.discountAnalysis : null))
+            : null;
         const a = filterInspectOfferDiscount(
           rawAnalysis,
           isOfferUnavailable(o)
@@ -1517,14 +1793,19 @@ export default function DeepInspectWorkspace({
                             </td>
                             <td
                               className={`small text-muted ${
-                                sanitizeInspectPriceVnd(offer.price_original) >
-                                0
+                                sanitizeInspectOriginalPriceVnd(
+                                  offer.price_original,
+                                  offer.price_current
+                                ) > 0
                                   ? 'text-decoration-line-through'
                                   : ''
                               }`}
                             >
                               {formatInspectPriceVndOrDash(
-                                offer.price_original,
+                                sanitizeInspectOriginalPriceVnd(
+                                  offer.price_original,
+                                  offer.price_current
+                                ),
                                 locale
                               )}
                             </td>
