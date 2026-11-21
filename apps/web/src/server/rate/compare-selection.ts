@@ -1,6 +1,7 @@
 import 'server-only';
 import { cache } from 'react';
 import { compareCategoryParam } from '@/lib/compare-params';
+import type { ItemCatalogRow } from '@/lib/item-directory';
 import { dedupeCompareTargets, parseCompareToken } from '@/lib/item-compare';
 import { createLogger } from '@/lib/logger';
 import {
@@ -17,7 +18,7 @@ import {
 } from './index';
 import { RATE_CACHE_TAGS, withRateDataCache } from './cache-tags';
 import { resolveCompareTargets } from './item-compare';
-import { whenItemModel } from './item-directory';
+import { groupCatalogRowsByItem, whenItemModel } from './item-directory';
 import { ITEM_VARIANT_SLUG_SUFFIX } from './item-model';
 
 type CompareSearchParams = Record<string, string | string[] | undefined>;
@@ -201,11 +202,29 @@ export async function getRequestedComparison(
 /** Initial columns and picker candidates for a visit to the compare page. */
 export async function getComparePageSelection(params: CompareSearchParams) {
   const tokens = parseCompareSlugs(params.slugs);
-  const [catalogCandidates, { products, resolvedSelection }] =
+  const [rawCatalogCandidates, { products, resolvedSelection }] =
     await Promise.all([
       getCachedMasterProducts({ categorySlug: 'all', limit: 50 }),
       getRequestedComparison(tokens, params),
     ]);
+  // RATE_ITEM_MODEL on: collapse multiple storage variants of one Item in the
+  // picker and tokenless defaults while keeping each standing variant's own
+  // row fields for the 10-group matrix (#1820).
+  const groupedCandidates: ItemCatalogRow[] =
+    resolvedSelection === null
+      ? rawCatalogCandidates
+      : await groupCatalogRowsByItem(rawCatalogCandidates);
+  const variantById = new Map(rawCatalogCandidates.map((row) => [row.id, row]));
+  const catalogCandidates =
+    groupedCandidates === rawCatalogCandidates
+      ? rawCatalogCandidates
+      : groupedCandidates.map((row) => {
+          const standing = row.id ? variantById.get(row.id) : undefined;
+          if (!standing) return row;
+          return row.item_slug
+            ? { ...standing, item_slug: row.item_slug }
+            : standing;
+        });
   const categoryParam = compareCategoryParam(params);
   const defaultCategory = isCanonicalCategorySlug(categoryParam)
     ? categoryParam

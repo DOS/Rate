@@ -45,17 +45,18 @@ export async function generateMetadata({
       const names = compared.map((p) => p.name).join(' vs ');
       const fullTitle = t('compareMetaTitleWithNames', { names });
       const description = fitDescription(
-        t('compareMetaDescWithNames', { names })
+        t('compareMetaDescWithNames', { names }),
+        lang
       );
       return {
         // The names come first; the fixed text, then the site name, give way
         // to fit a search result (DOS/Rate#777). The share card keeps the
         // full title, as on the versus page.
-        title: fitTitle([
-          fullTitle,
-          t('compareMetaTitleWithNamesShort', { names }),
-          names,
-        ]),
+        title: fitTitle(
+          [fullTitle, t('compareMetaTitleWithNamesShort', { names }), names],
+          undefined,
+          lang
+        ),
         description,
         alternates: {
           canonical: canonicalUrl,

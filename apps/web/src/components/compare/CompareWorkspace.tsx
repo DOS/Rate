@@ -456,6 +456,130 @@ export function isValidCompareVersusPair(
   );
 }
 
+export function dedupeCompareProductsByItem<T extends { slug: string }>(
+  rows: readonly T[],
+  versusSlugMap?: Readonly<Record<string, string>> | null
+): T[] {
+  const kept: T[] = [];
+  for (const row of rows) {
+    if (!row || typeof row.slug !== 'string' || !row.slug) continue;
+    if (
+      kept.some((existing) =>
+        isSameCompareVersusItem(existing.slug, row.slug, versusSlugMap)
+      )
+    ) {
+      continue;
+    }
+    kept.push(row);
+  }
+  return kept;
+}
+
+export function isCompareCandidateSelected(
+  products: readonly Pick<MasterProduct, 'slug'>[],
+  candidateSlug: string,
+  versusSlugMap?: Readonly<Record<string, string>> | null
+): boolean {
+  if (!candidateSlug) return false;
+  return products.some((p) =>
+    isSameCompareVersusItem(p.slug, candidateSlug, versusSlugMap)
+  );
+}
+
+export function pickCompareCategoryDefaults(
+  catalogCandidates: readonly MasterProduct[],
+  category: CanonicalCategorySlug,
+  versusSlugMap?: Readonly<Record<string, string>> | null,
+  limit = 3
+): MasterProduct[] {
+  return dedupeCompareProductsByItem(
+    catalogCandidates.filter(
+      (c) => getMasterProductCategorySlug(c) === category
+    ),
+    versusSlugMap
+  ).slice(0, limit);
+}
+
+export function buildCompareAutocompleteSuggestions(
+  catalogCandidates: readonly MasterProduct[],
+  remoteResults: readonly MasterProduct[] | null,
+  activeCategory: CanonicalCategorySlug,
+  searchQuery: string,
+  versusSlugMap?: Readonly<Record<string, string>> | null,
+  limit = 8
+): MasterProduct[] {
+  const sameCategoryCatalog = catalogCandidates.filter(
+    (c) => getMasterProductCategorySlug(c) === activeCategory
+  );
+  const q = searchQuery.trim().toLowerCase();
+  if (!q) {
+    return dedupeCompareProductsByItem(
+      sameCategoryCatalog,
+      versusSlugMap
+    ).slice(0, limit);
+  }
+  const localFiltered = sameCategoryCatalog.filter(
+    (item) =>
+      item.name.toLowerCase().includes(q) ||
+      item.brand.toLowerCase().includes(q) ||
+      item.model.toLowerCase().includes(q) ||
+      item.slug.toLowerCase().includes(q)
+  );
+  const sameCategoryRemote = (remoteResults ?? []).filter(
+    (item) => getMasterProductCategorySlug(item) === activeCategory
+  );
+  return dedupeCompareProductsByItem(
+    [...localFiltered, ...sameCategoryRemote],
+    versusSlugMap
+  ).slice(0, limit);
+}
+
+export function applyCompareCandidateSelection(
+  products: readonly MasterProduct[],
+  candidate: MasterProduct,
+  activeCategory: CanonicalCategorySlug,
+  activeReplaceIndex: number | null,
+  versusSlugMap?: Readonly<Record<string, string>> | null
+): {
+  nextProducts: MasterProduct[];
+  nextCategory: CanonicalCategorySlug;
+} | null {
+  const candidateCat = getMasterProductCategorySlug(candidate);
+  if (candidateCat !== activeCategory) {
+    return { nextProducts: [candidate], nextCategory: candidateCat };
+  }
+
+  if (
+    activeReplaceIndex !== null &&
+    activeReplaceIndex >= 0 &&
+    activeReplaceIndex < products.length
+  ) {
+    if (isCompareCandidateSelected(products, candidate.slug, versusSlugMap)) {
+      return null;
+    }
+    const next = [...products];
+    next[activeReplaceIndex] = candidate;
+    return {
+      nextProducts: dedupeCompareProductsByItem(next, versusSlugMap),
+      nextCategory: activeCategory,
+    };
+  }
+
+  if (isCompareCandidateSelected(products, candidate.slug, versusSlugMap)) {
+    return null;
+  }
+  if (products.length >= MAX_COMPARE_ITEMS) {
+    return null;
+  }
+  return {
+    nextProducts: dedupeCompareProductsByItem(
+      [...products, candidate],
+      versusSlugMap
+    ),
+    nextCategory: activeCategory,
+  };
+}
+
 export function buildCompareVersusSlugMap(
   rows: readonly MasterProduct[],
   itemSlugBySlug?: Readonly<Record<string, string>> | null,
@@ -771,6 +895,32 @@ export function resolveCompareAddSlotAriaLabel(
     .trim();
 }
 
+export const COMPARE_AUTOCOMPLETE_LIST_ID = 'compare-autocomplete-listbox';
+
+export function resolveCompareAutocompleteA11y(options: {
+  dropdownOpen: boolean;
+  productCount: number;
+  activeReplaceIndex: number | null;
+  maxItems?: number;
+}): {
+  role: 'combobox';
+  ariaAutocomplete: 'list';
+  ariaExpanded: boolean;
+  ariaControls: string;
+  disabled: boolean;
+} {
+  const max = options.maxItems ?? MAX_COMPARE_ITEMS;
+  const canOpen =
+    options.productCount < max || options.activeReplaceIndex !== null;
+  return {
+    role: 'combobox',
+    ariaAutocomplete: 'list',
+    ariaExpanded: Boolean(options.dropdownOpen && canOpen),
+    ariaControls: COMPARE_AUTOCOMPLETE_LIST_ID,
+    disabled: !canOpen,
+  };
+}
+
 export function shouldDismissCompareOnOutsidePointerDown(
   target: { closest?: (selector: string) => unknown } | null | undefined,
   isInsideSearchBox: boolean
@@ -780,6 +930,20 @@ export function shouldDismissCompareOnOutsidePointerDown(
     target &&
     typeof target.closest === 'function' &&
     target.closest('[data-compare-slot-trigger]')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function shouldDismissCompareOnFocusOut(
+  relatedTarget: { closest?: (selector: string) => unknown } | null | undefined,
+  isInsideSearchBox: boolean
+): boolean {
+  if (!relatedTarget || isInsideSearchBox) return false;
+  if (
+    typeof relatedTarget.closest === 'function' &&
+    relatedTarget.closest('[data-compare-slot-trigger]')
   ) {
     return false;
   }
@@ -1638,8 +1802,16 @@ export default function CompareWorkspace({
       initialProducts.length > 0
         ? getMasterProductCategorySlug(initialProducts[0]!)
         : initialCategory;
-    return initialProducts.filter(
+    const sameCat = initialProducts.filter(
       (p) => getMasterProductCategorySlug(p) === targetCat
+    );
+    if (hasExplicitSlugs) return sameCat;
+    return dedupeCompareProductsByItem(
+      sameCat,
+      buildCompareVersusSlugMap(
+        [...catalogCandidates, ...initialProducts],
+        itemSlugBySlug
+      )
     );
   });
   const [searchQuery, setSearchQuery] = useState('');
@@ -1681,11 +1853,17 @@ export default function CompareWorkspace({
   const versusSlugMap = useMemo(
     () =>
       buildCompareVersusSlugMap(
-        [...catalogCandidates, ...products],
+        [...catalogCandidates, ...products, ...(remoteResults ?? [])],
         itemSlugBySlug,
         clientItemSlugs
       ),
-    [catalogCandidates, products, itemSlugBySlug, clientItemSlugs]
+    [
+      catalogCandidates,
+      products,
+      remoteResults,
+      itemSlugBySlug,
+      clientItemSlugs,
+    ]
   );
   const popularBattles = useMemo(
     () =>
@@ -1701,6 +1879,7 @@ export default function CompareWorkspace({
     const candidates = new Set([
       ...products.map((p) => p.slug),
       ...popularBattles.flatMap((b) => [b.productA.slug, b.productB.slug]),
+      ...(remoteResults ?? []).map((p) => p.slug),
     ]);
     const inFlight = itemLookupsRef.current;
     for (const [slug, controller] of inFlight) {
@@ -1751,6 +1930,7 @@ export default function CompareWorkspace({
     itemSlugBySlug,
     products,
     popularBattles,
+    remoteResults,
     clientItemSlugs,
     itemLookupRetryTick,
   ]);
@@ -1841,13 +2021,19 @@ export default function CompareWorkspace({
     [activeCategory, categoryTabs]
   );
 
-  // Candidates strictly locked to the active category
+  // Candidates deduplicated per Item under RATE_ITEM_MODEL (#1820), then
+  // strictly locked to the active category.
+  const dedupedCatalogCandidates = useMemo(
+    () => dedupeCompareProductsByItem(catalogCandidates, versusSlugMap),
+    [catalogCandidates, versusSlugMap]
+  );
+
   const categoryLockedCandidates = useMemo(
     () =>
-      catalogCandidates.filter(
+      dedupedCatalogCandidates.filter(
         (c) => getMasterProductCategorySlug(c) === activeCategory
       ),
-    [catalogCandidates, activeCategory]
+    [dedupedCatalogCandidates, activeCategory]
   );
 
   // Rows known to carry their full spec sheet: the page's own and the search
@@ -1912,10 +2098,27 @@ export default function CompareWorkspace({
     activeReplaceIndexRef.current = null;
     setReplaceIndex(null);
     setActiveCategory(cat);
-    setProducts(
-      initialProducts.filter((p) => getMasterProductCategorySlug(p) === cat)
+    const sameCat = initialProducts.filter(
+      (p) => getMasterProductCategorySlug(p) === cat
     );
-  }, [initialProducts, initialCategory, hasExplicitSlugs]);
+    setProducts(
+      hasExplicitSlugs
+        ? sameCat
+        : dedupeCompareProductsByItem(
+            sameCat,
+            buildCompareVersusSlugMap(
+              [...catalogCandidates, ...initialProducts],
+              itemSlugBySlug
+            )
+          )
+    );
+  }, [
+    initialProducts,
+    initialCategory,
+    hasExplicitSlugs,
+    catalogCandidates,
+    itemSlugBySlug,
+  ]);
 
   // If user visits /compare without ?slugs=, restore their saved Compare Tray (strictly filtered to same category)
   useEffect(() => {
@@ -1931,8 +2134,15 @@ export default function CompareWorkspace({
           .filter((item): item is MasterProduct => Boolean(item));
         if (matched.length > 0) {
           const primaryCat = getMasterProductCategorySlug(matched[0]!);
-          const sameCatMatched = matched.filter(
-            (m) => getMasterProductCategorySlug(m) === primaryCat
+          const traySlugMap = buildCompareVersusSlugMap(
+            [...catalogCandidates, ...matched],
+            itemSlugBySlug
+          );
+          const sameCatMatched = dedupeCompareProductsByItem(
+            matched.filter(
+              (m) => getMasterProductCategorySlug(m) === primaryCat
+            ),
+            traySlugMap
           );
           setActiveCategory(primaryCat);
           setProducts(sameCatMatched);
@@ -1946,7 +2156,7 @@ export default function CompareWorkspace({
     // Otherwise only show the page's defaults or a shared ?slugs= list: the
     // tray changes on the visitor's own edits (syncSelection), never on load,
     // so it does not follow them site-wide or lose what they saved (#714).
-  }, [hasExplicitSlugs, catalogCandidates, router]);
+  }, [hasExplicitSlugs, catalogCandidates, itemSlugBySlug, router]);
 
   // Sync URL and localStorage tray whenever compared products change (always locked to 1 category)
   const syncSelection = (
@@ -1958,8 +2168,9 @@ export default function CompareWorkspace({
       (nextProducts.length > 0
         ? getMasterProductCategorySlug(nextProducts[0]!)
         : activeCategory);
-    const sameCategoryProducts = nextProducts.filter(
-      (p) => getMasterProductCategorySlug(p) === targetCat
+    const sameCategoryProducts = dedupeCompareProductsByItem(
+      nextProducts.filter((p) => getMasterProductCategorySlug(p) === targetCat),
+      versusSlugMap
     );
     clearReplaceMode();
     setActiveCategory(targetCat);
@@ -1986,14 +2197,44 @@ export default function CompareWorkspace({
     clearReplaceMode();
     setSearchQuery('');
     setDropdownOpen(false);
-    const nextDefaults = catalogCandidates
-      .filter((c) => getMasterProductCategorySlug(c) === nextCat)
-      .slice(0, 3);
+    const nextDefaults = pickCompareCategoryDefaults(
+      catalogCandidates,
+      nextCat,
+      versusSlugMap,
+      3
+    );
     syncSelection(nextDefaults, nextCat);
   };
 
-  // Close autocomplete dropdown when clicking outside
+  const dropdownOpenRef = useRef(dropdownOpen);
+  const productsCountRef = useRef(products.length);
   useEffect(() => {
+    dropdownOpenRef.current = dropdownOpen;
+    productsCountRef.current = products.length;
+  }, [dropdownOpen, products.length]);
+
+  const dismissAutocomplete = () => {
+    cancelPendingCompareReplaceFocus(
+      replaceFocusTimerRef,
+      scheduledReplaceIndexRef
+    );
+    activeReplaceIndexRef.current = null;
+    setDropdownOpen(false);
+    setReplaceIndex(null);
+  };
+
+  // Close autocomplete dropdown on outside pointer down, outside focus loss, or Escape (#1820).
+  useEffect(() => {
+    const closeAndClearReplace = () => {
+      cancelPendingCompareReplaceFocus(
+        replaceFocusTimerRef,
+        scheduledReplaceIndexRef
+      );
+      activeReplaceIndexRef.current = null;
+      setDropdownOpen(false);
+      setReplaceIndex(null);
+    };
+
     const handleOutside = (e: MouseEvent) => {
       if (!searchBoxRef.current) return;
       const isInside = searchBoxRef.current.contains(e.target as Node);
@@ -2002,17 +2243,63 @@ export default function CompareWorkspace({
           ? (e.target as { closest?: (selector: string) => unknown })
           : null;
       if (shouldDismissCompareOnOutsidePointerDown(targetEl, isInside)) {
-        cancelPendingCompareReplaceFocus(
-          replaceFocusTimerRef,
-          scheduledReplaceIndexRef
-        );
-        activeReplaceIndexRef.current = null;
-        setDropdownOpen(false);
-        setReplaceIndex(null);
+        closeAndClearReplace();
       }
     };
+
+    const handleFocusOut = (e: FocusEvent) => {
+      const box = searchBoxRef.current;
+      if (!box) return;
+      const next = e.relatedTarget as Node | null;
+      const isInside = Boolean(next && box.contains(next));
+      const relatedEl =
+        next && typeof next === 'object'
+          ? (next as { closest?: (selector: string) => unknown })
+          : null;
+      if (shouldDismissCompareOnFocusOut(relatedEl, isInside)) {
+        closeAndClearReplace();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const box = searchBoxRef.current;
+      const activeEl =
+        typeof document !== 'undefined' ? document.activeElement : null;
+      const wasInside = Boolean(box && activeEl && box.contains(activeEl));
+      const previousReplaceIndex = activeReplaceIndexRef.current;
+      if (
+        !wasInside &&
+        previousReplaceIndex === null &&
+        !dropdownOpenRef.current
+      ) {
+        return;
+      }
+      closeAndClearReplace();
+      if (wasInside) {
+        if (
+          productsCountRef.current >= MAX_COMPARE_ITEMS &&
+          previousReplaceIndex !== null
+        ) {
+          const triggers = document.querySelectorAll<HTMLElement>(
+            '[data-compare-slot-trigger="replace"]'
+          );
+          triggers[previousReplaceIndex]?.focus();
+        } else {
+          searchInputRef.current?.focus();
+        }
+      }
+    };
+
+    const box = searchBoxRef.current;
     document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    box?.addEventListener('focusout', handleFocusOut);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+      box?.removeEventListener('focusout', handleFocusOut);
+    };
   }, []);
 
   // Debounced remote search via Layer 1 REST API `/api/v1/rate/products` (locked to activeCategory)
@@ -2058,66 +2345,37 @@ export default function CompareWorkspace({
     };
   }, [searchQuery, activeCategory]);
 
-  // Combine instant client-side matches + remote REST API matches (strictly within activeCategory)
-  const suggestions = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) {
-      return categoryLockedCandidates.slice(0, 8);
-    }
-    const localFiltered = categoryLockedCandidates.filter(
-      (item) =>
-        item.name.toLowerCase().includes(q) ||
-        item.brand.toLowerCase().includes(q) ||
-        item.model.toLowerCase().includes(q) ||
-        item.slug.toLowerCase().includes(q)
-    );
-    const mergedMap = new Map<string, MasterProduct>();
-    for (const item of [...localFiltered, ...(remoteResults ?? [])]) {
-      if (
-        getMasterProductCategorySlug(item) === activeCategory &&
-        !mergedMap.has(item.slug)
-      ) {
-        mergedMap.set(item.slug, item);
-      }
-    }
-    return Array.from(mergedMap.values()).slice(0, 8);
-  }, [searchQuery, remoteResults, categoryLockedCandidates, activeCategory]);
-
-  const selectedSlugs = useMemo(
-    () => new Set(products.map((p) => p.slug)),
-    [products]
+  // Combine instant client-side matches + remote REST API matches, deduplicated per Item (#1820)
+  const suggestions = useMemo(
+    () =>
+      buildCompareAutocompleteSuggestions(
+        catalogCandidates,
+        remoteResults,
+        activeCategory,
+        searchQuery,
+        versusSlugMap,
+        8
+      ),
+    [
+      catalogCandidates,
+      remoteResults,
+      activeCategory,
+      searchQuery,
+      versusSlugMap,
+    ]
   );
 
   const handleSelectCandidate = (candidate: MasterProduct) => {
-    const candidateCat = getMasterProductCategorySlug(candidate);
-    if (candidateCat !== activeCategory) {
-      syncSelection([candidate], candidateCat);
-      clearReplaceMode();
-      setSearchQuery('');
-      setDropdownOpen(false);
-      return;
-    }
-
-    if (activeReplaceIndex !== null) {
-      const next = [...products];
-      next[activeReplaceIndex] = candidate;
-      const deduped = Array.from(
-        new Map(next.map((p) => [p.slug, p])).values()
-      );
-      syncSelection(deduped, activeCategory);
-      clearReplaceMode();
-      setSearchQuery('');
-      setDropdownOpen(false);
-      return;
-    }
-
-    if (selectedSlugs.has(candidate.slug)) {
-      return;
-    }
-    if (products.length >= MAX_COMPARE_ITEMS) {
-      return;
-    }
-    syncSelection([...products, candidate], activeCategory);
+    const applied = applyCompareCandidateSelection(
+      products,
+      candidate,
+      activeCategory,
+      activeReplaceIndex,
+      versusSlugMap
+    );
+    if (!applied) return;
+    syncSelection(applied.nextProducts, applied.nextCategory);
+    clearReplaceMode();
     setSearchQuery('');
     setDropdownOpen(false);
   };
@@ -2355,6 +2613,12 @@ export default function CompareWorkspace({
     [products]
   );
 
+  const autocompleteA11y = resolveCompareAutocompleteA11y({
+    dropdownOpen,
+    productCount: products.length,
+    activeReplaceIndex,
+  });
+
   const controlsBlock = (
     <>
       {/* 5-Category Lock Switcher Bar */}
@@ -2371,7 +2635,7 @@ export default function CompareWorkspace({
           >
             {categoryTabs.map((tab) => {
               const isActive = tab.slug === activeCategory;
-              const count = catalogCandidates.filter(
+              const count = dedupedCatalogCandidates.filter(
                 (c) => getMasterProductCategorySlug(c) === tab.slug
               ).length;
               return (
@@ -2398,7 +2662,23 @@ export default function CompareWorkspace({
       <div className="rate-card p-md-4 mb-4 p-3">
         <div className="row g-3 align-items-center">
           {/* Autocomplete Input */}
-          <div className="col-lg-6" ref={searchBoxRef}>
+          <div
+            className="col-lg-6"
+            ref={searchBoxRef}
+            onBlur={(e) => {
+              const box = searchBoxRef.current;
+              if (!box) return;
+              const next = e.relatedTarget as Node | null;
+              const isInside = Boolean(next && box.contains(next));
+              const relatedEl =
+                next && typeof next === 'object'
+                  ? (next as { closest?: (selector: string) => unknown })
+                  : null;
+              if (shouldDismissCompareOnFocusOut(relatedEl, isInside)) {
+                dismissAutocomplete();
+              }
+            }}
+          >
             <label
               htmlFor="compare-autocomplete-input"
               className="form-label fw-bold small text-uppercase text-muted mb-1"
@@ -2423,32 +2703,48 @@ export default function CompareWorkspace({
                   ref={searchInputRef}
                   id="compare-autocomplete-input"
                   type="text"
+                  role={autocompleteA11y.role}
+                  aria-autocomplete={autocompleteA11y.ariaAutocomplete}
+                  aria-expanded={autocompleteA11y.ariaExpanded}
+                  aria-controls={autocompleteA11y.ariaControls}
+                  autoComplete="off"
                   value={searchQuery}
                   onFocus={() => setDropdownOpen(true)}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
                     setDropdownOpen(true);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      const previousReplaceIndex = activeReplaceIndex;
+                      dismissAutocomplete();
+                      if (
+                        products.length >= MAX_COMPARE_ITEMS &&
+                        previousReplaceIndex !== null
+                      ) {
+                        const triggers = document.querySelectorAll<HTMLElement>(
+                          '[data-compare-slot-trigger="replace"]'
+                        );
+                        triggers[previousReplaceIndex]?.focus();
+                      }
+                    }
+                  }}
                   placeholder={
-                    products.length >= MAX_COMPARE_ITEMS &&
-                    activeReplaceIndex === null
+                    autocompleteA11y.disabled
                       ? t('maxDevicesPlaceholder')
                       : t('searchDevicePlaceholder', {
                           unit: activeCategoryMeta.unitLabel,
                         })
                   }
-                  disabled={
-                    products.length >= MAX_COMPARE_ITEMS &&
-                    activeReplaceIndex === null
-                  }
+                  disabled={autocompleteA11y.disabled}
                   className="form-control bg-light border-start-0 rounded-end-pill py-2"
                 />
                 {activeReplaceIndex !== null && (
                   <button
                     type="button"
                     onClick={() => {
-                      clearReplaceMode();
-                      setDropdownOpen(false);
+                      dismissAutocomplete();
                     }}
                     className="btn btn-outline-secondary rounded-pill btn-sm ms-2"
                   >
@@ -2458,136 +2754,139 @@ export default function CompareWorkspace({
               </div>
 
               {/* Autocomplete Suggestions Dropdown */}
-              {dropdownOpen &&
-                (products.length < MAX_COMPARE_ITEMS ||
-                  activeReplaceIndex !== null) && (
-                  <div
-                    className="card rounded-4 position-absolute mt-2 w-100 overflow-hidden border shadow-lg"
-                    style={{
-                      zIndex: 1050,
-                      maxHeight: '380px',
-                      overflowY: 'auto',
-                    }}
-                  >
-                    <div className="bg-light border-bottom d-flex justify-content-between align-items-center px-3 py-2">
-                      <span className="small fw-semibold text-muted">
-                        {searchQuery.trim()
-                          ? t('searchResultsFor', {
-                              category: activeCategoryMeta.label,
-                              query: searchQuery.trim(),
-                            })
-                          : t('sameCategoryList', {
-                              unit: activeCategoryMeta.unitLabel,
-                            })}
+              {autocompleteA11y.ariaExpanded && (
+                <div
+                  id={COMPARE_AUTOCOMPLETE_LIST_ID}
+                  className="card rounded-4 position-absolute mt-2 w-100 overflow-hidden border shadow-lg"
+                  style={{
+                    zIndex: 1050,
+                    maxHeight: '380px',
+                    overflowY: 'auto',
+                  }}
+                >
+                  <div className="bg-light border-bottom d-flex justify-content-between align-items-center px-3 py-2">
+                    <span className="small fw-semibold text-muted">
+                      {searchQuery.trim()
+                        ? t('searchResultsFor', {
+                            category: activeCategoryMeta.label,
+                            query: searchQuery.trim(),
+                          })
+                        : t('sameCategoryList', {
+                            unit: activeCategoryMeta.unitLabel,
+                          })}
+                    </span>
+                    {isSearching && (
+                      <span className="badge bg-secondary rounded-pill small">
+                        {t('searchingBadge')}
                       </span>
-                      {isSearching && (
-                        <span className="badge bg-secondary rounded-pill small">
-                          {t('searchingBadge')}
-                        </span>
-                      )}
-                    </div>
-
-                    {suggestions.length === 0 ? (
-                      <div className="text-muted small p-4 text-center">
-                        {t('noMatchingDevices', {
-                          unit: activeCategoryMeta.unitLabel,
-                          query: searchQuery,
-                        })}
-                      </div>
-                    ) : (
-                      <div className="list-group list-group-flush">
-                        {suggestions.map((item) => {
-                          const alreadySelected = selectedSlugs.has(item.slug);
-                          const thumb = resolveProductImageUrl(
-                            item.slug,
-                            productImageUrl(item)
-                          );
-                          const priceFormatted = formatComparePriceVnd(
-                            item.min_price,
-                            locale
-                          );
-                          const rating = getEffectiveRating(item);
-
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              disabled={alreadySelected}
-                              onClick={() => handleSelectCandidate(item)}
-                              className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between gap-3 px-3 py-2 ${
-                                alreadySelected ? 'bg-light opacity-75' : ''
-                              }`}
-                            >
-                              <div className="d-flex align-items-center gap-3 overflow-hidden">
-                                <div
-                                  className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 border bg-white"
-                                  style={{
-                                    width: '44px',
-                                    height: '44px',
-                                    padding: '4px',
-                                  }}
-                                >
-                                  {thumb ? (
-                                    <img
-                                      loading="lazy"
-                                      decoding="async"
-                                      src={thumb}
-                                      alt={item.name}
-                                      style={{
-                                        maxWidth: '100%',
-                                        maxHeight: '100%',
-                                        objectFit: 'contain',
-                                      }}
-                                    />
-                                  ) : (
-                                    <span className="small text-muted">SP</span>
-                                  )}
-                                </div>
-                                <div className="overflow-hidden text-start">
-                                  <div className="fw-bold text-dark text-truncate small">
-                                    {item.name}
-                                  </div>
-                                  <div className="d-flex align-items-center mt-1 flex-wrap gap-2">
-                                    <span className="rate-spec-pill">
-                                      {item.brand}
-                                    </span>
-                                    <StarRating
-                                      value={rating}
-                                      size="sm"
-                                      emptyLabel={t('unratedShort')}
-                                    />
-                                    <span
-                                      className="text-secondary fw-semibold rate-tabular"
-                                      style={{ fontSize: '0.8125rem' }}
-                                    >
-                                      {priceFormatted}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <span
-                                className={`badge rounded-pill flex-shrink-0 px-3 py-2 ${
-                                  alreadySelected
-                                    ? 'bg-secondary text-white'
-                                    : activeReplaceIndex !== null
-                                      ? 'bg-dark text-white'
-                                      : 'bg-danger text-white'
-                                }`}
-                              >
-                                {alreadySelected
-                                  ? t('alreadyComparingBadge')
-                                  : activeReplaceIndex !== null
-                                    ? t('selectReplacementBadge')
-                                    : t('addToCompareBadge')}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
                     )}
                   </div>
-                )}
+
+                  {suggestions.length === 0 ? (
+                    <div className="text-muted small p-4 text-center">
+                      {t('noMatchingDevices', {
+                        unit: activeCategoryMeta.unitLabel,
+                        query: searchQuery,
+                      })}
+                    </div>
+                  ) : (
+                    <div className="list-group list-group-flush">
+                      {suggestions.map((item) => {
+                        const alreadySelected = isCompareCandidateSelected(
+                          products,
+                          item.slug,
+                          versusSlugMap
+                        );
+                        const thumb = resolveProductImageUrl(
+                          item.slug,
+                          productImageUrl(item)
+                        );
+                        const priceFormatted = formatComparePriceVnd(
+                          item.min_price,
+                          locale
+                        );
+                        const rating = getEffectiveRating(item);
+
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            disabled={alreadySelected}
+                            onClick={() => handleSelectCandidate(item)}
+                            className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between gap-3 px-3 py-2 ${
+                              alreadySelected ? 'bg-light opacity-75' : ''
+                            }`}
+                          >
+                            <div className="d-flex align-items-center gap-3 overflow-hidden">
+                              <div
+                                className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 border bg-white"
+                                style={{
+                                  width: '44px',
+                                  height: '44px',
+                                  padding: '4px',
+                                }}
+                              >
+                                {thumb ? (
+                                  <img
+                                    loading="lazy"
+                                    decoding="async"
+                                    src={thumb}
+                                    alt={item.name}
+                                    style={{
+                                      maxWidth: '100%',
+                                      maxHeight: '100%',
+                                      objectFit: 'contain',
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="small text-muted">SP</span>
+                                )}
+                              </div>
+                              <div className="overflow-hidden text-start">
+                                <div className="fw-bold text-dark text-truncate small">
+                                  {item.name}
+                                </div>
+                                <div className="d-flex align-items-center mt-1 flex-wrap gap-2">
+                                  <span className="rate-spec-pill">
+                                    {item.brand}
+                                  </span>
+                                  <StarRating
+                                    value={rating}
+                                    size="sm"
+                                    emptyLabel={t('unratedShort')}
+                                  />
+                                  <span
+                                    className="text-secondary fw-semibold rate-tabular"
+                                    style={{ fontSize: '0.8125rem' }}
+                                  >
+                                    {priceFormatted}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <span
+                              className={`badge rounded-pill flex-shrink-0 px-3 py-2 ${
+                                alreadySelected
+                                  ? 'bg-secondary text-white'
+                                  : activeReplaceIndex !== null
+                                    ? 'bg-dark text-white'
+                                    : 'bg-danger text-white'
+                              }`}
+                            >
+                              {alreadySelected
+                                ? t('alreadyComparingBadge')
+                                : activeReplaceIndex !== null
+                                  ? t('selectReplacementBadge')
+                                  : t('addToCompareBadge')}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -2711,7 +3010,10 @@ export default function CompareWorkspace({
               })}
             </span>
             {categoryLockedCandidates
-              .filter((c) => !selectedSlugs.has(c.slug))
+              .filter(
+                (c) =>
+                  !isCompareCandidateSelected(products, c.slug, versusSlugMap)
+              )
               .slice(0, 5)
               .map((c) => (
                 <button

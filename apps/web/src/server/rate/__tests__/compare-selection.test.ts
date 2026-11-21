@@ -56,40 +56,68 @@ const acmeItem = {
   slug: 'acme',
   default_variant_id: 'acme-128gb',
 };
-let publishedItems: (typeof acmeItem)[] | null;
+type StubItem = {
+  id: string;
+  slug: string;
+  default_variant_id: string | null;
+  name?: string;
+  merchant_count?: number;
+  modelPrefix?: string;
+};
+type StubMasterRow = ReturnType<typeof master> & Record<string, unknown>;
+let publishedItems: StubItem[] | null;
+let catalogOverride: StubMasterRow[] | null;
 
 beforeEach(() => {
   process.env.RATE_ITEM_MODEL = 'off';
   resetRateClientForTests();
   requests.length = 0;
   publishedItems = null;
+  catalogOverride = null;
   mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
     const url = new URL(input instanceof Request ? input.url : input);
     requests.push(url);
     const query = url.searchParams;
     if (url.pathname.endsWith('/categories')) return Response.json([]);
-    const published = catalogue
+    const sourceRows = catalogOverride ?? catalogue;
+    const published = sourceRows
       .filter((row) => row.status === 'published')
-      .map((row) =>
-        publishedItems?.some((item) => item.id === acmeItem.id) &&
-        row.model_key.startsWith('brand:acme:')
+      .map((row) => {
+        const modelKey = String(row.model_key ?? '');
+        const matchedItem = publishedItems?.find((item) => {
+          const prefix =
+            item.modelPrefix ??
+            (item.id === acmeItem.id ? 'brand:acme:' : `brand:${item.slug}:`);
+          return modelKey.startsWith(prefix);
+        });
+        return matchedItem
           ? {
               ...row,
-              item_id: acmeItem.id,
-              variant_key: row.model_key.split(':')[2],
+              item_id: matchedItem.id,
+              variant_key: modelKey.split(':')[2],
             }
-          : row
-      );
+          : row;
+      });
     if (url.pathname.endsWith('/rpc/search_master_products')) {
       return Response.json(published);
     }
     if (url.pathname.endsWith('/items')) {
       if (publishedItems) {
+        const idFilter = query.get('id') ?? '';
+        const inIds = idFilter.startsWith('in.(')
+          ? new Set(
+              idFilter
+                .slice(4, -1)
+                .split(',')
+                .map((s) => s.replace(/^"|"$/g, ''))
+            )
+          : null;
         return Response.json(
           publishedItems.filter(
             (item) =>
               query.get('slug') === `eq.${item.slug}` ||
-              query.get('id') === `eq.${item.id}`
+              query.get('id') === `eq.${item.id}` ||
+              Boolean(inIds?.has(item.id))
           )
         );
       }
@@ -99,6 +127,30 @@ beforeEach(() => {
       );
     }
     assert.equal(url.pathname, '/rest/v1/master_products');
+    if (query.get('select') === 'id,item_id') {
+      if (!publishedItems) {
+        return Response.json(
+          { code: 'PGRST205', message: 'Item table unavailable' },
+          { status: 404 }
+        );
+      }
+      const idFilter = query.get('id') ?? '';
+      assert.ok(idFilter.startsWith('in.('));
+      const wantedIds = new Set(
+        idFilter
+          .slice(4, -1)
+          .split(',')
+          .map((s) => s.replace(/^"|"$/g, ''))
+      );
+      return Response.json(
+        published
+          .filter((row) => wantedIds.has(String(row.id)))
+          .map((row) => ({
+            id: row.id,
+            item_id: 'item_id' in row ? row.item_id : null,
+          }))
+      );
+    }
     const slugFilter = query.get('slug') ?? '';
     if (slugFilter.startsWith('eq.')) {
       assert.equal(query.get('status'), 'in.(published,archived)');
@@ -107,9 +159,21 @@ beforeEach(() => {
       );
     }
     assert.equal(query.get('status'), 'eq.published');
-    if (query.get('item_id') === 'eq.acme-item') {
+    const itemIdFilter = query.get('item_id') ?? '';
+    if (itemIdFilter.startsWith('eq.') || itemIdFilter.startsWith('in.(')) {
+      const wantedItems = itemIdFilter.startsWith('eq.')
+        ? new Set([itemIdFilter.slice(3)])
+        : new Set(
+            itemIdFilter
+              .slice(4, -1)
+              .split(',')
+              .map((s) => s.replace(/^"|"$/g, ''))
+          );
       const variants = published.filter(
-        (row) => 'item_id' in row && row.item_id === acmeItem.id
+        (row) =>
+          'item_id' in row &&
+          typeof row.item_id === 'string' &&
+          wantedItems.has(row.item_id)
       );
       return Response.json(Number(query.get('offset')) > 0 ? [] : variants);
     }
@@ -332,4 +396,75 @@ test('pins and explicit hints keep their represented master even for legacy slug
   assert.deepEqual(await openSharedLink('/compare?slugs=peer@512gb,last'), [
     'last',
   ]);
+});
+
+test('tokenless /compare deduplicates multiple variants of the same Item under RATE_ITEM_MODEL (#1820)', async () => {
+  catalogOverride = [
+    {
+      ...master('acme-256gb', 'brand:acme:256gb'),
+      name: 'Acme Phone 256GB',
+      min_price: 24_990_000,
+      max_price: 26_990_000,
+      merchant_count: 3,
+      storage_gb: 256,
+    },
+    {
+      ...master('acme-128gb', 'brand:acme:128gb'),
+      name: 'Acme Phone 128GB',
+      min_price: 19_990_000,
+      max_price: 20_990_000,
+      merchant_count: 2,
+      storage_gb: 128,
+    },
+    master('peer-128gb', 'brand:peer:128gb'),
+    master('last', 'brand:last:standard'),
+  ];
+  publishedItems = [
+    {
+      ...acmeItem,
+      name: 'Acme Phone',
+      merchant_count: 9,
+      modelPrefix: 'brand:acme:',
+    },
+  ];
+
+  // Flag off: legacy variant-level defaults keep the raw catalogue rows.
+  process.env.RATE_ITEM_MODEL = 'off';
+  const offDefaults = await getComparePageSelection({});
+  assert.deepEqual(
+    offDefaults.initialProducts.map((row) => row.slug),
+    ['acme-256gb', 'acme-128gb', 'peer-128gb']
+  );
+
+  // Flag on: acme-256gb and acme-128gb collapse to one standing variant in
+  // both initialProducts and catalogCandidates, preserving that variant's own
+  // name, price range, and merchant count while attaching item_slug.
+  process.env.RATE_ITEM_MODEL = 'item';
+  const itemDefaults = await getComparePageSelection({});
+  assert.equal(itemDefaults.hasExplicitSlugs, false);
+  assert.deepEqual(
+    itemDefaults.initialProducts.map((row) => row.slug),
+    ['acme-128gb', 'peer-128gb', 'last']
+  );
+  assert.deepEqual(
+    itemDefaults.catalogCandidates.map((row) => row.slug),
+    ['acme-128gb', 'peer-128gb', 'last']
+  );
+  const standingAcme = itemDefaults.initialProducts[0] as Record<
+    string,
+    unknown
+  >;
+  assert.equal(standingAcme.name, 'Acme Phone 128GB');
+  assert.equal(standingAcme.min_price, 19_990_000);
+  assert.equal(standingAcme.max_price, 20_990_000);
+  assert.equal(standingAcme.merchant_count, 2);
+  assert.equal(standingAcme.item_slug, 'acme');
+
+  // Flag on, Item table unavailable: graceful fallback to variant rows.
+  publishedItems = null;
+  const fallbackDefaults = await getComparePageSelection({});
+  assert.deepEqual(
+    fallbackDefaults.initialProducts.map((row) => row.slug),
+    ['acme-256gb', 'acme-128gb', 'peer-128gb']
+  );
 });

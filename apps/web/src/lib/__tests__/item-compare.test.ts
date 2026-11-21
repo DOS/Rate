@@ -821,6 +821,595 @@ async function main() {
     productFromProductAnswer({ ok: true, data: { product: [] } }, 'pixel-10'),
     null
   );
+
+  // DOS/Rate#1820: CompareWorkspace Item deduplication, combobox Escape/ARIA,
+  // locale-aware fitTitle/fitDescription on /compare & /compare/[versus], and
+  // malformed percent-encoding guard in parseVersusSlugs.
+  const nodeModule = require('node:module') as {
+    _extensions?: Record<string, (mod: { exports: unknown }) => void>;
+  };
+  if (nodeModule._extensions && !nodeModule._extensions['.css']) {
+    nodeModule._extensions['.css'] = (mod) => {
+      mod.exports = {};
+    };
+  }
+
+  const React = require('react') as typeof import('react');
+  const { renderToStaticMarkup } =
+    require('react-dom/server') as typeof import('react-dom/server');
+  const { NextIntlClientProvider, createTranslator } =
+    require('next-intl') as typeof import('next-intl');
+  const { AppRouterContext } =
+    require('next/dist/shared/lib/app-router-context.shared-runtime') as typeof import('next/dist/shared/lib/app-router-context.shared-runtime');
+  const csMessages =
+    require('../../../locales/cs.json') as typeof import('../../../locales/cs.json');
+  const enMessages =
+    require('../../../locales/en.json') as typeof import('../../../locales/en.json');
+  const { pickClientMessages } =
+    require('../client-messages') as typeof import('../client-messages');
+  const { fitDescription, fitTitle } =
+    require('../seo') as typeof import('../seo');
+  const CompareWorkspaceMod =
+    require('../../components/compare/CompareWorkspace') as typeof import('../../components/compare/CompareWorkspace');
+  const CompareWorkspace = CompareWorkspaceMod.default;
+  const {
+    COMPARE_AUTOCOMPLETE_LIST_ID,
+    applyCompareCandidateSelection,
+    buildCompareAutocompleteSuggestions,
+    buildCompareVersusSlugMap,
+    dedupeCompareProductsByItem,
+    isCompareCandidateSelected,
+    pickCompareCategoryDefaults,
+    resolveCompareAutocompleteA11y,
+    shouldDismissCompareOnFocusOut,
+  } = CompareWorkspaceMod;
+  const VersusPageMod =
+    require('../../app/[locale]/compare/[versus]/page') as typeof import('../../app/[locale]/compare/[versus]/page');
+  const { parseVersusSlugs } = VersusPageMod;
+
+  type MasterProduct = import('@repo/shared-data').MasterProduct;
+  const makeCandidate = (
+    slug: string,
+    name: string,
+    modelKey: string,
+    category: 'smartphones' | 'tablets' = 'smartphones',
+    extra: Record<string, unknown> = {}
+  ): MasterProduct =>
+    ({
+      id: `id-${slug}`,
+      slug,
+      name,
+      brand: modelKey.split(':')[0] ?? 'Brand',
+      model: modelKey.split(':')[1] ?? name,
+      model_key: modelKey,
+      status: 'published',
+      min_price: 20_000_000,
+      max_price: 22_000_000,
+      merchant_count: 3,
+      rating_score: 4.7,
+      user_rating_weighted: 4.7,
+      total_reviews: 20,
+      metadata: { category_slug: category },
+      specifications: {},
+      key_specs: {},
+      images: [],
+      thumbnail: null,
+      ...extra,
+    }) as unknown as MasterProduct;
+
+  const ip16v128 = makeCandidate(
+    'apple-iphone-16-128gb',
+    'Apple iPhone 16 128GB',
+    'apple:iphone-16:128gb'
+  );
+  const ip16v256 = makeCandidate(
+    'apple-iphone-16-256gb',
+    'Apple iPhone 16 256GB',
+    'apple:iphone-16:256gb'
+  );
+  const ip16v512Remote = makeCandidate(
+    'apple-iphone-16-512gb',
+    'Apple iPhone 16 512GB',
+    'apple:iphone-16:512gb'
+  );
+  const s24v256 = makeCandidate(
+    'samsung-galaxy-s24-256gb',
+    'Samsung Galaxy S24 256GB',
+    'samsung:galaxy-s24:256gb'
+  );
+  const xm15v512 = makeCandidate(
+    'xiaomi-15-ultra-512gb',
+    'Xiaomi 15 Ultra 512GB',
+    'xiaomi:15-ultra:512gb'
+  );
+  const ipad128 = makeCandidate(
+    'apple-ipad-air-128gb',
+    'Apple iPad Air 128GB',
+    'apple:ipad-air:128gb',
+    'tablets'
+  );
+  const ipad256 = makeCandidate(
+    'apple-ipad-air-256gb',
+    'Apple iPad Air 256GB',
+    'apple:ipad-air:256gb',
+    'tablets'
+  );
+  const galaxyTab = makeCandidate(
+    'samsung-galaxy-tab-s10-256gb',
+    'Samsung Galaxy Tab S10 256GB',
+    'samsung:galaxy-tab-s10:256gb',
+    'tablets'
+  );
+  const rawCandidates1820 = [
+    ip16v128,
+    ip16v256,
+    s24v256,
+    xm15v512,
+    ipad128,
+    ipad256,
+    galaxyTab,
+  ];
+  const ssrSlugMap1820 = {
+    'apple-iphone-16-128gb': 'Apple-iPhone-16',
+    'apple-iphone-16-256gb': 'Apple-iPhone-16',
+    'samsung-galaxy-s24-256gb': 'samsung-galaxy-s24',
+    'xiaomi-15-ultra-512gb': 'xiaomi-15-ultra',
+    'apple-ipad-air-128gb': 'apple-ipad-air',
+    'apple-ipad-air-256gb': 'apple-ipad-air',
+    'samsung-galaxy-tab-s10-256gb': 'samsung-galaxy-tab-s10',
+  };
+  const mergedSlugMap1820 = buildCompareVersusSlugMap(
+    [...rawCandidates1820, ip16v512Remote],
+    ssrSlugMap1820
+  );
+
+  // Category tab switches deduplicate per Item when RATE_ITEM_MODEL is active,
+  // and keep legacy variant behavior when versusSlugMap is undefined.
+  assert.deepEqual(
+    pickCompareCategoryDefaults(
+      rawCandidates1820,
+      'tablets',
+      mergedSlugMap1820,
+      3
+    ).map((p) => p.slug),
+    ['apple-ipad-air-128gb', 'samsung-galaxy-tab-s10-256gb']
+  );
+  assert.deepEqual(
+    pickCompareCategoryDefaults(rawCandidates1820, 'tablets', undefined, 3).map(
+      (p) => p.slug
+    ),
+    [
+      'apple-ipad-air-128gb',
+      'apple-ipad-air-256gb',
+      'samsung-galaxy-tab-s10-256gb',
+    ]
+  );
+
+  // Candidate filtering collapses duplicate variants across local + remote
+  // results per Item (including propagated remote model_key siblings).
+  assert.deepEqual(
+    buildCompareAutocompleteSuggestions(
+      rawCandidates1820,
+      null,
+      'smartphones',
+      '',
+      mergedSlugMap1820
+    ).map((p) => p.slug),
+    [
+      'apple-iphone-16-128gb',
+      'samsung-galaxy-s24-256gb',
+      'xiaomi-15-ultra-512gb',
+    ]
+  );
+  assert.deepEqual(
+    buildCompareAutocompleteSuggestions(
+      rawCandidates1820,
+      [ip16v512Remote, ip16v256],
+      'smartphones',
+      'iphone 16',
+      mergedSlugMap1820
+    ).map((p) => p.slug),
+    ['apple-iphone-16-128gb']
+  );
+
+  // Candidate selection blocks picking a sibling storage variant of an
+  // already-compared Item in both Add and Replace modes.
+  assert.equal(
+    isCompareCandidateSelected(
+      [ip16v256, s24v256],
+      'apple-iphone-16-128gb',
+      mergedSlugMap1820
+    ),
+    true
+  );
+  assert.equal(
+    isCompareCandidateSelected(
+      [ip16v256, s24v256],
+      'apple-iphone-16-512gb',
+      mergedSlugMap1820
+    ),
+    true
+  );
+  assert.equal(
+    isCompareCandidateSelected(
+      [ip16v256, s24v256],
+      'xiaomi-15-ultra-512gb',
+      mergedSlugMap1820
+    ),
+    false
+  );
+  assert.equal(
+    applyCompareCandidateSelection(
+      [ip16v256, s24v256],
+      ip16v128,
+      'smartphones',
+      null,
+      mergedSlugMap1820
+    ),
+    null,
+    'Add mode refuses sibling variant of already-compared Item'
+  );
+  assert.equal(
+    applyCompareCandidateSelection(
+      [ip16v256, s24v256],
+      ip16v128,
+      'smartphones',
+      1,
+      mergedSlugMap1820
+    ),
+    null,
+    'Replace mode on slot 1 refuses sibling variant of slot 0 Item'
+  );
+  assert.equal(
+    applyCompareCandidateSelection(
+      [ip16v256, s24v256],
+      ip16v128,
+      'smartphones',
+      0,
+      mergedSlugMap1820
+    ),
+    null,
+    'Replace mode on slot 0 refuses sibling variant of slot 0 Item'
+  );
+  assert.deepEqual(
+    applyCompareCandidateSelection(
+      [ip16v256, s24v256],
+      xm15v512,
+      'smartphones',
+      1,
+      mergedSlugMap1820
+    )?.nextProducts.map((p) => p.slug),
+    ['apple-iphone-16-256gb', 'xiaomi-15-ultra-512gb']
+  );
+  assert.deepEqual(
+    applyCompareCandidateSelection(
+      [ip16v256, s24v256],
+      xm15v512,
+      'smartphones',
+      null,
+      mergedSlugMap1820
+    )?.nextProducts.map((p) => p.slug),
+    [
+      'apple-iphone-16-256gb',
+      'samsung-galaxy-s24-256gb',
+      'xiaomi-15-ultra-512gb',
+    ]
+  );
+  assert.deepEqual(
+    dedupeCompareProductsByItem(
+      [ip16v128, ip16v256, s24v256],
+      mergedSlugMap1820
+    ).map((p) => p.slug),
+    ['apple-iphone-16-128gb', 'samsung-galaxy-s24-256gb']
+  );
+
+  // Combobox ARIA & focusout dismissal contracts (#1820).
+  assert.deepEqual(
+    resolveCompareAutocompleteA11y({
+      dropdownOpen: false,
+      productCount: 2,
+      activeReplaceIndex: null,
+    }),
+    {
+      role: 'combobox',
+      ariaAutocomplete: 'list',
+      ariaExpanded: false,
+      ariaControls: COMPARE_AUTOCOMPLETE_LIST_ID,
+      disabled: false,
+    }
+  );
+  assert.deepEqual(
+    resolveCompareAutocompleteA11y({
+      dropdownOpen: true,
+      productCount: 2,
+      activeReplaceIndex: null,
+    }),
+    {
+      role: 'combobox',
+      ariaAutocomplete: 'list',
+      ariaExpanded: true,
+      ariaControls: COMPARE_AUTOCOMPLETE_LIST_ID,
+      disabled: false,
+    }
+  );
+  assert.deepEqual(
+    resolveCompareAutocompleteA11y({
+      dropdownOpen: true,
+      productCount: 4,
+      activeReplaceIndex: null,
+    }),
+    {
+      role: 'combobox',
+      ariaAutocomplete: 'list',
+      ariaExpanded: false,
+      ariaControls: COMPARE_AUTOCOMPLETE_LIST_ID,
+      disabled: true,
+    },
+    'At max capacity without replace mode, aria-expanded stays false because listbox is not rendered'
+  );
+  assert.deepEqual(
+    resolveCompareAutocompleteA11y({
+      dropdownOpen: true,
+      productCount: 4,
+      activeReplaceIndex: 2,
+    }),
+    {
+      role: 'combobox',
+      ariaAutocomplete: 'list',
+      ariaExpanded: true,
+      ariaControls: COMPARE_AUTOCOMPLETE_LIST_ID,
+      disabled: false,
+    }
+  );
+
+  assert.equal(shouldDismissCompareOnFocusOut(null, false), false);
+  assert.equal(
+    shouldDismissCompareOnFocusOut({ closest: () => null }, true),
+    false
+  );
+  assert.equal(
+    shouldDismissCompareOnFocusOut(
+      {
+        closest: (sel) =>
+          sel === '[data-compare-slot-trigger]' ? { tagName: 'BUTTON' } : null,
+      },
+      false
+    ),
+    false
+  );
+  assert.equal(
+    shouldDismissCompareOnFocusOut({ closest: () => null }, false),
+    true
+  );
+
+  // SSR render check: tokenless CompareWorkspace deduplicates initialProducts,
+  // Quick Preset Chips skip sibling variants of compared Items, category counts
+  // reflect unique Items, and #compare-autocomplete-input exposes combobox ARIA.
+  const stubRouter1820 = {
+    bfcacheId: '',
+    back: () => {},
+    forward: () => {},
+    refresh: () => {},
+    push: () => {},
+    replace: () => {},
+    prefetch: () => {},
+  };
+  const Provider1820 = NextIntlClientProvider as React.ComponentType<{
+    locale: string;
+    messages: Record<string, unknown>;
+    timeZone: string;
+    children?: React.ReactNode;
+  }>;
+  const workspaceHtml1820 = renderToStaticMarkup(
+    React.createElement(
+      AppRouterContext.Provider,
+      { value: stubRouter1820 },
+      React.createElement(
+        Provider1820,
+        {
+          locale: 'en',
+          messages: pickClientMessages(
+            enMessages as unknown as Record<string, unknown>,
+            'compare'
+          ),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(CompareWorkspace, {
+          initialProducts: [ip16v256, ip16v128, s24v256],
+          catalogCandidates: rawCandidates1820,
+          initialCategory: 'smartphones',
+          hasExplicitSlugs: false,
+          locale: 'en',
+          itemSlugBySlug: ssrSlugMap1820,
+        })
+      )
+    )
+  );
+  const inputTagMatch = workspaceHtml1820.match(
+    /<input\b[^>]*id="compare-autocomplete-input"[^>]*>/
+  );
+  assert.ok(inputTagMatch, '#compare-autocomplete-input must render');
+  assert.match(inputTagMatch[0], /\brole="combobox"/);
+  assert.match(inputTagMatch[0], /\baria-autocomplete="list"/);
+  assert.match(inputTagMatch[0], /\baria-expanded="false"/);
+  assert.match(
+    inputTagMatch[0],
+    new RegExp(`\\baria-controls="${COMPARE_AUTOCOMPLETE_LIST_ID}"`)
+  );
+  assert.ok(
+    !workspaceHtml1820.includes('+ Apple iPhone 16 128GB'),
+    'Quick Preset Chips must not offer a sibling variant of an already-compared Item'
+  );
+  assert.ok(
+    workspaceHtml1820.includes('+ Xiaomi 15 Ultra 512GB'),
+    'Quick Preset Chips still offer distinct uncompared Items'
+  );
+  assert.match(
+    workspaceHtml1820,
+    /Smartphones\s*<span class="rate-tabular">\(3\)<\/span>/,
+    'Category tab count reflects 3 unique smartphone Items rather than 4 variants'
+  );
+  assert.match(
+    workspaceHtml1820,
+    /Tablets\s*<span class="rate-tabular">\(2\)<\/span>/,
+    'Category tab count reflects 2 unique tablet Items rather than 3 variants'
+  );
+
+  const compareWorkspaceSrc1820 = readFileSync(
+    new URL('../../components/compare/CompareWorkspace.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(
+    compareWorkspaceSrc1820,
+    /addEventListener\('focusout',\s*handleFocusOut\)/,
+    'CompareWorkspace wires focusout dismissal on searchBoxRef'
+  );
+  assert.match(
+    compareWorkspaceSrc1820,
+    /e\.key === 'Escape'/,
+    'CompareWorkspace wires Escape dismissal on #compare-autocomplete-input'
+  );
+
+  // Locale passed to fitTitle and fitDescription on /compare and /compare/[versus] (#1820).
+  const versusPageSrc1820 = readFileSync(
+    new URL('../../app/[locale]/compare/[versus]/page.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(
+    comparePageSrc,
+    /fitDescription\(\s*t\('compareMetaDescWithNames',\s*\{\s*names\s*\}\),\s*lang\s*\)/,
+    '/compare generateMetadata passes lang to fitDescription'
+  );
+  assert.match(
+    comparePageSrc,
+    /fitTitle\(\s*\[[\s\S]*?\],\s*undefined,\s*lang\s*\)/,
+    '/compare generateMetadata passes lang to fitTitle'
+  );
+  assert.match(
+    versusPageSrc1820,
+    /fitTitle\(\s*\[[\s\S]*?\],\s*undefined,\s*lang\s*\)/,
+    '/compare/[versus] generateMetadata passes lang to fitTitle'
+  );
+  assert.match(
+    versusPageSrc1820,
+    /fitDescription\(\s*t\('versusMetaDescription',\s*\{[\s\S]*?\}\),\s*lang\s*\)/,
+    '/compare/[versus] generateMetadata passes lang to fitDescription'
+  );
+
+  const tCompareCs = createTranslator({
+    locale: 'cs',
+    messages: csMessages,
+    namespace: 'compare',
+  });
+  const nbspNameA = 'iPhone\u00A016';
+  const nbspNameB = 'Pixel\u00A09';
+  const csNames = `${nbspNameA} vs ${nbspNameB}`;
+  const csCompareTitle = fitTitle(
+    [
+      tCompareCs('compareMetaTitleWithNames', { names: csNames }),
+      tCompareCs('compareMetaTitleWithNamesShort', { names: csNames }),
+      csNames,
+    ],
+    undefined,
+    'cs'
+  );
+  const viCollapsedCompareTitle = fitTitle(
+    [
+      tCompareCs('compareMetaTitleWithNames', { names: csNames }),
+      tCompareCs('compareMetaTitleWithNamesShort', { names: csNames }),
+      csNames,
+    ],
+    undefined,
+    'vi'
+  );
+  const csCompareDesc = fitDescription(
+    tCompareCs('compareMetaDescWithNames', { names: csNames }),
+    'cs'
+  );
+  const enCollapsedCompareDesc = fitDescription(
+    tCompareCs('compareMetaDescWithNames', { names: csNames }),
+    'en'
+  );
+  assert.ok(
+    csCompareTitle.includes('\u00A0'),
+    'Czech /compare title preserves U+00A0 non-breaking spaces'
+  );
+  assert.ok(
+    !viCollapsedCompareTitle.includes('\u00A0'),
+    'Non-Czech /compare title collapses U+00A0 to ASCII spaces'
+  );
+  assert.ok(
+    csCompareDesc.includes('\u00A0'),
+    'Czech /compare description preserves U+00A0 non-breaking spaces'
+  );
+  assert.ok(
+    !enCollapsedCompareDesc.includes('\u00A0'),
+    'Non-Czech /compare description collapses U+00A0 to ASCII spaces'
+  );
+  const csVersusTitle = fitTitle(
+    [
+      tCompareCs('versusMetaTitle', { nameA: nbspNameA, nameB: nbspNameB }),
+      tCompareCs('versusMetaTitleShort', {
+        nameA: nbspNameA,
+        nameB: nbspNameB,
+      }),
+      `${nbspNameA} vs ${nbspNameB}`,
+    ],
+    undefined,
+    'cs'
+  );
+  const csVersusDesc = fitDescription(
+    tCompareCs('versusMetaDescription', {
+      nameA: nbspNameA,
+      nameB: nbspNameB,
+    }),
+    'cs'
+  );
+  assert.ok(
+    csVersusTitle.includes('\u00A0'),
+    'Czech /compare/[versus] title preserves U+00A0 non-breaking spaces'
+  );
+  assert.ok(
+    csVersusDesc.includes('\u00A0'),
+    'Czech /compare/[versus] description preserves U+00A0 non-breaking spaces'
+  );
+
+  // Guard decodeURIComponent in parseVersusSlugs against malformed % sequences (#1820).
+  for (const malformedVersus of [
+    'a%-vs-b',
+    'a-vs-b%',
+    '100%-vs-b',
+    '%E0%A4%A-vs-b',
+    'a%ZZ-vs-b',
+    '%',
+  ]) {
+    assert.equal(
+      parseVersusSlugs(malformedVersus),
+      null,
+      `parseVersusSlugs(${JSON.stringify(malformedVersus)}) must return null instead of throwing URIError`
+    );
+    assert.equal(
+      parseVersusSlugs(malformedVersus, true),
+      null,
+      `parseVersusSlugs(${JSON.stringify(malformedVersus)}, true) must return null instead of throwing URIError`
+    );
+  }
+  assert.equal(parseVersusSlugs(undefined as unknown as string), null);
+  assert.deepEqual(parseVersusSlugs('Apple%2DiPhone-16-vs-pixel-10', true), [
+    'Apple-iPhone-16',
+    'pixel-10',
+  ]);
+  assert.match(
+    versusPageSrc1820,
+    /const parsed = parseVersusSlugs\(versus\);\s*if \(!parsed\) \{\s*return notFoundMeta\(\);\s*\}/,
+    'generateMetadata returns 404 metadata when parseVersusSlugs rejects malformed versus'
+  );
+  assert.match(
+    versusPageSrc1820,
+    /setRequestLocale\(locale\);\s*const parsed = parseVersusSlugs\(versus\);\s*if \(!parsed\) \{\s*notFound\(\);\s*\}/,
+    'VersusComparePage sets locale then calls notFound() when parseVersusSlugs rejects malformed versus'
+  );
+
   console.warn('  ✅ item compare suite passed');
 }
 
