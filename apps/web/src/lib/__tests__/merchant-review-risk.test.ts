@@ -33,9 +33,23 @@ import MerchantDirectoryExplorer, {
 } from '../../components/merchants/MerchantDirectoryExplorer';
 import {
   MerchantProfilePriceBlock,
+  collectMerchantPageProductSlugs,
   formatMerchantPagePriceVnd,
+  resolveCanonicalItemSlug,
+  resolveMerchantProductHref,
+  resolveMerchantReviewRiskScore,
   sanitizeMerchantPagePriceVnd,
 } from '../../app/[locale]/merchants/[id]/page';
+import { toPublicMerchantDirectoryPage } from '../../app/[locale]/merchants/page';
+import MerchantShareAuditButton, {
+  buildMerchantAuditCsv,
+  buildMerchantAuditJson,
+  buildMerchantAuditMarkdown,
+  sanitizeNullableMerchantScore100,
+  type MerchantAuditTranslateFn,
+  type MerchantShareAuditButtonProps,
+} from '../../components/merchants/MerchantShareAuditButton';
+import { fitDescription, fitTitle } from '../seo';
 import type { MasterProduct } from '@repo/shared-data';
 import type { CrossPlatformDealRadarResponse } from '../../server/rate';
 
@@ -181,6 +195,7 @@ async function main() {
   await publicOffersSayNoneWithoutReviews();
   merchantPagesRiskPriceAndA11ySuite();
   await homePageMerchantRadarAndCompareSuite();
+  await merchantAuditExportsItemLinksAndRscStrippingSuite();
 
   // A store with neither a DOSafe score nor analysed reviews has no trust
   // score, not "high trust 100/100"; with one signal, the score is as before
@@ -2129,6 +2144,475 @@ async function homePageMerchantRadarAndCompareSuite() {
         'applyCategorySpecTemplate(\n                    getMasterProductCategorySlug('
       ),
     'app/[locale]/page.tsx must pass gridProducts to buildHomeQuickCompareSlugs, build radarIndex via buildHomeRadarIndex, hide hero BsShieldCheck, drop fabricated strikethrough fallback, and preserve category card + spec-template contracts'
+  );
+}
+
+// DOS/Rate#1821: preserve null review seeding risk in MD/CSV/JSON exports,
+// resolve canonical Item links + locale-aware SEO titles on /merchants/[id],
+// and strip internal dosafe_risk_known + baseline scores on /merchants RSC.
+async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
+  // 1. Nullable score sanitizer never coerces null / non-finite / radix / control-char inputs to 0.
+  for (const invalid of [
+    null,
+    undefined,
+    '',
+    '   ',
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    '0x10',
+    '0b10',
+    '0o10',
+    '-0x10',
+    '8\t0',
+    '1\n0',
+    '\u000016',
+    false,
+    true,
+    [],
+    {},
+  ]) {
+    assert.equal(
+      sanitizeNullableMerchantScore100(invalid),
+      null,
+      `sanitizeNullableMerchantScore100(${JSON.stringify(invalid)}) must return null`
+    );
+  }
+  assert.equal(Object.is(sanitizeNullableMerchantScore100(0), 0), true);
+  assert.equal(Object.is(sanitizeNullableMerchantScore100(' 0 '), 0), true);
+  assert.equal(Object.is(sanitizeNullableMerchantScore100(-0.2), 0), true);
+  assert.equal(Object.is(sanitizeNullableMerchantScore100(-15), 0), true);
+  assert.equal(sanitizeNullableMerchantScore100(24.6), 25);
+  assert.equal(sanitizeNullableMerchantScore100(' 37.6 '), 38);
+  assert.equal(sanitizeNullableMerchantScore100(140), 100);
+
+  // resolveMerchantReviewRiskScore returns null when total_reviews === 0 or score is null/invalid.
+  assert.equal(
+    resolveMerchantReviewRiskScore({
+      review_risk_score: 4,
+      review_risk_breakdown: { total_reviews: 0 },
+    }),
+    null
+  );
+  assert.equal(
+    resolveMerchantReviewRiskScore({
+      review_risk_score: null,
+      review_risk_breakdown: { total_reviews: 12 },
+    }),
+    null
+  );
+  assert.equal(
+    resolveMerchantReviewRiskScore({
+      review_risk_score: '0x10',
+      review_risk_breakdown: { total_reviews: 12 },
+    }),
+    null
+  );
+  assert.equal(
+    resolveMerchantReviewRiskScore({
+      review_risk_score: 0,
+      review_risk_breakdown: { total_reviews: 12 },
+    }),
+    0
+  );
+  assert.equal(
+    resolveMerchantReviewRiskScore({
+      review_risk_score: 28.4,
+      review_risk_breakdown: { total_reviews: 12 },
+    }),
+    28
+  );
+
+  // 2. MD / CSV / JSON exports across vi / en / cs never coerce null review risk to 0.
+  const readLocale = (loc: string) =>
+    JSON.parse(
+      readFileSync(join(testDir, '../../../locales', `${loc}.json`), 'utf8')
+    ) as Record<string, unknown>;
+  const IntlProvider = NextIntlClientProvider as React.ComponentType<{
+    locale: string;
+    messages: Record<string, unknown>;
+    timeZone: string;
+    children?: React.ReactNode;
+  }>;
+
+  const baseAuditProps: MerchantShareAuditButtonProps = {
+    merchantName: 'FPT Shop Official',
+    platform: 'fptshop',
+    platformShopId: 'fpt-01',
+    isOfficial: true,
+    trustScore: 88,
+    trustLevelLabel: 'Trusted',
+    dosafeRiskScore: 12,
+    reviewSeedingRiskScore: null,
+    authenticReviews: 0,
+    totalReviews: 0,
+    flaggedReviews: 0,
+    productCount: 14,
+    genuineDealCount: 2,
+    fakeSaleTrapCount: 0,
+  };
+
+  const parseCsvRow = (
+    csv: string
+  ): { headers: string[]; values: string[] } => {
+    const clean = csv.replace(/^\uFEFF/, '');
+    const [headerLine, valueLine] = clean.split(/\r?\n/);
+    assert.ok(headerLine && valueLine);
+    return {
+      headers: headerLine.split(','),
+      values: valueLine.split(','),
+    };
+  };
+
+  for (const loc of ['vi', 'en', 'cs'] as const) {
+    const messages = pickClientMessages(readLocale(loc), 'merchantProfile');
+    const merchantMsgs = messages.merchants as Record<string, string>;
+    let capturedT: MerchantAuditTranslateFn | null = null;
+    function CaptureTranslator() {
+      const t = useTranslations('merchants');
+      capturedT = (key, values) => t(key, values);
+      return React.createElement(MerchantShareAuditButton, baseAuditProps);
+    }
+    const buttonMarkup = renderToStaticMarkup(
+      React.createElement(
+        IntlProvider,
+        { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+        React.createElement(CaptureTranslator)
+      )
+    );
+    assert.ok(
+      buttonMarkup.includes('data-testid="merchant-export-csv-btn"') &&
+        buttonMarkup.includes('data-testid="merchant-export-json-btn"') &&
+        !buttonMarkup.includes('NaN'),
+      `${loc}: MerchantShareAuditButton must render export controls cleanly when reviewSeedingRiskScore is null`
+    );
+    assert.ok(capturedT, `${loc}: translator captured`);
+    const tAudit = capturedT as MerchantAuditTranslateFn;
+
+    // Case A: reviewSeedingRiskScore === null with totalReviews === 0.
+    const mdNoReviews = buildMerchantAuditMarkdown(
+      baseAuditProps,
+      tAudit,
+      'https://rate.vn/merchants/fpt-01'
+    );
+    const csvNoReviews = parseCsvRow(buildMerchantAuditCsv(baseAuditProps));
+    const jsonNoReviews = buildMerchantAuditJson(
+      baseAuditProps,
+      '2026-11-21T19:00:00.000Z'
+    );
+    const seedingColIdx = csvNoReviews.headers.indexOf('SeedingRisk(/100)');
+    assert.notEqual(seedingColIdx, -1);
+    assert.equal(
+      csvNoReviews.values[seedingColIdx],
+      '',
+      `${loc}: CSV SeedingRisk(/100) must be empty when reviewSeedingRiskScore is null (totalReviews=0)`
+    );
+    assert.equal(
+      jsonNoReviews.merchant.reviewSeedingRiskScore,
+      null,
+      `${loc}: JSON reviewSeedingRiskScore must be null when reviewSeedingRiskScore is null (totalReviews=0)`
+    );
+    assert.ok(
+      mdNoReviews.includes(String(merchantMsgs.mdSeedingLineNoReviews)) &&
+        !mdNoReviews.includes('0/100'),
+      `${loc}: Markdown must render mdSeedingLineNoReviews and never 0/100 when reviewSeedingRiskScore is null`
+    );
+
+    // Case B: reviewSeedingRiskScore === null with totalReviews === 10 (e.g. pending/unscored reviews).
+    const nullWithReviewsProps: MerchantShareAuditButtonProps = {
+      ...baseAuditProps,
+      reviewSeedingRiskScore: null,
+      authenticReviews: 8,
+      totalReviews: 10,
+      flaggedReviews: 2,
+    };
+    const mdNullWithReviews = buildMerchantAuditMarkdown(
+      nullWithReviewsProps,
+      tAudit,
+      'https://rate.vn/merchants/fpt-01'
+    );
+    const csvNullWithReviews = parseCsvRow(
+      buildMerchantAuditCsv(nullWithReviewsProps)
+    );
+    const jsonNullWithReviews = buildMerchantAuditJson(
+      nullWithReviewsProps,
+      '2026-11-21T19:00:00.000Z'
+    );
+    assert.equal(
+      csvNullWithReviews.values[seedingColIdx],
+      '',
+      `${loc}: CSV SeedingRisk(/100) must stay empty when reviewSeedingRiskScore is null even if totalReviews > 0`
+    );
+    assert.equal(
+      jsonNullWithReviews.merchant.reviewSeedingRiskScore,
+      null,
+      `${loc}: JSON reviewSeedingRiskScore must stay null when reviewSeedingRiskScore is null even if totalReviews > 0`
+    );
+    const expectedNoDataLine = `- **${String(merchantMsgs.riskReviewLabel)}:** ${String(merchantMsgs.reviewRiskNoDataShort).toLowerCase()}`;
+    assert.ok(
+      mdNullWithReviews.includes(expectedNoDataLine) &&
+        !mdNullWithReviews.includes(
+          String(merchantMsgs.mdSeedingLineNoReviews)
+        ) &&
+        !mdNullWithReviews.includes('0/100'),
+      `${loc}: Markdown must render localized no-data label (not 0/100 and not no-reviews) when reviewSeedingRiskScore is null and totalReviews > 0`
+    );
+
+    // Case C: genuinely measured 0/100 review seeding risk still exports 0 / "0" / "0/100".
+    const measuredZeroProps: MerchantShareAuditButtonProps = {
+      ...baseAuditProps,
+      reviewSeedingRiskScore: 0,
+      authenticReviews: 10,
+      totalReviews: 10,
+      flaggedReviews: 0,
+    };
+    const mdMeasuredZero = buildMerchantAuditMarkdown(
+      measuredZeroProps,
+      tAudit,
+      'https://rate.vn/merchants/fpt-01'
+    );
+    const csvMeasuredZero = parseCsvRow(
+      buildMerchantAuditCsv(measuredZeroProps)
+    );
+    const jsonMeasuredZero = buildMerchantAuditJson(
+      measuredZeroProps,
+      '2026-11-21T19:00:00.000Z'
+    );
+    assert.equal(csvMeasuredZero.values[seedingColIdx], '0');
+    assert.equal(jsonMeasuredZero.merchant.reviewSeedingRiskScore, 0);
+    assert.ok(
+      mdMeasuredZero.includes('0/100'),
+      `${loc}: measured 0/100 review risk must still export 0/100`
+    );
+  }
+
+  // 3. Canonical Item link resolution + slug collection + prototype/traversal safety on /merchants/[id].
+  const itemMap = {
+    'iphone-16-pro-max-256gb': 'iphone-16-pro-max',
+    'airpods-pro-2-usb-c': 'airpods-pro-2',
+    'pixel-9a': 'pixel-9a',
+  };
+  assert.deepEqual(
+    collectMerchantPageProductSlugs(
+      {
+        listings: [
+          { master_product: { slug: 'iphone-16-pro-max-256gb' } },
+          { master_product: { slug: '../bad-slug' } },
+          { master_product: null },
+        ],
+        recent_reviews: [
+          { master_slug: 'airpods-pro-2-usb-c' },
+          { master_slug: '__proto__' },
+          { master_slug: null },
+        ],
+      },
+      [
+        {
+          productSlug: 'iphone-16-pro-max-256gb',
+          productHref: '/smartphones/iphone-16-pro-max-256gb',
+        },
+        {
+          productHref: '/laptops/macbook-air-m4-512gb',
+        },
+      ],
+      [
+        {
+          productSlug: 'pixel-9a',
+          productHref: '/smartphones/pixel-9a',
+        },
+      ]
+    ),
+    [
+      'iphone-16-pro-max-256gb',
+      'airpods-pro-2-usb-c',
+      'macbook-air-m4-512gb',
+      'pixel-9a',
+    ]
+  );
+
+  assert.equal(
+    resolveMerchantProductHref({
+      categorySlug: 'smartphones',
+      productSlug: 'iphone-16-pro-max-256gb',
+      fallbackHref: '/smartphones/iphone-16-pro-max-256gb',
+      itemSlugBySlug: itemMap,
+    }),
+    '/smartphones/iphone-16-pro-max'
+  );
+  assert.equal(
+    resolveMerchantProductHref({
+      categorySlug: 'earbuds',
+      productSlug: 'airpods-pro-2-usb-c',
+      hash: '#jreviews-section',
+      itemSlugBySlug: itemMap,
+    }),
+    '/earbuds/airpods-pro-2#jreviews-section'
+  );
+  assert.equal(
+    resolveMerchantProductHref({
+      fallbackHref: '/smartphones/iphone-16-pro-max-256gb',
+      itemSlugBySlug: itemMap,
+    }),
+    '/smartphones/iphone-16-pro-max'
+  );
+  assert.equal(
+    resolveMerchantProductHref({
+      categorySlug: 'smartphones',
+      productSlug: 'iphone-16-pro-max-256gb',
+      hash: '#jreviews-section',
+      itemSlugBySlug: null,
+    }),
+    '/smartphones/iphone-16-pro-max-256gb#jreviews-section',
+    'RATE_ITEM_MODEL off preserves variant URLs'
+  );
+  for (const unsafeSlug of [
+    '__proto__',
+    'constructor',
+    'prototype',
+    '../admin',
+    'foo..bar',
+    'bad.',
+    '0',
+    'null',
+    'undefined',
+    'a\u0000b',
+  ]) {
+    assert.equal(resolveCanonicalItemSlug(unsafeSlug, itemMap), null);
+    assert.equal(
+      resolveMerchantProductHref({
+        categorySlug: 'smartphones',
+        productSlug: unsafeSlug,
+        fallbackHref: '//evil.example/hijack',
+        itemSlugBySlug: itemMap,
+      }),
+      null
+    );
+  }
+
+  // Czech non-breaking space preserved when passing locale to fitTitle / fitDescription.
+  const csTitle = 'Obchod\u00a0Test (SHOPEE) - Skóre 88\u00a0% | Rate.vn';
+  assert.equal(fitTitle([csTitle], undefined, 'cs'), csTitle);
+  const csDesc =
+    'Profil prodejce A: riziko recenzí (12\u00a0%) a historie cen 5\u00a0produktů na Rate.vn.';
+  assert.equal(fitDescription(csDesc, 'cs'), csDesc);
+
+  // 4. /merchants RSC initialPage strips dosafe_risk_known and baseline scores via withPublicReviewRisk.
+  const rawPage = {
+    matched: 2,
+    offset: 0,
+    items: [
+      {
+        ...merchant('rsc-unknown', 4, 0, 82),
+        dosafe_risk_score: 0,
+        dosafe_risk_known: false,
+      } as MerchantSummary,
+      {
+        ...merchant('rsc-known-clean', 18, 12, 91),
+        dosafe_risk_score: 0,
+        dosafe_risk_known: true,
+      } as MerchantSummary,
+    ],
+  };
+  const publicPage = toPublicMerchantDirectoryPage(rawPage);
+  const serializedRscPage = JSON.stringify(publicPage);
+  assert.ok(
+    !serializedRscPage.includes('dosafe_risk_known'),
+    '/merchants RSC payload must never serialize internal dosafe_risk_known flag'
+  );
+  assert.equal('dosafe_risk_known' in publicPage.items[0]!, false);
+  assert.equal('dosafe_risk_known' in publicPage.items[1]!, false);
+  assert.equal(publicPage.items[0]!.dosafe_risk_score, null);
+  assert.equal(
+    publicPage.items[0]!.review_risk_score,
+    null,
+    'unmeasured baseline review_risk_score must strip to null in /merchants RSC payload'
+  );
+  assert.equal(publicPage.items[1]!.dosafe_risk_score, 0);
+  assert.equal(publicPage.items[1]!.review_risk_score, 18);
+
+  const mockRouter = {
+    back: () => {},
+    forward: () => {},
+    refresh: () => {},
+    push: () => {},
+    replace: () => {},
+    prefetch: () => {},
+    bfcacheId: 'test',
+  };
+  for (const loc of ['vi', 'en', 'cs'] as const) {
+    const messages = pickClientMessages(readLocale(loc), 'merchants');
+    const dirHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter as never },
+        React.createElement(
+          IntlProvider,
+          { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+          React.createElement(MerchantDirectoryExplorer, {
+            initialPage: publicPage,
+            summary: {
+              total: 2,
+              official: 0,
+              safe: 2,
+              avgTrust: 87,
+              platformCounts: { shopee: 2 },
+            },
+          })
+        )
+      )
+    );
+    const unknownStart = dirHtml.indexOf('data-merchant-id="rsc-unknown"');
+    const knownStart = dirHtml.indexOf('data-merchant-id="rsc-known-clean"');
+    assert.ok(unknownStart !== -1 && knownStart !== -1);
+    const unknownHtml = dirHtml.slice(unknownStart, knownStart);
+    const knownHtml = dirHtml.slice(knownStart);
+    assert.match(
+      unknownHtml,
+      /data-testid="merchant-directory-scam-badge"[^>]*\bdata-tone="unknown"/
+    );
+    assert.match(
+      unknownHtml,
+      /data-testid="merchant-directory-review-badge"[^>]*\bdata-tone="unknown"/
+    );
+    assert.ok(
+      !unknownHtml.includes('0/100') && !unknownHtml.includes('4/100'),
+      `${loc}: stripped /merchants RSC card must not render 0/100 or baseline 4/100`
+    );
+    assert.match(
+      knownHtml,
+      /data-testid="merchant-directory-scam-badge"[^>]*\bdata-tone="good"[^>]*>0\/100</
+    );
+    assert.match(
+      knownHtml,
+      /data-testid="merchant-directory-review-badge"[^>]*\bdata-tone="good"[^>]*>18\/100</
+    );
+  }
+
+  // 5. Source contracts on merchants/[id]/page.tsx and merchants/page.tsx.
+  const merchantDetailPageSrc = readFileSync(
+    join(testDir, '../../app/[locale]/merchants/[id]/page.tsx'),
+    'utf8'
+  );
+  const merchantsDirectoryPageSrc = readFileSync(
+    join(testDir, '../../app/[locale]/merchants/page.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    merchantDetailPageSrc.includes(
+      'reviewSeedingRiskScore={reviewRiskScore}'
+    ) &&
+      !merchantDetailPageSrc.includes(
+        'reviewSeedingRiskScore={merchant.review_risk_score}'
+      ) &&
+      merchantDetailPageSrc.includes('getItemSlugsFor(productSlugs)') &&
+      merchantDetailPageSrc.includes('undefined,\n      locale\n    ),') &&
+      merchantDetailPageSrc.includes('}),\n    locale\n  );'),
+    'merchants/[id]/page.tsx must pass reviewRiskScore to MerchantShareAuditButton, resolve getItemSlugsFor(productSlugs), and pass locale to fitTitle and fitDescription'
+  );
+  assert.ok(
+    merchantsDirectoryPageSrc.includes('withPublicReviewRisk') &&
+      merchantsDirectoryPageSrc.includes('toPublicMerchantDirectoryPage('),
+    'merchants/page.tsx must strip initialPage.items through withPublicReviewRisk'
   );
 }
 

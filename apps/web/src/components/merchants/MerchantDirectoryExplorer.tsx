@@ -18,7 +18,6 @@ import {
   merchantDirectoryFilterParams,
   parseMerchantDirectoryFilters,
   type MerchantDirectoryFilters,
-  type MerchantDirectoryPage,
   type MerchantDirectorySummary,
   type MerchantRiskTier,
   type MerchantSeedingTier,
@@ -196,9 +195,25 @@ export function formatMerchantDirectoryPriceRange(
   return formatPriceVnd((safeMin ?? safeMax)!, locale);
 }
 
+export type MerchantDirectoryExplorerItem = Omit<
+  MerchantSummary,
+  'dosafe_risk_score' | 'review_risk_score' | 'dosafe_risk_known'
+> & {
+  dosafe_risk_score: number | null;
+  review_risk_score: number | null;
+  dosafe_risk_known?: boolean;
+};
+
+export interface MerchantDirectoryExplorerPage {
+  items: MerchantDirectoryExplorerItem[];
+  /** Stores matching the filters, across all pages. */
+  matched: number;
+  offset: number;
+}
+
 interface MerchantDirectoryExplorerProps {
   /** First page for the initial filters, rendered on the server. */
-  readonly initialPage: MerchantDirectoryPage;
+  readonly initialPage: MerchantDirectoryExplorerPage;
   /** Whole-directory stats; they do not depend on the filters. */
   readonly summary: MerchantDirectorySummary;
   readonly locale?: string;
@@ -209,7 +224,7 @@ async function fetchDirectoryPage(
   offset: number,
   limit: number,
   signal?: AbortSignal
-): Promise<MerchantDirectoryPage> {
+): Promise<MerchantDirectoryExplorerPage> {
   const params = merchantDirectoryFilterParams(filters);
   params.set('offset', String(offset));
   params.set('limit', String(limit));
@@ -217,7 +232,7 @@ async function fetchDirectoryPage(
     signal,
   });
   if (!resp.ok) throw new Error(`merchant directory HTTP ${resp.status}`);
-  const body = (await resp.json()) as { data: MerchantDirectoryPage };
+  const body = (await resp.json()) as { data: MerchantDirectoryExplorerPage };
   return body.data;
 }
 
@@ -353,8 +368,10 @@ export default function MerchantDirectoryExplorer({
     }
   };
   /** Every store matching the current filters, for the exports. */
-  const fetchAllMatching = async (): Promise<MerchantSummary[]> => {
-    const all: MerchantSummary[] = [];
+  const fetchAllMatching = async (): Promise<
+    MerchantDirectoryExplorerItem[]
+  > => {
+    const all: MerchantDirectoryExplorerItem[] = [];
     for (let pageIdx = 0; pageIdx < MAX_MERCHANT_EXPORT_PAGES; pageIdx += 1) {
       const offset = pageIdx * EXPORT_PAGE_SIZE;
       const page = await fetchDirectoryPage(filters, offset, EXPORT_PAGE_SIZE);
@@ -466,7 +483,7 @@ export default function MerchantDirectoryExplorer({
     setSortBy('trust_desc');
   };
 
-  const getMerchantRadarStats = (m: MerchantSummary) => {
+  const getMerchantRadarStats = (m: MerchantDirectoryExplorerItem) => {
     const r = selectMerchantRadar(radarPayload, m);
     return {
       genuineDealCount: r.genuineDealCount,
@@ -475,7 +492,9 @@ export default function MerchantDirectoryExplorer({
     };
   };
 
-  const buildMerchantsMarkdown = (filteredMerchants: MerchantSummary[]) => {
+  const buildMerchantsMarkdown = (
+    filteredMerchants: MerchantDirectoryExplorerItem[]
+  ) => {
     const headers = [
       'Merchant',
       'Platform',
@@ -546,7 +565,7 @@ export default function MerchantDirectoryExplorer({
 
   const handleDownloadMerchantsCsv = async () => {
     if (typeof document === 'undefined' || matchedCount === 0) return;
-    let filteredMerchants: MerchantSummary[];
+    let filteredMerchants: MerchantDirectoryExplorerItem[];
     try {
       filteredMerchants = await fetchAllMatching();
     } catch {
@@ -611,7 +630,7 @@ export default function MerchantDirectoryExplorer({
 
   const handleDownloadMerchantsJson = async () => {
     if (typeof document === 'undefined' || matchedCount === 0) return;
-    let filteredMerchants: MerchantSummary[];
+    let filteredMerchants: MerchantDirectoryExplorerItem[];
     try {
       filteredMerchants = await fetchAllMatching();
     } catch {

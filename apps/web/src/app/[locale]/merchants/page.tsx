@@ -2,15 +2,19 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { getCachedMerchantsList } from '@/server/rate';
+import { withPublicReviewRisk } from '@/server/rate/api-handler';
 import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import { BsSearch, BsShieldCheck } from 'react-icons/bs';
-import MerchantDirectoryExplorer from '@/components/merchants/MerchantDirectoryExplorer';
+import MerchantDirectoryExplorer, {
+  type MerchantDirectoryExplorerPage,
+} from '@/components/merchants/MerchantDirectoryExplorer';
 import {
   DEFAULT_MERCHANT_DIRECTORY_FILTERS,
   MERCHANT_PAGE_SIZE,
   pageMerchantDirectory,
   summarizeMerchantDirectory,
+  type MerchantDirectoryPage,
 } from '@/lib/merchant-directory';
 import ClientMessages from '@/components/providers/ClientMessages';
 
@@ -37,6 +41,15 @@ export async function generateMetadata({
   };
 }
 
+export function toPublicMerchantDirectoryPage(
+  page: MerchantDirectoryPage
+): MerchantDirectoryExplorerPage {
+  return {
+    ...page,
+    items: page.items.map(withPublicReviewRisk),
+  };
+}
+
 export default async function MerchantsDirectoryPage({
   params,
 }: {
@@ -49,11 +62,15 @@ export default async function MerchantsDirectoryPage({
 
   // Only the first page and whole-directory stats go to the browser; the
   // explorer fetches further pages and exports from the directory API.
-  const initialPage = pageMerchantDirectory(
-    merchants,
-    DEFAULT_MERCHANT_DIRECTORY_FILTERS,
-    0,
-    MERCHANT_PAGE_SIZE
+  // Strip internal dosafe_risk_known and baseline scores before RSC serialization
+  // (matching /api/v1/rate/merchants/directory, DOS/Rate#1465, #1821).
+  const initialPage = toPublicMerchantDirectoryPage(
+    pageMerchantDirectory(
+      merchants,
+      DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+      0,
+      MERCHANT_PAGE_SIZE
+    )
   );
   const summary = summarizeMerchantDirectory(merchants);
 

@@ -17,7 +17,9 @@ import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
 } from '@/server/rate';
+import { getItemSlugsFor } from '@/server/rate/item-directory';
 import {
+  EMPTY_RADAR_SIGNAL,
   buildRadarIndex,
   getRadarSignal,
   selectMerchantRadar,
@@ -150,7 +152,7 @@ function normalizeMerchantTrustScore(value: unknown): number | null {
   return Math.min(100, Math.max(0, Math.round(raw)));
 }
 
-function resolveMerchantReviewRiskScore(merchant: {
+export function resolveMerchantReviewRiskScore(merchant: {
   review_risk_score?: unknown;
   review_risk_breakdown?: { total_reviews?: unknown } | null;
 }): number | null {
@@ -161,6 +163,139 @@ function resolveMerchantReviewRiskScore(merchant: {
     review_risk_score: raw,
     review_risk_breakdown: merchant.review_risk_breakdown,
   });
+}
+
+const SAFE_ROUTE_SLUG_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/;
+const PRODUCT_ROUTE_HREF_RE =
+  /^(?:\/(?:vi|en|cs))?\/([a-z0-9-]+)\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,199})([?#].*)?$/i;
+
+function isSafeRouteSlug(slug: string): boolean {
+  return (
+    SAFE_ROUTE_SLUG_RE.test(slug) &&
+    !slug.endsWith('.') &&
+    !slug.includes('..') &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i.test(
+      slug
+    )
+  );
+}
+
+export function resolveCanonicalItemSlug(
+  slug: string | null | undefined,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): string | null {
+  if (typeof slug !== 'string' || /\p{Cc}/u.test(slug)) return null;
+  const cleaned = slug.trim();
+  if (!isSafeRouteSlug(cleaned)) return null;
+  if (itemSlugBySlug && typeof itemSlugBySlug === 'object') {
+    if (Object.hasOwn(itemSlugBySlug, cleaned)) {
+      const mapped = itemSlugBySlug[cleaned];
+      if (typeof mapped === 'string' && !/\p{Cc}/u.test(mapped)) {
+        const cleanMapped = mapped.trim();
+        if (isSafeRouteSlug(cleanMapped)) return cleanMapped;
+      }
+    }
+    const lower = cleaned.toLowerCase();
+    if (lower !== cleaned && Object.hasOwn(itemSlugBySlug, lower)) {
+      const mapped = itemSlugBySlug[lower];
+      if (typeof mapped === 'string' && !/\p{Cc}/u.test(mapped)) {
+        const cleanMapped = mapped.trim();
+        if (isSafeRouteSlug(cleanMapped)) return cleanMapped;
+      }
+    }
+  }
+  return cleaned;
+}
+
+export function resolveMerchantProductHref({
+  categorySlug,
+  productSlug,
+  fallbackHref,
+  hash,
+  itemSlugBySlug,
+}: {
+  readonly categorySlug?: string | null;
+  readonly productSlug?: string | null;
+  readonly fallbackHref?: string | null;
+  readonly hash?: string | null;
+  readonly itemSlugBySlug?: Readonly<Record<string, string>> | null;
+}): string | null {
+  const cleanFallback =
+    typeof fallbackHref === 'string' && !/\p{Cc}/u.test(fallbackHref)
+      ? fallbackHref.trim()
+      : '';
+  const parsedFallback = cleanFallback
+    ? PRODUCT_ROUTE_HREF_RE.exec(cleanFallback)
+    : null;
+  const rawSlug =
+    (typeof productSlug === 'string' && productSlug.trim()
+      ? productSlug
+      : parsedFallback?.[2]) ?? null;
+  const canonicalSlug = resolveCanonicalItemSlug(rawSlug, itemSlugBySlug);
+  const suffix =
+    typeof hash === 'string' && !/\p{Cc}/u.test(hash) && hash.trim()
+      ? hash.trim().startsWith('#')
+        ? hash.trim()
+        : `#${hash.trim()}`
+      : (parsedFallback?.[3] ?? '');
+  if (!canonicalSlug) {
+    return cleanFallback.startsWith('/') && !cleanFallback.startsWith('//')
+      ? cleanFallback
+      : null;
+  }
+  const effectiveCategory =
+    (typeof categorySlug === 'string' &&
+    !/\p{Cc}/u.test(categorySlug) &&
+    categorySlug.trim()
+      ? categorySlug.trim()
+      : parsedFallback?.[1]) || 'smartphones';
+  const baseHref = getCategoryRouteHref(effectiveCategory);
+  return `${baseHref}/${canonicalSlug}${suffix}`;
+}
+
+export function collectMerchantPageProductSlugs(
+  merchant: {
+    listings?: ReadonlyArray<{
+      master_product?: { slug?: string | null } | null;
+    }>;
+    recent_reviews?: ReadonlyArray<{ master_slug?: string | null }>;
+  },
+  genuineDeals: ReadonlyArray<{
+    productSlug?: string | null;
+    productHref?: string | null;
+  }> = [],
+  fakeSaleTraps: ReadonlyArray<{
+    productSlug?: string | null;
+    productHref?: string | null;
+  }> = []
+): string[] {
+  const slugs = new Set<string>();
+  const add = (raw: string | null | undefined) => {
+    if (typeof raw !== 'string' || /\p{Cc}/u.test(raw)) return;
+    const cleaned = raw.trim();
+    if (!isSafeRouteSlug(cleaned)) return;
+    slugs.add(cleaned);
+    const lower = cleaned.toLowerCase();
+    if (lower !== cleaned) slugs.add(lower);
+  };
+  for (const item of merchant.listings ?? []) {
+    add(item?.master_product?.slug);
+  }
+  for (const rev of merchant.recent_reviews ?? []) {
+    add(rev?.master_slug);
+  }
+  for (const entry of [...genuineDeals, ...fakeSaleTraps]) {
+    if (typeof entry?.productSlug === 'string' && entry.productSlug.trim()) {
+      add(entry.productSlug);
+    } else if (
+      typeof entry?.productHref === 'string' &&
+      !/\p{Cc}/u.test(entry.productHref)
+    ) {
+      const m = PRODUCT_ROUTE_HREF_RE.exec(entry.productHref.trim());
+      if (m?.[2]) add(m[2]);
+    }
+  }
+  return Array.from(slugs);
 }
 
 export async function generateMetadata({
@@ -229,20 +364,25 @@ export async function generateMetadata({
             name: merchant.name,
             dosafe: dosafeScore,
             count: merchant.product_count,
-          })
+          }),
+    locale
   );
 
   return {
     // The store name first; the platform, the site name, then the score
     // give way to fit a search result (DOS/Rate#782). The share card keeps
     // the full title.
-    title: fitTitle([
-      fullTitle,
-      `${shortTitle} | Rate.vn`,
-      shortTitle,
-      `${merchant.name} | Rate.vn`,
-      merchant.name,
-    ]),
+    title: fitTitle(
+      [
+        fullTitle,
+        `${shortTitle} | Rate.vn`,
+        shortTitle,
+        `${merchant.name} | Rate.vn`,
+        merchant.name,
+      ],
+      undefined,
+      locale
+    ),
     description,
     alternates: {
       canonical: canonicalUrl,
@@ -279,9 +419,9 @@ export default async function MerchantProfilePage({
       getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 })
     ),
   ]);
-  timing.done();
 
   if (!merchant) {
+    timing.done();
     notFound();
   }
 
@@ -289,6 +429,18 @@ export default async function MerchantProfilePage({
   const merchantRadar = selectMerchantRadar(dealRadar, merchant);
   const merchantGenuineDeals = merchantRadar.genuineDeals;
   const merchantFakeTraps = merchantRadar.fakeSaleTraps;
+  // RATE_ITEM_MODEL on: resolve variant slugs to canonical Item URLs so
+  // radar, review and listing links avoid legacy 308 hops (DOS/Rate#1821).
+  const productSlugs = collectMerchantPageProductSlugs(
+    merchant,
+    merchantGenuineDeals,
+    merchantFakeTraps
+  );
+  const itemSlugBySlug =
+    productSlugs.length > 0
+      ? await timing.time('itemSlugs', getItemSlugsFor(productSlugs))
+      : null;
+  timing.done();
 
   // A store with neither a DOSafe score nor analysed reviews has no trust
   // score: a neutral "no data" tag, never "high trust" (DOS/Rate#1484).
@@ -564,7 +716,7 @@ export default async function MerchantProfilePage({
                     trustScore={trustScore}
                     trustLevelLabel={trustLevelLabel}
                     dosafeRiskScore={dosafeScore}
-                    reviewSeedingRiskScore={merchant.review_risk_score}
+                    reviewSeedingRiskScore={reviewRiskScore}
                     authenticReviews={brk.authentic_count}
                     totalReviews={brk.total_reviews}
                     flaggedReviews={Math.max(
@@ -818,12 +970,19 @@ export default async function MerchantProfilePage({
                   const gMedianPrice = sanitizeMerchantPagePriceVnd(
                     g.marketMedianPrice
                   );
+                  const dealProductHref =
+                    resolveMerchantProductHref({
+                      categorySlug: g.categorySlug,
+                      productSlug: g.productSlug,
+                      fallbackHref: g.productHref,
+                      itemSlugBySlug,
+                    }) ?? g.productHref;
                   return (
                     <div key={g.id} className="col-md-6">
                       <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
                         <div className="overflow-hidden pe-2">
                           <Link
-                            href={g.productHref}
+                            href={dealProductHref}
                             className="fw-bold text-dark text-decoration-none d-block text-truncate small"
                           >
                             <BsArrowDownCircle
@@ -862,12 +1021,19 @@ export default async function MerchantProfilePage({
                   const trapOrigPrice = sanitizeMerchantPagePriceVnd(
                     tItem.priceOriginal
                   );
+                  const trapProductHref =
+                    resolveMerchantProductHref({
+                      categorySlug: tItem.categorySlug,
+                      productSlug: tItem.productSlug,
+                      fallbackHref: tItem.productHref,
+                      itemSlugBySlug,
+                    }) ?? tItem.productHref;
                   return (
                     <div key={tItem.id} className="col-md-6">
                       <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
                         <div className="overflow-hidden pe-2">
                           <Link
-                            href={tItem.productHref}
+                            href={trapProductHref}
                             className="fw-bold text-dark text-decoration-none d-block text-truncate small"
                           >
                             <BsExclamationTriangle
@@ -934,8 +1100,14 @@ export default async function MerchantProfilePage({
               <div className="row g-3">
                 {merchant.recent_reviews.slice(0, 12).map((rev) => {
                   const isAuthentic = rev.include_in_rating;
-                  const revCatSlug = rev.master_category_slug || 'smartphones';
-                  const revCatBase = getCategoryRouteHref(revCatSlug);
+                  const revProductHref = rev.master_slug
+                    ? resolveMerchantProductHref({
+                        categorySlug: rev.master_category_slug,
+                        productSlug: rev.master_slug,
+                        hash: '#jreviews-section',
+                        itemSlugBySlug,
+                      })
+                    : null;
                   const flagBadge = isPendingReview(rev)
                     ? {
                         label: t('flagPendingAnalysis'),
@@ -979,9 +1151,9 @@ export default async function MerchantProfilePage({
                                 locale={locale}
                               />
                             </div>
-                            {rev.master_slug ? (
+                            {revProductHref ? (
                               <Link
-                                href={`${revCatBase}/${rev.master_slug}#jreviews-section`}
+                                href={revProductHref}
                                 className="text-primary text-decoration-none"
                                 style={{ fontSize: '0.8125rem' }}
                               >
@@ -1113,10 +1285,43 @@ export default async function MerchantProfilePage({
                       // The category read with the master, not one guessed
                       // from its name, which linked earbuds and others under
                       // /smartphones (DOS/Rate#769).
-                      const masterCatSlug =
-                        item.master_product?.category_slug || 'smartphones';
-                      const masterBaseHref =
-                        getCategoryRouteHref(masterCatSlug);
+                      const masterProductHref = item.master_product
+                        ? resolveMerchantProductHref({
+                            categorySlug: item.master_product.category_slug,
+                            productSlug: item.master_product.slug,
+                            itemSlugBySlug,
+                          })
+                        : null;
+                      const masterReviewsHref = item.master_product
+                        ? resolveMerchantProductHref({
+                            categorySlug: item.master_product.category_slug,
+                            productSlug: item.master_product.slug,
+                            hash: '#jreviews-section',
+                            itemSlugBySlug,
+                          })
+                        : null;
+                      const listingRadarSignal = item.master_product
+                        ? (() => {
+                            const direct = getRadarSignal(
+                              radarIndex,
+                              item.master_product.slug
+                            );
+                            if (
+                              direct.verdict !== 'none' ||
+                              direct.spreadPct > 0
+                            ) {
+                              return direct;
+                            }
+                            const canonicalSlug = resolveCanonicalItemSlug(
+                              item.master_product.slug,
+                              itemSlugBySlug
+                            );
+                            return canonicalSlug &&
+                              canonicalSlug !== item.master_product.slug
+                              ? getRadarSignal(radarIndex, canonicalSlug)
+                              : direct;
+                          })()
+                        : EMPTY_RADAR_SIGNAL;
 
                       return (
                         <tr key={item.id}>
@@ -1181,21 +1386,16 @@ export default async function MerchantProfilePage({
                             </div>
                           </td>
                           <td>
-                            {item.master_product ? (
+                            {item.master_product && masterProductHref ? (
                               <div>
                                 <div className="d-flex align-items-center flex-wrap gap-1">
                                   <Link
-                                    href={`${masterBaseHref}/${item.master_product.slug}`}
+                                    href={masterProductHref}
                                     className="fw-semibold text-primary text-decoration-none small"
                                   >
                                     {item.master_product.name}
                                   </Link>
-                                  <RadarBadge
-                                    signal={getRadarSignal(
-                                      radarIndex,
-                                      item.master_product.slug
-                                    )}
-                                  />
+                                  <RadarBadge signal={listingRadarSignal} />
                                 </div>
                                 <div
                                   className="text-muted"
@@ -1279,9 +1479,9 @@ export default async function MerchantProfilePage({
                           </td>
                           <td className="text-end">
                             <div className="d-flex justify-content-end gap-2">
-                              {item.master_product && (
+                              {masterReviewsHref && (
                                 <Link
-                                  href={`${masterBaseHref}/${item.master_product.slug}#jreviews-section`}
+                                  href={masterReviewsHref}
                                   className="btn btn-sm btn-outline-primary rounded-pill px-3"
                                 >
                                   {t('viewReviewsAndPricesBtn')}
