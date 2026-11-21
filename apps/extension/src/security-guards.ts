@@ -7,6 +7,17 @@ import type {
   SupportedEcommercePlatform,
 } from './types.js';
 import { t, type MessageKey } from './i18n.js';
+import {
+  encodeSurrogateSafeUriComponent,
+  sliceCodePoints,
+  stripLoneSurrogates,
+} from './surrogate-safe.js';
+
+export {
+  encodeSurrogateSafeUriComponent,
+  sliceCodePoints,
+  stripLoneSurrogates,
+};
 
 export const DEFAULT_API_BASE_URL = 'https://rate.vn';
 
@@ -351,19 +362,23 @@ export function sanitizeExtensionProductSignal(
 
   const trimmedTitle =
     typeof safeSignal.title === 'string'
-      ? safeSignal.title
-          .replace(/\p{Cc}+/gu, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 500)
+      ? sliceCodePoints(
+          stripLoneSurrogates(safeSignal.title)
+            .replace(/\p{Cc}+/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim(),
+          500
+        )
       : '';
   const trimmedVariant =
     typeof safeSignal.selectedVariant === 'string'
-      ? safeSignal.selectedVariant
-          .replace(/\p{Cc}+/gu, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 200) || null
+      ? sliceCodePoints(
+          stripLoneSurrogates(safeSignal.selectedVariant)
+            .replace(/\p{Cc}+/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim(),
+          200
+        ) || null
       : null;
 
   return {
@@ -482,8 +497,7 @@ export function buildExtensionObservationV1(
       // v1 allows 120 characters; a longer label is cut, not a reason to
       // drop the observation.
       variant_label: signal.selectedVariant
-        ? Array.from(signal.selectedVariant).slice(0, 120).join('').trim() ||
-          null
+        ? sliceCodePoints(signal.selectedVariant, 120).trim() || null
         : null,
       price_vnd: signal.price,
       list_price_vnd: signal.originalPrice,
