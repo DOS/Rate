@@ -245,6 +245,8 @@ test('a 5G device gets only the 5G bands its registry entry states', () => {
     'Samsung Galaxy Tab S10 Ultra 256GB',
     'Apple iPhone 16 Pro Max 256GB',
     'Apple Watch Ultra 3 49mm',
+    // Its Wi-Fi + Cellular models have 5G (DOS/Rate#1793).
+    'Apple iPad Pro M4 11 inch 256GB',
   ]) {
     const out = assertNoGeneric(title).specifications;
     assert.equal(out.cellular?.has_5g, true, title);
@@ -283,7 +285,6 @@ test('a device without 5G gets no Wi-Fi, SIM, VoLTE or Wi-Fi calling guess', () 
     'Samsung Galaxy Watch7 44mm',
     'Apple Watch Ultra 2 49mm',
     'Đồng hồ Garmin Forerunner 265',
-    'Apple iPad Pro M4 11 inch 256GB',
   ]) {
     const out = assertNoGeneric(title).specifications;
     assert.deepEqual(defined(out.cellular), { has_5g: false }, title);

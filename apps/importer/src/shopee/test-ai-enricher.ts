@@ -12,6 +12,7 @@ import http from 'node:http';
 import assert from 'node:assert/strict';
 import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, KeySpecsSchema } from '@repo/shared-data';
+import { getCategorySpecTemplate } from '@repo/shared-data/rules';
 import { ProductNormalizer } from './product-normalizer.js';
 import {
   AiSpecEnricher,
@@ -305,15 +306,19 @@ async function runTests() {
         `Flagship seed ${device.model_key} missing group ${grp}`
       );
     }
-    assert.ok(
-      device.specifications.camera?.main_camera,
-      `Flagship seed ${device.model_key} missing main_camera`
-    );
-    assert.ok(
-      hasSingleRearCamera(device.specifications.camera) ||
-        device.specifications.camera?.second_camera,
-      `Flagship seed ${device.model_key} missing second_camera`
-    );
+    // Earbuds and watches have no cameras: their seeds keep the group, empty or not, for
+    // the spec audit (DOS/Rate#1793).
+    if (getCategorySpecTemplate(device.categorySlug).groups.includes('camera')) {
+      assert.ok(
+        device.specifications.camera?.main_camera,
+        `Flagship seed ${device.model_key} missing main_camera`
+      );
+      assert.ok(
+        hasSingleRearCamera(device.specifications.camera) ||
+          device.specifications.camera?.second_camera,
+        `Flagship seed ${device.model_key} missing second_camera`
+      );
+    }
     console.log(
       `✅ [Seed Validation] ${device.name} (${device.categorySlug}) -> 10/10 groups, camera=${device.specifications.camera?.rear_setup}`
     );
