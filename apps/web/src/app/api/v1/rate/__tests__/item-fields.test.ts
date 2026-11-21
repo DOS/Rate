@@ -135,6 +135,16 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
             : [];
       if (q.includes('slug=eq.apple-iphone-16-128gb')) return json([M128]);
       if (q.includes('slug=eq.apple-iphone-16-256gb')) return json([M256]);
+      if (itemReviewsEnabled && q.includes('slug=eq.apple-iphone-16-unknown'))
+        return json([
+          {
+            ...M128,
+            slug: 'apple-iphone-16-unknown',
+            variant_key: 'unknown',
+            storage_gb: null,
+            status: 'archived',
+          },
+        ]);
       if (q.includes(`slug=eq.${OTHER.slug}`)) return json([OTHER]);
       if (q.includes(`id=eq.${V128}`)) return json([M128]);
       if (itemReviewsEnabled && q.includes(`id=eq.${V256}`))
@@ -194,7 +204,7 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
             id: 'rev-item-256',
             author_name: 'Buyer 256GB',
             rating_star: 5,
-            comment: 'Dung lượng 256GB thoải mái, camera sắc nét.',
+            comment: 'Spacious 256GB storage and crisp main camera.',
             created_at: '2026-11-20T10:00:00Z',
             reviewer_type: 'user',
             helpfulness_weight: 1,
@@ -212,7 +222,7 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
             id: 'rev-item-128',
             author_name: 'Buyer 128GB',
             rating_star: 4,
-            comment: 'Bản 128GB gọn nhẹ, pin ổn trong ngày.',
+            comment: 'Compact 128GB model with reliable all-day battery.',
             created_at: '2026-11-20T09:00:00Z',
             reviewer_type: 'user',
             helpfulness_weight: 1,
@@ -602,6 +612,23 @@ async function testReviewsAndItemSizeRoutes() {
     body = await res.json();
     assert.equal(body.masterProductId, V128);
     assert.equal(body.data[0]?.id, 'rev-item-128');
+
+    // Unknown ?v= on an Item slug and retired/archived variant slugs fall back to the default variant.
+    res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16&v=999gb'
+      )
+    );
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).masterProductId, V256);
+
+    res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16-unknown'
+      )
+    );
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).masterProductId, V256);
 
     res = await reviewsRoute.GET(
       new NextRequest(

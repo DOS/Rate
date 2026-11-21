@@ -3063,65 +3063,114 @@ async function testLeaderboardAllCategoryCompareUrl() {
       CAT_LAPTOPS,
       4.6
     ),
+    {
+      ...mkMaster(
+        '000000000301',
+        'gamma-phone-256gb',
+        'GammaBrand1811',
+        'smartphones',
+        CAT_PHONES,
+        4.9
+      ),
+      item_id: '11111111-1111-4111-8111-000000001811',
+    },
+    mkMaster(
+      '000000000302',
+      'gamma-laptop-1',
+      'GammaBrand1811',
+      'laptops',
+      CAT_LAPTOPS,
+      4.8
+    ),
+    {
+      ...mkMaster(
+        '000000000303',
+        'gamma-phone-128gb',
+        'GammaBrand1811',
+        'smartphones',
+        CAT_PHONES,
+        4.7
+      ),
+      item_id: '11111111-1111-4111-8111-000000001811',
+    },
   ];
 
-  rpcResponder = (name, rpcBody) => {
-    if (name === 'search_master_products') {
-      const args = (rpcBody ?? {}) as { p_offset?: number };
-      return Number(args.p_offset ?? 0) > 0
-        ? { status: 200, json: [] }
-        : { status: 200, json: rows };
-    }
-    return { status: 200, json: [] };
-  };
+  const savedRpcResponder = rpcResponder;
+  const savedItemFlag = process.env.RATE_ITEM_MODEL;
+  try {
+    rpcResponder = (name, rpcBody) => {
+      if (name === 'search_master_products') {
+        const args = (rpcBody ?? {}) as { p_offset?: number };
+        return Number(args.p_offset ?? 0) > 0
+          ? { status: 200, json: [] }
+          : { status: 200, json: rows };
+      }
+      return { status: 200, json: [] };
+    };
 
-  // 1. category=all where #1 and #3 are smartphones and #2 is laptops:
-  // compare_top_3_url filters out cross-category #2 instead of sending a laptop slug to /compare?cat=smartphones.
-  let res = await GET(
-    new NextRequest(
-      'http://localhost/api/v1/rate/leaderboard?category=all&brand=AlphaBrand1811'
-    )
-  );
-  assert.equal(res.status, 200);
-  let body = await res.json();
-  assert.deepEqual(
-    body.podium_top_3.map((x: { slug: string }) => x.slug),
-    ['alpha-phone-1', 'alpha-laptop-1', 'alpha-phone-2']
-  );
-  assert.equal(
-    body.compare_top_3_url,
-    '/compare?cat=smartphones&slugs=alpha-phone-1,alpha-phone-2'
-  );
-  assert.equal(body.data.compare_top_3_url, body.compare_top_3_url);
+    // 1. category=all where #1 and #3 are smartphones and #2 is laptops:
+    // compare_top_3_url filters out cross-category #2 instead of sending a laptop slug to /compare?cat=smartphones.
+    let res = await GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=all&brand=AlphaBrand1811'
+      )
+    );
+    assert.equal(res.status, 200);
+    let body = await res.json();
+    assert.deepEqual(
+      body.podium_top_3.map((x: { slug: string }) => x.slug),
+      ['alpha-phone-1', 'alpha-laptop-1', 'alpha-phone-2']
+    );
+    assert.equal(
+      body.compare_top_3_url,
+      '/compare?cat=smartphones&slugs=alpha-phone-1,alpha-phone-2'
+    );
+    assert.equal(body.data.compare_top_3_url, body.compare_top_3_url);
 
-  // 2. category=all where #1, #2, #3 are all distinct categories:
-  // fewer than 2 podium items match compareCategory, so compare_top_3_url is null.
-  res = await GET(
-    new NextRequest(
-      'http://localhost/api/v1/rate/leaderboard?category=all&brand=BetaBrand1811'
-    )
-  );
-  assert.equal(res.status, 200);
-  body = await res.json();
-  assert.deepEqual(
-    body.podium_top_3.map((x: { slug: string }) => x.slug),
-    ['beta-laptop-1', 'beta-phone-1', 'beta-tablet-1']
-  );
-  assert.equal(body.compare_top_3_url, null);
-  assert.equal(body.data.compare_top_3_url, null);
+    // 2. category=all where #1, #2, #3 are all distinct categories:
+    // fewer than 2 podium items match compareCategory, so compare_top_3_url is null.
+    res = await GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=all&brand=BetaBrand1811'
+      )
+    );
+    assert.equal(res.status, 200);
+    body = await res.json();
+    assert.deepEqual(
+      body.podium_top_3.map((x: { slug: string }) => x.slug),
+      ['beta-laptop-1', 'beta-phone-1', 'beta-tablet-1']
+    );
+    assert.equal(body.compare_top_3_url, null);
+    assert.equal(body.data.compare_top_3_url, null);
 
-  // 3. Single-category leaderboard keeps all 3 same-category podium slugs.
-  res = await GET(
-    new NextRequest(
-      'http://localhost/api/v1/rate/leaderboard?category=smartphones&brand=AlphaBrand1811'
-    )
-  );
-  assert.equal(res.status, 200);
-  body = await res.json();
-  assert.equal(
-    body.compare_top_3_url,
-    '/compare?cat=smartphones&slugs=alpha-phone-1,alpha-phone-2,alpha-phone-3'
-  );
+    // 3. Single-category leaderboard keeps all 3 same-category podium slugs.
+    res = await GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=smartphones&brand=AlphaBrand1811'
+      )
+    );
+    assert.equal(res.status, 200);
+    body = await res.json();
+    assert.equal(
+      body.compare_top_3_url,
+      '/compare?cat=smartphones&slugs=alpha-phone-1,alpha-phone-2,alpha-phone-3'
+    );
+
+    // 4. Under RATE_ITEM_MODEL, same-Item podium variants are deduplicated so /compare does not collapse to 1 Item.
+    process.env.RATE_ITEM_MODEL = 'item';
+    res = await GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=all&brand=GammaBrand1811'
+      )
+    );
+    assert.equal(res.status, 200);
+    body = await res.json();
+    assert.equal(body.compare_top_3_url, null);
+  } finally {
+    rpcResponder = savedRpcResponder;
+    if (savedItemFlag === undefined) delete process.env.RATE_ITEM_MODEL;
+    else process.env.RATE_ITEM_MODEL = savedItemFlag;
+  }
 
   console.log(
     '  ✅ Leaderboard category=all filters compare_top_3_url to compareCategory (#1811)'

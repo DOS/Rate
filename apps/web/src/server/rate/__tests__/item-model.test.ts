@@ -651,18 +651,22 @@ async function main() {
     assert.doesNotMatch(src, /searchParams|\bheaders\(|\bcookies\(/, file);
     assert.doesNotMatch(src, /export const dynamic\b|force-dynamic/, file);
   }
-  // The size route is cached too: it reads only its path (DOS/Rate#1285).
-  const sizeRoute = path.resolve(
-    __dirname,
-    '../../../app/api/v1/rate/item-size/[slug]/route.ts'
-  );
-  for (const file of [...productRouteFiles, sizeRoute]) {
+  for (const file of productRouteFiles) {
     const src = fs.readFileSync(file, 'utf8');
     assert.match(src, /export const revalidate = 300;/, file);
     assert.match(src, /export function generateStaticParams\(/, file);
   }
+  // The size route reads only its path and caches via Data Cache + Cache-Control,
+  // without generateStaticParams (which breaks OPTIONS preflight in Next 16 ISR; #1285, #1811).
+  const sizeRoute = path.resolve(
+    __dirname,
+    '../../../app/api/v1/rate/item-size/[slug]/route.ts'
+  );
   {
     const src = fs.readFileSync(sizeRoute, 'utf8');
+    assert.match(src, /export async function OPTIONS\(/);
+    assert.match(src, /public, s-maxage=300, stale-while-revalidate=600/);
+    assert.doesNotMatch(src, /export function generateStaticParams\(/);
     assert.doesNotMatch(src, /searchParams|\bheaders\(|\bcookies\(/);
     assert.doesNotMatch(src, /export const dynamic\b|force-dynamic/);
     assert.doesNotMatch(src, /_request\.(url|nextUrl|headers)/);

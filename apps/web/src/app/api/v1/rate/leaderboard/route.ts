@@ -21,6 +21,7 @@ import {
   parseBoundedIntParam,
   parseBoundedStringParam,
 } from '@/server/rate/api-handler';
+import { isItemModelOn } from '@/server/rate/item-model';
 
 export const revalidate = 60;
 
@@ -122,13 +123,25 @@ export async function GET(req: NextRequest) {
 
     const compareCategory =
       category === 'all' ? items[0]?.category || 'smartphones' : category;
-    const top3Slugs = (
-      category === 'all'
-        ? items.slice(0, 3).filter((x) => x.category === compareCategory)
-        : items.slice(0, 3)
-    )
-      .map((x) => x.slug)
-      .filter(Boolean);
+    const dedupeByItem = isItemModelOn();
+    const seenCompareItemIds = new Set<string>();
+    const top3Slugs = pageRanked
+      .slice(0, 3)
+      .filter((r) => {
+        if (category === 'all' && r.categorySlug !== compareCategory) {
+          return false;
+        }
+        if (dedupeByItem) {
+          const rawItemId = (r.product as { item_id?: unknown }).item_id;
+          const itemId = typeof rawItemId === 'string' ? rawItemId.trim() : '';
+          if (itemId) {
+            if (seenCompareItemIds.has(itemId)) return false;
+            seenCompareItemIds.add(itemId);
+          }
+        }
+        return Boolean(r.slug);
+      })
+      .map((r) => r.slug);
     const compareTop3Url =
       top3Slugs.length >= 2
         ? `/compare?cat=${compareCategory}&slugs=${top3Slugs.map(encodeURIComponent).join(',')}`
