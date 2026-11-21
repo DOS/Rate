@@ -2,10 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  PO_TOOLS,
   declaredClaimants,
   formatLockMessage,
   formatReleaseMessage,
+  isClaimant,
   parseLockMessage,
+  poLabel,
+  poTool,
   resolveClaimant,
 } from '../claim-lock.mjs';
 import {
@@ -107,6 +111,7 @@ test('every status has a Project #9 option id', () => {
 
 const A = 'claude:local_aaaa1111';
 const B = 'qwen:bbbb2222';
+const C = 'antigravity:d0dc3655-856b-4c89-b2bd-3283a4e5e3da';
 
 /**
  * An in-memory refs/claims store with GitHub's semantics: creating an
@@ -356,43 +361,73 @@ test('force-release is for the PO and needs a reason', async () => {
   assert.equal(isPoNick('Ops'), false);
 });
 
-test('a claim adds the PO line label of the claimant', () => {
-  assert.deepEqual(
-    labelChanges(['status:ready'], 'in-progress', 'Ops', { po: 'claude' }),
-    {
-      add: ['status:in-progress', 'agent:ops', 'po:claude'],
-      remove: ['status:ready'],
-    }
-  );
-  assert.deepEqual(
-    labelChanges(
-      ['status:in-progress', 'agent:ops', 'po:claude'],
-      'in-review',
-      'Ops',
-      {
-        po: 'claude',
-      }
-    ),
-    { add: ['status:in-review'], remove: ['status:in-progress'] }
-  );
+test('poTool and poLabel cover claude, qwen, and antigravity (DOS/Rate#1805)', () => {
+  assert.deepEqual(PO_TOOLS, ['claude', 'qwen', 'antigravity']);
+  assert.equal(isClaimant(C), true);
+  assert.equal(poTool(A), 'claude');
+  assert.equal(poTool(B), 'qwen');
+  assert.equal(poTool(C), 'antigravity');
+  assert.equal(poTool('codex:1234abcd'), null);
+  assert.equal(poLabel('claude'), 'po:claude');
+  assert.equal(poLabel('qwen'), 'po:qwen');
+  assert.equal(poLabel('antigravity'), 'po:antigravity');
+  assert.equal(resolveClaimant({ flag: C, env: {} }), C);
 });
 
-test("never claims an issue of the other PO's line without --take-over", () => {
-  assert.throws(
-    () =>
-      labelChanges(['status:ready', 'po:qwen'], 'in-progress', 'Ops', {
-        po: 'claude',
-      }),
-    /dispatched by po:qwen, another PO's line/
-  );
+test('a claim adds the PO line label of the claimant', () => {
+  for (const tool of PO_TOOLS) {
+    assert.deepEqual(
+      labelChanges(['status:ready'], 'in-progress', 'Ops', { po: tool }),
+      {
+        add: ['status:in-progress', 'agent:ops', `po:${tool}`],
+        remove: ['status:ready'],
+      }
+    );
+    assert.deepEqual(
+      labelChanges(
+        ['status:in-progress', 'agent:ops', `po:${tool}`],
+        'in-review',
+        'Ops',
+        {
+          po: tool,
+        }
+      ),
+      { add: ['status:in-review'], remove: ['status:in-progress'] }
+    );
+  }
+});
+
+test("never claims an issue of another PO's line without --take-over (3-way mutual exclusion)", () => {
+  for (const from of PO_TOOLS) {
+    for (const to of PO_TOOLS) {
+      if (from === to) continue;
+      assert.throws(
+        () =>
+          labelChanges(['status:ready', `po:${from}`], 'in-progress', 'Ops', {
+            po: to,
+          }),
+        new RegExp(`dispatched by po:${from}, another PO's line`)
+      );
+      assert.deepEqual(
+        labelChanges(['status:ready', `po:${from}`], 'in-progress', 'Ops', {
+          po: to,
+          takeOver: true,
+        }),
+        {
+          add: ['status:in-progress', 'agent:ops', `po:${to}`],
+          remove: ['status:ready', `po:${from}`],
+        }
+      );
+    }
+  }
+  // A tool without a PO line adds no po:* label and is not refused by line.
   assert.deepEqual(
-    labelChanges(['status:ready', 'po:qwen'], 'in-progress', 'Ops', {
-      po: 'claude',
-      takeOver: true,
+    labelChanges(['status:ready', 'po:antigravity'], 'in-progress', 'Ops', {
+      po: poTool('codex:1234abcd'),
     }),
     {
-      add: ['status:in-progress', 'agent:ops', 'po:claude'],
-      remove: ['status:ready', 'po:qwen'],
+      add: ['status:in-progress', 'agent:ops'],
+      remove: ['status:ready'],
     }
   );
 });
@@ -1116,30 +1151,35 @@ test('setBoard: another session cannot release a stale lock of a reopened issue'
   assert.equal(await holder(api, 7), B);
 });
 
-test('stale: the agent label of a stale claim needs no --take-over, the other PO line still does', () => {
+test('stale: the agent label of a stale claim needs no --take-over, another PO line still does', () => {
   assert.deepEqual(
     labelChanges(['status:in-review', 'agent:web'], 'in-progress', 'Ops', {
       staleClaim: true,
-      po: 'claude',
+      po: 'antigravity',
     }),
     {
-      add: ['status:in-progress', 'agent:ops', 'po:claude'],
+      add: ['status:in-progress', 'agent:ops', 'po:antigravity'],
       remove: ['status:in-review', 'agent:web'],
     }
   );
-  assert.throws(
-    () =>
-      labelChanges(
-        ['status:in-review', 'agent:web', 'po:qwen'],
-        'in-progress',
-        'Ops',
-        {
-          staleClaim: true,
-          po: 'claude',
-        }
-      ),
-    /another PO's line/
-  );
+  for (const from of PO_TOOLS) {
+    for (const to of PO_TOOLS) {
+      if (from === to) continue;
+      assert.throws(
+        () =>
+          labelChanges(
+            ['status:in-review', 'agent:web', `po:${from}`],
+            'in-progress',
+            'Ops',
+            {
+              staleClaim: true,
+              po: to,
+            }
+          ),
+        /another PO's line/
+      );
+    }
+  }
 });
 
 test('the lock comment names a stale lock it replaced', () => {
@@ -1275,4 +1315,82 @@ test('github lock api: a release is a compare-and-swap from the lock read to its
   assert.match(cas, /after=k1/);
   assert.ok(!fake.calls.some((c) => c.includes('DELETE')));
   assert.equal((await api.read(7)).released, true);
+});
+
+test('setBoard: enforces 3-way mutual exclusion across po:claude, po:qwen, and po:antigravity (DOS/Rate#1805)', async () => {
+  const claimants = { claude: A, qwen: B, antigravity: C };
+
+  // Claiming an unlabelled issue with antigravity stamps po:antigravity.
+  {
+    const edits = [];
+    const base = fakeIo(['status:ready']);
+    const io = {
+      ...base.io,
+      gh(args) {
+        if (args[0] === 'issue' && args[1] === 'edit') edits.push(args);
+        return base.io.gh(args);
+      },
+    };
+    const api = loggingLocks(base.log);
+    const out = await setBoard({
+      number: 7,
+      status: 'in-progress',
+      nick: 'Ops',
+      claimant: C,
+      api,
+      io,
+    });
+    assert.match(out, /antigravity:d0dc3655.*lock taken/);
+    assert.equal(await holder(api, 7), C);
+    assert.ok(edits[0].includes('po:antigravity'));
+  }
+
+  // Every cross-PO pair is refused before any lock, comment, label or board edit.
+  for (const from of PO_TOOLS) {
+    for (const to of PO_TOOLS) {
+      if (from === to) continue;
+      const { io, log } = fakeIo(['status:ready', `po:${from}`]);
+      const api = loggingLocks(log);
+      await assert.rejects(
+        setBoard({
+          number: 7,
+          status: 'in-progress',
+          nick: 'Ops',
+          claimant: claimants[to],
+          api,
+          io,
+        }),
+        new RegExp(`dispatched by po:${from}, another PO's line`)
+      );
+      assert.deepEqual(log, []);
+      assert.equal(await holder(api, 7), null);
+    }
+  }
+
+  // With --take-over, antigravity replaces po:claude cleanly.
+  {
+    const edits = [];
+    const base = fakeIo(['status:ready', 'po:claude']);
+    const io = {
+      ...base.io,
+      gh(args) {
+        if (args[0] === 'issue' && args[1] === 'edit') edits.push(args);
+        return base.io.gh(args);
+      },
+    };
+    const api = loggingLocks(base.log);
+    await setBoard({
+      number: 7,
+      status: 'in-progress',
+      nick: 'Ops',
+      claimant: C,
+      takeOver: true,
+      api,
+      io,
+    });
+    assert.equal(await holder(api, 7), C);
+    const edit = edits[0].join(' ');
+    assert.match(edit, /--add-label po:antigravity/);
+    assert.match(edit, /--remove-label po:claude/);
+  }
 });

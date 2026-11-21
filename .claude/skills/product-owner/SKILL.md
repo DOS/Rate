@@ -34,27 +34,29 @@ apply to it: "Starting a sub-session" (its brief), "Review gate",
 
 ## Lines and names
 
-Two POs may run on the same repository at once: one in Claude Code and one
-in Qwen Code Desktop (DOS/Rate#1673). They keep apart like this:
+Multiple POs may run on the same repository at once: in Claude Code, Qwen
+Code Desktop, and Antigravity (DOS/Rate#1673, DOS/Rate#1805). They keep apart
+like this:
 
-- **PO line label.** `po:claude` or `po:qwen` says which PO dispatched an
-  issue. A PO dispatches only issues with its own label or none, and adds its
-  label when it dispatches
+- **PO line label.** `po:claude`, `po:qwen`, or `po:antigravity` says which PO
+  dispatched an issue. A PO dispatches only issues with its own label or none,
+  and adds its label when it dispatches
   (`gh issue edit <n> -R DOS/Rate --add-label po:claude`). `board.mjs` adds
-  the claimant's line label on a claim and refuses an issue of the other line
-  without `--take-over` (JOY's assignment only). A claimant of a tool that
-  runs no PO (for example `codex:...`) gets no `po:*` label and is not
+  the claimant's line label on a claim and refuses an issue of another PO's
+  line without `--take-over` (JOY's assignment only). A claimant of a tool
+  that runs no PO (for example `codex:...`) gets no `po:*` label and is not
   refused by line; such an agent still respects the labels by this rule.
 - **Separate state.** Each PO keeps its own state and check-in file, named
-  per tool (`po-state.claude.md`, `po-state.qwen.md`), outside the
-  repository (in that PO's own notes folder), never committed, and never
-  writes the other's.
+  per tool (`po-state.claude.md`, `po-state.qwen.md`, or
+  `dos-rate-core-antigravity-po-checkin.md` under `~/.claude/po-state/` for
+  Antigravity), outside the repository (in that PO's own notes or `po-state`
+  folder), never committed, and never writes another PO's file.
 - **One promoter.** Only the Claude Code PO runs `promote.mjs` and the
-  `verify-live.mjs` check after it. The Qwen PO asks the Claude Code PO (or
-  JOY, if it cannot reach it) when its merged work needs a promotion.
-  `promote.mjs` refuses to run when the session's claimant (resolved as
-  `board.mjs` does) is not `claude:` or cannot be resolved: a guard against
-  mistakes, not access control.
+  `verify-live.mjs` check after it. The Qwen and Antigravity POs ask the
+  Claude Code PO (or JOY, if they cannot reach it) when their merged work
+  needs a promotion. `promote.mjs` refuses to run when the session's claimant
+  (resolved as `board.mjs` does) is not `claude:` or cannot be resolved: a
+  guard against mistakes, not access control.
 - The claim lock (see "Claims") keeps their sub-sessions off each other's
   issues even when two take the same issue at the same moment.
 
@@ -172,7 +174,9 @@ names a role and two sessions can share it:
   workflow runs on it.
 - The lock records the **claimant**, `<tool>:<session id>`. Claude Code
   sessions get `claude:<session id>` automatically (the desktop session id,
-  the one `SendMessage` uses). Qwen Code sessions pass `--claimant qwen:<session id>` on every call.
+  the one `SendMessage` uses). Qwen Code sessions pass
+  `--claimant qwen:<session id>` and Antigravity sessions pass
+  `--claimant antigravity:<conversation id>` on every call.
   `RATE_CLAIMANT` may only be set for one session, never in a shell profile
   or an environment other sessions (sub-sessions included) inherit; a Claude
   Code session id always wins over it. `board.mjs` prints
@@ -189,7 +193,7 @@ names a role and two sessions can share it:
 - A lock taken before a merged PR last closed the issue is stale: the merge
   ended that work. On a reopened issue, a claim (`in-progress` or
   `in-review`) replaces a stale lock without `--take-over` (and its stale
-  `agent:*` label; the other PO's `po:*` label still needs `--take-over`),
+  `agent:*` label; another PO's `po:*` label still needs `--take-over`),
   and the lock comment names the lock it replaced. A release does not: on an
   open issue only the holder releases, or the PO with `--force-release`. A
   close that was not a merge (not planned, by hand) never makes a lock stale.
@@ -270,8 +274,10 @@ the next session claims only after that comment.
    pages over Project #9 (more than 300 items) time out with 504 or return
    only the first 30 items; look an issue's board item up from the issue as
    `AGENTS.md` 1 shows, or page Project #9 GraphQL in pages of 50 or fewer.
-2. Skip issues labelled with the other PO's line (`po:qwen` for the Claude
-   Code PO, `po:claude` for the Qwen PO); see "Lines and names".
+2. Skip issues labelled with another PO's line (`po:qwen` and
+   `po:antigravity` for the Claude Code PO, `po:claude` and `po:antigravity`
+   for the Qwen PO, `po:claude` and `po:qwen` for the Antigravity PO); see
+   "Lines and names".
    Order: `incident` first, then `status:ready`, then other open issues.
    `status:in-progress` and `status:in-review` issues are someone's claim:
    check whether they are live or orphaned (see "Claims").
@@ -346,7 +352,8 @@ context the session gets, so it carries:
   ("Starting a sub-session", "Review gate", "Coordinating", "Stop lines").
 - **Process**: claim with
   `node scripts/ops/board.mjs <n> --status in-progress --agent <Nick>` before
-  editing (a Qwen sub-session adds `--claimant qwen:<its session id>`);
+  editing (a Qwen sub-session adds `--claimant qwen:<its session id>`; an
+  Antigravity sub-session adds `--claimant antigravity:<its conversation id>`);
   English issue, PR and commit text; PR into `dev` with `Closes #<n>` and a
   `Claimant: <claimant board.mjs printed>` line; `board.mjs <n> --status in-review --agent <Nick>` once the
   PR is open; the review gate (below); the PO acceptance gate; then

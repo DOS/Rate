@@ -152,6 +152,16 @@ test('passes an issue locked by the claimant the PR declares', () => {
   assert.equal(r.ok, true);
   assert.equal(r.claimant, ME);
   assert.match(r.reason, /locked by the declared claimant/);
+
+  const agy = 'antigravity:d0dc3655-856b-4c89-b2bd-3283a4e5e3da';
+  const agyRes = evaluateClaim(
+    pr({
+      body: `Closes #1805\n\nClaimant: ${agy}\n`,
+      closingIssues: [issue(claimed, 1805, { claimant: agy, agent: 'Ops' })],
+    })
+  );
+  assert.equal(agyRes.ok, true);
+  assert.equal(agyRes.claimant, agy);
 });
 
 test('accepts the declared claimant in backticks', () => {

@@ -23,9 +23,10 @@
 //
 // The status label replaces any other status:* label, the agent label
 // (agent:<nick>) is created when missing, a claim adds the PO line label
-// (po:claude or po:qwen) of the claimant's tool, and an issue not yet on the
-// board is added to it. An issue another agent, session or PO line holds is
-// refused unless --take-over is passed (a hand-over or JOY's assignment).
+// (po:claude, po:qwen or po:antigravity) of the claimant's tool, and an issue
+// not yet on the board is added to it. An issue another agent, session or PO
+// line holds is refused unless --take-over is passed (a hand-over or JOY's
+// assignment).
 
 import { parseArgs } from 'node:util';
 import { lockRef, poLabel, poTool, resolveClaimant } from '../claim-lock.mjs';
