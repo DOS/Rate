@@ -12,9 +12,13 @@
  * Scoped run (DOS/Rate#1464), for an approved fix of named masters only:
  *   ... backfill-specs.ts --only <model_key,...>                  (Dry-run: per-row field diff + planned count)
  *   ... backfill-specs.ts --only <model_key,...> --apply --expect <n>
- *   --only <keys>  Plans and writes only these seed model_keys: no other seed is inserted or
- *                  updated, no canonical or AI master and no rate.items row is touched. A key
- *                  with no seed fails before any database read.
+ *   --only <keys>  Plans and writes only these model_keys: each is a seed or a canonical
+ *                  entry (CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY, DOS/Rate#1804). No other seed
+ *                  or canonical master is inserted or updated, no AI master and no rate.items
+ *                  row is touched. A key that is neither fails before any database read. A
+ *                  canonical key is planned, diffed and counted like a seed, and is never
+ *                  inserted: with no master row it stops an --apply (even with
+ *                  --insert-missing) before any write.
  *   --expect <n>   With --apply, stops before the first write unless the plan updates or
  *                  inserts exactly n masters. A dry run logs whether the plan matches.
  *   --expect-inserts <n>  Optional, like --expect for the inserts alone, so a row that appears
@@ -97,9 +101,10 @@ export function requiredSpecGroups(
 export interface BackfillSpecsOptions {
   readonly apply?: boolean;
   /**
-   * `--only`: the seed `model_key`s to update. Nothing else is inserted or updated: no other
-   * seed, no canonical or AI master, no `rate.items` row. A key with no seed is an error
-   * before any read; a key with no master row stops an apply before any write.
+   * `--only`: the seed or canonical `model_key`s to update. Nothing else is inserted or
+   * updated: no other seed or canonical master, no AI master, no `rate.items` row. A key
+   * that is neither a seed nor a canonical entry is an error before any read; a key with no
+   * master row stops an apply before any write (a canonical key even with `insertMissing`).
    */
   readonly only?: readonly string[];
   /**
@@ -621,6 +626,67 @@ export function selectOnlySeeds(
   return seeds.filter(s => wanted.has(s.model_key));
 }
 
+type CanonicalBackfillEntry = (typeof CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY)[string];
+
+/**
+ * The masters a backfill `--only` list names: the seeds, in seed order, and the canonical
+ * entries (`CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY`), in list order (DOS/Rate#1804). A key
+ * that is both stays a seed, as in an unscoped run. Throws, naming them, on keys that are
+ * neither, so a typo never turns a scoped run into a smaller one.
+ */
+export function selectOnlyScope(
+  only: readonly string[],
+  seeds: readonly FlagshipDeviceSeed[] = FLAGSHIP_DEVICES_TO_SEED,
+  canonical: Readonly<
+    Record<string, CanonicalBackfillEntry>
+  > = CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY
+): { seeds: FlagshipDeviceSeed[]; canonicalKeys: string[] } {
+  if (!Array.isArray(only) || only.length === 0) {
+    throw new Error('--only needs at least one model_key');
+  }
+  const wanted = new Set(only.map(k => (typeof k === 'string' ? k.trim() : '')));
+  const seedKeys = new Set(seeds.map(s => s.model_key));
+  const isCanonical = (k: string) => Object.hasOwn(canonical, k);
+  const unknown = [...wanted].filter(k => !k || (!seedKeys.has(k) && !isCanonical(k)));
+  if (unknown.length > 0) {
+    throw new Error(
+      `--only names ${unknown.length} key(s) with no seed and no canonical entry: ${unknown.map(k => JSON.stringify(k)).join(', ')}`
+    );
+  }
+  return {
+    seeds: seeds.filter(s => wanted.has(s.model_key)),
+    canonicalKeys: [...wanted].filter(k => !seedKeys.has(k)),
+  };
+}
+
+/**
+ * The columns a canonical entry writes onto its existing master: its value columns, and its
+ * specs and key specs merged into the stored ones. No timestamp. Shared by the unscoped run
+ * and a scoped `--only` run, so both write the same thing.
+ */
+export function canonicalMasterUpdate(
+  existing: { specifications?: unknown; key_specs?: unknown } | null | undefined,
+  entry: CanonicalBackfillEntry
+): Record<string, unknown> {
+  return {
+    ram_gb: entry.ram_gb,
+    storage_gb: entry.storage_gb,
+    screen_size_inch: entry.screen_size_inch,
+    battery_mah: entry.battery_mah,
+    has_5g: entry.has_5g,
+    colors: entry.colors,
+    specifications: mergeProductSpecifications(
+      existing?.specifications,
+      entry.specifications,
+      entry.colors
+    ),
+    key_specs: mergeKeySpecs(
+      existing?.key_specs,
+      entry.key_specs as unknown as Record<string, unknown>
+    ),
+  };
+}
+
 /** What the job needs besides the client, so tests can pass stand-ins. */
 export interface BackfillSpecsDeps {
   readonly enricher: { isConfigured(): boolean };
@@ -651,6 +717,8 @@ type MasterWrite =
       modelKey: string;
       name: string;
       payload: Record<string, unknown>;
+      /** The field diff, for a canonical key named in a scoped run (DOS/Rate#1804). */
+      changes?: string[];
     }
   | { kind: 'ai-enrich'; id: string; name: string };
 
@@ -687,7 +755,7 @@ export async function runMasterSpecsBackfill(
 ): Promise<BackfillSpecsResult> {
   if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
   // An unknown --only key fails before the client exists.
-  if (options.only !== undefined) selectOnlySeeds(options.only);
+  if (options.only !== undefined) selectOnlyScope(options.only);
   const { createClient } = await import('@supabase/supabase-js');
   const { EntityMatcher } = await import('../entity-matcher.js');
 
@@ -730,7 +798,8 @@ export async function runMasterSpecsBackfillWith(
   const apply = options.apply === true;
   const allSeeds = deps.seeds ?? FLAGSHIP_DEVICES_TO_SEED;
   const scoped = options.only !== undefined;
-  const seeds = scoped ? selectOnlySeeds(options.only!, allSeeds) : allSeeds;
+  const scope = scoped ? selectOnlyScope(options.only!, allSeeds) : undefined;
+  const seeds = scope ? scope.seeds : allSeeds;
   const expect = options.expect;
   if (expect !== undefined && (!Number.isInteger(expect) || expect < 0)) {
     throw new Error(`expect must be a whole number of masters, got ${String(expect)}`);
@@ -868,8 +937,51 @@ export async function runMasterSpecsBackfillWith(
     }
   }
 
-  // Canonical and AI masters: never in a scoped run.
+  // Canonical masters a scoped run names (DOS/Rate#1804): read by model_key, planned and
+  // diffed like a seed. A canonical entry has no insert payload, so a missing row is never
+  // inserted. No other canonical or AI master is read in a scoped run.
   const masterWrites: MasterWrite[] = [];
+  const scopedCanonicalMissing: string[] = [];
+  for (const modelKey of scope?.canonicalKeys ?? []) {
+    const entry = CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[modelKey]!;
+    const { data: existing, error: lookupErr } = await supabase
+      .from('master_products')
+      .select(
+        'id, name, key_specs, specifications, ram_gb, storage_gb, screen_size_inch, battery_mah, has_5g, colors'
+      )
+      .eq('model_key', modelKey)
+      .maybeSingle();
+    if (lookupErr) {
+      throw new Error(`Failed to look up master product ${modelKey}: ${lookupErr.message}`);
+    }
+    if (!existing) {
+      scopedCanonicalMissing.push(modelKey);
+      continue;
+    }
+    const row = existing as unknown as { id: unknown; name?: unknown } & Record<string, unknown>;
+    // The update goes by id: an id the unscoped run would skip stops the plan instead.
+    if (typeof row.id !== 'string' || !row.id.trim() || /\p{Cc}/u.test(row.id)) {
+      throw new Error(`Master product ${modelKey} has no usable id: stopped before any write`);
+    }
+    const update = canonicalMasterUpdate(
+      row as { specifications?: unknown; key_specs?: unknown },
+      entry
+    );
+    masterWrites.push({
+      kind: 'canonical-update',
+      id: row.id,
+      modelKey,
+      name:
+        typeof row.name === 'string'
+          ? stripKeySpecControlChars(row.name).replace(/\s+/g, ' ').trim().slice(0, 200) ||
+            '(unnamed)'
+          : '(unnamed)',
+      payload: { ...update, updated_at: new Date().toISOString() },
+      changes: specUpdateChanges(row, update),
+    });
+  }
+
+  // Unnamed canonical and AI masters: never in a scoped run.
   let skipped = 0;
   if (!scoped) {
     const masters = await fetchAllPages('Failed to fetch master_products', (from, to) =>
@@ -911,20 +1023,9 @@ export async function runMasterSpecsBackfillWith(
           modelKey: safeModelKey,
           name: safeName,
           payload: {
-            ram_gb: canonicalEntry.ram_gb,
-            storage_gb: canonicalEntry.storage_gb,
-            screen_size_inch: canonicalEntry.screen_size_inch,
-            battery_mah: canonicalEntry.battery_mah,
-            has_5g: canonicalEntry.has_5g,
-            colors: canonicalEntry.colors,
-            specifications: mergeProductSpecifications(
-              (m as { specifications?: unknown }).specifications,
-              canonicalEntry.specifications,
-              canonicalEntry.colors
-            ),
-            key_specs: mergeKeySpecs(
-              (m as { key_specs?: unknown }).key_specs,
-              canonicalEntry.key_specs as unknown as Record<string, unknown>
+            ...canonicalMasterUpdate(
+              m as { specifications?: unknown; key_specs?: unknown },
+              canonicalEntry
             ),
             updated_at: new Date().toISOString(),
           },
@@ -935,6 +1036,18 @@ export async function runMasterSpecsBackfillWith(
         skipped++;
       }
     }
+  }
+
+  // A named canonical key with no master row: there is nothing to update and a canonical
+  // entry is never inserted, so --expect alone must not hide it (DOS/Rate#1804).
+  if (scopedCanonicalMissing.length > 0) {
+    const message = `--only: no master row for canonical key(s) ${scopedCanonicalMissing.join(', ')}; a canonical entry is never inserted`;
+    if (apply) throw new Error(`${message}: stopped before any write`);
+    logger.warn(
+      'backfill.scoped_canonical_missing',
+      `DRY-RUN: ${message}; an --apply would stop before any write`,
+      { modelKeys: scopedCanonicalMissing }
+    );
   }
 
   // A scoped run fixes existing masters: a named key with no master row would insert a draft
@@ -1088,6 +1201,13 @@ export async function runMasterSpecsBackfillWith(
         }
       }
       catalogUpdated++;
+      if (w.changes) {
+        logDiff(
+          `[Canonical Specs] ${w.modelKey}: ${apply ? 'changed' : 'would change'}`,
+          w.modelKey,
+          w.changes
+        );
+      }
       logger.info(
         'backfill.canonical_updated',
         `[Canonical Specs] ${w.name} (${w.modelKey}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
