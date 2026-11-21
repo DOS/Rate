@@ -17,11 +17,11 @@ import {
 } from '@/server/rate/item-page';
 import {
   buildItemProductGroupNode,
+  buildPeerCompareHref,
   buildPeerItemSlugMap,
   itemVariantLabel,
   itemFromStats,
   resolveCanonicalPeerSlug,
-  resolvePeerCompareToken,
   resolvePeerVersusHref,
   withoutCurrentItemPeers,
 } from '@/lib/item-page';
@@ -966,21 +966,28 @@ export async function ProductDetailView({
     { slug: product.slug, itemSlug: currentItemSlug },
     relatedCompetitors
   );
-  const currentCompareToken = resolvePeerCompareToken({
+  const hasMultipleRouteVariants =
+    isItemGroup ||
+    (itemRoute?.kind === 'render' && itemRoute.variants.length > 1);
+  const currentCompareRow = {
     id: product.id,
     slug: product.slug,
     item_slug: currentItemSlug,
-    ...(isItemGroup && defaultVariantKey
+    ...(hasMultipleRouteVariants && defaultVariantKey
       ? { variant_key: defaultVariantKey }
       : {}),
-  });
-  const compareAllTokens = [
-    currentCompareToken,
-    ...relatedCompetitors.map((c) => resolvePeerCompareToken(c)),
-  ]
-    .filter(Boolean)
-    .slice(0, 4)
-    .map((token) => encodeURIComponent(token).replace(/%40/gi, '@'));
+  };
+  const singleCompareHref = buildPeerCompareHref(
+    categorySlug,
+    [currentCompareRow],
+    1
+  );
+  const compareAllHref = buildPeerCompareHref(
+    categorySlug,
+    [currentCompareRow, ...relatedCompetitors],
+    4
+  );
+  const compareAllCount = Math.min(4, relatedCompetitors.length + 1);
 
   return (
     <ClientMessages scope="productDetail">
@@ -1431,7 +1438,7 @@ export async function ProductDetailView({
                     {t('tenSpecGroupsBtn')}
                   </a>
                   <Link
-                    href={`/compare?slugs=${encodeURIComponent(currentCompareToken).replace(/%40/gi, '@')}`}
+                    href={singleCompareHref}
                     className="btn btn-outline-light"
                   >
                     {t('headToHeadCompareBtn')}
@@ -1691,11 +1698,11 @@ export async function ProductDetailView({
                     {t('dealHub10PlatformsBtn')}
                   </Link>
                   <Link
-                    href={`/compare?slugs=${compareAllTokens.join(',')}`}
+                    href={compareAllHref}
                     className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
                   >
                     {t('compareAllPeersBtn', {
-                      count: compareAllTokens.length,
+                      count: compareAllCount,
                     })}
                   </Link>
                 </div>
@@ -1710,25 +1717,31 @@ export async function ProductDetailView({
                     slug: peer.slug,
                     item_slug: catalogRowSlug(peer),
                   });
-                  const peerDetailHref = `${categoryBasePath}/${encodeURIComponent(peerCanonicalSlug)}`;
-                  const rawVersusHref = peerItemSlugMap
+                  const peerDetailHref = peerCanonicalSlug
+                    ? `${categoryBasePath}/${encodeURIComponent(peerCanonicalSlug)}`
+                    : categoryBasePath;
+                  const resolvedVersusHref = resolvePeerVersusHref(
+                    product.slug,
+                    peer.slug,
+                    peerItemSlugMap
+                  );
+                  const fallbackVersusHref = peerItemSlugMap
                     ? versusHref(product.slug, peer.slug, peerItemSlugMap)
                     : versusHref(product.slug, peer.slug);
-                  const rawVersusSides = rawVersusHref
+                  const candidateVersusHref =
+                    resolvedVersusHref ??
+                    (peerItemSlugMap ? null : fallbackVersusHref);
+                  const candidateVersusSides = (candidateVersusHref ?? '')
                     .replace(/^\/compare\//, '')
                     .split('-vs-');
                   const peerVersusHref =
-                    resolvePeerVersusHref(
-                      product.slug,
-                      peer.slug,
-                      peerItemSlugMap
-                    ) &&
-                    rawVersusSides.length === 2 &&
+                    resolvedVersusHref &&
+                    candidateVersusSides.length === 2 &&
                     isParseableVersusPair(
-                      rawVersusSides[0]!,
-                      rawVersusSides[1]!
+                      candidateVersusSides[0]!,
+                      candidateVersusSides[1]!
                     )
-                      ? rawVersusHref
+                      ? resolvedVersusHref
                       : null;
                   const peerPrice = Number(peer.min_price || 0);
                   const priceDelta = peerPriceDelta(peerPrice, currentMinPrice);

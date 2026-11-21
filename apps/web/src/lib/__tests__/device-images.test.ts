@@ -381,8 +381,15 @@ async function main() {
     groupNode.hasVariant![0]!.image![0],
     'ImageObject records are cloned per node'
   );
+  assert.notEqual(
+    (groupNode.image![0] as { creator?: unknown }).creator,
+    (groupNode.hasVariant![0]!.image![0] as { creator?: unknown }).creator,
+    'nested creator objects are cloned per node'
+  );
 
-  // Fallback when default variant has no images but a priced variant does:
+  // Fallback when default variant has no images (`input.images = []`) on a
+  // multi-variant Item: BOTH ProductGroup and priced variants without custom
+  // images inherit the fallback ImageObject, and null contentUrl is stripped.
   const fallbackGroupNode = buildItemProductGroupNode({
     itemKey: 'brand:sample-phone',
     name: 'Sample Phone',
@@ -391,6 +398,13 @@ async function main() {
     description: 'Sample multi-size Item',
     images: [],
     variants: [
+      {
+        variantKey: '256gb',
+        label: '256GB',
+        minPrice: 19_990_000,
+        maxPrice: 20_990_000,
+        sellerCount: 2,
+      },
       {
         variantKey: '512gb',
         label: '512GB',
@@ -401,19 +415,49 @@ async function main() {
           {
             '@type': 'ImageObject',
             contentUrl: '  https://rate.vn/img/devices/sample-phone.jpg  ',
+            creator: { '@type': 'Person', name: 'Fallback Author' },
             license: 'https://creativecommons.org/licenses/by-sa/4.0/',
+          },
+          {
+            '@type': 'ImageObject',
+            contentUrl: null,
+            url: '  https://rate.vn/img/devices/sample-phone-alt.jpg  ',
           },
         ],
       },
     ],
-  }) as { image?: unknown[] };
-  assert.deepEqual(fallbackGroupNode.image, [
+  }) as {
+    image?: unknown[];
+    hasVariant?: { sku: string; image?: unknown[] }[];
+  };
+  const expectedFallbackImages = [
     {
       '@type': 'ImageObject',
       contentUrl: 'https://rate.vn/img/devices/sample-phone.jpg',
+      creator: { '@type': 'Person', name: 'Fallback Author' },
       license: 'https://creativecommons.org/licenses/by-sa/4.0/',
     },
-  ]);
+    {
+      '@type': 'ImageObject',
+      url: 'https://rate.vn/img/devices/sample-phone-alt.jpg',
+    },
+  ];
+  assert.deepEqual(fallbackGroupNode.image, expectedFallbackImages);
+  assert.equal(fallbackGroupNode.hasVariant?.length, 2);
+  assert.deepEqual(
+    fallbackGroupNode.hasVariant![0]!.image,
+    expectedFallbackImages,
+    'preceding priced variant without custom images inherits fallbackGroupImages'
+  );
+  assert.deepEqual(
+    fallbackGroupNode.hasVariant![1]!.image,
+    expectedFallbackImages
+  );
+  assert.equal(
+    'contentUrl' in (fallbackGroupNode.image![1] as Record<string, unknown>),
+    false,
+    'null contentUrl is stripped when url is present'
+  );
 
   // ProductDetailView passes jsonLdProductImages (with deviceImageJsonLd) into
   // buildItemProductGroupNode rather than plain URL strings (#1819).

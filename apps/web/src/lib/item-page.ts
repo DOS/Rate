@@ -7,6 +7,7 @@ import {
   canonicalVersusOrder,
   isParseableVersusPair,
   itemSlugFromProductAnswer,
+  parseCompareToken,
   versusHref,
 } from './item-compare';
 
@@ -91,6 +92,48 @@ export interface ItemPeerCurrentContext {
 
 const COMPARE_PIN_TOKEN_REGEX =
   /^[a-z0-9][a-z0-9._-]{0,159}@[a-z0-9][a-z0-9-]{0,40}$/i;
+const SAFE_CATALOG_SLUG_REGEX = /^(?=.*[a-zA-Z0-9])[a-zA-Z0-9._-]{1,120}$/;
+const UNSAFE_CATALOG_SLUG_KEYS = new Set([
+  '0',
+  'null',
+  'undefined',
+  'nan',
+  'none',
+  'na',
+  'infinity',
+  '-infinity',
+  'false',
+  'true',
+  '__proto__',
+  'constructor',
+  'prototype',
+  'tostring',
+  'tolocalestring',
+  'valueof',
+  'hasownproperty',
+  'isprototypeof',
+  'propertyisenumerable',
+  ...Object.getOwnPropertyNames(Object.prototype).map((key) =>
+    key.toLowerCase()
+  ),
+]);
+
+function stripControlAndTrim(raw: unknown): string {
+  return typeof raw === 'string' ? raw.replace(/\p{Cc}+/gu, '').trim() : '';
+}
+
+function isSafeCatalogSlugToken(slug: string): boolean {
+  return (
+    Boolean(slug) &&
+    SAFE_CATALOG_SLUG_REGEX.test(slug) &&
+    !/^0+$/.test(slug) &&
+    !slug.startsWith('.') &&
+    !slug.endsWith('.') &&
+    !slug.includes('..') &&
+    !(slug in Object.prototype) &&
+    !UNSAFE_CATALOG_SLUG_KEYS.has(slug.toLowerCase())
+  );
+}
 
 function isValidVersusSlugToken(slug: string): boolean {
   return (
@@ -124,31 +167,33 @@ function getOwnSlugEntry(
   if (!map || !key || !Object.prototype.hasOwnProperty.call(map, key)) {
     return undefined;
   }
-  const value = map[key];
-  return typeof value === 'string' && value.trim().length > 0
-    ? value.trim()
-    : undefined;
+  const clean = stripControlAndTrim(map[key]);
+  return clean.length > 0 ? clean : undefined;
 }
 
 /**
  * The canonical slug a catalogue row links to under `/{category}/{slug}`:
  * its Item slug when valid (preserving mixed case, dots and underscores),
- * falling back to the variant slug when unlinked or malformed (DOS/Rate#1819).
+ * falling back to the validated variant slug when unlinked or malformed,
+ * or `''` when neither is a safe catalogue slug (DOS/Rate#1819).
  */
 export function resolveCanonicalPeerSlug(row: {
   slug: string;
   item_slug?: string | null;
 }): string {
-  const fallback = typeof row?.slug === 'string' ? row.slug.trim() : '';
-  const candidate = catalogRowSlug({
-    slug: fallback,
-    ...(typeof row?.item_slug === 'string' ? { item_slug: row.item_slug } : {}),
-  }).trim();
-  if (!candidate || candidate === fallback) return fallback;
-  return itemSlugFromProductAnswer(
-    { ok: true, data: { item: { slug: candidate } } },
-    fallback
+  const rawFallback = stripControlAndTrim(row?.slug);
+  const safeFallback = isSafeCatalogSlugToken(rawFallback) ? rawFallback : '';
+  const rawItemSlug = stripControlAndTrim(row?.item_slug);
+  const candidate = stripControlAndTrim(
+    catalogRowSlug({
+      slug: safeFallback,
+      ...(rawItemSlug ? { item_slug: rawItemSlug } : {}),
+    })
   );
+  if (candidate && isValidVersusSlugToken(candidate)) {
+    return candidate;
+  }
+  return safeFallback;
 }
 
 /**
@@ -166,7 +211,7 @@ export function withoutCurrentItemPeers<
   if (!Array.isArray(peers)) return [];
   const skipSlugs = new Set<string>();
   const addSlug = (raw: string | null | undefined) => {
-    const clean = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+    const clean = stripControlAndTrim(raw).toLowerCase();
     if (clean) skipSlugs.add(clean);
   };
   addSlug(current.productSlug);
@@ -177,7 +222,7 @@ export function withoutCurrentItemPeers<
 
   const skipIds = new Set<string>();
   const addId = (raw: string | null | undefined) => {
-    const clean = typeof raw === 'string' ? raw.trim() : '';
+    const clean = stripControlAndTrim(raw);
     if (clean) skipIds.add(clean);
   };
   addId(current.productId);
@@ -196,22 +241,21 @@ export function withoutCurrentItemPeers<
     ) {
       continue;
     }
-    const rawSlug = peer.slug.trim();
+    const rawSlug = stripControlAndTrim(peer.slug);
     if (!rawSlug) continue;
-    const peerId = typeof peer.id === 'string' ? peer.id.trim() : '';
+    const peerId = stripControlAndTrim(peer.id);
     if (peerId && skipIds.has(peerId)) continue;
     if (skipSlugs.has(rawSlug.toLowerCase())) continue;
 
-    const rawItemSlug =
-      typeof peer.item_slug === 'string' ? peer.item_slug.trim() : '';
+    const rawItemSlug = stripControlAndTrim(peer.item_slug);
     if (rawItemSlug && skipSlugs.has(rawItemSlug.toLowerCase())) continue;
     const rawVariants = peer.item_variants;
     if (
       Array.isArray(rawVariants) &&
-      rawVariants.some(
-        (v: { id?: unknown }) =>
-          Boolean(v) && typeof v.id === 'string' && skipIds.has(v.id.trim())
-      )
+      rawVariants.some((v: { id?: unknown }) => {
+        const vid = v ? stripControlAndTrim(v.id) : '';
+        return Boolean(vid) && skipIds.has(vid);
+      })
     ) {
       continue;
     }
@@ -234,10 +278,8 @@ export function buildPeerItemSlugMap(
 ): Record<string, string> | null {
   const map = Object.create(null) as Record<string, string>;
   let count = 0;
-  const currentSlug =
-    typeof current.slug === 'string' ? current.slug.trim() : '';
-  const currentItem =
-    typeof current.itemSlug === 'string' ? current.itemSlug.trim() : '';
+  const currentSlug = stripControlAndTrim(current.slug);
+  const currentItem = stripControlAndTrim(current.itemSlug);
   if (currentSlug && currentItem) {
     setOwnSlugEntry(map, currentSlug, currentItem);
     count++;
@@ -245,9 +287,8 @@ export function buildPeerItemSlugMap(
   if (Array.isArray(peers)) {
     for (const peer of peers) {
       if (!peer || typeof peer.slug !== 'string') continue;
-      const slug = peer.slug.trim();
-      const itemSlug =
-        typeof peer.item_slug === 'string' ? peer.item_slug.trim() : '';
+      const slug = stripControlAndTrim(peer.slug);
+      const itemSlug = stripControlAndTrim(peer.item_slug);
       if (slug && itemSlug && !getOwnSlugEntry(map, slug)) {
         setOwnSlugEntry(map, slug, itemSlug);
         count++;
@@ -267,8 +308,8 @@ export function resolvePeerVersusHref(
   slugB: string,
   itemSlugBySlug?: Readonly<Record<string, string>> | null
 ): string | null {
-  const cleanA = typeof slugA === 'string' ? slugA.trim() : '';
-  const cleanB = typeof slugB === 'string' ? slugB.trim() : '';
+  const cleanA = stripControlAndTrim(slugA);
+  const cleanB = stripControlAndTrim(slugB);
   if (!cleanA || !cleanB || cleanA.toLowerCase() === cleanB.toLowerCase()) {
     return null;
   }
@@ -319,37 +360,106 @@ export function resolvePeerVersusHref(
     : versusHref(cleanA, cleanB);
 }
 
-/**
- * Multi-item `/compare?slugs=` token for a product or grouped Item row: pins
- * multi-size Items as `itemSlug@variantKey` so both Item and fallback compare
- * routes resolve the exact standing size without ambiguity (#1819).
- */
-export function resolvePeerCompareToken(row: {
+export interface PeerCompareRowInput {
   id?: string;
   slug: string;
   item_slug?: string | null;
   variant_key?: string | null;
   item_variants?: readonly { id: string; variant_key: string }[];
-}): string {
-  const rawSlug = typeof row.slug === 'string' ? row.slug.trim() : '';
+}
+
+/**
+ * Multi-item `/compare?slugs=` token for a product or grouped Item row: pins
+ * multi-size Items (including shared-slug Items) as `itemSlug@variantKey` so
+ * compare resolves the exact standing size (#1819).
+ */
+export function resolvePeerCompareToken(row: PeerCompareRowInput): string {
+  const rawSlug = stripControlAndTrim(row?.slug);
+  const safeSlug = isSafeCatalogSlugToken(rawSlug) ? rawSlug : '';
+  const rawItemSlug = stripControlAndTrim(row?.item_slug);
+  const hasValidItem = Boolean(
+    rawItemSlug && isValidVersusSlugToken(rawItemSlug)
+  );
   const canonical = resolveCanonicalPeerSlug(row);
   if (
+    hasValidItem &&
     canonical &&
-    canonical !== rawSlug &&
     ((Array.isArray(row.item_variants) && row.item_variants.length > 1) ||
-      Boolean(row.variant_key))
+      Boolean(cleanVariantKey(row.variant_key)))
   ) {
+    const cleanId = stripControlAndTrim(row.id);
     const matchedKey =
       cleanVariantKey(row.variant_key) ??
       cleanVariantKey(
-        row.id && Array.isArray(row.item_variants)
-          ? row.item_variants.find((v) => v.id === row.id)?.variant_key
+        cleanId && Array.isArray(row.item_variants)
+          ? row.item_variants.find((v) => stripControlAndTrim(v.id) === cleanId)
+              ?.variant_key
           : null
       );
     const pinned = matchedKey ? `${canonical}@${matchedKey}` : '';
-    return pinned && COMPARE_PIN_TOKEN_REGEX.test(pinned) ? pinned : rawSlug;
+    return pinned && COMPARE_PIN_TOKEN_REGEX.test(pinned) ? pinned : safeSlug;
   }
-  return canonical || rawSlug;
+  return canonical || safeSlug;
+}
+
+/**
+ * Multi-item `/compare` link with `cat=<categorySlug>` and `variant.<token>`
+ * fallback hints when `legacyTarget` would not directly infer `variantSlug`
+ * (e.g. `1024gb` -> `-1tb`, `standard`, shared-slug multi-size Items, or
+ * single-size retail aliases; DOS/Rate#1782, #1819).
+ */
+export function buildPeerCompareHref(
+  categorySlug: string,
+  rows: readonly PeerCompareRowInput[],
+  limit = 4
+): string {
+  const safeCategory = stripControlAndTrim(categorySlug) || 'smartphones';
+  const safeLimit =
+    typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+      ? Math.min(4, Math.floor(limit))
+      : 4;
+  const entries: Array<{ token: string; variantSlug: string }> = [];
+  const seenTokens = new Set<string>();
+  const seenVariants = new Set<string>();
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      if (!row || typeof row.slug !== 'string') continue;
+      const rawVariantSlug = stripControlAndTrim(row.slug);
+      if (!isSafeCatalogSlugToken(rawVariantSlug)) continue;
+      const token = resolvePeerCompareToken(row);
+      if (!token) continue;
+      const tokenKey = token.toLowerCase();
+      const variantKey = rawVariantSlug.toLowerCase();
+      if (seenTokens.has(tokenKey) || seenVariants.has(variantKey)) continue;
+      seenTokens.add(tokenKey);
+      seenVariants.add(variantKey);
+      entries.push({ token, variantSlug: rawVariantSlug });
+      if (entries.length >= safeLimit) break;
+    }
+  }
+  const slugs = entries
+    .map(({ token }) => encodeURIComponent(token).replace(/%40/gi, '@'))
+    .join(',');
+  const fallbacks = new URLSearchParams();
+  const needsFallback = entries.some(({ token, variantSlug }) => {
+    const { slug, variantKey } = parseCompareToken(token);
+    const master = variantSlug.toLowerCase();
+    if (!variantKey) return master !== slug;
+    return (
+      variantKey === 'standard' ||
+      slug.endsWith(`-${variantKey}`) ||
+      `${slug}-${variantKey}` !== master
+    );
+  });
+  if (needsFallback) {
+    for (const { token, variantSlug } of entries) {
+      if (token !== variantSlug) {
+        fallbacks.set(`variant.${token.toLowerCase()}`, variantSlug);
+      }
+    }
+  }
+  const baseHref = `/compare?cat=${encodeURIComponent(safeCategory)}&slugs=${slugs}`;
+  return fallbacks.size > 0 ? `${baseHref}&${fallbacks}` : baseHref;
 }
 
 export type ItemJsonLdImage = string | Record<string, unknown>;
@@ -373,15 +483,13 @@ function normalizeItemJsonLdImage(
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
     return null;
   }
-  const rawContentUrl = Object.prototype.hasOwnProperty.call(
+  const hasContentUrl = Object.prototype.hasOwnProperty.call(
     entry,
     'contentUrl'
-  )
-    ? entry.contentUrl
-    : undefined;
-  const rawUrl = Object.prototype.hasOwnProperty.call(entry, 'url')
-    ? entry.url
-    : undefined;
+  );
+  const hasUrl = Object.prototype.hasOwnProperty.call(entry, 'url');
+  const rawContentUrl = hasContentUrl ? entry.contentUrl : undefined;
+  const rawUrl = hasUrl ? entry.url : undefined;
   const contentUrl =
     typeof rawContentUrl === 'string' ? rawContentUrl.trim() : '';
   const url = typeof rawUrl === 'string' ? rawUrl.trim() : '';
@@ -389,11 +497,11 @@ function normalizeItemJsonLdImage(
     return null;
   }
   const copy: Record<string, unknown> = { ...entry };
-  if (typeof rawContentUrl === 'string') {
+  if (hasContentUrl) {
     if (contentUrl) copy.contentUrl = contentUrl;
     else delete copy.contentUrl;
   }
-  if (typeof rawUrl === 'string') {
+  if (hasUrl) {
     if (url) copy.url = url;
     else delete copy.url;
   }
@@ -451,43 +559,46 @@ export function buildItemProductGroupNode(input: {
   aggregateRating?: Record<string, unknown> | null;
 }): Record<string, unknown> {
   const images = normalizeItemJsonLdImages(input.images);
-  let fallbackGroupImages: ItemJsonLdImage[] = [];
-  const hasVariant = input.variants
+  const pricedVariants = input.variants
     .filter((v) => Number.isFinite(v.minPrice) && v.minPrice > 0)
-    .map((v) => {
-      const rawSellers = Number(v.sellerCount);
-      const offerCount = Number.isFinite(rawSellers)
-        ? Math.max(1, Math.floor(rawSellers))
-        : 1;
-      const highPrice =
-        Number.isFinite(v.maxPrice) && v.maxPrice > v.minPrice
-          ? v.maxPrice
-          : v.minPrice;
-      const variantImages = normalizeItemJsonLdImages(v.images);
-      if (fallbackGroupImages.length === 0 && variantImages.length > 0) {
-        fallbackGroupImages = variantImages;
-      }
-      const effectiveImages = variantImages.length > 0 ? variantImages : images;
-      return {
-        '@type': 'Product',
-        name: `${input.name} ${v.label}`,
-        sku: `${input.itemKey}:${v.variantKey}`,
-        inProductGroupWithID: input.itemKey,
-        size: v.label,
-        url: `${input.canonicalUrl}?v=${encodeURIComponent(v.variantKey)}`,
-        ...(effectiveImages.length > 0
-          ? { image: effectiveImages.map(cloneItemJsonLdImage) }
-          : {}),
-        offers: {
-          '@type': 'AggregateOffer',
-          priceCurrency: 'VND',
-          lowPrice: v.minPrice,
-          highPrice,
-          offerCount,
-        },
-      };
-    });
+    .map((v) => ({
+      variant: v,
+      variantImages: normalizeItemJsonLdImages(v.images),
+    }));
+  const fallbackGroupImages =
+    pricedVariants.find((entry) => entry.variantImages.length > 0)
+      ?.variantImages ?? [];
   const groupImages = images.length > 0 ? images : fallbackGroupImages;
+  const hasVariant = pricedVariants.map(({ variant: v, variantImages }) => {
+    const rawSellers = Number(v.sellerCount);
+    const offerCount = Number.isFinite(rawSellers)
+      ? Math.max(1, Math.floor(rawSellers))
+      : 1;
+    const highPrice =
+      Number.isFinite(v.maxPrice) && v.maxPrice > v.minPrice
+        ? v.maxPrice
+        : v.minPrice;
+    const effectiveImages =
+      variantImages.length > 0 ? variantImages : groupImages;
+    return {
+      '@type': 'Product',
+      name: `${input.name} ${v.label}`,
+      sku: `${input.itemKey}:${v.variantKey}`,
+      inProductGroupWithID: input.itemKey,
+      size: v.label,
+      url: `${input.canonicalUrl}?v=${encodeURIComponent(v.variantKey)}`,
+      ...(effectiveImages.length > 0
+        ? { image: effectiveImages.map(cloneItemJsonLdImage) }
+        : {}),
+      offers: {
+        '@type': 'AggregateOffer',
+        priceCurrency: 'VND',
+        lowPrice: v.minPrice,
+        highPrice,
+        offerCount,
+      },
+    };
+  });
   return {
     '@type': 'ProductGroup',
     name: input.name,

@@ -9,6 +9,7 @@ import {
   rankRelatedCompetitors,
 } from '../product-competitors';
 import {
+  buildPeerCompareHref,
   buildPeerItemSlugMap,
   resolveCanonicalPeerSlug,
   resolvePeerCompareToken,
@@ -680,8 +681,67 @@ async function main() {
     assert.equal(resolvePeerCompareToken(rankedOn[2]!), 'xiaomi-15-ultra');
     assert.equal(resolvePeerCompareToken(rankedOn[3]!), 'google-pixel-10-pro');
 
-    // 5. Edge-case guards: unsafe Item slugs, prototype keys, same-Item pairs,
-    //    `-vs` suffix reversal, and unparseable `-vs` collisions.
+    // Shared-slug multi-size Item (`item_slug === slug`) still pins `@variantKey`
+    // so `/compare` selects the standing size instead of `default_variant_id`.
+    assert.equal(
+      resolvePeerCompareToken({
+        id: 'v-base-256',
+        slug: 'base',
+        item_slug: 'base',
+        item_variants: [
+          { id: 'v-base-256', variant_key: '256gb' },
+          { id: 'v-base-512', variant_key: '512gb' },
+        ],
+      }),
+      'base@256gb'
+    );
+
+    // `buildPeerCompareHref` preserves category (`cat=`) and appends
+    // `variant.<token>=<slug>` fallback hints for irregular / 1TB / shared-slug
+    // / retail-alias masters while staying clean when pins match directly.
+    assert.equal(
+      buildPeerCompareHref('smartphones', [
+        {
+          id: currentProduct.id,
+          slug: 'apple-iphone-16-pro-256gb',
+          item_slug: 'apple-iphone-16-pro',
+          variant_key: '256gb',
+        },
+        {
+          id: V_S25_256,
+          slug: 'samsung-galaxy-s25-ultra-256gb',
+          item_slug: 'samsung-galaxy-s25-ultra',
+          variant_key: '256gb',
+        },
+      ]),
+      '/compare?cat=smartphones&slugs=apple-iphone-16-pro@256gb,samsung-galaxy-s25-ultra@256gb'
+    );
+    assert.equal(
+      buildPeerCompareHref('laptops', [
+        {
+          id: 'v-1tb',
+          slug: 'macbook-pro-14-1tb',
+          item_slug: 'macbook-pro-14',
+          variant_key: '1024gb',
+        },
+        {
+          id: 'v-base-256',
+          slug: 'base',
+          item_slug: 'base',
+          variant_key: '256gb',
+        },
+      ]),
+      '/compare?cat=laptops&slugs=macbook-pro-14@1024gb,base@256gb&variant.macbook-pro-14%401024gb=macbook-pro-14-1tb&variant.base%40256gb=base'
+    );
+
+    // `nullable_variant` mode groups identically to `item` mode:
+    process.env.RATE_ITEM_MODEL = 'nullable_variant';
+    const groupedNullable = await groupCatalogRowsByItem(storedCategoryPeers);
+    assert.equal(groupedNullable.length, groupedOn.length);
+
+    // 5. Edge-case guards: unsafe Item & fallback slugs, control characters,
+    //    prototype keys, same-Item pairs, `-vs` suffix reversal, and unparseable
+    //    `-vs` collisions.
     for (const unsafe of [
       '../evil',
       'a/b',
@@ -699,7 +759,34 @@ async function main() {
         'safe-peer-slug',
         `unsafe item_slug ${unsafe} falls back to variant slug`
       );
+      assert.equal(
+        resolveCanonicalPeerSlug({
+          slug: unsafe,
+          item_slug: unsafe,
+        }),
+        '',
+        `unsafe fallback slug ${unsafe} returns empty string`
+      );
     }
+    assert.equal(resolveCanonicalPeerSlug({ slug: '..' }), '');
+    assert.equal(
+      resolveCanonicalPeerSlug({ slug: '_retail-1tb' }),
+      '_retail-1tb',
+      'underscore-prefixed legacy master slug remains valid'
+    );
+    assert.deepEqual(
+      withoutCurrentItemPeers(
+        [
+          { slug: 'apple-iphone-16-pro-256gb\u0000' },
+          { slug: '..' },
+          { slug: 'constructor', item_slug: 'constructor' },
+          { slug: 'valid-rival-phone\u0000' },
+        ],
+        { productSlug: 'apple-iphone-16-pro-256gb' }
+      ).map((p) => resolveCanonicalPeerSlug(p)),
+      ['valid-rival-phone'],
+      'strips control chars when matching skipSlugs and drops unsafe slugs'
+    );
     const protoMap = buildPeerItemSlugMap(
       { slug: '__proto__', itemSlug: 'safe-item-a' },
       [{ slug: 'constructor', item_slug: 'safe-item-b' }]
