@@ -20,6 +20,11 @@ import {
   resolveSafeApiRelativeUrl,
 } from '../security-guards.js';
 import { contentTextHtml, escapeHtml, t, type MessageKey } from '../i18n.js';
+import {
+  encodeSurrogateSafeUriComponent,
+  sliceCodePoints,
+  stripLoneSurrogates,
+} from '../surrogate-safe.js';
 
 export { escapeHtml };
 
@@ -357,10 +362,12 @@ export function renderNotFoundHtml(
   apiBaseUrl: string,
   accessory: boolean
 ): string {
-  const query = String(signal.title ?? '').trim();
+  const query = sliceCodePoints(String(signal.title ?? '').trim(), 500).trim();
   const searchUrl = resolveSafeApiRelativeUrl(
     apiBaseUrl,
-    query ? `/inspect?q=${encodeURIComponent(query)}` : '/inspect',
+    query
+      ? `/inspect?q=${encodeSurrogateSafeUriComponent(query, 500)}`
+      : '/inspect',
     '/inspect'
   );
   return `
@@ -404,7 +411,7 @@ export function renderLookupErrorHtml(
   productTitle?: string | null,
   retryAfterSeconds?: number | null
 ): string {
-  const title = String(productTitle ?? '').trim();
+  const title = stripLoneSurrogates(String(productTitle ?? '')).trim();
   // A rate limit says how long to wait when the server said so (DOS/Rate#1466).
   const wait =
     kind === 'rate_limited' &&
@@ -432,6 +439,7 @@ export function renderLookupErrorHtml(
 export interface PanelActionLink {
   href: string;
   label: string;
+  icon?: string;
   primary?: boolean;
 }
 
@@ -445,10 +453,12 @@ export function renderActionRowsHtml(links: PanelActionLink[]): string {
   for (let i = 0; i < links.length; i += 2) {
     const cells = links
       .slice(i, i + 2)
-      .map(
-        (l) =>
-          `<a class="${l.primary ? 'btn-primary' : 'btn-secondary'}" href="${l.href}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label)}</a>`
-      )
+      .map((l) => {
+        const iconHtml = l.icon
+          ? `<span aria-hidden="true">${escapeHtml(l.icon)} </span>`
+          : '';
+        return `<a class="${l.primary ? 'btn-primary' : 'btn-secondary'}" href="${l.href}" target="_blank" rel="noopener noreferrer">${iconHtml}${escapeHtml(l.label)}</a>`;
+      })
       .join('\n        ');
     rows.push(
       `<div class="btn-row"${i > 0 ? ' style="margin-top: 6px;"' : ''}>

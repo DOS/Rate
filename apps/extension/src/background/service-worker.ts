@@ -24,6 +24,8 @@ import {
   ONBOARDING_PAGE_PATH,
   sanitizeExtensionProductSignal,
   selectFreshestSessionSignal,
+  sliceCodePoints,
+  stripLoneSurrogates,
 } from '../security-guards.js';
 import { LookupCooldown } from '../rate-limit.js';
 import {
@@ -217,6 +219,7 @@ let fullLookupRequestCounter = 0;
 const latestFullLookupByTab = new Map<number, number>();
 let latestSelectionCounter = 0;
 let latestPageSelectionCounter = 0;
+let settingsUpdateChain: Promise<void> = Promise.resolve();
 let pendingQuickQueryReceipt: {
   updatedAt: number;
   apiBaseUrl: string;
@@ -865,10 +868,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const cleanedVariant =
           typeof message.selectedVariant === 'string'
-            ? message.selectedVariant
-                .replace(/\p{Cc}+/gu, ' ')
-                .trim()
-                .slice(0, 200)
+            ? sliceCodePoints(
+                stripLoneSurrogates(message.selectedVariant)
+                  .replace(/\p{Cc}+/gu, ' ')
+                  .trim(),
+                200
+              )
             : '';
         const overrideVariant = cleanedVariant || null;
         const [activeTab] = await chrome.tabs.query({
@@ -1061,10 +1066,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const rawQuery =
           typeof message.query === 'string'
-            ? message.query
-                .replace(/\p{Cc}+/gu, ' ')
-                .trim()
-                .slice(0, 500)
+            ? sliceCodePoints(
+                stripLoneSurrogates(message.query)
+                  .replace(/\p{Cc}+/gu, ' ')
+                  .trim(),
+                500
+              )
             : '';
         const settings = await getSettings();
         if (!rawQuery) {
@@ -1190,7 +1197,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return false;
     }
-    (async () => {
+    const runSettingsUpdate = async (): Promise<void> => {
       try {
         const nextSettings: Partial<ExtensionSettings> = {};
         let serverChanged = false;
@@ -1232,7 +1239,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           error: err instanceof Error ? err.message : 'Settings update failed',
         });
       }
-    })();
+    };
+    settingsUpdateChain = settingsUpdateChain.then(
+      runSettingsUpdate,
+      runSettingsUpdate
+    );
     return true;
   }
 

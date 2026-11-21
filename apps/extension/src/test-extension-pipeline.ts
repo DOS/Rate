@@ -9701,6 +9701,1233 @@ async function runTests() {
       }
     }
   }
+
+  // DOS/Rate#1812: surrogate-safe code-point truncation, side panel consent version sync,
+  // settings UI rollback + cleared inpApiBase default restore, and Deal Radar UI/a11y fixes.
+  {
+    const {
+      encodeSurrogateSafeUriComponent,
+      sliceCodePoints,
+      stripLoneSurrogates,
+    } = await import('./surrogate-safe.js');
+    const {
+      buildExtensionObservationV1,
+      buildLookupParams,
+      sanitizeExtensionProductSignal,
+    } = await import('./security-guards.js');
+    const { renderActionRowsHtml, renderLookupErrorHtml, renderNotFoundHtml } =
+      await import('./sidepanel/panel-view.js');
+    const { t } = await import('./i18n.js');
+
+    const hasLoneSurrogate = (s: string) =>
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(
+        s
+      );
+
+    // 1. Surrogate-safe helpers & astral boundary truncation (200 / 500 limits).
+    assert.equal(stripLoneSurrogates(null), '');
+    assert.equal(stripLoneSurrogates(42), '');
+    assert.equal(
+      stripLoneSurrogates('\uD83DiPhone \uDC00🔥\uDC00\uD800 16\uD83D'),
+      'iPhone 🔥 16'
+    );
+    assert.equal(sliceCodePoints('abc', 0), '');
+    assert.equal(sliceCodePoints('abc', -5), '');
+    assert.equal(sliceCodePoints('abc', Number.NaN), '');
+
+    const titleStraddling500 = `${'a'.repeat(499)}🔥 extra`;
+    // Verify raw UTF-16 .slice(0, 500) would split the surrogate pair and throw URIError.
+    assert.equal(hasLoneSurrogate(titleStraddling500.slice(0, 500)), true);
+    assert.throws(
+      () => encodeURIComponent(titleStraddling500.slice(0, 500)),
+      URIError
+    );
+
+    const safe500 = sliceCodePoints(titleStraddling500, 500);
+    assert.equal(safe500, `${'a'.repeat(499)}🔥`);
+    assert.equal(Array.from(safe500).length, 500);
+    assert.equal(hasLoneSurrogate(safe500), false);
+    assert.doesNotThrow(() => encodeURIComponent(safe500));
+    assert.equal(
+      encodeSurrogateSafeUriComponent(titleStraddling500, 500),
+      `${'a'.repeat(499)}%F0%9F%94%A5`
+    );
+
+    const boldMathTitle = `${'𝗶'.repeat(505)} | Shopee VN`;
+    const cleanedMathTitle = cleanExtractedProductTitle(boldMathTitle);
+    assert.equal(Array.from(cleanedMathTitle).length, 500);
+    assert.equal(hasLoneSurrogate(cleanedMathTitle), false);
+    assert.doesNotThrow(() => encodeURIComponent(cleanedMathTitle));
+
+    const cleanedStraddleNoPipe = cleanExtractedProductTitle(
+      `${'x'.repeat(499)}🔥 tail | Lazada VN`
+    );
+    assert.equal(cleanedStraddleNoPipe, `${'x'.repeat(499)}🔥`);
+    assert.equal(hasLoneSurrogate(cleanedStraddleNoPipe), false);
+    assert.doesNotThrow(() => encodeURIComponent(cleanedStraddleNoPipe));
+
+    const cleanedStraddleWithPipe = cleanExtractedProductTitle(
+      `${'y'.repeat(493)} | 256GB🔥 | Tiki.vn`
+    );
+    // 'y'*493 + ' 256GB' = 499 BMP chars + '🔥' = 500 code points (straddling UTF-16 index 500).
+    assert.equal(cleanedStraddleWithPipe, `${'y'.repeat(493)} 256GB🔥`);
+    assert.equal(hasLoneSurrogate(cleanedStraddleWithPipe), false);
+    assert.doesNotThrow(() => encodeURIComponent(cleanedStraddleWithPipe));
+
+    const cleanedLoneSurrogateTitle = cleanExtractedProductTitle(
+      'Điện thoại \uD83D iPhone 16 Pro \uDC00 | Shopee'
+    );
+    assert.equal(cleanedLoneSurrogateTitle, 'Điện thoại iPhone 16 Pro');
+
+    // Variant straddling the 200-char limit in extractSelectedVariantFromDom & security-guards.
+    const variantDomStraddle = {
+      querySelectorAll: (sel: string) =>
+        sel === 'button.product-variation--selected'
+          ? [
+              { textContent: 'A'.repeat(55) },
+              { textContent: 'B'.repeat(55) },
+              { textContent: 'C'.repeat(55) },
+              { textContent: `${'D'.repeat(25)}🔥X` },
+            ]
+          : [],
+    } as unknown as Document;
+    // Joined: 55 + 3 + 55 + 3 + 55 + 3 + 25 = 199 BMP chars + '🔥' at 200th code point!
+    const extractedVariant = extractSelectedVariantFromDom(variantDomStraddle);
+    assert.ok(extractedVariant && extractedVariant.endsWith('🔥'));
+    assert.equal(Array.from(extractedVariant!).length, 200);
+    assert.equal(hasLoneSurrogate(extractedVariant!), false);
+    assert.doesNotThrow(() => encodeURIComponent(extractedVariant!));
+
+    const loneOnlyVariantDom = {
+      querySelectorAll: (sel: string) =>
+        sel === 'button.product-variation--selected'
+          ? [{ textContent: '\uD800\uDC00'.slice(0, 1) }]
+          : [],
+    } as unknown as Document;
+    assert.equal(extractSelectedVariantFromDom(loneOnlyVariantDom), null);
+
+    const sanitizedStraddle = sanitizeExtensionProductSignal({
+      platform: 'shopee',
+      canonicalUrl: 'https://shopee.vn/p-i.1.2',
+      externalItemId: '2',
+      externalShopId: '1',
+      title: `${'a'.repeat(499)}🔥 extra`,
+      selectedVariant: `${'v'.repeat(199)}🔥 extra`,
+      price: 20_000_000,
+      originalPrice: null,
+      ratingStar: null,
+      ratingCount: null,
+    });
+    assert.equal(sanitizedStraddle.title, `${'a'.repeat(499)}🔥`);
+    assert.equal(sanitizedStraddle.selectedVariant, `${'v'.repeat(199)}🔥`);
+    assert.equal(hasLoneSurrogate(sanitizedStraddle.title), false);
+    assert.equal(
+      hasLoneSurrogate(sanitizedStraddle.selectedVariant ?? ''),
+      false
+    );
+    const lookupParams = buildLookupParams(sanitizedStraddle, 'full');
+    assert.equal(lookupParams.get('title'), `${'a'.repeat(499)}🔥`);
+    assert.equal(lookupParams.get('selectedVariant'), `${'v'.repeat(199)}🔥`);
+    assert.equal(lookupParams.get('title')?.includes('\uFFFD'), false);
+
+    const obsWithLoneVariant = buildExtensionObservationV1(
+      {
+        ...sanitizedStraddle,
+        selectedVariant: '256GB \uD83D Natural 🔥',
+      },
+      new Date('2026-11-21T12:00:00Z'),
+      '2.1.0'
+    );
+    assert.ok(obsWithLoneVariant);
+    assert.equal(obsWithLoneVariant.variant_label, '256GB Natural 🔥');
+
+    // panel-view renderNotFoundHtml & renderLookupErrorHtml never throw URIError on lone surrogates or straddling emoji.
+    const notFoundStraddleHtml = renderNotFoundHtml(
+      { title: `${'z'.repeat(499)}🔥\uD83D` },
+      'https://rate.vn',
+      false
+    );
+    assert.ok(
+      notFoundStraddleHtml.includes(
+        `href="https://rate.vn/inspect?q=${'z'.repeat(499)}%F0%9F%94%A5"`
+      )
+    );
+    assert.equal(hasLoneSurrogate(notFoundStraddleHtml), false);
+
+    const notFoundLoneOnlyHtml = renderNotFoundHtml(
+      { title: '\uD83D' },
+      'https://rate.vn',
+      false
+    );
+    assert.ok(notFoundLoneOnlyHtml.includes('href="https://rate.vn/inspect"'));
+    assert.equal(hasLoneSurrogate(notFoundLoneOnlyHtml), false);
+
+    const errLoneHtml = renderLookupErrorHtml('network', 'Phone \uD83D 16');
+    assert.equal(hasLoneSurrogate(errLoneHtml), false);
+
+    const actionIconRows = renderActionRowsHtml([
+      {
+        href: 'https://rate.vn/inspect?q=test',
+        icon: '🔬',
+        label: 'Kiểm tra chi tiết',
+      },
+    ]);
+    assert.ok(
+      actionIconRows.includes(
+        '<span aria-hidden="true">🔬 </span>Kiểm tra chi tiết'
+      )
+    );
+
+    // 2. Runtime verification of sidepanel.ts:
+    //    - surrogate-safe inspect/watchlist/radar/merchant URL encoding (no false lookupErrorNetwork)
+    //    - crowdConsentVersion === 2 gating on hydration & storage.onChanged
+    //    - try/catch + UI rollback on chkOptIn and inpApiBase change handlers
+    //    - cleared inpApiBase reset to DEFAULT_API_BASE_URL
+    //    - Deal Radar hiding radarDealsTitle when deals.length === 0, json.ok === false, null platform guards, and aria-hidden emojis.
+    const g = globalThis as Record<string, unknown>;
+    const savedGlobals = ['chrome', 'document', 'fetch'].map(
+      (key) => [key, Object.getOwnPropertyDescriptor(g, key)] as const
+    );
+    const unhandled1812: unknown[] = [];
+    const onUnhandled1812 = (reason: unknown) => {
+      unhandled1812.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled1812);
+    const settle = () => new Promise((r) => setTimeout(r, 15));
+
+    try {
+      const root = {
+        innerHTML: '',
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      };
+      const radarSlot = { innerHTML: '' };
+      const trustSlot = { innerHTML: '' };
+      const chkHandlers: Array<() => unknown> = [];
+      const apiHandlers: Array<() => unknown> = [];
+      const submitHandlers: Array<(e: { preventDefault: () => void }) => void> =
+        [];
+      const chkOptIn = {
+        checked: false,
+        addEventListener: (ev: string, cb: () => unknown) => {
+          if (ev === 'change') chkHandlers.push(cb);
+        },
+      };
+      const inpApiBase = {
+        value: '',
+        addEventListener: (ev: string, cb: () => unknown) => {
+          if (ev === 'change') apiHandlers.push(cb);
+        },
+      };
+      const inpQuickQuery = { value: '' };
+      const formQuickInspect = {
+        addEventListener: (
+          ev: string,
+          cb: (e: { preventDefault: () => void }) => void
+        ) => {
+          if (ev === 'submit') submitHandlers.push(cb);
+        },
+      };
+
+      let onDomReady: (() => void) | undefined;
+      const storageListeners: Array<
+        (changes: Record<string, unknown>, areaName: string) => void
+      > = [];
+      const sentMessages: Array<Record<string, unknown>> = [];
+      const fetchedRadarUrls: string[] = [];
+
+      const storedLocalState: Record<string, unknown> = {
+        apiBaseUrl: 'http://localhost:3000',
+        crowdContributeOptIn: true,
+        crowdConsentVersion: 1,
+      };
+      let localGetImpl = async () => ({ ...storedLocalState });
+
+      let dealsJsonPayload: unknown = {
+        ok: true,
+        data: {
+          genuineDeals: [],
+          priceSpreadLeaders: [
+            {
+              id: 'sp-1',
+              productSlug: 'iphone-16',
+              productName: 'iPhone 16\uD83D',
+              productHref: '/smartphones/iphone-16',
+              minPrice: 19_990_000,
+              maxPrice: 22_990_000,
+              spreadVnd: 3_000_000,
+              spreadPct: 15,
+              cheapestPlatform: null,
+              cheapestOfferUrl: 'https://shopee.vn/p-i.1.2',
+              priciestPlatform: undefined,
+            },
+          ],
+          fakeSaleTraps: [
+            {
+              id: 'tr-1',
+              verdict: 'fake_sale_trap',
+              verdictBadgeVi: 'Bẫy sale ảo',
+              productSlug: 'galaxy-s25',
+              productName: 'Galaxy S25',
+              categorySlug: 'smartphones',
+              productHref: '/smartphones/galaxy-s25',
+              platform: null,
+              merchantName: 'Trap Shop',
+              offerUrl: 'https://shopee.vn/t-i.3.4',
+              priceCurrent: 24_990_000,
+              priceOriginal: 35_990_000,
+              savingsVsMedianVnd: 0,
+              savingsVsMedianPct: 0,
+              fakeMarkupPct: 44,
+              explanationVi: 'Nâng khống',
+            },
+          ],
+        },
+      };
+      let merchantsJsonPayload: unknown = {
+        ok: true,
+        data: [
+          {
+            id: 'm-lone-\uD83D',
+            platform: null,
+            name: 'Official Store\uD83D',
+            slug: 'official-\uD83D-store',
+            is_official: true,
+            dosafe_risk_score: 5,
+            review_risk_score: 8,
+            risk_score: 8,
+            trust_score: 92,
+            product_count: 12,
+          },
+        ],
+      };
+
+      const matchedLookupWithAstral: ExtensionLookupData = {
+        matchStatus: 'exact_listing',
+        platform: 'shopee',
+        canonicalUrl: null,
+        detectedStorageGb: 256,
+        isAccessoryOrPart: false,
+        accessoryReason: null,
+        variantCandidates: [],
+        masterProduct: {
+          id: 'mp-1812',
+          slug: '',
+          name: 'iPhone 16 Pro 256GB',
+          brand: 'Apple',
+          model: 'iPhone 16 Pro',
+          storage_gb: 256,
+          ram_gb: 8,
+          min_price: 25_990_000,
+          max_price: 28_990_000,
+          merchant_count: 4,
+          average_rating: 4.9,
+          user_rating_weighted: 4.9,
+          expert_rating: null,
+          authentic_review_count: 25,
+          total_reviews: 30,
+        },
+        matchedOffer: null,
+        topCheaperOffers: [],
+        allOffers: [],
+        merchantProfile: null,
+        reviewSummary: null,
+        priceHistory: null,
+        categorySlug: 'smartphones',
+        compareUrl: '/compare?category=smartphones',
+        productDetailUrl: '/smartphones/iphone-16-pro',
+        versusUrl: '/compare?category=smartphones&ids=a,b',
+        leaderboardStandings: [
+          {
+            criterion: 'combined',
+            rank: 1,
+            totalInCategory: 20,
+            score5: 4.8,
+            score10: 9.6,
+            categorySlug: 'smartphones',
+          },
+          {
+            criterion: 'camera',
+            rank: 2,
+            totalInCategory: 20,
+            score5: 4.7,
+            score10: 9.4,
+            categorySlug: 'smartphones',
+          },
+        ],
+        radarSignal: {
+          verdict: 'genuine_deal',
+          savingsPct: 8,
+          fakeMarkupPct: 0,
+          spreadPct: 12,
+          genuineDeal: { verdict: 'genuine_all_time_low' },
+        },
+        priceAssessment: {
+          verdict: 'genuine_deal',
+          badgeLabel: 'Giá tốt',
+          explanation: 'Thấp hơn trung vị',
+          observedPrice: 25_990_000,
+          observedOriginalPrice: 28_990_000,
+          claimedDiscountPct: 10,
+          vsMarketMedianPct: -8,
+          marketMinPrice: 25_990_000,
+          marketMedianPrice: 28_200_000,
+          marketMaxPrice: 28_990_000,
+          historicalMinPrice: 25_990_000,
+          historicalMaxPrice: 29_990_000,
+          cheaperOfferCount: 0,
+          maxSavingsAmount: 0,
+        },
+      };
+
+      let sendMessageImpl = async (
+        msg: Record<string, unknown>
+      ): Promise<unknown> => {
+        if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: String(
+                storedLocalState.apiBaseUrl ?? DEFAULT_API_BASE_URL
+              ),
+              crowdContributeOptIn:
+                storedLocalState.crowdContributeOptIn === true &&
+                storedLocalState.crowdConsentVersion === 2,
+            },
+            signal: {
+              platform: 'shopee',
+              canonicalUrl: '',
+              externalItemId: '2',
+              externalShopId: '1',
+              // Raw lone surrogate + straddling emoji when canonicalUrl and master.slug are empty!
+              title: `${'q'.repeat(499)}\uD83D`,
+              selectedVariant: null,
+              price: 25_990_000,
+              originalPrice: null,
+              ratingStar: null,
+              ratingCount: null,
+            },
+            data: matchedLookupWithAstral,
+          };
+        }
+        if (msg.type === 'RATE_SIDEPANEL_QUICK_QUERY') {
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: String(
+                storedLocalState.apiBaseUrl ?? DEFAULT_API_BASE_URL
+              ),
+              crowdContributeOptIn: false,
+            },
+            signal: {
+              platform: 'shopee',
+              canonicalUrl: '',
+              externalItemId: null,
+              externalShopId: null,
+              title: `${'m'.repeat(499)}\uD83D`,
+              selectedVariant: null,
+              price: null,
+              originalPrice: null,
+              ratingStar: null,
+              ratingCount: null,
+            },
+            data: null,
+          };
+        }
+        if (msg.type === 'RATE_UPDATE_SETTINGS') {
+          if (typeof msg.apiBaseUrl === 'string') {
+            storedLocalState.apiBaseUrl = normalizeAllowedApiBaseUrl(
+              msg.apiBaseUrl
+            );
+          }
+          if (typeof msg.crowdContributeOptIn === 'boolean') {
+            storedLocalState.crowdContributeOptIn = msg.crowdContributeOptIn;
+            storedLocalState.crowdConsentVersion = msg.crowdContributeOptIn
+              ? 2
+              : null;
+          }
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: String(
+                storedLocalState.apiBaseUrl ?? DEFAULT_API_BASE_URL
+              ),
+              crowdContributeOptIn:
+                storedLocalState.crowdContributeOptIn === true &&
+                storedLocalState.crowdConsentVersion === 2,
+            },
+          };
+        }
+        return { ok: false };
+      };
+
+      g.fetch = async (url: unknown) => {
+        const u = String(url);
+        if (u.includes('/api/v1/rate/deals')) {
+          fetchedRadarUrls.push(u);
+          return {
+            ok: true,
+            json: async () => dealsJsonPayload,
+          };
+        }
+        if (u.includes('/api/v1/rate/merchants')) {
+          return {
+            ok: true,
+            json: async () => merchantsJsonPayload,
+          };
+        }
+        return { ok: false };
+      };
+      g.chrome = {
+        runtime: {
+          sendMessage: (msg: Record<string, unknown>) => {
+            sentMessages.push(msg);
+            return sendMessageImpl(msg);
+          },
+        },
+        storage: {
+          local: { get: () => localGetImpl() },
+          onChanged: {
+            addListener: (
+              fn: (c: Record<string, unknown>, a: string) => void
+            ) => storageListeners.push(fn),
+          },
+        },
+      };
+      g.document = {
+        documentElement: {},
+        title: '',
+        querySelectorAll: () => [],
+        getElementById: (id: string) => {
+          switch (id) {
+            case 'panel-root':
+              return root;
+            case 'deal-radar-slot':
+              return radarSlot;
+            case 'merchant-trust-slot':
+              return trustSlot;
+            case 'chk-crowd-optin':
+              return chkOptIn;
+            case 'inp-api-base':
+              return inpApiBase;
+            case 'inp-quick-query':
+              return inpQuickQuery;
+            case 'form-quick-inspect':
+              return formQuickInspect;
+            default:
+              return null;
+          }
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'DOMContentLoaded') onDomReady = cb;
+        },
+      };
+
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1812a', import.meta.url).href
+      );
+      onDomReady!();
+      await settle();
+
+      // (a) Product card with lone-surrogate title did NOT throw URIError into lookupErrorNetwork.
+      assert.equal(
+        root.innerHTML.includes(t('lookupErrorNetwork')),
+        false,
+        'lone surrogate in signal.title must never trigger false lookupErrorNetwork'
+      );
+      assert.ok(
+        root.innerHTML.includes(
+          `href="http://localhost:3000/inspect?q=${'q'.repeat(499)}"`
+        ),
+        'inspectUrl strips lone surrogate cleanly'
+      );
+      // Decorative emojis in product card, leaderboard sub-badge, radar pill, and action links have aria-hidden="true".
+      for (const expectedIcon of ['🏆', '⚔️', '🔬', '🔔', '🔥']) {
+        assert.ok(
+          root.innerHTML.includes(
+            `<span aria-hidden="true">${expectedIcon} </span>`
+          ),
+          `icon ${expectedIcon} must be wrapped with aria-hidden="true"`
+        );
+      }
+
+      // (b) Deal Radar with deals.length === 0 hides radarDealsTitle, guards null platforms, and marks emojis aria-hidden.
+      assert.equal(
+        radarSlot.innerHTML.includes(t('radarDealsTitle')),
+        false,
+        'radarDealsTitle must be hidden when genuineDeals is empty'
+      );
+      assert.ok(radarSlot.innerHTML.includes(t('radarSpreadTitle')));
+      assert.ok(radarSlot.innerHTML.includes(t('radarTrapsTitle')));
+      assert.ok(
+        radarSlot.innerHTML.includes('<span aria-hidden="true">📊 </span>')
+      );
+      assert.ok(
+        radarSlot.innerHTML.includes('<span aria-hidden="true">⚠️ </span>')
+      );
+      assert.equal(
+        radarSlot.innerHTML.indexOf('border-top:1px solid #2a2f3a;') >
+          radarSlot.innerHTML.indexOf(t('radarSpreadTitle')),
+        true,
+        'first rendered radar section must not carry a leading separator border'
+      );
+      assert.match(
+        radarSlot.innerHTML,
+        /<div class="card">\s*<div>\s*<div class="card-title"/,
+        'first rendered radar section must be wrapped in a <div> so .offer-item:last-child prevents double borders'
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes('<span aria-hidden="true">🛡️ </span>')
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes(
+          'href="http://localhost:3000/merchants/official--store"'
+        )
+      );
+
+      // (c) Deal Radar & Merchant Trust Directory guard json.ok === false, and deals.length > 0 shows radarDealsTitle with aria-hidden 🔥.
+      dealsJsonPayload = {
+        ok: false,
+        data: {
+          genuineDeals: [
+            {
+              id: 'd-ignored',
+              productName: 'Should Not Render',
+            },
+          ],
+        },
+      };
+      merchantsJsonPayload = {
+        ok: false,
+        data: [{ id: 'm-ignored', name: 'Should Not Render' }],
+      };
+      storageListeners.forEach((fn) =>
+        fn({ lookup_tab_latest: { newValue: 2 } }, 'session')
+      );
+      await settle();
+      assert.equal(
+        radarSlot.innerHTML,
+        '',
+        'Deal Radar must render nothing when json.ok === false'
+      );
+      assert.equal(
+        trustSlot.innerHTML,
+        '',
+        'Merchant directory must render nothing when json.ok === false'
+      );
+
+      dealsJsonPayload = {
+        ok: true,
+        data: {
+          genuineDeals: [
+            {
+              id: 'd-1',
+              verdict: 'genuine_deal',
+              verdictBadgeVi: 'Giá tốt',
+              productSlug: 'ipad-air',
+              productName: 'iPad Air M2',
+              categorySlug: 'tablets',
+              productHref: '/tablets/ipad-air',
+              platform: null,
+              merchantName: 'Apple Store',
+              offerUrl: 'https://shopee.vn/ipad-i.1.2',
+              priceCurrent: 14_990_000,
+              priceOriginal: 16_990_000,
+              savingsVsMedianVnd: 1_500_000,
+              savingsVsMedianPct: 9,
+              fakeMarkupPct: 0,
+              explanationVi: 'Tốt',
+            },
+          ],
+          priceSpreadLeaders: [],
+          fakeSaleTraps: [],
+        },
+      };
+      storageListeners.forEach((fn) =>
+        fn({ lookup_tab_latest: { newValue: 3 } }, 'session')
+      );
+      await settle();
+      assert.ok(radarSlot.innerHTML.includes(t('radarDealsTitle')));
+      assert.ok(
+        radarSlot.innerHTML.includes('<span aria-hidden="true">🔥 </span>')
+      );
+
+      // Quick query with lone-surrogate not-found signal renders notFoundTitle instead of lookupErrorNetwork.
+      inpQuickQuery.value = `${'m'.repeat(499)}🔥 tail`;
+      submitHandlers[0]!({ preventDefault() {} });
+      await settle();
+      assert.ok(root.innerHTML.includes(t('notFoundTitle')));
+      assert.equal(root.innerHTML.includes(t('lookupErrorNetwork')), false);
+
+      // (d) Consent gating on crowdConsentVersion === 2 in hydration and storage.onChanged.
+      // Stored local had { crowdContributeOptIn: true, crowdConsentVersion: 1 }, so chkOptIn MUST be false!
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'v1 consent must leave chkOptIn unchecked'
+      );
+      const emitLocalChange = (changes: Record<string, unknown>) =>
+        storageListeners.forEach((fn) => fn(changes, 'local'));
+
+      // crowdContributeOptIn: true alone while storedConsentVersion === 1 stays false!
+      emitLocalChange({ crowdContributeOptIn: { newValue: true } });
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'crowdContributeOptIn without crowdConsentVersion === 2 must stay unchecked'
+      );
+
+      // Upgrading crowdConsentVersion to 2 while crowdContributeOptIn is true turns chkOptIn true!
+      emitLocalChange({ crowdConsentVersion: { newValue: 2 } });
+      assert.equal(chkOptIn.checked, true);
+
+      // Downgrading or clearing crowdConsentVersion revokes chkOptIn back to false!
+      emitLocalChange({ crowdConsentVersion: { newValue: 1 } });
+      assert.equal(chkOptIn.checked, false);
+      emitLocalChange({
+        crowdContributeOptIn: { newValue: true },
+        crowdConsentVersion: { newValue: 2 },
+      });
+      assert.equal(chkOptIn.checked, true);
+      emitLocalChange({ crowdConsentVersion: { newValue: null } });
+      assert.equal(chkOptIn.checked, false);
+
+      // (e) chkOptIn change handler rollback on rejected sendMessage AND { ok: false }.
+      const baseImpl = sendMessageImpl;
+      // Turning ON fails with rejection -> rolls back to false.
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_UPDATE_SETTINGS') {
+          throw new Error('storage quota exceeded');
+        }
+        return baseImpl(msg);
+      };
+      chkOptIn.checked = true;
+      await chkHandlers[0]!();
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'chkOptIn must roll back to false when RATE_UPDATE_SETTINGS throws'
+      );
+
+      // Turning ON succeeds -> checked === true; then turning OFF fails with { ok: false } -> rolls back to true!
+      sendMessageImpl = baseImpl;
+      chkOptIn.checked = true;
+      await chkHandlers[0]!();
+      assert.equal(chkOptIn.checked, true);
+
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_UPDATE_SETTINGS') {
+          return { ok: false, error: 'write failed' };
+        }
+        return baseImpl(msg);
+      };
+      chkOptIn.checked = false;
+      await chkHandlers[0]!();
+      assert.equal(
+        chkOptIn.checked,
+        true,
+        'chkOptIn must roll back to true when disabling fails with ok: false'
+      );
+
+      // (f) inpApiBase rollback on failure & cleared inpApiBase reset to DEFAULT_API_BASE_URL.
+      assert.equal(inpApiBase.value, 'http://localhost:3000');
+      // Changing to https://www.rate.vn fails -> rolls back to http://localhost:3000.
+      inpApiBase.value = 'https://www.rate.vn';
+      await apiHandlers[0]!();
+      assert.equal(
+        inpApiBase.value,
+        'http://localhost:3000',
+        'inpApiBase must roll back to previous confirmed URL when RATE_UPDATE_SETTINGS returns ok: false'
+      );
+
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_UPDATE_SETTINGS') {
+          throw new Error('worker unavailable');
+        }
+        return baseImpl(msg);
+      };
+      inpApiBase.value = '';
+      await apiHandlers[0]!();
+      assert.equal(
+        inpApiBase.value,
+        'http://localhost:3000',
+        'clearing inpApiBase when storage update throws must roll back to previous confirmed URL'
+      );
+
+      // Now restore working sendMessage and clear inpApiBase -> persists & restores DEFAULT_API_BASE_URL!
+      sendMessageImpl = baseImpl;
+      sentMessages.length = 0;
+      inpApiBase.value = '   ';
+      await apiHandlers[0]!();
+      await settle();
+      assert.equal(
+        inpApiBase.value,
+        DEFAULT_API_BASE_URL,
+        'clearing inpApiBase must restore DEFAULT_API_BASE_URL'
+      );
+      assert.equal(storedLocalState.apiBaseUrl, DEFAULT_API_BASE_URL);
+      assert.ok(
+        sentMessages.some(
+          (m) =>
+            m.type === 'RATE_UPDATE_SETTINGS' &&
+            m.apiBaseUrl === DEFAULT_API_BASE_URL
+        ),
+        'clearing inpApiBase must persist DEFAULT_API_BASE_URL via RATE_UPDATE_SETTINGS'
+      );
+      assert.ok(
+        sentMessages.some((m) => m.type === 'RATE_SIDEPANEL_FETCH_FULL'),
+        'clearing inpApiBase must reload the side panel against DEFAULT_API_BASE_URL'
+      );
+
+      // (g) Pre-hydration partial storage.onChanged buffering in sidepanel.ts.
+      let resolveSlowHydration!: (v: Record<string, unknown>) => void;
+      localGetImpl = () =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          resolveSlowHydration = resolve;
+        });
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1812b', import.meta.url).href
+      );
+      onDomReady!();
+      const latestStorageListener = storageListeners.at(-1)!;
+      // Partial opt-in true before hydration finishes must NOT turn chkOptIn true until version === 2 is confirmed!
+      latestStorageListener(
+        { crowdContributeOptIn: { newValue: true } },
+        'local'
+      );
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'pre-hydration partial opt-in must stay unchecked until crowdConsentVersion === 2 is confirmed'
+      );
+      resolveSlowHydration({
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 2,
+        apiBaseUrl: DEFAULT_API_BASE_URL,
+      });
+      await settle();
+      assert.equal(
+        chkOptIn.checked,
+        true,
+        'buffered opt-in true + hydrated crowdConsentVersion === 2 must reconcile chkOptIn to true'
+      );
+
+      // (h) Whitespace/lone-surrogate-only canonicalUrl, master.slug, and m.slug fall back cleanly without trailing %20.
+      merchantsJsonPayload = {
+        ok: true,
+        data: [
+          {
+            id: 'merchant-fallback-id',
+            platform: 'shopee',
+            name: 'Fallback Shop',
+            slug: ' \uD83D \uDC00 '.slice(0, 3),
+            is_official: false,
+            dosafe_risk_score: 10,
+            review_risk_score: 10,
+            risk_score: 10,
+            trust_score: 90,
+            product_count: 5,
+          },
+        ],
+      };
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: DEFAULT_API_BASE_URL,
+              crowdContributeOptIn: false,
+            },
+            signal: {
+              platform: 'shopee',
+              canonicalUrl: ' \uD83D ',
+              externalItemId: '2',
+              externalShopId: '1',
+              title: 'Phone 16 \uD83D',
+              selectedVariant: null,
+              price: 25_990_000,
+              originalPrice: null,
+              ratingStar: null,
+              ratingCount: null,
+            },
+            data: {
+              ...matchedLookupWithAstral,
+              masterProduct: {
+                ...matchedLookupWithAstral.masterProduct!,
+                slug: ' \uDC00 ',
+              },
+            },
+          };
+        }
+        return baseImpl(msg);
+      };
+      latestStorageListener({ lookup_tab_latest: { newValue: 9 } }, 'session');
+      await settle();
+      assert.ok(
+        root.innerHTML.includes('href="https://rate.vn/inspect?q=Phone%2016"'),
+        'whitespace/lone-surrogate canonicalUrl and master.slug must fall back to trimmed signal.title without trailing %20'
+      );
+      assert.ok(
+        root.innerHTML.includes('href="https://rate.vn/watchlist"'),
+        'lone-surrogate-only master.slug must fall back to /watchlist without ?add=%20'
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes(
+          'href="https://rate.vn/merchants/merchant-fallback-id"'
+        ),
+        'lone-surrogate-only m.slug must fall back to m.id'
+      );
+
+      // (i) Fail-closed v2 consent when local.get rejects or returns {}: unversioned res.settings.crowdContributeOptIn
+      //     and partial storage.onChanged without crowdConsentVersion === 2 must NEVER check chkOptIn.
+      localGetImpl = async () => {
+        throw new Error('storage read error');
+      };
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: DEFAULT_API_BASE_URL,
+              crowdContributeOptIn: true,
+            },
+            signal: null,
+            data: null,
+          };
+        }
+        return baseImpl(msg);
+      };
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1812c', import.meta.url).href
+      );
+      onDomReady!();
+      await settle();
+      const listener1812c = storageListeners.at(-1)!;
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'rejected storage.local.get must fail closed even if res.settings claims crowdContributeOptIn: true'
+      );
+      listener1812c({ crowdContributeOptIn: { newValue: true } }, 'local');
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'partial crowdContributeOptIn without crowdConsentVersion === 2 after rejected hydration must remain unchecked'
+      );
+
+      // (j) Overlapping inpApiBase and chkOptIn saves reconcile to latest persisted value without mid-flight flicker.
+      localGetImpl = async () => ({
+        apiBaseUrl: DEFAULT_API_BASE_URL,
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 0,
+      });
+      sendMessageImpl = baseImpl;
+      storedLocalState.apiBaseUrl = DEFAULT_API_BASE_URL;
+      storedLocalState.crowdContributeOptIn = false;
+      storedLocalState.crowdConsentVersion = 0;
+      chkHandlers.length = 0;
+      apiHandlers.length = 0;
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1812d', import.meta.url).href
+      );
+      onDomReady!();
+      await settle();
+      const listener1812d = storageListeners.at(-1)!;
+
+      // Overlapping inpApiBase saves: Save #1 (http://localhost:3000) succeeds while Save #2 (https://www.rate.vn) fails.
+      let resolveApiSave1!: (v: unknown) => void;
+      let rejectApiSave2!: (e: Error) => void;
+      let apiCallIdx = 0;
+      sendMessageImpl = (msg) => {
+        if (msg.type === 'RATE_UPDATE_SETTINGS' && 'apiBaseUrl' in msg) {
+          apiCallIdx += 1;
+          if (apiCallIdx === 1) {
+            return new Promise((r) => {
+              resolveApiSave1 = r;
+            });
+          }
+          return new Promise((_, rej) => {
+            rejectApiSave2 = rej;
+          });
+        }
+        return baseImpl(msg);
+      };
+      sentMessages.length = 0;
+      inpApiBase.value = 'http://localhost:3000';
+      const pApi1 = apiHandlers[0]!();
+      inpApiBase.value = 'https://www.rate.vn';
+      const pApi2 = apiHandlers[0]!();
+      storedLocalState.apiBaseUrl = 'http://localhost:3000';
+      listener1812d(
+        { apiBaseUrl: { newValue: 'http://localhost:3000' } },
+        'local'
+      );
+      assert.equal(
+        inpApiBase.value,
+        'https://www.rate.vn',
+        'in-flight second inpApiBase edit must not flicker when first save fires onChanged'
+      );
+      resolveApiSave1({
+        ok: true,
+        settings: {
+          apiBaseUrl: 'http://localhost:3000',
+          crowdContributeOptIn: false,
+        },
+      });
+      await pApi1;
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_SIDEPANEL_FETCH_FULL')
+          .length,
+        0,
+        'superseded first inpApiBase save must not trigger premature reload while second save is in flight'
+      );
+      rejectApiSave2(new Error('save 2 failed'));
+      await pApi2;
+      await settle();
+      assert.equal(
+        inpApiBase.value,
+        'http://localhost:3000',
+        'failed second inpApiBase save must roll back to Save #1 persisted URL, not pre-Save-#1 URL'
+      );
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_SIDEPANEL_FETCH_FULL')
+          .length,
+        1,
+        'panel must reload once against Save #1 persisted URL after Save #2 settles'
+      );
+
+      // Overlapping chkOptIn saves: Toggle #1 (true) succeeds while Toggle #2 (false) fails -> reconciles to true without mid-flight flicker.
+      let resolveChk1!: (v: unknown) => void;
+      let resolveChk2!: (v: unknown) => void;
+      let chkCallIdx = 0;
+      sendMessageImpl = (msg) => {
+        if (
+          msg.type === 'RATE_UPDATE_SETTINGS' &&
+          'crowdContributeOptIn' in msg
+        ) {
+          chkCallIdx += 1;
+          if (chkCallIdx === 1) {
+            return new Promise((r) => {
+              resolveChk1 = r;
+            });
+          }
+          return new Promise((r) => {
+            resolveChk2 = r;
+          });
+        }
+        return baseImpl(msg);
+      };
+      chkOptIn.checked = true;
+      const pChk1 = chkHandlers[0]!();
+      chkOptIn.checked = false;
+      const pChk2 = chkHandlers[0]!();
+      listener1812d(
+        {
+          crowdContributeOptIn: { newValue: true },
+          crowdConsentVersion: { newValue: 2 },
+        },
+        'local'
+      );
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'chkOptIn must not flicker back to true while Toggle #2 (false) is still in flight'
+      );
+      resolveChk1({
+        ok: true,
+        settings: {
+          apiBaseUrl: 'http://localhost:3000',
+          crowdContributeOptIn: true,
+        },
+      });
+      await pChk1;
+      resolveChk2({ ok: false, error: 'toggle 2 failed' });
+      await pChk2;
+      assert.equal(
+        chkOptIn.checked,
+        true,
+        'failed Toggle #2 must reconcile chkOptIn to Toggle #1 persisted true state'
+      );
+
+      assert.equal(
+        unhandled1812.length,
+        0,
+        'side panel settings failures must never trigger unhandledRejection'
+      );
+
+      // 3. Service worker serialization of concurrent RATE_UPDATE_SETTINGS & astral 200/500 bounds.
+      {
+        let swMsgHandler:
+          | ((
+              msg: Record<string, unknown>,
+              sender: Record<string, unknown>,
+              sendResponse: (res: unknown) => void
+            ) => unknown)
+          | undefined;
+        const swLocal = new Map<string, unknown>([
+          ['apiBaseUrl', 'https://rate.vn'],
+          ['crowdContributeOptIn', false],
+        ]);
+        const swSession = new Map<string, unknown>();
+        let delayCooldownClearOnce = true;
+        let releaseCooldownClear!: () => void;
+        let onCooldownPaused: (() => void) | undefined;
+
+        g.chrome = {
+          runtime: {
+            id: 'rate-ext-1812-sw',
+            getURL: (p: string) => `chrome-extension://rate-ext-1812-sw/${p}`,
+            getManifest: () => ({ version: '2.1.0' }),
+            onInstalled: { addListener() {} },
+            onStartup: { addListener() {} },
+            onMessage: {
+              addListener: (fn: typeof swMsgHandler) => {
+                swMsgHandler = fn;
+              },
+            },
+          },
+          sidePanel: {
+            setPanelBehavior: async () => {},
+            open: async () => {},
+          },
+          storage: {
+            local: {
+              get: async (keys?: string | string[]) => {
+                const list = Array.isArray(keys) ? keys : keys ? [keys] : [];
+                return Object.fromEntries(
+                  list
+                    .filter((k) => swLocal.has(k))
+                    .map((k) => [k, swLocal.get(k)])
+                );
+              },
+              set: async (obj: Record<string, unknown>) => {
+                for (const [k, v] of Object.entries(obj)) swLocal.set(k, v);
+              },
+              remove: async (keys: string | string[]) => {
+                for (const k of Array.isArray(keys) ? keys : [keys]) {
+                  swLocal.delete(k);
+                }
+              },
+            },
+            session: {
+              get: async (keys?: string | string[]) => {
+                const list = Array.isArray(keys) ? keys : keys ? [keys] : [];
+                return Object.fromEntries(
+                  list
+                    .filter((k) => swSession.has(k))
+                    .map((k) => [k, swSession.get(k)])
+                );
+              },
+              set: async (obj: Record<string, unknown>) => {
+                if (
+                  delayCooldownClearOnce &&
+                  obj.lookup_rate_limited_until === 0
+                ) {
+                  delayCooldownClearOnce = false;
+                  const gate = new Promise<void>((r) => {
+                    releaseCooldownClear = r;
+                  });
+                  onCooldownPaused?.();
+                  await gate;
+                }
+                for (const [k, v] of Object.entries(obj)) swSession.set(k, v);
+              },
+            },
+          },
+          action: {
+            setBadgeText: async () => {},
+            setBadgeBackgroundColor: async () => {},
+            onClicked: { addListener() {} },
+          },
+          tabs: {
+            query: async () => [{ id: 1, active: true }],
+            create: async () => ({ id: 2 }),
+          },
+        };
+        g.fetch = async () =>
+          new Response(JSON.stringify({ ok: true, data: null }), {
+            status: 200,
+          });
+
+        await import(
+          new URL('./background/service-worker.js?case=1812sw', import.meta.url)
+            .href
+        );
+        const callSw1812 = (msg: Record<string, unknown>) =>
+          new Promise<Record<string, unknown>>((resolve) => {
+            swMsgHandler!(
+              msg,
+              {
+                id: 'rate-ext-1812-sw',
+                tab: undefined,
+                url: 'chrome-extension://rate-ext-1812-sw/sidepanel/sidepanel.html',
+              },
+              (r) => resolve(r as Record<string, unknown>)
+            );
+          });
+
+        // Concurrent RATE_UPDATE_SETTINGS: Request 1 (localhost) pauses at lookupCooldown.clear() while Request 2 (reset to https://rate.vn) is queued behind it.
+        const pausedOnClear = new Promise<void>((r) => {
+          onCooldownPaused = r;
+        });
+        const req1 = callSw1812({
+          type: 'RATE_UPDATE_SETTINGS',
+          apiBaseUrl: 'http://localhost:3000',
+          crowdContributeOptIn: true,
+        });
+        const req2 = callSw1812({
+          type: 'RATE_UPDATE_SETTINGS',
+          apiBaseUrl: DEFAULT_API_BASE_URL,
+          crowdContributeOptIn: false,
+        });
+        await pausedOnClear;
+        releaseCooldownClear();
+        const [res1, res2] = await Promise.all([req1, req2]);
+        assert.equal(res1.ok, true);
+        assert.equal(res2.ok, true);
+        assert.equal(
+          swLocal.get('apiBaseUrl'),
+          DEFAULT_API_BASE_URL,
+          'serialized RATE_UPDATE_SETTINGS must preserve later reset to DEFAULT_API_BASE_URL'
+        );
+        assert.equal(
+          swLocal.get('crowdContributeOptIn'),
+          false,
+          'serialized RATE_UPDATE_SETTINGS must preserve later opt-out'
+        );
+        assert.equal(swLocal.get('crowdConsentVersion'), null);
+
+        // Service worker quick query (500 limit) & selectedVariant override (200 limit) preserve astral pairs cleanly.
+        const quickAstralRes = await callSw1812({
+          type: 'RATE_SIDEPANEL_QUICK_QUERY',
+          query: `${'k'.repeat(499)}🔥 extra`,
+        });
+        assert.equal(quickAstralRes.ok, true);
+        const quickSig = quickAstralRes.signal as { title: string };
+        assert.equal(quickSig.title, `${'k'.repeat(499)}🔥`);
+        assert.equal(hasLoneSurrogate(quickSig.title), false);
+
+        const fullAstralRes = await callSw1812({
+          type: 'RATE_SIDEPANEL_FETCH_FULL',
+          selectedVariant: `${'s'.repeat(199)}🔥 extra`,
+        });
+        assert.equal(fullAstralRes.ok, true);
+        const fullSig = fullAstralRes.signal as { selectedVariant: string };
+        assert.equal(fullSig.selectedVariant, `${'s'.repeat(199)}🔥`);
+        assert.equal(hasLoneSurrogate(fullSig.selectedVariant), false);
+      }
+
+      console.log(
+        '  ✅ [Surrogate-safe URL encoding, consent v2 sync, settings rollback & Deal Radar UI/a11y (#1812)] Verified'
+      );
+    } finally {
+      process.off('unhandledRejection', onUnhandled1812);
+      for (const [key, desc] of savedGlobals) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 
