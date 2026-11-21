@@ -1800,7 +1800,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     refresh_rate_hz: 60,
     charging_w: 15,
     // The GPS + Cellular models support 5G (RedCap) and LTE: Apple's Tech Specs,
-    // https://support.apple.com/en-us/125093 (DOS/Rate#1792).
+    // https://support.apple.com/en-us/125093 (DOS/Rate#1792). Like every registry entry, the
+    // flag describes the model line (it has a 5G model), not a GPS-only listing.
     has_5g: true,
     release_date: 'September 2025',
     ip_rating: 'IP6X dust resistant + WR50 water resistant (50m swimproof)',

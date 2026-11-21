@@ -23,8 +23,9 @@ export function withoutRetractedSpecs<T>(
     }
     const record = copy[group];
     if (record && typeof record === 'object' && !Array.isArray(record)) {
+      // A group the retraction empties stays as {}: the spec audit and publish-masters
+      // require the group (DOS/Rate#1792).
       delete (record as Record<string, unknown>)[field];
-      if (Object.keys(record).length === 0) delete copy[group];
     }
   }
   return copy as T;

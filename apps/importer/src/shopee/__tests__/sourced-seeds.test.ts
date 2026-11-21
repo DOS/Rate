@@ -158,7 +158,8 @@ const retracted = withoutRetractedSpecs(
   ['battery.fast_charging_w', 'regulatory.sar_head', 'regulatory.sar_body', 'key_specs.ram'],
   'specifications'
 );
-assert.deepEqual(retracted, { battery: { capacity_mah: 5391 } });
+// An emptied group stays as {} (DOS/Rate#1792).
+assert.deepEqual(retracted, { battery: { capacity_mah: 5391 }, regulatory: {} });
 assert.deepEqual(
   withoutRetractedSpecs({ ram: '16GB', chip: 'x' }, ['key_specs.ram', 'battery.type'], 'key_specs'),
   { chip: 'x' }

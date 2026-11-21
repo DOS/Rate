@@ -16,6 +16,7 @@ import {
   requiredSpecGroups,
 } from '../jobs/backfill-specs.js';
 import { ProductNormalizer } from '../product-normalizer.js';
+import { withoutRetractedSpecs } from '../spec-retraction.js';
 import type { ShopeeProduct } from '../types.js';
 
 const normalizer = new ProductNormalizer();
@@ -144,6 +145,17 @@ test('merging specs keeps a group either side has, as {} when it is empty', () =
   // A group neither side has is still left out.
   assert.equal(merged.regulatory, undefined);
   assert.equal(merged.cellular, undefined);
+});
+
+test('a retraction that empties a group keeps the group as {}', () => {
+  assert.deepEqual(
+    withoutRetractedSpecs(
+      { regulatory: { sar_head: '1 W/kg' }, battery: { capacity_mah: 1 } },
+      ['regulatory.sar_head'],
+      'specifications'
+    ),
+    { regulatory: {}, battery: { capacity_mah: 1 } }
+  );
 });
 
 test('requiredSpecGroups leaves out only the groups a category template removes', () => {

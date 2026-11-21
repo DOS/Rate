@@ -629,7 +629,7 @@ export class AiSpecEnricher {
     categorySlug: string = 'smartphones'
   ): { systemPrompt: string; userPrompt: string } {
     const systemPrompt = `You are a hardware specification database expert with authoritative knowledge of PhoneArena and GSMArena device specifications.
-Your job is to return accurate, comprehensive technical specifications for a consumer tech device, structured into the 10 standard PhoneArena Field Groups (with GSMArena technical precision).
+Your job is to return accurate technical specifications for a consumer tech device, only as sources state them, structured into the 10 standard PhoneArena Field Groups (with GSMArena technical precision).
 
 RULES:
 1. Return ONLY a valid JSON object matching the exact schema below. Do not wrap in markdown code fences.
@@ -637,7 +637,7 @@ RULES:
 3. Boolean fields (has_5g, nfc, volte, vowifi, headphone_jack_35mm) MUST be JSON booleans (true or false).
 4. Separate cameras clearly following PhoneArena structure: main_camera, second_camera (ultrawide), third_camera (telephoto/macro), fourth_camera (periscope if present), front_camera.
 5. Keep descriptive text concise, accurate, and readable for Vietnamese & international users.
-6. Omit groups and fields the device category does not have. Earbuds have no display, RAM, storage, camera or cellular network; describe their drivers, codecs, ANC and battery instead. Smartwatches have no camera, and a cellular watch is LTE unless the model really supports 5G.
+6. Omit groups and fields the device category does not have. Earbuds have no display, RAM, storage, camera or cellular network: put their audio chip in hardware.chipset, their codecs in connectivity.bluetooth, and their drivers and ANC in multimedia.audio_features, never in display or camera fields. Smartwatches have no camera, and a cellular watch is LTE unless the model really supports 5G.
 7. Leave a field out when neither the listing nor the maker's or GSMArena's page for this exact model states it. Never fill a field with a typical value for the category or brand (an OS version, a memory-card answer, a 5G band list, a battery chemistry, a certification list): an empty field is correct, a guessed one is wrong.
 8. The schema hints below describe the format of each value. They are not values to copy.
 
