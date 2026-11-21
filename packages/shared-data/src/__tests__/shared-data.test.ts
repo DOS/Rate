@@ -102,6 +102,104 @@ function testRouteConstants(): void {
     '/api/v1/rate/merchants/'
   );
   assert.equal(RATE_API_V1_ENDPOINTS.REVIEW_VOTE('..'), '/api/reviews//vote');
+  // Lone UTF-16 surrogates and astral pairs straddling maxLen must never throw URIError (#1813).
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL('iphone-\ud83d-16'),
+    '/api/v1/rate/products/iphone--16'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL('\ud800'),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL('\udc00\ud800'),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL('\ud83d\u0000\ude00'),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.MERCHANT_DETAIL('shop-\ude00'),
+    '/api/v1/rate/merchants/shop-'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.REVIEW_VOTE('\udc00rev\ud800'),
+    '/api/reviews/rev/vote'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL(`${'a'.repeat(179)}😀`),
+    `/api/v1/rate/products/${'a'.repeat(179)}`
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL(`${'a'.repeat(178)}😀`),
+    `/api/v1/rate/products/${'a'.repeat(178)}${encodeURIComponent('😀')}`
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.MERCHANT_DETAIL(`${'a'.repeat(127)}😀`),
+    `/api/v1/rate/merchants/${'a'.repeat(127)}`
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.MERCHANT_DETAIL(`${'a'.repeat(126)}😀`),
+    `/api/v1/rate/merchants/${'a'.repeat(126)}${encodeURIComponent('😀')}`
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.REVIEW_VOTE(`${'a'.repeat(127)}😀`),
+    `/api/reviews/${'a'.repeat(127)}/vote`
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.REVIEW_VOTE(`${'a'.repeat(126)}😀`),
+    `/api/reviews/${'a'.repeat(126)}${encodeURIComponent('😀')}/vote`
+  );
+  // Post-truncation dot segments (. and ..) must still be rejected (#1813).
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL(`.${' '.repeat(179)}x`),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL(`..${' '.repeat(178)}x`),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL(`..${' '.repeat(177)}😀`),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.MERCHANT_DETAIL(`.${' '.repeat(127)}x`),
+    '/api/v1/rate/merchants/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.MERCHANT_DETAIL(`..${' '.repeat(126)}x`),
+    '/api/v1/rate/merchants/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.REVIEW_VOTE(`..${' '.repeat(126)}x`),
+    '/api/reviews//vote'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.REVIEW_VOTE(`.${' '.repeat(126)}😀`),
+    '/api/reviews//vote'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL(`..${'\u00a0'.repeat(178)}x`),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.REVIEW_VOTE(`.${'\ufeff'.repeat(127)}x`),
+    '/api/reviews//vote'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL(null as never),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.MERCHANT_DETAIL(undefined as never),
+    '/api/v1/rate/merchants/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.REVIEW_VOTE(123 as never),
+    '/api/reviews//vote'
+  );
   assert.equal(RATE_API_V1_ENDPOINTS.HEALTH, '/api/health');
   assert.equal(ROUTES.API.LISTINGS, '/api/v1/rate/products');
   assert.equal(STATUS_CODES.OK, 200);
@@ -1166,6 +1264,101 @@ function testCategorySpecTemplates(): void {
   );
   assert.equal(
     rules.specFieldApplies(watchTemplate, 'camera', 'main_camera'),
+    false
+  );
+
+  // Prototype keys fall back to PHONE_TEMPLATE without throwing (#1813).
+  const phoneTemplate = rules.getCategorySpecTemplate('smartphones');
+  for (const protoSlug of [
+    '__proto__',
+    'constructor',
+    'toString',
+    'valueOf',
+    'hasOwnProperty',
+    '  __PROTO__  ',
+    'Constructor',
+  ]) {
+    assert.equal(rules.getCategorySpecTemplate(protoSlug), phoneTemplate);
+    assert.equal(
+      rules.applyCategorySpecTemplate(protoSlug, phoneShaped),
+      phoneShaped
+    );
+    assert.equal(
+      rules.applyCategorySpecTemplate(protoSlug, phoneShaped, {
+        forStorage: true,
+      }),
+      phoneShaped
+    );
+    assert.equal(
+      rules.specFieldApplies(
+        rules.getCategorySpecTemplate(protoSlug),
+        'camera',
+        'main_camera'
+      ),
+      true
+    );
+  }
+  assert.equal(
+    rules.specFieldApplies(
+      watchTemplate,
+      '__proto__' as rules.SpecGroupKey,
+      'toString'
+    ),
+    false
+  );
+  assert.equal(
+    rules.specFieldApplies(
+      watchTemplate,
+      'constructor' as rules.SpecGroupKey,
+      'name'
+    ),
+    false
+  );
+  const protoSpecsPayload = JSON.parse(
+    '{"__proto__":{"cellular":{"technology":"5G"}},"multimedia":{"audio_features":"ANC"}}'
+  ) as Record<string, unknown>;
+  const protoBuds = rules.applyCategorySpecTemplate('earbuds', {
+    specifications: protoSpecsPayload,
+  });
+  assert.equal(
+    Object.getPrototypeOf(protoBuds.specifications),
+    Object.prototype
+  );
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(protoBuds.specifications, 'cellular'),
+    false
+  );
+  const shadowedSpecs = {
+    hasOwnProperty: 'not-a-fn',
+    cellular: { technology: 'LTE / 5G' },
+  };
+  const shadowedWatch = rules.applyCategorySpecTemplate('smartwatches', {
+    specifications: shadowedSpecs,
+  });
+  assert.deepEqual(
+    (shadowedWatch.specifications as { cellular: unknown }).cellular,
+    { technology: 'LTE' }
+  );
+  const nestedProtoHardware = JSON.parse(
+    '{"hardware":{"__proto__":{"gpu":"x"},"chipset":"H2"}}'
+  ) as Record<string, unknown>;
+  const nestedProtoBuds = rules.applyCategorySpecTemplate('earbuds', {
+    specifications: nestedProtoHardware,
+  });
+  const nestedHw = (
+    nestedProtoBuds.specifications as { hardware: Record<string, unknown> }
+  ).hardware;
+  assert.equal(Object.getPrototypeOf(nestedHw), Object.prototype);
+  assert.equal(nestedHw.gpu, undefined);
+  assert.equal(nestedHw.chipset, 'H2');
+  assert.equal(rules.applyCategorySpecTemplate('earbuds', null as never), null);
+  assert.equal(rules.applyCategorySpecTemplate('earbuds', 123 as never), 123);
+  assert.deepEqual(
+    rules.applyCategorySpecTemplate('earbuds', phoneShaped, null as never),
+    buds
+  );
+  assert.equal(
+    rules.specFieldApplies(null as never, 'camera', 'main_camera'),
     false
   );
 }
