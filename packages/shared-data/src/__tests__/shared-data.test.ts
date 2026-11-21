@@ -180,6 +180,26 @@ function testRouteConstants(): void {
     RATE_API_V1_ENDPOINTS.REVIEW_VOTE(`.${' '.repeat(126)}😀`),
     '/api/reviews//vote'
   );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL(`..${'\u00a0'.repeat(178)}x`),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.REVIEW_VOTE(`.${'\ufeff'.repeat(127)}x`),
+    '/api/reviews//vote'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL(null as never),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.MERCHANT_DETAIL(undefined as never),
+    '/api/v1/rate/merchants/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.REVIEW_VOTE(123 as never),
+    '/api/reviews//vote'
+  );
   assert.equal(RATE_API_V1_ENDPOINTS.HEALTH, '/api/health');
   assert.equal(ROUTES.API.LISTINGS, '/api/v1/rate/products');
   assert.equal(STATUS_CODES.OK, 200);
@@ -1306,6 +1326,39 @@ function testCategorySpecTemplates(): void {
   );
   assert.equal(
     Object.prototype.hasOwnProperty.call(protoBuds.specifications, 'cellular'),
+    false
+  );
+  const shadowedSpecs = {
+    hasOwnProperty: 'not-a-fn',
+    cellular: { technology: 'LTE / 5G' },
+  };
+  const shadowedWatch = rules.applyCategorySpecTemplate('smartwatches', {
+    specifications: shadowedSpecs,
+  });
+  assert.deepEqual(
+    (shadowedWatch.specifications as { cellular: unknown }).cellular,
+    { technology: 'LTE' }
+  );
+  const nestedProtoHardware = JSON.parse(
+    '{"hardware":{"__proto__":{"gpu":"x"},"chipset":"H2"}}'
+  ) as Record<string, unknown>;
+  const nestedProtoBuds = rules.applyCategorySpecTemplate('earbuds', {
+    specifications: nestedProtoHardware,
+  });
+  const nestedHw = (
+    nestedProtoBuds.specifications as { hardware: Record<string, unknown> }
+  ).hardware;
+  assert.equal(Object.getPrototypeOf(nestedHw), Object.prototype);
+  assert.equal(nestedHw.gpu, undefined);
+  assert.equal(nestedHw.chipset, 'H2');
+  assert.equal(rules.applyCategorySpecTemplate('earbuds', null as never), null);
+  assert.equal(rules.applyCategorySpecTemplate('earbuds', 123 as never), 123);
+  assert.deepEqual(
+    rules.applyCategorySpecTemplate('earbuds', phoneShaped, null as never),
+    buds
+  );
+  assert.equal(
+    rules.specFieldApplies(null as never, 'camera', 'main_camera'),
     false
   );
 }

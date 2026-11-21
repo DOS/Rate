@@ -162,13 +162,21 @@ export function getCategorySpecTemplate(
   );
 }
 
+const ownList = (
+  record: Partial<Record<SpecGroupKey, readonly string[]>> | null | undefined,
+  group: SpecGroupKey
+): readonly string[] => {
+  const list = ownValue(record, group);
+  return Array.isArray(list) ? list : [];
+};
+
 const hiddenIn = (
   template: CategorySpecTemplate,
   group: SpecGroupKey,
   forStorage: boolean
 ): readonly string[] => [
-  ...(ownValue(template.hiddenFields, group) ?? []),
-  ...(forStorage ? [] : (ownValue(template.displayHiddenFields, group) ?? [])),
+  ...ownList(template.hiddenFields, group),
+  ...(forStorage ? [] : ownList(template.displayHiddenFields, group)),
 ];
 
 /** Whether the page shows a field of a group for the category. */
@@ -178,6 +186,8 @@ export function specFieldApplies(
   field: string
 ): boolean {
   return (
+    Boolean(template) &&
+    Array.isArray(template.groups) &&
     template.groups.includes(group) &&
     !hiddenIn(template, group, false).includes(field)
   );
@@ -255,8 +265,10 @@ const withoutFiveGText = (
 export function applyCategorySpecTemplate<T extends CategoryScopedSpecs>(
   categorySlug: string | null | undefined,
   product: T,
-  { forStorage = false }: { forStorage?: boolean } = {}
+  options?: { forStorage?: boolean } | null
 ): T {
+  if (!isRecord(product)) return product;
+  const forStorage = options?.forStorage === true;
   const template = getCategorySpecTemplate(categorySlug);
   if (template === PHONE_TEMPLATE) return product;
   const out: T = { ...product };
