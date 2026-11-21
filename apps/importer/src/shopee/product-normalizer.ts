@@ -755,7 +755,10 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ram_gb?: number;
     chipset: string;
     cpu: string;
-    gpu: string;
+    // The graphics processor, as a source states it. Earbuds have none, and an entry
+    // whose source names no GPU has none: audio, LED or display controllers are not a
+    // GPU (DOS/Rate#1793).
+    gpu?: string;
     os: string;
     weight_g: number;
     dimensions: string;
@@ -1209,7 +1212,11 @@ const CANONICAL_PHONE_REGISTRY: Record<
     rear_camera: '12 MP, f/1.8 (wide), dual pixel PDAF + TOF 3D LiDAR scanner',
     front_camera: '12 MP, f/2.4, 122˚ (ultrawide, Center Stage) + Face ID',
     charging_w: 30,
-    has_5g: false,
+    // The Wi-Fi + Cellular models support "5G (sub-6 GHz) with 4x4 MIMO": Apple's Tech Specs,
+    // https://support.apple.com/en-us/119892 (11-inch) and
+    // https://support.apple.com/en-us/119891 (13-inch). Like apple:watch-series-11, the flag
+    // describes the model line (DOS/Rate#1793).
+    has_5g: true,
     release_date: 'May 2024',
     // No ip_rating: its entry stated body materials, not a rating (DOS/Rate#1790).
   },
@@ -1259,7 +1266,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     battery_mah: 523,
     chipset: 'Apple H2 headphone chip + Apple U1 chip (MagSafe Case)',
     cpu: 'Apple H2 custom acoustic DSP',
-    gpu: 'N/A',
     os: 'iOS / macOS / Spatial Audio firmware',
     weight_g: 50.8,
     dimensions: '45.2 x 60.6 x 21.7 mm (Case)',
@@ -1272,7 +1278,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     battery_mah: 500,
     chipset: 'Sony Integrated Processor V2 + HD Noise Cancelling Processor QN2e',
     cpu: 'Dual-processor 24-bit Audio DSP',
-    gpu: 'N/A',
     os: 'Sony Sound Connect (LDAC / Multipoint)',
     weight_g: 49,
     dimensions: '64.6 x 40.0 x 26.5 mm (Case)',
@@ -1388,7 +1393,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ram_gb: 1,
     chipset: 'Garmin Ultra-Low-Power Sports SoC + Multi-Band SatIQ GNSS',
     cpu: 'Garmin Dual-Core RTOS + Firstbeat Analytics Engine',
-    gpu: 'AMOLED Display Controller',
     os: 'Garmin OS (Connect IQ)',
     weight_g: 47,
     dimensions: '46.1 x 46.1 x 12.9 mm',
@@ -1406,7 +1410,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     battery_mah: 515,
     chipset: 'Samsung Proprietary Bluetooth 5.4 SoC + Dual Amplifier',
     cpu: 'Galaxy AI Adaptive ANC & Real-Time Interpreter DSP',
-    gpu: 'Blade Lights LED Controller',
     os: 'Galaxy Wearable (SSC UHQ 24-bit/96kHz)',
     weight_g: 57.4,
     dimensions: '48.7 x 58.9 x 24.4 mm (Case)',
@@ -1831,7 +1834,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     battery_mah: 540,
     chipset: 'Apple H3 Headphone Chip + U2 Ultra Wideband (MagSafe Case)',
     cpu: 'Apple H3 Ultra-Low-Latency Audio DSP (96kHz/24-bit Lossless)',
-    gpu: 'Acoustic & Heart-Rate Biosensor Co-Processor',
     os: 'Apple AudioOS (Hearing Health & Live Translation AI)',
     weight_g: 50.2,
     dimensions: '45.2 x 60.6 x 21.7 mm (USB-C MagSafe Case)',
@@ -1844,7 +1846,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     battery_mah: 550,
     chipset: 'Sony Integrated Processor V3 + QN3e HD Noise Cancelling Processor',
     cpu: 'Dual-Processor 24-bit Audio Signal Processing + DSEE Ultimate AI',
-    gpu: 'LE Audio LC3 & LDAC High-Bitrate Controller',
     os: 'Sony Sound Connect (LDAC 990kbps / 360 Reality Audio)',
     weight_g: 46.8,
     dimensions: '64.0 x 40.0 x 25.8 mm (Qi Wireless Case)',

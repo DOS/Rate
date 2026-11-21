@@ -1435,9 +1435,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     slug: 'apple-airpods-pro-2-usb-c',
     description:
       'Tai nghe chống ồn chủ động Apple AirPods Pro 2 cổng sạc MagSafe USB-C trang bị chip H2, khử tiếng ồn ANC gấp 2 lần, Adaptive Audio, chuẩn kháng bụi nước IP54 và hỗ trợ Lossless với Vision Pro.',
-    ram_gb: 1,
-    storage_gb: 64,
-    screen_size_inch: 1.0,
+    ram_gb: null,
+    storage_gb: null,
+    screen_size_inch: null,
     battery_mah: 523,
     has_5g: false,
     colors: ['Trắng'],
@@ -1457,27 +1457,14 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         build:
           'Tai nghe In-ear có đuôi cảm ứng vuốt chỉnh âm lượng, hộp sạc tích hợp móc dây đeo & loa',
         resistance: 'IP54 dust, sweat, and water resistant (cả tai nghe và hộp sạc)',
-        biometrics: 'Skin-detect sensor (cảm biến nhận diện da tai tự động phát/dừng)',
         keys: 'Touch Control stem (nhấn & vuốt tăng giảm âm lượng)',
         colors: ['Trắng'],
       },
-      display: {
-        size_inch: 1.0,
-        type: 'LED Status Indicator + iOS Dynamic Island Battery HUD',
-        resolution: 'Acoustic Custom High-Excursion Driver (11mm)',
-        refresh_rate_hz: 60,
-        ppi: 300,
-        protection: 'IP54 Dust & Water Ingress Protection',
-        features: 'Hiển thị phần trăm pin trực tiếp trên iPhone/Mac kể cả khi đóng nắp hộp',
-      },
+      // Earbuds have no display, cameras or cellular network. The groups stay as {}, as the
+      // spec audit expects of a master with no category_slug in its specs (DOS/Rate#1793).
+      display: {},
       hardware: {
         chipset: 'Apple H2 headphone chip + Apple U1 chip (trong hộp sạc MagSafe)',
-        cpu: 'Apple H2 custom DSP (48,000 lần khử ồn mỗi giây)',
-        gpu: 'Personalized Spatial Audio Engine',
-        ram_gb: 1,
-        storage_gb: 64,
-        storage_expansion: 'Firmware tự động cập nhật qua iCloud',
-        os: 'iOS 18 Hearing Health & Adaptive Audio firmware',
       },
       battery: {
         capacity_mah: 523,
@@ -1486,35 +1473,18 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fast_charging_w: 5,
         reverse_charging: false,
       },
-      camera: {
-        rear_setup: 'Dual Beamforming & Inward-Facing Acoustic Array',
-        main_camera: 'Dual beamforming microphones (thu giọng nói định hướng khử gió)',
-        second_camera: 'Inward-facing microphone (tối ưu EQ & khử ồn trong ống tai)',
-        front_camera: 'Optical Skin-detect & Motion-detecting / Speech-detecting accelerometer',
-        video_recording:
-          'Hỗ trợ thu âm giọng nói chuẩn Studio Voice Isolation khi quay video trên iPhone',
-      },
+      camera: {},
       connectivity: {
         bluetooth: '5.3, AAC, Ultra-low latency 20-bit/48kHz Lossless Audio Protocol',
-        wlan: 'Apple Ecosystem Instant iCloud Handoff',
         usb: 'USB Type-C charging port',
         sensors:
           'Skin-detect sensor, motion-detecting accelerometer, speech-detecting accelerometer, touch control',
-        location: 'Find My with Precision Finding (Apple U1 Ultra Wideband)',
-        nfc: false,
         other:
           'Conversation Awareness (tự giảm nhạc khi người dùng bắt đầu nói chuyện), Hearing Aid & Hearing Test',
       },
-      cellular: {
-        has_5g: false,
-        technology: 'Bluetooth 5.3 + Ultra Wideband (U1)',
-        sim_type: 'Wireless Audio Accessory',
-        volte: false,
-        vowifi: false,
-      },
+      cellular: {},
       multimedia: {
         loudspeaker: 'Custom high-excursion Apple driver + Custom high dynamic range amplifier',
-        headphone_jack_35mm: false,
         audio_features:
           'Active Noise Cancellation (2x), Adaptive Transparency, Personalized Spatial Audio with dynamic head tracking',
       },
@@ -1525,13 +1495,45 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
     },
     key_specs: {
-      screen: 'Hộp sạc MagSafe USB-C (IP54 + Loa Find My)',
       chip: 'Apple H2 + Apple U1 Ultra Wideband',
-      camera: 'ANC Khử ồn gấp 2 lần + Adaptive Audio',
       battery: '6h tai nghe / 30h hộp sạc (523 mAh)',
-      storage: 'USB-C / MagSafe',
-      ram: 'Bluetooth 5.3',
     },
+    // Template text an earlier version of this seed wrote: a display, cameras, a cellular
+    // network and phone hardware earbuds do not have (DOS/Rate#1793).
+    retract_spec_fields: [
+      'design.biometrics',
+      'display.size_inch',
+      'display.type',
+      'display.resolution',
+      'display.refresh_rate_hz',
+      'display.ppi',
+      'display.protection',
+      'display.features',
+      'hardware.cpu',
+      'hardware.gpu',
+      'hardware.ram_gb',
+      'hardware.storage_gb',
+      'hardware.storage_expansion',
+      'hardware.os',
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'camera.video_recording',
+      'connectivity.wlan',
+      'connectivity.location',
+      'connectivity.nfc',
+      'cellular.has_5g',
+      'cellular.technology',
+      'cellular.sim_type',
+      'cellular.volte',
+      'cellular.vowifi',
+      'multimedia.headphone_jack_35mm',
+      'key_specs.screen',
+      'key_specs.camera',
+      'key_specs.storage',
+      'key_specs.ram',
+    ],
   },
 
   // 11. Samsung Galaxy Tab S10 Ultra 5G 256GB (Tablet Flagship)
@@ -2305,9 +2307,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     slug: 'sony-wf-1000xm5',
     description:
       'Tai nghe chống ồn chủ động đầu bảng Sony WF-1000XM5 trang bị bộ đôi chip xử lý V2 + QN2e, màng loa Dynamic Driver X 8.4mm, chuẩn âm thanh Hi-Res Wireless LDAC và cảm biến dẫn truyền xương thu giọng nói.',
-    ram_gb: 1,
-    storage_gb: 64,
-    screen_size_inch: 1.0,
+    ram_gb: null,
+    storage_gb: null,
+    screen_size_inch: null,
     battery_mah: 500,
     has_5g: false,
     colors: ['Đen', 'Bạc Platinum'],
@@ -2326,27 +2328,14 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         materials: 'Recycled ABS matte case, Noise Isolation Polyurethane foam ear tips',
         build: 'Nhỏ hơn 25% và nhẹ hơn 20% so với thế hệ XM4 (5.9g mỗi bên tai nghe)',
         resistance: 'IPX4 water and sweat resistant',
-        biometrics: 'IR Proximity In-Ear Detection Sensor + Bone Conduction Sensor',
         keys: 'Capacitive Touch Sensor panels on both earbuds + Pairing button on case',
         colors: ['Đen', 'Bạc Platinum'],
       },
-      display: {
-        size_inch: 1.0,
-        type: 'Multi-color LED Charging & Pairing Indicator + Sony Sound Connect HUD',
-        resolution: '8.4 mm Dynamic Driver X (Dome-edge composite structure)',
-        refresh_rate_hz: 60,
-        ppi: 300,
-        protection: 'IPX4 Acoustic Mesh Protection',
-        features: 'Adaptive Sound Control tự động đổi cấu hình chống ồn theo vị trí & chuyển động',
-      },
+      // Earbuds have no display, cameras or cellular network. The groups stay as {}, as the
+      // spec audit expects of a master with no category_slug in its specs (DOS/Rate#1793).
+      display: {},
       hardware: {
         chipset: 'Sony Integrated Processor V2 + HD Noise Cancelling Processor QN2e',
-        cpu: 'Dual-Processor 24-bit Audio Signal Processing & Real-time ANC',
-        gpu: 'DSEE Extreme AI Upscaling Engine',
-        ram_gb: 1,
-        storage_gb: 64,
-        storage_expansion: 'Cập nhật Firmware OTA qua ứng dụng Sony Sound Connect',
-        os: 'Sony Sound Connect (Hỗ trợ Multipoint 2 thiết bị iOS/Android/Windows cùng lúc)',
       },
       battery: {
         capacity_mah: 500,
@@ -2355,35 +2344,18 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fast_charging_w: 5,
         reverse_charging: false,
       },
-      camera: {
-        rear_setup: '6-Microphone Dual-Feedback & Bone Conduction Array',
-        main_camera: 'Dual feedback microphones + Feed-forward mic on each earbud (6 mics total)',
-        second_camera: 'Bone Conduction Sensor (nhận diện rung động xương hàm khi nói chuyện)',
-        front_camera:
-          'IR Proximity Sensor + Head Gesture Tracking (gật/lắc đầu nhận/từ chối cuộc gọi)',
-        video_recording: 'Chuẩn thu âm giọng nói AI Precise Voice Pickup chống ồn gió',
-      },
+      camera: {},
       connectivity: {
         bluetooth: '5.3, A2DP, AVRCP, HFP, HSP, TMAP, CSIP, MCP, VCP, CCP (SBC, AAC, LDAC, LC3)',
-        wlan: 'Fast Pair (Android) & Swift Pair (Windows 11)',
         usb: 'USB Type-C port',
         sensors: 'Bone conduction sensor, IR proximity sensor, gyro head-tracking sensor',
-        location: 'Google Find My Device network support',
-        nfc: false,
         other:
           'Multipoint Connection (kết nối 2 thiết bị đồng thời), Speak-to-Chat, LE Audio Ready',
       },
-      cellular: {
-        has_5g: false,
-        technology: 'Bluetooth 5.3 + LE Audio + LDAC 990kbps',
-        sim_type: 'Wireless Audio Accessory',
-        volte: false,
-        vowifi: false,
-      },
+      cellular: {},
       multimedia: {
         loudspeaker:
           '8.4 mm Dynamic Driver X (Tần số đáp ứng 20Hz - 40,000Hz với LDAC 96kHz/24-bit)',
-        headphone_jack_35mm: false,
         audio_features:
           'Hi-Res Audio Wireless, LDAC, DSEE Extreme, 360 Reality Audio with Head Tracking',
       },
@@ -2393,13 +2365,45 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
     },
     key_specs: {
-      screen: 'Driver Dynamic X 8.4mm + Nút bọt biển cách âm',
       chip: 'Chip kép Sony V2 + HD ANC QN2e',
-      camera: '6 Micro + Cảm biến dẫn truyền xương AI',
       battery: '8h bật ANC / 24h kèm hộp sạc Qi',
-      storage: 'LDAC Hi-Res / Multipoint 2 thiết bị',
-      ram: 'Bluetooth 5.3',
     },
+    // Template text an earlier version of this seed wrote: a display, cameras, a cellular
+    // network and phone hardware earbuds do not have (DOS/Rate#1793).
+    retract_spec_fields: [
+      'design.biometrics',
+      'display.size_inch',
+      'display.type',
+      'display.resolution',
+      'display.refresh_rate_hz',
+      'display.ppi',
+      'display.protection',
+      'display.features',
+      'hardware.cpu',
+      'hardware.gpu',
+      'hardware.ram_gb',
+      'hardware.storage_gb',
+      'hardware.storage_expansion',
+      'hardware.os',
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'camera.video_recording',
+      'connectivity.wlan',
+      'connectivity.location',
+      'connectivity.nfc',
+      'cellular.has_5g',
+      'cellular.technology',
+      'cellular.sim_type',
+      'cellular.volte',
+      'cellular.vowifi',
+      'multimedia.headphone_jack_35mm',
+      'key_specs.screen',
+      'key_specs.camera',
+      'key_specs.storage',
+      'key_specs.ram',
+    ],
   },
 
   // 19. Samsung Galaxy Buds3 Pro (True Wireless Planar Dual-Amp Flagship)
@@ -2413,9 +2417,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     slug: 'samsung-galaxy-buds3-pro',
     description:
       'Tai nghe không dây chống ồn Samsung Galaxy Buds3 Pro thiết kế Blade Lights hiện đại, hệ thống loa 2 đường tiếng (Dynamic 10.5mm + Planar Tweeter 6.1mm) với Amply kép, chuẩn kháng nước IP57 và phiên dịch trực tiếp Galaxy AI.',
-    ram_gb: 1,
-    storage_gb: 64,
-    screen_size_inch: 1.0,
+    ram_gb: null,
+    storage_gb: null,
+    screen_size_inch: null,
     battery_mah: 515,
     has_5g: false,
     colors: ['Bạc Silver', 'Trắng White'],
@@ -2435,28 +2439,14 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         build:
           'Thiết kế đuôi góc cạnh Blade hỗ trợ bóp và vuốt chỉnh âm lượng kèm dải đèn LED Blade Lights',
         resistance: 'IP57 dust and water resistant (ngâm nước 1m trong 30 phút cho tai nghe)',
-        biometrics: 'Wear Detection Sensor + VPU Voice Pickup Unit',
         keys: 'Pinch & Swipe Blade Control + Voice Command không cần từ khóa đánh thức',
         colors: ['Bạc Silver', 'Trắng White'],
       },
-      display: {
-        size_inch: 1.0,
-        type: 'Blade Lights LED Bar on earbuds + Transparent Lid Case Status LED',
-        resolution: 'Enhanced 2-Way Speaker (10.5mm Dynamic Woofer + 6.1mm Planar Tweeter)',
-        refresh_rate_hz: 60,
-        ppi: 300,
-        protection: 'IP57 Water & Sweat Seal',
-        features:
-          'Đèn Blade Lights tùy chỉnh hiệu ứng nhấp nháy và hỗ trợ tìm kiếm tai nghe trong tối',
-      },
+      // Earbuds have no display, cameras or cellular network. The groups stay as {}, as the
+      // spec audit expects of a master with no category_slug in its specs (DOS/Rate#1793).
+      display: {},
       hardware: {
         chipset: 'Samsung Proprietary Bluetooth 5.4 SoC + Dual Amplifier Architecture',
-        cpu: 'Galaxy AI Adaptive Noise Control & Super Clear Call Neural DSP',
-        gpu: '360 Audio Direct Multi-Channel Engine',
-        ram_gb: 1,
-        storage_gb: 64,
-        storage_expansion: 'Galaxy Wearable OTA Firmware',
-        os: 'Galaxy Wearable (Samsung Seamless Codec UHQ 24-bit/96kHz)',
       },
       battery: {
         capacity_mah: 515,
@@ -2465,36 +2455,19 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fast_charging_w: 5,
         reverse_charging: false,
       },
-      camera: {
-        rear_setup: '3-Mic High-SNR & Voice Pickup Unit Array',
-        main_camera: '3 High-SNR (Signal-to-Noise Ratio) Microphones per earbud',
-        second_camera: 'VPU (Voice Pickup Unit) cảm biến rung xương hàm + Siren/Voice Detect AI',
-        front_camera: 'Accelerometer + Gyro + Hall Sensor + Pressure Sensor + Proximity Sensor',
-        video_recording:
-          'Thu âm 360 Audio Recording độ phân giải cao khi quay video trên máy Galaxy',
-      },
+      camera: {},
       connectivity: {
         bluetooth:
           '5.4, A2DP, AVRCP, HFP, PBP, TMAP (SSC HiFi, SSC UHQ 24-bit/96kHz, AAC, SBC, LC3)',
-        wlan: 'Auto Switch giữa điện thoại, tablet, đồng hồ và laptop Galaxy',
         usb: 'USB Type-C port',
         sensors:
           'Accelerometer, Gyro Sensor, Hall Sensor, Pressure Sensor, Proximity Sensor, Touch Sensor, VPU',
-        location: 'Samsung Find network',
-        nfc: false,
         other:
           'Galaxy AI Live Interpreter (Phiên dịch trực tiếp), Siren Detect (Tự mở xuyên âm khi nghe còi cứu hỏa/cấp cứu)',
       },
-      cellular: {
-        has_5g: false,
-        technology: 'Bluetooth 5.4 + Auracast Broadcast Audio',
-        sim_type: 'Wireless Audio Accessory',
-        volte: false,
-        vowifi: false,
-      },
+      cellular: {},
       multimedia: {
         loudspeaker: 'Loa 2 đường tiếng (10.5mm Dynamic + 6.1mm Planar) với Dual Amp độc lập',
-        headphone_jack_35mm: false,
         audio_features:
           '24-bit/96kHz Ultra High Quality (UHQ) Audio, Adaptive EQ, Adaptive ANC, 360 Audio',
       },
@@ -2504,13 +2477,45 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
     },
     key_specs: {
-      screen: 'Loa 2 đường tiếng (10.5mm Dynamic + 6.1mm Planar) + Blade Lights',
       chip: 'Dual Amplifier + Galaxy AI ANC DSP',
-      camera: '3 Micro High-SNR + VPU + Nhận diện còi báo động',
       battery: '6h bật ANC / 26h-30h kèm hộp sạc (515 mAh)',
-      storage: 'SSC UHQ 24-bit/96kHz + Chuẩn IP57',
-      ram: 'Bluetooth 5.4',
     },
+    // Template text an earlier version of this seed wrote: a display, cameras, a cellular
+    // network and phone hardware earbuds do not have (DOS/Rate#1793).
+    retract_spec_fields: [
+      'design.biometrics',
+      'display.size_inch',
+      'display.type',
+      'display.resolution',
+      'display.refresh_rate_hz',
+      'display.ppi',
+      'display.protection',
+      'display.features',
+      'hardware.cpu',
+      'hardware.gpu',
+      'hardware.ram_gb',
+      'hardware.storage_gb',
+      'hardware.storage_expansion',
+      'hardware.os',
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'camera.video_recording',
+      'connectivity.wlan',
+      'connectivity.location',
+      'connectivity.nfc',
+      'cellular.has_5g',
+      'cellular.technology',
+      'cellular.sim_type',
+      'cellular.volte',
+      'cellular.vowifi',
+      'multimedia.headphone_jack_35mm',
+      'key_specs.screen',
+      'key_specs.camera',
+      'key_specs.storage',
+      'key_specs.ram',
+    ],
   },
   // ============================================================================
   // 2026 UPSTREAM FLAGSHIP LINEUP (GSMArena & PhoneArena Synced)
@@ -3306,10 +3311,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         keys: 'Digital Crown, Side button',
         colors: ['Jet Black', 'Rose Gold', 'Silver'],
       },
+      // The GPS model: no cellular network (DOS/Rate#1793).
       cellular: {
         has_5g: false,
-        sim_type: 'GPS Model (eSIM optional on Cellular variant)',
-        technology: 'Wi-Fi + Bluetooth 5.3 + UWB Gen 2',
       },
       connectivity: {
         bluetooth: '5.3',
@@ -3341,6 +3345,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     sources: {
       'connectivity.bluetooth': 'https://support.apple.com/en-us/125093',
     },
+    // Wi-Fi, Bluetooth and UWB, and an eSIM note, stored as network values (DOS/Rate#1793).
+    retract_spec_fields: ['cellular.sim_type', 'cellular.technology'],
   },
   // 34. Apple Watch Ultra 3 49mm 64GB (2025/2026 Flagship Adventure Smartwatch)
   {
@@ -3453,11 +3459,11 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     brand: 'Apple',
     model: 'AirPods Pro 3 USB-C',
     variant_name: 'Tiêu chuẩn',
-    storage_gb: 1,
+    storage_gb: null,
     name: 'Apple AirPods Pro 3 USB-C',
     slug: 'apple-airpods-pro-3-usb-c',
-    ram_gb: 1,
-    screen_size_inch: 1.0,
+    ram_gb: null,
+    screen_size_inch: null,
     battery_mah: 540,
     has_5g: false,
     colors: ['Trắng (White)'],
@@ -3465,37 +3471,17 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     description:
       'Apple AirPods Pro 3 USB-C trang bị chip âm thanh Apple H3 thế hệ mới khử tiếng ồn chủ động ANC gấp 3 lần, cảm biến đo nhịp tim & nhiệt độ cơ thể trong ống tai, chế độ Trợ thính chuẩn lâm sàng (Clinical-Grade Hearing Aid) và hộp sạc MagSafe tích hợp UWB U2.',
     key_specs: {
-      screen: 'MagSafe USB-C Case (Loa Find My + Chip U2 UWB)',
       chip: 'Apple H3 Headphone Chip + Apple U2 (Case)',
-      ram: '1GB',
-      storage: 'Standard',
-      camera: '3x Pro ANC + In-Ear Heart Rate & Body Temp Sensor',
       battery: '6.5h (Tai nghe) / 32h (Hộp sạc MagSafe USB-C)',
     },
     specifications: {
-      display: {
-        size_inch: 1.0,
-        type: 'Status LED Indicator + Built-in Find My Precision Speaker',
-        resolution: 'Custom High-Excursion Apple Driver + High Dynamic Range Amplifier',
-        refresh_rate_hz: 60,
-        features:
-          'Personalized Spatial Audio with dynamic head tracking, Lossless Audio (20-bit/48kHz & 24-bit/96kHz)',
-      },
+      // Earbuds have no display, cameras or cellular network. The groups stay as {}, as the
+      // spec audit expects of a master with no category_slug in its specs (DOS/Rate#1793).
+      display: {},
       hardware: {
         chipset: 'Apple H3 Headphone Chip (Earbuds) + Apple U2 Ultra Wideband (Charging Case)',
-        cpu: 'Apple H3 Ultra-Low-Latency Audio DSP (96,000x/sec noise adaptation)',
-        gpu: 'Acoustic & Optical Biosensor Co-Processor',
-        ram_gb: 1,
-        storage_gb: 1,
-        storage_expansion: 'No',
-        os: 'Apple AudioOS (Hearing Health & Live Translation AI)',
       },
-      camera: {
-        rear_setup: 'In-Ear Biosensor & Multi-Mic Acoustic Array',
-        main_camera: 'In-Ear Optical Heart-Rate & Body Temperature Sensor',
-        second_camera: 'Dual beamforming microphones + Inward-facing microphone + Voice Isolation',
-        front_camera: 'Capacitive Touch Control Stem (Swipe Volume + Press ANC/Transparency)',
-      },
+      camera: {},
       battery: {
         capacity_mah: 540,
         type: 'Rechargeable Li-Ion (up to 6.5h listening with ANC / 32h total with MagSafe Case)',
@@ -3509,27 +3495,18 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         weight_g: 50.2,
         materials: 'Recessed acoustic mesh, silicone ear tips (XXS, XS, S, M, L), lanyard loop',
         resistance: 'IP54 dust, sweat, and water resistant (both earbuds and MagSafe case)',
-        biometrics: 'Skin-detect sensor + In-ear optical heart rate & temperature biosensor',
         keys: 'Touch Control stems, Case setup button',
         colors: ['White'],
       },
-      cellular: {
-        has_5g: false,
-        sim_type: 'No cellular',
-        technology: 'Bluetooth 5.4 + Ultra-Low-Latency 5GHz Lossless Link + UWB U2',
-      },
+      cellular: {},
       connectivity: {
         bluetooth: '5.4, A2DP, LE Audio, AAC-ELD, Apple Lossless Audio Protocol',
-        wlan: '5GHz Ultra-Low-Latency Wireless Audio Link',
         usb: 'USB Type-C',
-        nfc: false,
-        location: 'Precision Finding via Apple U2 Ultra Wideband chip',
         sensors:
           'In-ear heart rate sensor, in-ear temperature sensor, skin-detect sensor, motion-detecting accelerometer, speech-detecting accelerometer',
       },
       multimedia: {
         loudspeaker: 'Custom high-excursion Apple driver + Built-in Case speaker for Find My',
-        headphone_jack_35mm: false,
         audio_features:
           '3x Pro Active Noise Cancellation, Adaptive Audio, Transparency mode, Conversation Awareness, Clinical-Grade Hearing Aid',
       },
@@ -3543,6 +3520,37 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'FDA OTC Hearing Aid Authorized, IP54, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
+    // Template text an earlier version of this seed wrote: a display, cameras, a cellular
+    // network and phone hardware earbuds do not have (DOS/Rate#1793).
+    retract_spec_fields: [
+      'display.size_inch',
+      'display.type',
+      'display.resolution',
+      'display.refresh_rate_hz',
+      'display.features',
+      'hardware.cpu',
+      'hardware.gpu',
+      'hardware.ram_gb',
+      'hardware.storage_gb',
+      'hardware.storage_expansion',
+      'hardware.os',
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'design.biometrics',
+      'cellular.has_5g',
+      'cellular.sim_type',
+      'cellular.technology',
+      'connectivity.wlan',
+      'connectivity.nfc',
+      'connectivity.location',
+      'multimedia.headphone_jack_35mm',
+      'key_specs.screen',
+      'key_specs.ram',
+      'key_specs.storage',
+      'key_specs.camera',
+    ],
   },
   // 36. Sony WF-1000XM6 (2025/2026 Flagship Hi-Res LDAC ANC Earbuds)
   {
@@ -3551,11 +3559,11 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     brand: 'Sony',
     model: 'WF-1000XM6',
     variant_name: 'Tiêu chuẩn',
-    storage_gb: 1,
+    storage_gb: null,
     name: 'Sony WF-1000XM6',
     slug: 'sony-wf-1000xm6',
-    ram_gb: 1,
-    screen_size_inch: 1.0,
+    ram_gb: null,
+    screen_size_inch: null,
     battery_mah: 550,
     has_5g: false,
     colors: ['Đen (Black)', 'Bạc Платина (Platinum Silver)', 'Hồng Khói (Smoky Pink)'],
@@ -3563,38 +3571,17 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     description:
       'Sony WF-1000XM6 trang bị bộ đôi chip xử lý Integrated Processor V3 và QN3e HD Noise Cancelling Processor cùng màng loa Dynamic Driver X 8.4mm thế hệ mới, hỗ trợ Hi-Res Audio Wireless LDAC 990kbps, DSEE Ultimate AI và pin 8.5 giờ bật ANC.',
     key_specs: {
-      screen: 'Qi Wireless Case + Multi-Point Status LED',
       chip: 'Sony V3 + QN3e HD Noise Cancelling Dual-Processor',
-      ram: '1GB',
-      storage: 'Standard',
-      camera: '6-Mic Array + Bone Conduction Sensor + AI Wind Reduction',
       battery: '8.5h (ANC On) / 26h (Hộp sạc Qi USB-C)',
     },
     specifications: {
-      display: {
-        size_inch: 1.0,
-        type: 'Ergonomic Matte Acoustic Housing + Tri-Color Case Status LED',
-        resolution: '8.4mm Dynamic Driver X (20Hz - 40,000Hz LDAC 96kHz/24-bit 990kbps)',
-        refresh_rate_hz: 60,
-        features:
-          'DSEE Ultimate AI upscaling, 360 Reality Audio with Head Tracking, 10-band EQ in Sony Sound Connect',
-      },
+      // Earbuds have no display, cameras or cellular network. The groups stay as {}, as the
+      // spec audit expects of a master with no category_slug in its specs (DOS/Rate#1793).
+      display: {},
       hardware: {
         chipset: 'Sony Integrated Processor V3 + QN3e HD Noise Cancelling Processor',
-        cpu: 'Dual-Processor 24-bit Audio DSP + Real-Time Adaptive ANC Engine',
-        gpu: 'LDAC & LE Audio (LC3 / Auracast) Controller',
-        ram_gb: 1,
-        storage_gb: 1,
-        storage_expansion: 'No',
-        os: 'Sony Sound Connect (iOS / Android / Windows / macOS Multipoint)',
       },
-      camera: {
-        rear_setup: '6-Microphone Dual Feedback & Bone Conduction Array',
-        main_camera: 'Dual Feedback + Feedforward Microphones per earbud (6 mics total)',
-        second_camera:
-          'Precise Voice Pickup Bone Conduction Sensor + AI Beamforming Wind Reduction',
-        front_camera: 'Capacitive Touch Panels + Head Gesture Control (Nod/Shake)',
-      },
+      camera: {},
       battery: {
         capacity_mah: 550,
         type: 'Rechargeable Li-Ion (8.5h ANC on / 12h ANC off / 26h total with case)',
@@ -3608,26 +3595,18 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         materials:
           'Recycled ABS matte texture body + Polyurethane foam noise isolation earbud tips (SS, S, M, L)',
         resistance: 'IPX4 splash and sweat resistant',
-        biometrics: 'In-ear proximity sensor + Bone conduction speech vibration detector',
         keys: 'Left/Right capacitive touch sensors, Case pairing button',
         colors: ['Black', 'Platinum Silver', 'Smoky Pink'],
       },
-      cellular: {
-        has_5g: false,
-        sim_type: 'No cellular',
-        technology: 'Bluetooth 5.4 Multipoint (2 devices simultaneously)',
-      },
+      cellular: {},
       connectivity: {
         bluetooth: '5.4, A2DP, AVRCP, HFP, HSP, TMAP, CSIP, MCP, VCP, CCP (SBC, AAC, LDAC, LC3)',
-        wlan: 'Fast Pair (Android) & Swift Pair (Windows 11)',
         usb: 'USB Type-C + Qi Wireless Charging',
-        nfc: false,
         sensors:
           'Bone conduction sensor, dual proximity sensors, gyro/accelerometer for head gestures',
       },
       multimedia: {
         loudspeaker: '8.4mm Dynamic Driver X with dome-edge dual-layer diaphragm',
-        headphone_jack_35mm: false,
         audio_features:
           'Hi-Res Audio Wireless, LDAC 990kbps, DSEE Ultimate, Speak-to-Chat, Adaptive Sound Control, Auracast',
       },
@@ -3641,6 +3620,36 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'Hi-Res Audio Wireless Certified, IPX4, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
+    // Template text an earlier version of this seed wrote: a display, cameras, a cellular
+    // network and phone hardware earbuds do not have (DOS/Rate#1793).
+    retract_spec_fields: [
+      'display.size_inch',
+      'display.type',
+      'display.resolution',
+      'display.refresh_rate_hz',
+      'display.features',
+      'hardware.cpu',
+      'hardware.gpu',
+      'hardware.ram_gb',
+      'hardware.storage_gb',
+      'hardware.storage_expansion',
+      'hardware.os',
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'camera.front_camera',
+      'design.biometrics',
+      'cellular.has_5g',
+      'cellular.sim_type',
+      'cellular.technology',
+      'connectivity.wlan',
+      'connectivity.nfc',
+      'multimedia.headphone_jack_35mm',
+      'key_specs.screen',
+      'key_specs.ram',
+      'key_specs.storage',
+      'key_specs.camera',
+    ],
   },
   // Sourced iPhone 18 Pro, 18 Pro Max and Galaxy S26 Ultra 256GB seeds (flagship-seed-sourced-
   // 2026.ts), in place of the earlier unsourced entries.
