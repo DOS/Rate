@@ -65,8 +65,10 @@ import { contentLang } from '@/lib/content-lang';
 import { SAMPLE_AUDIT_URLS } from '@/lib/inspect-samples';
 import {
   implausiblyLowOfferIds,
+  isImplausiblyLowPrice,
   isOfferImplausiblyLowAgainstInStock,
   normalizeOfferId,
+  plausibleMinPrice,
   plausibleOffers,
 } from '@repo/shared-data/rules';
 import {
@@ -301,9 +303,27 @@ export function inspectMarkdownPriceVerdict(
 
 export function resolveInspectPriceVerdictPrices(params: {
   matchedOffer?: {
+    id?: string | null;
     price_current?: unknown;
     price_original?: unknown;
+    availability?: OfferAvailability | null;
+    implausiblyLow?: boolean | null;
   } | null;
+  allOffers?:
+    | readonly {
+        id: string;
+        price_current: number;
+        availability?: OfferAvailability | null;
+      }[]
+    | null;
+  inStockOffers?:
+    | readonly {
+        id?: string | null;
+        price_current: number;
+      }[]
+    | null;
+  offerUnavailable?: boolean;
+  offerImplausiblyLow?: boolean;
   master?: {
     min_price?: unknown;
     max_price?: unknown;
@@ -318,20 +338,120 @@ export function resolveInspectPriceVerdictPrices(params: {
   historicalLowVnd: number;
   historicalHighVnd: number;
 } {
-  const { matchedOffer, master, priceHistory } = params;
+  const { matchedOffer, allOffers, master, priceHistory } = params;
+  const safeOfferCurrent = sanitizeInspectPriceVnd(matchedOffer?.price_current);
+  const hasAllOffers = Array.isArray(allOffers) && allOffers.length > 0;
+  let cachedOrdered: ReturnType<typeof orderInspectOffers> | null = null;
+  const getOrdered = () => {
+    if (!hasAllOffers) return null;
+    if (!cachedOrdered) {
+      cachedOrdered = orderInspectOffers(allOffers);
+    }
+    return cachedOrdered;
+  };
+
+  const unavailable = Boolean(
+    params.offerUnavailable ||
+    (matchedOffer && isOfferUnavailable(matchedOffer))
+  );
+  const bait = (() => {
+    if (
+      params.offerImplausiblyLow === true ||
+      matchedOffer?.implausiblyLow === true
+    ) {
+      return true;
+    }
+    if (params.offerImplausiblyLow === false) {
+      return false;
+    }
+    if (!matchedOffer || safeOfferCurrent <= 0) {
+      return false;
+    }
+    const candidate =
+      typeof matchedOffer.id === 'string' &&
+      typeof matchedOffer.price_current === 'number'
+        ? (matchedOffer as {
+            id: string;
+            price_current: number;
+            availability?: OfferAvailability | null;
+          })
+        : {
+            id: typeof matchedOffer.id === 'string' ? matchedOffer.id : '',
+            price_current: safeOfferCurrent,
+            availability: matchedOffer.availability ?? null,
+          };
+    const ordered = getOrdered();
+    if (ordered) {
+      return isInspectOfferBait(
+        candidate,
+        ordered.implausibleOfferIds,
+        ordered.plausibilityOffers
+      );
+    }
+    if (
+      Array.isArray(params.inStockOffers) &&
+      params.inStockOffers.length > 0
+    ) {
+      return isOfferImplausiblyLowAgainstInStock(
+        candidate,
+        params.inStockOffers
+      );
+    }
+    return false;
+  })();
+
+  const resolvedInStockOffers = Array.isArray(params.inStockOffers)
+    ? params.inStockOffers
+    : hasAllOffers
+      ? (getOrdered()?.inStockOffers ?? null)
+      : null;
+
+  const rawMasterMin = sanitizeInspectPriceVnd(master?.min_price);
+  const safeFallbackMin = (() => {
+    if (
+      hasAllOffers &&
+      resolvedInStockOffers &&
+      resolvedInStockOffers.length === 0
+    ) {
+      return 0;
+    }
+    if (
+      resolvedInStockOffers &&
+      resolvedInStockOffers.length > 0 &&
+      rawMasterMin > 0 &&
+      isImplausiblyLowPrice(
+        rawMasterMin,
+        plausibleOffers(resolvedInStockOffers)
+      )
+    ) {
+      return plausibleMinPrice(rawMasterMin, resolvedInStockOffers);
+    }
+    return rawMasterMin;
+  })();
+
+  const suppressOfferPrices = unavailable || bait;
+  const currentPriceVnd =
+    (suppressOfferPrices ? 0 : safeOfferCurrent) || safeFallbackMin;
+  const rawClaimedOriginal = suppressOfferPrices
+    ? 0
+    : sanitizeInspectPriceVnd(matchedOffer?.price_original);
+  const claimedOriginalVnd =
+    currentPriceVnd > 0 && rawClaimedOriginal > currentPriceVnd
+      ? rawClaimedOriginal
+      : 0;
+
   return {
-    currentPriceVnd:
-      sanitizeInspectPriceVnd(matchedOffer?.price_current) ||
-      sanitizeInspectPriceVnd(master?.min_price),
-    claimedOriginalVnd: sanitizeInspectPriceVnd(matchedOffer?.price_original),
+    currentPriceVnd,
+    claimedOriginalVnd,
     historicalLowVnd:
-      sanitizeInspectPriceVnd(priceHistory?.lowestEverPrice) ||
-      sanitizeInspectPriceVnd(master?.min_price),
+      sanitizeInspectPriceVnd(priceHistory?.lowestEverPrice) || safeFallbackMin,
     historicalHighVnd:
       sanitizeInspectPriceVnd(priceHistory?.highestEverPrice) ||
       sanitizeInspectPriceVnd(master?.max_price),
   };
 }
+
+export const resolveInspectVerdictPrices = resolveInspectPriceVerdictPrices;
 
 export function buildInspectMarkdownPriceLines(params: {
   currentListedPrice: unknown;
@@ -352,7 +472,7 @@ export function buildInspectMarkdownPriceLines(params: {
   const out: string[] = [];
   if (current > 0) {
     const origSuffix =
-      orig > 0
+      orig > current
         ? ` | ${params.labels.claimedOriginalLabel}: ${orig.toLocaleString('vi-VN')} ₫`
         : '';
     out.push(
@@ -382,12 +502,14 @@ export function isInspectOfferBait(
         id: string;
         price_current: number;
         availability?: OfferAvailability | null;
+        implausiblyLow?: boolean | null;
       }
     | null
     | undefined,
   implausibleOfferIds: ReadonlySet<string>,
   inStockOffers: readonly { id?: string | null; price_current: number }[]
 ): boolean {
+  if (offer?.implausiblyLow === true) return true;
   return isOfferImplausiblyLowAgainstInStock(
     offer,
     inStockOffers,
@@ -597,6 +719,10 @@ export default function DeepInspectWorkspace({
   );
   const verdictPrices = resolveInspectPriceVerdictPrices({
     matchedOffer,
+    allOffers: result?.allOffers,
+    inStockOffers,
+    offerUnavailable: matchedOfferUnavailable,
+    offerImplausiblyLow,
     master,
     priceHistory,
   });

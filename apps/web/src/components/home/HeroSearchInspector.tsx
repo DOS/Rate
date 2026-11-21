@@ -12,11 +12,21 @@ import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import type { KeySpecs } from '@repo/shared-data';
+import {
+  implausiblyLowOfferIds,
+  isOfferImplausiblyLowAgainstInStock,
+  plausibleOffers,
+} from '@repo/shared-data/rules';
 import type { HeroProductSuggestion } from '@/lib/hero-products';
+import {
+  isOfferUnavailable,
+  type OfferAvailability,
+} from '@/lib/product-market-stats';
 import {
   MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
   getMasterProductHref,
+  type OfferDiscountAnalysis,
   type UrlInspectionResult,
 } from '@/lib/rate-domain';
 import {
@@ -234,6 +244,87 @@ export function buildHeroCompareItem(
   };
 }
 
+export function resolveHeroInspectDiscountAnalysis(
+  inspectResult:
+    | {
+        matchedOffer?: {
+          id?: string | null;
+          price_current?: unknown;
+          availability?: OfferAvailability | null;
+          implausiblyLow?: boolean | null;
+        } | null;
+        allOffers?:
+          | readonly {
+              id: string;
+              price_current: number;
+              availability?: OfferAvailability | null;
+            }[]
+          | null;
+        discountAnalysis?: OfferDiscountAnalysis | null;
+      }
+    | null
+    | undefined
+): OfferDiscountAnalysis | null {
+  const analysis = inspectResult?.discountAnalysis ?? null;
+  if (!analysis) return null;
+
+  const safeOffers = Array.isArray(inspectResult?.allOffers)
+    ? inspectResult.allOffers
+    : [];
+  const inStockOffers = safeOffers.filter((o) => !isOfferUnavailable(o));
+  const matchedOffer = inspectResult?.matchedOffer ?? null;
+
+  if (!matchedOffer) {
+    if (sanitizeHeroInspectorPriceVnd(analysis.price_current) <= 0) {
+      return null;
+    }
+    if (safeOffers.length > 0 && plausibleOffers(inStockOffers).length === 0) {
+      return null;
+    }
+    return analysis;
+  }
+
+  if (isOfferUnavailable(matchedOffer)) {
+    return null;
+  }
+  const safeOfferPrice = sanitizeHeroInspectorPriceVnd(
+    matchedOffer.price_current
+  );
+  if (safeOfferPrice <= 0) {
+    return null;
+  }
+  if (matchedOffer.implausiblyLow === true) {
+    return null;
+  }
+
+  const plausibilityOffers =
+    inStockOffers.length > 0 ? inStockOffers : safeOffers;
+  const implausibleOfferIds = implausiblyLowOfferIds(plausibilityOffers);
+  const candidate =
+    typeof matchedOffer.price_current === 'number'
+      ? (matchedOffer as {
+          id?: string | null;
+          price_current: number;
+          availability?: string | null;
+        })
+      : {
+          id: typeof matchedOffer.id === 'string' ? matchedOffer.id : '',
+          price_current: safeOfferPrice,
+          availability: matchedOffer.availability ?? null,
+        };
+  if (
+    isOfferImplausiblyLowAgainstInStock(
+      candidate,
+      plausibilityOffers,
+      implausibleOfferIds
+    )
+  ) {
+    return null;
+  }
+
+  return analysis;
+}
+
 export default function HeroSearchInspector({
   initialProducts,
   initialMerchants,
@@ -268,6 +359,8 @@ export default function HeroSearchInspector({
   const [inspectError, setInspectError] = useState<string | null>(null);
   const [inspectResult, setInspectResult] =
     useState<UrlInspectionResult | null>(initialInspectResult);
+  const heroDiscountAnalysis =
+    resolveHeroInspectDiscountAnalysis(inspectResult);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -899,22 +992,25 @@ export default function HeroSearchInspector({
                                 {inspectResult.parsedUrl.platform}
                               </span>
                             )}
-                            {inspectResult.discountAnalysis && (
+                            {heroDiscountAnalysis && (
                               <span
                                 className={`badge rounded-pill ${
-                                  inspectResult.discountAnalysis.verdict ===
+                                  heroDiscountAnalysis.verdict ===
                                   'fake_discount'
                                     ? 'bg-danger text-white'
-                                    : inspectResult.discountAnalysis.verdict ===
-                                        'genuine_deal'
-                                      ? 'bg-success text-white'
-                                      : 'bg-secondary-subtle text-secondary'
+                                    : heroDiscountAnalysis.verdict ===
+                                        'suspicious_discount'
+                                      ? 'bg-warning text-dark'
+                                      : heroDiscountAnalysis.verdict ===
+                                          'genuine_deal'
+                                        ? 'bg-success text-white'
+                                        : 'bg-secondary-subtle text-secondary'
                                 }`}
                               >
                                 {
                                   discountVerdictCopy(
                                     tVerdict,
-                                    inspectResult.discountAnalysis,
+                                    heroDiscountAnalysis,
                                     locale
                                   ).label
                                 }
@@ -977,12 +1073,12 @@ export default function HeroSearchInspector({
                             );
                           })()}
 
-                          {inspectResult.discountAnalysis && (
+                          {heroDiscountAnalysis && (
                             <p className="text-muted small mb-0">
                               {
                                 discountVerdictCopy(
                                   tVerdict,
-                                  inspectResult.discountAnalysis,
+                                  heroDiscountAnalysis,
                                   locale
                                 ).explanation
                               }
