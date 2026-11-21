@@ -759,8 +759,10 @@ const CANONICAL_PHONE_REGISTRY: Record<
     os: string;
     weight_g: number;
     dimensions: string;
-    resolution: string;
-    screen_type: string;
+    // The screen as a source states it. Earbuds have none: their drivers, ANC and status
+    // LEDs are not a display (DOS/Rate#1792).
+    resolution?: string;
+    screen_type?: string;
     refresh_rate_hz?: number;
     // Cameras only, as a source states them. A watch or earbuds has none; a laptop has only
     // its webcam (front). Ports, sensors, microphones, controls and flashes are not cameras
@@ -1261,8 +1263,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     os: 'iOS / macOS / Spatial Audio firmware',
     weight_g: 50.8,
     dimensions: '45.2 x 60.6 x 21.7 mm (Case)',
-    resolution: 'Custom high-excursion Apple driver',
-    screen_type: 'Active Noise Cancellation (2x ANC) + Adaptive Transparency',
     charging_w: 5,
     has_5g: false,
     release_date: 'September 2023',
@@ -1276,8 +1276,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     os: 'Sony Sound Connect (LDAC / Multipoint)',
     weight_g: 49,
     dimensions: '64.6 x 40.0 x 26.5 mm (Case)',
-    resolution: '8.4 mm Dynamic Driver X (20Hz-40,000Hz LDAC)',
-    screen_type: 'Industry-leading Dual-Processor ANC + Bone Conduction Sensor',
     charging_w: 5,
     has_5g: false,
     release_date: 'July 2023',
@@ -1412,8 +1410,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     os: 'Galaxy Wearable (SSC UHQ 24-bit/96kHz)',
     weight_g: 57.4,
     dimensions: '48.7 x 58.9 x 24.4 mm (Case)',
-    resolution: 'Enhanced 2-Way Speaker (10.5mm Dynamic + 6.1mm Planar Tweeter)',
-    screen_type: 'Blade Lights LED Indicator + Transparent Cradle Lid',
     charging_w: 5,
     has_5g: false,
     release_date: 'July 2024',
@@ -1803,7 +1799,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
     screen_type: 'Wide-angle LTPO3 OLED Always-On Retina, 2200 nits (peak)',
     refresh_rate_hz: 60,
     charging_w: 15,
-    has_5g: false,
+    // The GPS + Cellular models support 5G (RedCap) and LTE: Apple's Tech Specs,
+    // https://support.apple.com/en-us/125093 (DOS/Rate#1792).
+    has_5g: true,
     release_date: 'September 2025',
     ip_rating: 'IP6X dust resistant + WR50 water resistant (50m swimproof)',
     only_storage_gb: 64,
@@ -1836,8 +1834,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     os: 'Apple AudioOS (Hearing Health & Live Translation AI)',
     weight_g: 50.2,
     dimensions: '45.2 x 60.6 x 21.7 mm (USB-C MagSafe Case)',
-    resolution: 'Custom High-Excursion Apple Driver + High Dynamic Range Amplifier',
-    screen_type: 'Status LED + Built-in Find My Precision Speaker',
     charging_w: 5,
     has_5g: false,
     release_date: 'September 2025',
@@ -1851,8 +1847,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     os: 'Sony Sound Connect (LDAC 990kbps / 360 Reality Audio)',
     weight_g: 46.8,
     dimensions: '64.0 x 40.0 x 25.8 mm (Qi Wireless Case)',
-    resolution: '8.4mm Dynamic Driver X (Dual-layer dome-edge diaphragm)',
-    screen_type: 'Recessed Matte Acoustic Chassis + Multi-Point Status LED',
     charging_w: 5,
     has_5g: false,
     release_date: 'June 2025',
@@ -3329,7 +3323,8 @@ export class ProductNormalizer {
     // OS, screen, chip, battery and charging come from a registry entry or the title only:
     // a category guess ("Android 14", "IPS / OLED Anti-Glare", "Snapdragon / Dimensity",
     // "5000 mAh", a 45 W charger) describes no listing a source checked (DOS/Rate#1790).
-    const screenType = benchmark?.screen_type || undefined;
+    // Earbuds have no screen: a driver, ANC or status LED is no display type (DOS/Rate#1792).
+    const screenType = categorySlug === 'earbuds' ? undefined : benchmark?.screen_type || undefined;
 
     // Camera text comes only from a registry entry: no category guess (a laptop's "1080p
     // FHD Webcam", an earbud's microphones, a watch's heart sensor, a phone's "50 MP") is a
@@ -3403,7 +3398,9 @@ export class ProductNormalizer {
       display: {
         size_inch: categorySlug === 'earbuds' ? undefined : screenSize || undefined,
         type: screenType,
-        resolution: (caseMismatch ? undefined : benchmark?.resolution) || undefined,
+        resolution:
+          (caseMismatch || categorySlug === 'earbuds' ? undefined : benchmark?.resolution) ||
+          undefined,
         refresh_rate_hz:
           categorySlug === 'earbuds'
             ? undefined
