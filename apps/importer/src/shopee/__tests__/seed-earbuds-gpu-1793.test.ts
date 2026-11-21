@@ -139,14 +139,56 @@ const RETRACTED_EVERYWHERE = [
   'key_specs.ram',
   'key_specs.storage',
   'key_specs.camera',
+  // The other fields the earbuds template does not have, which every earlier seed set.
+  'design.biometrics',
+  'display.features',
+  'hardware.cpu',
+  'hardware.os',
+  'connectivity.wlan',
+  'connectivity.nfc',
+  'cellular.has_5g',
+  'multimedia.headphone_jack_35mm',
 ];
+
+// The fields only some earlier seeds set.
+const RETRACTED_ALSO: Record<string, readonly string[]> = {
+  'apple:airpods-pro-2-usbc:64gb': [
+    'display.ppi',
+    'display.protection',
+    'camera.video_recording',
+    'connectivity.location',
+    'cellular.volte',
+    'cellular.vowifi',
+  ],
+  'apple:airpods-pro-3:standard': ['connectivity.location'],
+  'sony:wf-1000xm5:64gb': [
+    'display.ppi',
+    'display.protection',
+    'camera.video_recording',
+    'connectivity.location',
+    'cellular.volte',
+    'cellular.vowifi',
+  ],
+  'samsung:galaxy-buds3-pro:64gb': [
+    'display.ppi',
+    'display.protection',
+    'camera.video_recording',
+    'connectivity.location',
+    'cellular.volte',
+    'cellular.vowifi',
+  ],
+  'sony:wf-1000xm6:standard': [],
+};
 
 test('the backfill removes the stored earbud template text from masters and Items', async () => {
   for (const key of EARBUD_SEEDS) {
     const seed = seedOf(key);
-    for (const path of RETRACTED_EVERYWHERE) {
-      assert.ok(seed.retract_spec_fields?.includes(path), `${key}: ${path} not retracted`);
-    }
+    const expected = [...RETRACTED_EVERYWHERE, ...(RETRACTED_ALSO[key] ?? [])];
+    assert.deepEqual(
+      [...(seed.retract_spec_fields ?? [])].sort(),
+      expected.sort(),
+      `${key}: retract_spec_fields`
+    );
     const update = seedMasterSpecUpdate(structuredClone(STORED_TEMPLATE_TEXT), seed) as {
       specifications: ProductSpecifications;
       key_specs: Record<string, unknown>;
