@@ -132,6 +132,35 @@ function decodeArenaHtmlEntities(raw: string): string {
     });
 }
 
+/**
+ * The biometric sensors a GSMArena "Sensors" row lists ("Fingerprint (under display,
+ * ultrasonic)", "Face ID"), as the page words them, or undefined (DOS/Rate#1761).
+ */
+export function biometricsFromSensors(sensors: string | undefined): string | undefined {
+  if (!sensors) return undefined;
+  // Split on commas outside parentheses: "Fingerprint (under display, ultrasonic)" is one.
+  // One pass over the characters, no regex: a split regex with nested quantifiers backtracks
+  // polynomially on a run of "(" (CodeQL js/polynomial-redos).
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  const text = sensors.slice(0, 2000);
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    else if (ch === ',' && depth === 0) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  const found = parts
+    .map(part => part.trim())
+    .filter(part => /fingerprint|face\s*id|iris|face\s*unlock|3d\s*face/i.test(part));
+  return found.length > 0 ? found.join(', ') : undefined;
+}
+
 function escapeRegExp(raw: string): string {
   return raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -417,10 +446,13 @@ export function parseGsmArenaHtmlToSpecs(
       gpu: capSpec(d['gpu'] || pa['gpu']),
       ram_gb: ramGb ?? undefined,
       storage_gb: storageGb ?? undefined,
+      // A page that omits the card slot says nothing about it (DOS/Rate#1761).
       storage_expansion: capSpec(
-        d['memoryother']
-          ? `${d['memoryslot'] || 'No'} (${d['memoryother']})`
-          : d['memoryslot'] || 'No'
+        d['memoryslot']
+          ? d['memoryother']
+            ? `${d['memoryslot']} (${d['memoryother']})`
+            : d['memoryslot']
+          : undefined
       ),
       os: capSpec(d['os'] || pa['os']),
     },
@@ -447,9 +479,8 @@ export function parseGsmArenaHtmlToSpecs(
       weight_g: weightG,
       materials: capSpec(d['build'] || d['bodyother']),
       resistance: capSpec(resistanceMatch ? resistanceMatch[0].trim() : undefined),
-      biometrics: /fingerprint/i.test(d['sensors'] || pa['biometrics'] || '')
-        ? 'Under-display ultrasonic fingerprint, Face Unlock'
-        : 'Face ID / Biometric sensor',
+      // Only what the page states: no "ultrasonic" or "Face ID" guess (DOS/Rate#1761).
+      biometrics: capSpec(pa['biometrics'] || biometricsFromSensors(d['sensors'])),
       colors: parsedColors.length > 0 ? parsedColors : undefined,
     },
     // An unknown 5G invents no cellular defaults: only what the page states.
@@ -461,16 +492,13 @@ export function parseGsmArenaHtmlToSpecs(
             data_speed: capSpec(d['speed']),
             technology: capSpec(d['nettech']),
           }
-        : {
+        : // Only what the page states: no 5G band, SIM or speed default (DOS/Rate#1761).
+          {
             has_5g: has5g,
-            bands_5g: capSpec(has5g ? d['net5g'] || '5G SA/NSA/Sub6' : d['net5g']),
-            sim_type: capSpec(
-              d['sim'] || (has5g ? 'Dual SIM (Nano-SIM + eSIM)' : 'No cellular connectivity')
-            ),
-            data_speed: capSpec(d['speed'] || (has5g ? '5G, LTE-A' : 'Wi-Fi Only')),
-            technology: capSpec(
-              d['nettech'] || (has5g ? 'GSM / HSPA / LTE / 5G' : 'No cellular connectivity')
-            ),
+            bands_5g: capSpec(d['net5g']),
+            sim_type: capSpec(d['sim']),
+            data_speed: capSpec(d['speed']),
+            technology: capSpec(d['nettech']),
           },
     connectivity: {
       bluetooth: capSpec(d['bluetooth'] || pa['bluetooth']),

@@ -24,7 +24,8 @@
  * - the seed has images, and the row's `images` and `thumbnail` are the seed's (so the
  *   scoped `backfill-specs.ts --apply` that writes them ran first);
  * - its specifications pass the same checks as the catalog audit (schema, the 10 groups,
- *   the main camera, and a second camera unless the phone has one rear camera).
+ *   and, for a phone or tablet seed or a camera group that states a rear camera, the main
+ *   camera and a second camera unless the phone has one rear camera).
  * Any named master that fails stops the run before the first write. Each write is
  * `update ... where id = <id> and status = 'draft' and slug and thumbnail are the seed's`
  * and must touch exactly that row.
@@ -38,7 +39,12 @@ import { FLAGSHIP_DEVICES_TO_SEED, type FlagshipDeviceSeed } from '../flagship-s
 import { resolveBackfillSupabaseTarget } from '../paging.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
-import { REQUIRED_10_SPEC_GROUPS, hasSingleRearCamera, selectOnlySeeds } from './backfill-specs.js';
+import {
+  hasSingleRearCamera,
+  requiredSpecGroups,
+  selectOnlySeeds,
+  statesRearCamera,
+} from './backfill-specs.js';
 
 const logger = createImporterLogger('PublishMastersJob');
 
@@ -146,12 +152,18 @@ export function publishBlockers(
   if (!ProductSpecificationsSchema.safeParse(specs).success) {
     problems.push('specifications fail ProductSpecificationsSchema');
   }
-  for (const group of REQUIRED_10_SPEC_GROUPS) {
+  for (const group of requiredSpecGroups(seed.categorySlug)) {
     if (!specs?.[group]) problems.push(`missing specification group "${group}"`);
   }
-  if (!specs?.camera?.main_camera?.trim()) problems.push('missing camera.main_camera');
-  if (!hasSingleRearCamera(specs?.camera) && !specs?.camera?.second_camera?.trim()) {
-    problems.push('missing camera.second_camera');
+  // A phone or tablet seed always lists its rear cameras: a draft whose camera group is
+  // empty never got the seed's specs. Other categories are audited only when their camera
+  // group states a rear camera (DOS/Rate#1787).
+  const rearCameraExpected = seed.categorySlug === 'smartphones' || seed.categorySlug === 'tablets';
+  if (rearCameraExpected || statesRearCamera(specs?.camera)) {
+    if (!specs?.camera?.main_camera?.trim()) problems.push('missing camera.main_camera');
+    if (!hasSingleRearCamera(specs?.camera) && !specs?.camera?.second_camera?.trim()) {
+      problems.push('missing camera.second_camera');
+    }
   }
   return problems;
 }

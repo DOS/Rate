@@ -46,6 +46,7 @@ import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, type ProductSpecifications } from '@repo/shared-data';
+import { getCategorySpecTemplate } from '@repo/shared-data/rules';
 import { AiSpecEnricher, mergeProductSpecifications } from '../ai-spec-enricher.js';
 import { fetchAllPages, resolveBackfillSupabaseTarget } from '../paging.js';
 import {
@@ -76,6 +77,22 @@ export const REQUIRED_10_SPEC_GROUPS = [
   'multimedia',
   'regulatory',
 ] as const;
+
+/**
+ * The spec groups a master must carry: all 10, less the groups its category's spec template
+ * removes (a watch has no camera; earbuds have no display, camera or cellular). The importer
+ * stores a new master through that template, so an auto-created watch or earbuds master
+ * never has those groups and would fail an audit of all 10 (DOS/Rate#1792). A category the
+ * templates do not know, or none, keeps all 10.
+ */
+export function requiredSpecGroups(
+  categorySlug: unknown
+): ReadonlyArray<(typeof REQUIRED_10_SPEC_GROUPS)[number]> {
+  const { groups } = getCategorySpecTemplate(
+    typeof categorySlug === 'string' ? categorySlug : undefined
+  );
+  return REQUIRED_10_SPEC_GROUPS.filter(group => groups.includes(group));
+}
 
 export interface BackfillSpecsOptions {
   readonly apply?: boolean;
@@ -288,8 +305,38 @@ export function hasSingleRearCamera(
 }
 
 /**
- * Spec-only audit: every master product must carry all 10 Field Groups and the main camera,
- * plus a second camera unless `camera.rear_setup` declares a single rear camera.
+ * Whether the camera group states any rear camera (a rear setup label, or a main, second,
+ * third or fourth camera). A group that states none (a watch or earbuds, a laptop with
+ * only its webcam, a listing no source describes) has no rear camera to audit: the
+ * importer writes no guessed camera (DOS/Rate#1787).
+ */
+export function statesRearCamera(
+  camera:
+    | {
+        rear_setup?: unknown;
+        main_camera?: unknown;
+        second_camera?: unknown;
+        third_camera?: unknown;
+        fourth_camera?: unknown;
+      }
+    | null
+    | undefined
+): boolean {
+  const filled = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+  return (
+    filled(camera?.rear_setup) ||
+    filled(camera?.main_camera) ||
+    filled(camera?.second_camera) ||
+    filled(camera?.third_camera) ||
+    filled(camera?.fourth_camera)
+  );
+}
+
+/**
+ * Spec-only audit: every master product must carry all 10 Field Groups, less the ones its
+ * category does not have (`requiredSpecGroups`). A master whose
+ * camera group states a rear camera must carry the main camera, plus a second camera
+ * unless `camera.rear_setup` declares a single rear camera.
  * Deliberately asserts nothing about offers, reviews or ratings.
  */
 export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<number> {
@@ -326,19 +373,19 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
     if (!specCheck.success) {
       failures.push(`${label} failed ProductSpecificationsSchema validation`);
     }
-    for (const grp of REQUIRED_10_SPEC_GROUPS) {
+    for (const grp of requiredSpecGroups(row.specifications?.category_slug)) {
       if (!row.specifications?.[grp]) {
         failures.push(`${label} is missing specification group "${grp}"`);
       }
     }
-    if (!row.specifications?.camera?.main_camera?.trim()) {
-      failures.push(`${label} is missing camera.main_camera`);
-    }
-    if (
-      !hasSingleRearCamera(row.specifications?.camera) &&
-      !row.specifications?.camera?.second_camera?.trim()
-    ) {
-      failures.push(`${label} is missing camera.second_camera`);
+    const camera = row.specifications?.camera;
+    if (statesRearCamera(camera)) {
+      if (!camera?.main_camera?.trim()) {
+        failures.push(`${label} is missing camera.main_camera`);
+      }
+      if (!hasSingleRearCamera(camera) && !camera?.second_camera?.trim()) {
+        failures.push(`${label} is missing camera.second_camera`);
+      }
     }
   }
 
