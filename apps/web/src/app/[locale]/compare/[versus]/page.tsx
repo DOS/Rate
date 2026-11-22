@@ -47,7 +47,13 @@ export function parseVersusSlugs(
   rawVersus: string,
   keepCase = false
 ): [string, string] | null {
-  const decoded = decodeURIComponent(rawVersus || '').trim();
+  if (typeof rawVersus !== 'string') return null;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(rawVersus).trim();
+  } catch {
+    return null;
+  }
   const cleaned = keepCase ? decoded : decoded.toLowerCase();
   const parts = cleaned.split('-vs-');
   if (parts.length !== 2) return null;
@@ -102,16 +108,21 @@ export async function generateMetadata({
   const fullTitle = t('versusMetaTitle', { nameA: a.name, nameB: b.name });
   // Both names first; the fixed text, then the site name, give way to fit a
   // search result (DOS/Rate#777). The share card keeps the full title.
-  const title = fitTitle([
-    fullTitle,
-    t('versusMetaTitleShort', { nameA: a.name, nameB: b.name }),
-    `${a.name} vs ${b.name}`,
-  ]);
+  const title = fitTitle(
+    [
+      fullTitle,
+      t('versusMetaTitleShort', { nameA: a.name, nameB: b.name }),
+      `${a.name} vs ${b.name}`,
+    ],
+    undefined,
+    lang
+  );
   const description = fitDescription(
     t('versusMetaDescription', {
       nameA: a.name,
       nameB: b.name,
-    })
+    }),
+    lang
   );
 
   return {
@@ -191,12 +202,12 @@ export function buildVersusItemListSchema(
 export default async function VersusComparePage({ params }: VersusPageProps) {
   const { locale, versus } = await params;
   setRequestLocale(locale);
-  const lang = normalizeRateLocale(locale);
-  const t = await getTranslations({ locale: lang, namespace: 'compare' });
   const parsed = parseVersusSlugs(versus);
   if (!parsed) {
     notFound();
   }
+  const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale: lang, namespace: 'compare' });
 
   // RATE_ITEM_MODEL on: versus URLs name Items, an old variant pair 308s to
   // its Item pair and a same-Item pair is no versus (DOS/Rate#1156); off:
