@@ -43,6 +43,13 @@ async function refreshSupabaseSession(
   }
 }
 
+/** Direct API and AI discovery endpoints that never undergo locale rewriting. */
+export function isDirectNonLocalePath(pathname: string): boolean {
+  return /^\/(?:api(?:\/|$)|llms\.txt\/?$|(?:\.well-known)(?:\/|$))/i.test(
+    pathname
+  );
+}
+
 /** HTTPS + locale routing (synchronous, so it is testable without a network). */
 export function localeProxy(req: NextRequest): NextResponse {
   const xForwardedProtoHeader = req.headers.get('x-forwarded-proto');
@@ -63,6 +70,10 @@ export function localeProxy(req: NextRequest): NextResponse {
 
   // Strip any explicit /vi, /en, /cs URL prefix so URLs never contain a locale slug
   const pathname = req.nextUrl.pathname;
+  if (isDirectNonLocalePath(pathname)) {
+    req.headers.delete('content-security-policy');
+    return NextResponse.next();
+  }
   const localePrefixMatch = pathname.match(/^\/(vi|en|cs)(\/.*)?$/i);
   if (localePrefixMatch) {
     const matchedLocale = localePrefixMatch[1]!.toLowerCase();
@@ -109,8 +120,13 @@ export function localeProxy(req: NextRequest): NextResponse {
 
 export async function proxy(req: NextRequest): Promise<NextResponse> {
   const response = localeProxy(req);
-  // Redirects carry no page; refresh the session on the request that renders.
-  if (response.status >= 300 && response.status < 400) return response;
+  // Redirects and stateless API / AI discovery routes skip cookie session refresh.
+  if (
+    isDirectNonLocalePath(req.nextUrl.pathname) ||
+    (response.status >= 300 && response.status < 400)
+  ) {
+    return response;
+  }
   await refreshSupabaseSession(req, response);
   return response;
 }

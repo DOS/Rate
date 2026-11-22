@@ -130,6 +130,143 @@ for (const locale of ['vi', 'cs']) {
 console.warn('  ✅ /developers table and group titles are localized (#1372)');
 
 // ---------------------------------------------------------------------------
+// DOS/Rate#1866: Rate Shopping MCP Server (/api/mcp), /.well-known/mcp.json &
+// /llms.txt documentation parity across vi, en, cs (zero em-dash / en-dash).
+// ---------------------------------------------------------------------------
+const mcpToolKeys = [
+  'search_verified_catalog',
+  'get_22_store_offers_and_price_truth',
+  'compare_devices_by_use_case',
+  'audit_listing_url',
+  'get_genuine_deals',
+] as const;
+
+const mcpFlatKeys = [
+  'btnMcpDocs',
+  'authPublicMcp',
+  'cacheNoStoreMcp',
+  'ep20Params',
+  'ep20Summary',
+  'ep21Params',
+  'ep21Summary',
+  'ep22Params',
+  'ep22Summary',
+  'mcpBadge',
+  'mcpTitle',
+  'mcpSubtitle',
+  'mcpBtnLlmsTxt',
+  'mcpBtnWellKnown',
+  'mcpGuardNote',
+  'mcpToolsHeading',
+  'mcpReadOnlyBadge',
+  'mcpConfigHeading',
+  'mcpClientConfigLabel',
+  'mcpCurlConfigLabel',
+] as const;
+
+const enDevTopKeys = Object.keys(messages.en!).sort();
+for (const locale of ['vi', 'en', 'cs'] as const) {
+  const dev = messages[locale]!;
+  assert.deepEqual(
+    Object.keys(dev).sort(),
+    enDevTopKeys,
+    `${locale}.developers top-level key parity`
+  );
+  for (const k of mcpFlatKeys) {
+    const val = dev[k];
+    assert.ok(
+      typeof val === 'string' && val.trim().length > 0,
+      `${locale}.developers.${k} must be a non-empty string`
+    );
+    assert.equal(
+      /[\u2013\u2014]/.test(val),
+      false,
+      `${locale}.developers.${k} must contain zero em-dashes or en-dashes`
+    );
+  }
+  const mcpTools = dev.mcpTools as Record<string, string>;
+  assert.ok(
+    mcpTools && typeof mcpTools === 'object',
+    `${locale}.developers.mcpTools must exist`
+  );
+  assert.deepEqual(
+    Object.keys(mcpTools).sort(),
+    [...mcpToolKeys].sort(),
+    `${locale}.developers.mcpTools key parity`
+  );
+  for (const toolKey of mcpToolKeys) {
+    const desc = mcpTools[toolKey];
+    assert.ok(
+      typeof desc === 'string' && desc.trim().length > 0,
+      `${locale}.developers.mcpTools.${toolKey} must be non-empty`
+    );
+    assert.equal(
+      /[\u2013\u2014]/.test(desc),
+      false,
+      `${locale}.developers.mcpTools.${toolKey} must contain zero em-dashes or en-dashes`
+    );
+  }
+}
+
+for (const locale of ['vi', 'cs'] as const) {
+  const dev = messages[locale]!;
+  for (const proseKey of [
+    'authPublicMcp',
+    'ep20Summary',
+    'ep21Summary',
+    'ep22Summary',
+    'mcpTitle',
+    'mcpSubtitle',
+    'mcpGuardNote',
+    'mcpReadOnlyBadge',
+  ] as const) {
+    assert.notEqual(
+      dev[proseKey],
+      messages.en![proseKey],
+      `${locale}.developers.${proseKey} must be localized`
+    );
+  }
+  for (const toolKey of mcpToolKeys) {
+    assert.notEqual(
+      (dev.mcpTools as Record<string, string>)[toolKey],
+      (messages.en!.mcpTools as Record<string, string>)[toolKey],
+      `${locale}.developers.mcpTools.${toolKey} must be localized`
+    );
+  }
+}
+
+assert.equal(
+  /[\u2013\u2014]/.test(page),
+  false,
+  'developers/page.tsx must contain zero em-dashes or en-dashes'
+);
+for (const expectedPageToken of [
+  "'/api/mcp'",
+  "'/.well-known/mcp.json'",
+  "'/llms.txt'",
+  't(`mcpTools.${toolKey}`)',
+  'https://rate.vn/api/mcp',
+  'mcp-remote',
+  'Accept: application/json, text/event-stream',
+  'btn-outline-dark',
+  ...mcpToolKeys.map((k) => `'${k}'`),
+]) {
+  assert.ok(
+    page.includes(expectedPageToken),
+    `developers/page.tsx must include ${expectedPageToken}`
+  );
+}
+assert.equal(
+  page.includes('btn-outline-secondary'),
+  false,
+  'developers/page.tsx must not use low-contrast dark-mode btn-outline-secondary'
+);
+
+console.warn(
+  '  ✅ /developers MCP & /llms.txt localization parity passed (#1866)'
+);
+
+// ---------------------------------------------------------------------------
 // DOS/Rate#1747: Runnable POST snippets, non-JSON HTTP status preservation,
 // preset state synchronization, decorative icon a11y, th scope & telemetry formatting.
 // ---------------------------------------------------------------------------

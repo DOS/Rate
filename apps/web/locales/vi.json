@@ -1545,6 +1545,33 @@
       "connectivity": "Kết nối",
       "battery": "Pin và sạc",
       "misc": "Cảm biến, SAR và quy chuẩn"
+    },
+    "btnMcpDocs": "MCP & /llms.txt cho AI agent",
+    "authPublicMcp": "Công khai chỉ đọc (giới hạn theo IP)",
+    "cacheNoStoreMcp": "no-store (đọc qua withRateDataCache)",
+    "ep20Params": "Body JSON-RPC 2.0: initialize, ping, tools/list, tools/call (<= 16 KB)",
+    "ep20Summary": "Máy chủ MCP qua HTTP không trạng thái, cung cấp 5 công cụ chỉ đọc trên 22 sàn tại Việt Nam kèm trích dẫn nguồn rate.vn.",
+    "ep21Params": "Không có tham số",
+    "ep21Summary": "Tệp mô tả tự động nhận diện máy chủ MCP (phiên bản giao thức 2025-06-18, địa chỉ HTTP, giới hạn tần suất và danh sách công cụ).",
+    "ep22Params": "Không có tham số",
+    "ep22Summary": "Tài liệu ngữ cảnh Markdown gọn nhẹ (/llms.txt) cho trợ lý AI và trình đọc web về 22 sàn bán lẻ, 5 ngành hàng, mô hình tin cậy đánh giá 6 trục và bộ công cụ MCP.",
+    "mcpBadge": "Giao thức MCP (2025-06-18)",
+    "mcpTitle": "Máy chủ MCP của Rate.vn & /llms.txt cho AI agent",
+    "mcpSubtitle": "Kết nối trực tiếp trợ lý AI, trình sửa mã IDE, ChatGPT hoặc DOSClaw với giá thật từ 22 sàn tại Việt Nam và mô hình lọc đánh giá 6 trục mà không cần khóa API.",
+    "mcpBtnLlmsTxt": "Mở /llms.txt",
+    "mcpBtnWellKnown": "Xem /.well-known/mcp.json",
+    "mcpGuardNote": "Chốt an toàn chỉ đọc: JSON-RPC 2.0 qua POST /api/mcp, kích thước body <= 16 KB, tối đa 10 kết quả mỗi lần gọi, giới hạn tần suất theo IP (60 yêu cầu/phút, 30 lần kiểm tra URL/phút), bắt buộc đính kèm canonical_citation_url và mốc thời gian observed_at trên mọi mục trả về.",
+    "mcpToolsHeading": "5 công cụ MCP chỉ đọc",
+    "mcpReadOnlyBadge": "Chỉ đọc",
+    "mcpConfigHeading": "Cấu hình kết nối nhanh (.mcp.json / .cursor/mcp.json / claude_desktop_config.json / DOSClaw)",
+    "mcpClientConfigLabel": ".mcp.json / .cursor/mcp.json / claude_desktop_config.json / DOSClaw",
+    "mcpCurlConfigLabel": "JSON-RPC 2.0 qua HTTP (POST /api/mcp)",
+    "mcpTools": {
+      "search_verified_catalog": "Tìm kiếm trên 5 ngành hàng công nghệ theo hãng và khoảng giá VNĐ (tối đa 10 mục, đã loại tin hết hàng và giá mồi).",
+      "get_22_store_offers_and_price_truth": "Lấy danh sách nơi bán còn hàng trên 22 sàn, giá đáy và trung vị lịch sử, điểm Bayes, độ tin cậy đánh giá 6 trục và cờ giảm giá ảo.",
+      "compare_devices_by_use_case": "So sánh trực tiếp 2 đến 4 mẫu máy cùng ngành hàng trên 10 nhóm thông số, giá đáy đa sàn và 5 tiêu chí kèm trọng số tùy chỉnh.",
+      "audit_listing_url": "Kiểm tra đường dẫn tin bán trên 22 sàn được hỗ trợ để ghép mẫu máy chuẩn, chấm kết luận giá 5 mức và điểm rủi ro người bán.",
+      "get_genuine_deals": "Liệt kê các deal dưới giá trung vị và chạm đáy đa sàn đã kiểm chứng (tối đa 10 mục), lọc theo ngành hàng, sàn và ngân sách."
     }
   },
   "staticPages": {
