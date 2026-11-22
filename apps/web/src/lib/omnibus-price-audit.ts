@@ -288,19 +288,16 @@ function buildOfferExclusionSets(params: {
   inStockPlausibleOffers: { id: string; price_current: number }[];
 } {
   const excludedIds = new Set<string>();
-  if (params.unavailableOfferIds) {
-    for (const id of params.unavailableOfferIds) {
-      const clean = normalizeOfferId(id);
-      if (clean) excludedIds.add(clean);
-      if (typeof id === 'string' && id.trim()) excludedIds.add(id.trim());
-    }
-  }
-  if (params.implausibleOfferIds) {
-    for (const id of params.implausibleOfferIds) {
-      const clean = normalizeOfferId(id);
-      if (clean) excludedIds.add(clean);
-      if (typeof id === 'string' && id.trim()) excludedIds.add(id.trim());
-    }
+  const markExcluded = (raw: string | null | undefined) => {
+    if (!raw) return;
+    const trimmed = raw.trim();
+    if (trimmed) excludedIds.add(trimmed);
+    const clean = normalizeOfferId(trimmed);
+    if (clean) excludedIds.add(clean);
+  };
+  for (const set of [params.unavailableOfferIds, params.implausibleOfferIds]) {
+    if (!set) continue;
+    for (const id of set) markExcluded(id);
   }
 
   const safeRefOffers = Array.isArray(params.referenceOffers)
@@ -310,52 +307,43 @@ function buildOfferExclusionSets(params: {
     : [];
 
   const inStockSized: { id: string; price_current: number }[] = [];
+  const pricedAll: { rawId: string; id: string; price_current: number }[] = [];
   for (const off of safeRefOffers) {
     const rawId = typeof off.id === 'string' ? off.id.trim() : '';
-    const canonId = normalizeOfferId(rawId);
-    const unavailable = isOfferUnavailable(off);
+    const id = normalizeOfferId(rawId) || rawId;
     const price = sanitizeOmnibusPriceVnd(
       off.price_current,
       params.minFloorVnd
     );
-    if (unavailable || off.implausiblyLow === true || price == null) {
-      if (canonId) excludedIds.add(canonId);
-      if (rawId) excludedIds.add(rawId);
+    if (price != null) pricedAll.push({ rawId, id, price_current: price });
+    if (
+      isOfferUnavailable(off) ||
+      off.implausiblyLow === true ||
+      price == null
+    ) {
+      markExcluded(rawId);
       continue;
     }
-    inStockSized.push({
-      id: canonId || rawId,
-      price_current: price,
-    });
+    inStockSized.push({ id, price_current: price });
   }
 
   const baitIdsFromInStock = implausiblyLowOfferIds(inStockSized);
-  for (const bId of baitIdsFromInStock) {
-    excludedIds.add(bId);
-  }
-  for (const off of safeRefOffers) {
-    const rawId = typeof off.id === 'string' ? off.id.trim() : '';
-    const canonId = normalizeOfferId(rawId);
-    const price = sanitizeOmnibusPriceVnd(
-      off.price_current,
-      params.minFloorVnd
-    );
-    if (
-      price != null &&
-      inStockSized.length > 0 &&
-      isOfferImplausiblyLowAgainstInStock(
-        { id: canonId || rawId, price_current: price },
-        inStockSized,
-        baitIdsFromInStock
-      )
-    ) {
-      if (canonId) excludedIds.add(canonId);
-      if (rawId) excludedIds.add(rawId);
+  for (const bId of baitIdsFromInStock) excludedIds.add(bId);
+  if (inStockSized.length > 0) {
+    for (const off of pricedAll) {
+      if (
+        isOfferImplausiblyLowAgainstInStock(
+          off,
+          inStockSized,
+          baitIdsFromInStock
+        )
+      ) {
+        markExcluded(off.rawId);
+      }
     }
   }
 
-  const inStockPlausibleOffers = plausibleOffers(inStockSized);
-  return { excludedIds, inStockPlausibleOffers };
+  return { excludedIds, inStockPlausibleOffers: plausibleOffers(inStockSized) };
 }
 
 /**
@@ -458,6 +446,19 @@ function buildEffectiveSeries(
   return out;
 }
 
+const EMPTY_CYCLE_90D: Cycle90dEvaluation = {
+  signal: 'insufficient_data',
+  percentile: null,
+  topPercentileDisplay: null,
+  low90dVnd: null,
+  high90dVnd: null,
+  median90dVnd: null,
+  aboveFloorVnd: null,
+  aboveFloorPct: null,
+  observedPointDays: 0,
+  observedSpanDays90d: 0,
+};
+
 function evaluate90dCycleFromSeries(params: {
   readonly series: readonly SeriesPoint[];
   readonly anchorMs: number;
@@ -468,20 +469,7 @@ function evaluate90dCycleFromSeries(params: {
   const in90d = series.filter(
     (pt) => pt.recordedMs >= cutoff90dMs && pt.recordedMs <= anchorMs
   );
-  if (in90d.length === 0) {
-    return {
-      signal: 'insufficient_data',
-      percentile: null,
-      topPercentileDisplay: null,
-      low90dVnd: null,
-      high90dVnd: null,
-      median90dVnd: null,
-      aboveFloorVnd: null,
-      aboveFloorPct: null,
-      observedPointDays: 0,
-      observedSpanDays90d: 0,
-    };
-  }
+  if (in90d.length === 0) return EMPTY_CYCLE_90D;
 
   const earliest90dMs = in90d[0]!.recordedMs;
   const latest90dMs = in90d[in90d.length - 1]!.recordedMs;
@@ -726,37 +714,32 @@ export function evaluateOmnibusPriceAudit(
   const mode = safeParams.mode === 'market' ? 'market' : 'offer';
   const series = buildEffectiveSeries(cleanPoints, mode);
 
+  const unverified = (
+    observedSpanDays: number,
+    validObservationCount: number,
+    cycle90d: Cycle90dEvaluation
+  ): OmnibusPriceAuditResult => ({
+    currentPriceVnd,
+    claimedOriginalPriceVnd,
+    claimedDiscountVnd,
+    claimedDiscountPct,
+    priorFloorPriceVnd: null,
+    observedSpanDays,
+    windowDaysUsed: 0,
+    isOmnibusCertified: false,
+    hasBlackoutGap: false,
+    windowStatus: 'insufficient_history',
+    verdict: 'unverified_window',
+    deltaVsPriorFloorVnd: null,
+    deltaVsPriorFloorPct: null,
+    claimedVsPriorFloorMarkupVnd: null,
+    claimedVsPriorFloorMarkupPct: null,
+    validObservationCount,
+    cycle90d,
+  });
+
   if (series.length === 0) {
-    return {
-      currentPriceVnd,
-      claimedOriginalPriceVnd,
-      claimedDiscountVnd,
-      claimedDiscountPct,
-      priorFloorPriceVnd: null,
-      observedSpanDays: 0,
-      windowDaysUsed: 0,
-      isOmnibusCertified: false,
-      hasBlackoutGap: false,
-      windowStatus: 'insufficient_history',
-      verdict: 'unverified_window',
-      deltaVsPriorFloorVnd: null,
-      deltaVsPriorFloorPct: null,
-      claimedVsPriorFloorMarkupVnd: null,
-      claimedVsPriorFloorMarkupPct: null,
-      validObservationCount: 0,
-      cycle90d: {
-        signal: 'insufficient_data',
-        percentile: null,
-        topPercentileDisplay: null,
-        low90dVnd: null,
-        high90dVnd: null,
-        median90dVnd: null,
-        aboveFloorVnd: null,
-        aboveFloorPct: null,
-        observedPointDays: 0,
-        observedSpanDays90d: 0,
-      },
-    };
+    return unverified(0, 0, EMPTY_CYCLE_90D);
   }
 
   const seriesLatestMs = series[series.length - 1]!.recordedMs;
@@ -776,25 +759,7 @@ export function evaluateOmnibusPriceAudit(
   // Require multi-day actual observations (>= 1 full day between real points
   // and >= 2 timestamps) before reporting any prior floor at all.
   if (series.length < 2 || seriesSpanMs < DAY_MS || currentPriceVnd == null) {
-    return {
-      currentPriceVnd,
-      claimedOriginalPriceVnd,
-      claimedDiscountVnd,
-      claimedDiscountPct,
-      priorFloorPriceVnd: null,
-      observedSpanDays,
-      windowDaysUsed: 0,
-      isOmnibusCertified: false,
-      hasBlackoutGap: false,
-      windowStatus: 'insufficient_history',
-      verdict: 'unverified_window',
-      deltaVsPriorFloorVnd: null,
-      deltaVsPriorFloorPct: null,
-      claimedVsPriorFloorMarkupVnd: null,
-      claimedVsPriorFloorMarkupPct: null,
-      validObservationCount: series.length,
-      cycle90d,
-    };
+    return unverified(observedSpanDays, series.length, cycle90d);
   }
 
   const windowStartMs = anchorMs - OMNIBUS_WINDOW_DAYS * DAY_MS;
@@ -974,172 +939,143 @@ export function formatOmnibusAuditCopy(
   t: OmnibusVerdictTranslator,
   locale?: string | null
 ): FormattedOmnibusAuditCopy {
+  const {
+    windowStatus: ws,
+    verdict: vd,
+    currentPriceVnd: curVnd,
+    claimedOriginalPriceVnd: origVnd,
+    claimedDiscountPct: claimPct,
+    priorFloorPriceVnd: flrVnd,
+    windowDaysUsed: days,
+    isOmnibusCertified: cert,
+    deltaVsPriorFloorVnd: dVnd,
+    deltaVsPriorFloorPct: dPct,
+    claimedVsPriorFloorMarkupVnd: mkVnd,
+    claimedVsPriorFloorMarkupPct: mkPct,
+    cycle90d: c,
+  } = audit;
   const priceOrDash = (vnd: number | null) =>
     vnd != null && vnd > 0 ? formatPriceVnd(vnd, locale) : '-';
+  const fmtVnd = (vnd: number) => formatPriceVnd(vnd, locale);
+  const fmtNum = (num: number) => formatPlainNumber(num, locale);
 
-  let statusBadgeText: string;
-  let statusBadgeTone: 'good' | 'warn' | 'bad' | 'neutral';
-  if (audit.windowStatus === 'omnibus_30d_certified') {
-    statusBadgeText = t('oOk');
-    statusBadgeTone =
-      audit.verdict === 'fake_strikethrough_above_floor' ? 'bad' : 'good';
-  } else if (audit.windowStatus === 'partial_window') {
-    statusBadgeText = t('oPart', { days: audit.windowDaysUsed });
-    statusBadgeTone = 'warn';
-  } else if (audit.windowStatus === 'blackout_gap') {
-    statusBadgeText = t('oGap');
-    statusBadgeTone = 'warn';
-  } else {
-    statusBadgeText = t('oPend');
-    statusBadgeTone = 'neutral';
-  }
+  const isFake = vd === 'fake_strikethrough_above_floor';
+  const isExag = vd === 'exaggerated_strikethrough';
+
+  const statusBadgeText =
+    ws === 'omnibus_30d_certified'
+      ? t('oOk')
+      : ws === 'partial_window'
+        ? t('oPart', { days })
+        : ws === 'blackout_gap'
+          ? t('oGap')
+          : t('oPend');
+  const statusBadgeTone: 'good' | 'warn' | 'bad' | 'neutral' =
+    ws === 'omnibus_30d_certified'
+      ? isFake
+        ? 'bad'
+        : 'good'
+      : ws === 'partial_window' || ws === 'blackout_gap'
+        ? 'warn'
+        : 'neutral';
 
   const claimedBadgeText =
-    audit.claimedOriginalPriceVnd != null && audit.claimedDiscountPct != null
-      ? t('oClaim', {
-          pct: formatPlainNumber(audit.claimedDiscountPct, locale),
-          original: formatPriceVnd(audit.claimedOriginalPriceVnd, locale),
-        })
+    origVnd != null && claimPct != null
+      ? t('oClaim', { pct: fmtNum(claimPct), original: fmtVnd(origVnd) })
       : null;
 
   let currentSubText: string;
   let currentSubTone: 'bad' | 'good' | 'neutral' = 'neutral';
-  const exceedsAlignedTolerance =
-    audit.claimedOriginalPriceVnd != null &&
-    audit.priorFloorPriceVnd != null &&
-    (audit.verdict === 'fake_strikethrough_above_floor' ||
-      audit.verdict === 'exaggerated_strikethrough' ||
-      audit.claimedOriginalPriceVnd >
-        Math.round(audit.priorFloorPriceVnd * 1.02));
-
-  if (audit.claimedOriginalPriceVnd == null) {
+  if (origVnd == null) {
     currentSubText = t('oNoOrig');
-  } else if (audit.priorFloorPriceVnd == null) {
+  } else if (flrVnd == null) {
     currentSubText = t('oNeed');
   } else if (
-    exceedsAlignedTolerance &&
-    audit.claimedVsPriorFloorMarkupVnd != null &&
-    audit.claimedVsPriorFloorMarkupVnd > 0 &&
-    audit.claimedVsPriorFloorMarkupPct != null
+    (isFake || isExag || origVnd > Math.round(flrVnd * 1.02)) &&
+    mkVnd != null &&
+    mkVnd > 0 &&
+    mkPct != null
   ) {
     currentSubText = t('oMarkup', {
-      markup: formatPriceVnd(audit.claimedVsPriorFloorMarkupVnd, locale),
-      pct: formatPlainNumber(audit.claimedVsPriorFloorMarkupPct, locale),
+      markup: fmtVnd(mkVnd),
+      pct: fmtNum(mkPct),
     });
-    currentSubTone =
-      audit.verdict === 'fake_strikethrough_above_floor' ||
-      audit.verdict === 'exaggerated_strikethrough'
-        ? 'bad'
-        : 'neutral';
+    currentSubTone = isFake || isExag ? 'bad' : 'neutral';
   } else {
     currentSubText = t('oAlign');
-    currentSubTone = audit.isOmnibusCertified ? 'good' : 'neutral';
+    currentSubTone = cert ? 'good' : 'neutral';
   }
 
   const colFloorTitle =
-    audit.windowStatus === 'omnibus_30d_certified'
+    ws === 'omnibus_30d_certified'
       ? t('oOk')
-      : audit.windowStatus === 'partial_window'
-        ? t('oPart', { days: audit.windowDaysUsed })
+      : ws === 'partial_window'
+        ? t('oPart', { days })
         : t('oFlr');
 
   let floorDeltaText: string;
   let floorDeltaTone: 'good' | 'bad' | 'neutral' = 'neutral';
-  if (
-    audit.priorFloorPriceVnd == null ||
-    audit.deltaVsPriorFloorVnd == null ||
-    audit.deltaVsPriorFloorPct == null
-  ) {
+  if (flrVnd == null || dVnd == null || dPct == null) {
     floorDeltaText = t('oNeed');
-  } else if (audit.deltaVsPriorFloorVnd < 0) {
-    const absAmount = Math.abs(audit.deltaVsPriorFloorVnd);
-    const absPct = Math.abs(audit.deltaVsPriorFloorPct);
+  } else if (dVnd < 0) {
     floorDeltaText = t('oDrop', {
-      pct: formatPlainNumber(absPct, locale),
-      amount: formatPriceVnd(absAmount, locale),
+      pct: fmtNum(Math.abs(dPct)),
+      amount: fmtVnd(Math.abs(dVnd)),
     });
     floorDeltaTone = 'good';
-  } else if (audit.deltaVsPriorFloorVnd > 0) {
-    if (audit.verdict === 'fake_strikethrough_above_floor') {
-      floorDeltaText = t('oFake', {
-        pct: formatPlainNumber(audit.deltaVsPriorFloorPct, locale),
-        amount: formatPriceVnd(audit.deltaVsPriorFloorVnd, locale),
-      });
-    } else {
-      floorDeltaText = t('oUp', {
-        pct: formatPlainNumber(audit.deltaVsPriorFloorPct, locale),
-        amount: formatPriceVnd(audit.deltaVsPriorFloorVnd, locale),
-      });
-    }
-    floorDeltaTone = 'bad';
-  } else if (audit.verdict === 'fake_strikethrough_above_floor') {
-    floorDeltaText = t('oFake', {
-      pct: formatPlainNumber(0, locale),
-      amount: formatPriceVnd(0, locale),
+  } else if (dVnd > 0) {
+    floorDeltaText = t(isFake ? 'oFake' : 'oUp', {
+      pct: fmtNum(dPct),
+      amount: fmtVnd(dVnd),
     });
+    floorDeltaTone = 'bad';
+  } else if (isFake) {
+    floorDeltaText = t('oFake', { pct: fmtNum(0), amount: fmtVnd(0) });
     floorDeltaTone = 'bad';
   } else {
     floorDeltaText = t('oFlat');
-    floorDeltaTone = 'neutral';
   }
 
   const floorDisclaimerText =
-    audit.windowStatus === 'partial_window'
-      ? t('oNoteP', { days: audit.windowDaysUsed })
-      : audit.windowStatus === 'blackout_gap'
+    ws === 'partial_window'
+      ? t('oNoteP', { days })
+      : ws === 'blackout_gap'
         ? t('oNoteG')
         : null;
 
   let cycleValueText: string;
   let cycleValueTone: 'good' | 'bad' | 'neutral' = 'neutral';
+  const rngSub =
+    c.low90dVnd != null && c.high90dVnd != null
+      ? t('oRng', { low: fmtVnd(c.low90dVnd), high: fmtVnd(c.high90dVnd) })
+      : null;
   let cycleSubText: string;
-  const c = audit.cycle90d;
 
   if (
     c.signal === 'buy_now_floor' &&
     c.topPercentileDisplay != null &&
-    c.low90dVnd != null &&
-    c.high90dVnd != null
+    rngSub != null
   ) {
-    cycleValueText = t('oBuy', {
-      pct: formatPlainNumber(c.topPercentileDisplay, locale),
-    });
+    cycleValueText = t('oBuy', { pct: fmtNum(c.topPercentileDisplay) });
     cycleValueTone = 'good';
-    cycleSubText = t('oRng', {
-      low: formatPriceVnd(c.low90dVnd, locale),
-      high: formatPriceVnd(c.high90dVnd, locale),
-    });
+    cycleSubText = rngSub;
   } else if (
     c.signal === 'fair_market' &&
     c.percentile != null &&
-    c.low90dVnd != null &&
-    c.high90dVnd != null
+    rngSub != null
   ) {
-    cycleValueText = t('oFair', {
-      pct: formatPlainNumber(c.percentile, locale),
-    });
-    cycleValueTone = 'neutral';
-    cycleSubText = t('oRng', {
-      low: formatPriceVnd(c.low90dVnd, locale),
-      high: formatPriceVnd(c.high90dVnd, locale),
-    });
+    cycleValueText = t('oFair', { pct: fmtNum(c.percentile) });
+    cycleSubText = rngSub;
   } else if (
     c.signal === 'above_recent_floor' &&
     c.aboveFloorVnd != null &&
-    c.low90dVnd != null &&
-    c.high90dVnd != null
+    rngSub != null
   ) {
-    cycleValueText = t('oWait', {
-      gap: formatPriceVnd(c.aboveFloorVnd, locale),
-    });
+    cycleValueText = t('oWait', { gap: fmtVnd(c.aboveFloorVnd) });
     cycleValueTone = 'bad';
-    cycleSubText = t('oRng', {
-      low: formatPriceVnd(c.low90dVnd, locale),
-      high: formatPriceVnd(c.high90dVnd, locale),
-    });
+    cycleSubText = rngSub;
   } else {
     cycleValueText = t('oCycP');
-    cycleValueTone = 'neutral';
     cycleSubText = t('oCycN', {
       points: c.observedPointDays,
       days: c.observedSpanDays90d,
@@ -1151,12 +1087,12 @@ export function formatOmnibusAuditCopy(
     statusBadgeText,
     statusBadgeTone,
     colCurrentTitle: t('oCur'),
-    currentPriceText: priceOrDash(audit.currentPriceVnd),
+    currentPriceText: priceOrDash(curVnd),
     claimedBadgeText,
     currentSubText,
     currentSubTone,
     colFloorTitle,
-    floorPriceText: priceOrDash(audit.priorFloorPriceVnd),
+    floorPriceText: priceOrDash(flrVnd),
     floorDeltaText,
     floorDeltaTone,
     floorDisclaimerText,
@@ -1166,6 +1102,13 @@ export function formatOmnibusAuditCopy(
     cycleSubText,
   };
 }
+
+const validPosVnd = (v: unknown): number | null => {
+  const n = parseStrictFiniteNumber(v);
+  if (n == null) return null;
+  const r = Math.round(n);
+  return r > 0 && r <= MAX_VALID_VND_PRICE ? r : null;
+};
 
 /**
  * Seasonal sale campaign filter predicate for `/deals` (`DealFinderWorkspace`).
@@ -1178,36 +1121,29 @@ export function matchesSeasonalSaleFilter(
   if (!signal || typeof signal !== 'object') return false;
   if (mode === 'genuine_sale_drops') {
     const g = signal.genuineDeal;
-    if (!g || typeof g !== 'object') return false;
-    const current = parseStrictFiniteNumber(g.priceCurrent);
-    const savingsVnd = parseStrictFiniteNumber(g.savingsVsMedianVnd);
     return Boolean(
+      g &&
+      typeof g === 'object' &&
       typeof signal.savingsPct === 'number' &&
       Number.isFinite(signal.savingsPct) &&
       signal.savingsPct > 0 &&
-      current != null &&
-      current > 0 &&
-      current <= MAX_VALID_VND_PRICE &&
-      savingsVnd != null &&
-      savingsVnd > 0 &&
-      savingsVnd <= MAX_VALID_VND_PRICE
+      validPosVnd(g.priceCurrent) != null &&
+      validPosVnd(g.savingsVsMedianVnd) != null
     );
   }
   if (mode === 'inflated_presale_warnings') {
     const trap = signal.fakeSaleTrap;
-    if (!trap || typeof trap !== 'object') return false;
-    const current = parseStrictFiniteNumber(trap.priceCurrent);
-    const orig = parseStrictFiniteNumber(trap.priceOriginal);
+    const cur =
+      trap && typeof trap === 'object' ? validPosVnd(trap.priceCurrent) : null;
+    const orig =
+      trap && typeof trap === 'object' ? validPosVnd(trap.priceOriginal) : null;
     return Boolean(
       typeof signal.fakeMarkupPct === 'number' &&
       Number.isFinite(signal.fakeMarkupPct) &&
       signal.fakeMarkupPct > 0 &&
-      current != null &&
-      current > 0 &&
-      current <= MAX_VALID_VND_PRICE &&
+      cur != null &&
       orig != null &&
-      orig > current &&
-      orig <= MAX_VALID_VND_PRICE
+      orig > cur
     );
   }
   return true;

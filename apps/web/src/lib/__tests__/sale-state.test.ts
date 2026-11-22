@@ -24,6 +24,7 @@ import {
 import PriceHistorySection from '../../components/price-history/PriceHistorySection';
 import DealFinderWorkspace from '../../components/deals/DealFinderWorkspace';
 import DeepInspectWorkspace from '../../components/inspect/DeepInspectWorkspace';
+import { GLOBAL_ERROR_CATALOG } from '../../app/global-error';
 
 function main() {
   console.warn('🧪 Sale state suite (DOS/Rate#1188)');
@@ -451,6 +452,11 @@ function main() {
         'utf8'
       )
     ) as Record<string, unknown>;
+    assert.deepEqual(
+      GLOBAL_ERROR_CATALOG[locale],
+      (rawCatalog.errors as { global: unknown }).global,
+      `${locale}: GLOBAL_ERROR_CATALOG matches locales/${locale}.json errors.global`
+    );
 
     const historyHtml = renderToStaticMarkup(
       React.createElement(

@@ -14,7 +14,6 @@ import {
   BsExclamationTriangle,
   BsGraphUp,
   BsSearch,
-  BsShieldCheck,
 } from 'react-icons/bs';
 import {
   evaluateOmnibusPriceAudit,
@@ -743,80 +742,122 @@ export default function PriceHistorySection({
     return ids;
   }, [offerAnalyses, offers, safeCurrentMinPrice]);
 
-  const effectiveReferenceOffers = useMemo<OmnibusReferenceOfferInput[]>(() => {
-    if (Array.isArray(offers) && offers.length > 0) {
-      return [...offers];
-    }
-    return offerAnalyses.map((oa) => ({
-      id: oa.product_id,
-      price_current: oa.price_current,
-      availability:
-        unavailableOfferIds.has(oa.product_id) ||
-        unavailableOfferIds.has(normalizeOfferId(oa.product_id))
-          ? ('out_of_stock' as const)
-          : ('in_stock' as const),
-    }));
-  }, [offerAnalyses, offers, unavailableOfferIds]);
+  const isUnavailId = useCallback(
+    (id: string) =>
+      unavailableOfferIds.has(id) ||
+      unavailableOfferIds.has(normalizeOfferId(id)),
+    [unavailableOfferIds]
+  );
+
+  const effectiveReferenceOffers = useMemo<OmnibusReferenceOfferInput[]>(
+    () =>
+      Array.isArray(offers) && offers.length > 0
+        ? [...offers]
+        : offerAnalyses.map((oa) => ({
+            id: oa.product_id,
+            price_current: oa.price_current,
+            availability: isUnavailId(oa.product_id)
+              ? ('out_of_stock' as const)
+              : ('in_stock' as const),
+          })),
+    [isUnavailId, offerAnalyses, offers]
+  );
 
   // Historical anchor excludes synthetic `live_listing` rows and unavailable offers
   // so synthetic fallback timestamps never inflate observedSpanDays (#1863).
   const omnibusAnchorMs = useMemo<number | null>(() => {
     let maxMs = 0;
     for (const pt of validPoints) {
-      if (pt.source === 'live_listing') continue;
-      if (
-        unavailableOfferIds.has(pt.product_id) ||
-        unavailableOfferIds.has(normalizeOfferId(pt.product_id))
-      ) {
-        continue;
-      }
+      if (pt.source === 'live_listing' || isUnavailId(pt.product_id)) continue;
       const ms = new Date(pt.recorded_at).getTime();
       if (Number.isFinite(ms) && ms > maxMs) maxMs = ms;
     }
     return maxMs > 0 ? maxMs : null;
-  }, [unavailableOfferIds, validPoints]);
+  }, [isUnavailId, validPoints]);
+
+  const omnibusSharedOpts = useMemo(
+    () => ({
+      referenceOffers: effectiveReferenceOffers,
+      unavailableOfferIds,
+      minValidPriceVnd,
+      referenceTimestampMs: omnibusAnchorMs,
+    }),
+    [
+      effectiveReferenceOffers,
+      minValidPriceVnd,
+      omnibusAnchorMs,
+      unavailableOfferIds,
+    ]
+  );
+
+  const omnibusByOffer = useMemo<Map<string, OmnibusPriceAuditResult>>(() => {
+    const map = new Map<string, OmnibusPriceAuditResult>();
+    if (
+      validPoints.length === 0 ||
+      offerAnalyses.length === 0 ||
+      safeCurrentMinPrice == null
+    ) {
+      return map;
+    }
+    const pointsByOfferId = new Map<string, PriceHistoryPoint[]>();
+    for (const pt of validPoints) {
+      if (pt.source === 'live_listing') continue;
+      const list = pointsByOfferId.get(pt.product_id);
+      if (list) list.push(pt);
+      else pointsByOfferId.set(pt.product_id, [pt]);
+    }
+    for (const oa of offerAnalyses) {
+      if (isUnavailId(oa.product_id)) continue;
+      const pts = pointsByOfferId.get(oa.product_id);
+      if (!pts) continue;
+      map.set(
+        oa.product_id,
+        evaluateOmnibusPriceAudit({
+          ...omnibusSharedOpts,
+          points: pts,
+          currentPriceVnd: oa.price_current,
+          claimedOriginalPriceVnd: oa.price_original,
+          currentInStockPriceVnd: oa.price_current,
+          mode: 'offer',
+        })
+      );
+    }
+    return map;
+  }, [
+    isUnavailId,
+    offerAnalyses,
+    omnibusSharedOpts,
+    safeCurrentMinPrice,
+    validPoints,
+  ]);
 
   const omnibusAudit = useMemo<OmnibusPriceAuditResult>(() => {
     if (selectedProductId !== 'ALL') {
-      const selectedOa =
-        offerAnalyses.find((oa) => oa.product_id === selectedProductId) ?? null;
-      const selectedPts = validPoints.filter(
-        (pt) => pt.product_id === selectedProductId
+      const cached = omnibusByOffer.get(selectedProductId);
+      if (cached) return cached;
+      const selectedOa = offerAnalyses.find(
+        (oa) => oa.product_id === selectedProductId
       );
-      const selectedUnavailable =
-        safeCurrentMinPrice == null ||
-        unavailableOfferIds.has(selectedProductId) ||
-        unavailableOfferIds.has(normalizeOfferId(selectedProductId));
       return evaluateOmnibusPriceAudit({
-        points: selectedPts,
+        ...omnibusSharedOpts,
+        points: validPoints.filter((pt) => pt.product_id === selectedProductId),
         currentPriceVnd: selectedOa?.price_current ?? null,
         claimedOriginalPriceVnd: selectedOa?.price_original ?? null,
-        currentInStockPriceVnd:
-          !selectedUnavailable && selectedOa ? selectedOa.price_current : null,
-        currentOfferUnavailable: selectedUnavailable,
+        currentInStockPriceVnd: null,
+        currentOfferUnavailable: true,
         mode: 'offer',
-        referenceOffers: effectiveReferenceOffers,
-        unavailableOfferIds,
-        minValidPriceVnd,
-        referenceTimestampMs: omnibusAnchorMs,
       });
     }
 
     let bestClaimedOrig: number | null = null;
     if (safeCurrentMinPrice != null) {
-      const atMinOffers = offerAnalyses.filter(
+      const atMin = offerAnalyses.filter(
         (oa) =>
           Math.round(Number(oa.price_current)) === safeCurrentMinPrice &&
-          !unavailableOfferIds.has(oa.product_id) &&
-          !unavailableOfferIds.has(normalizeOfferId(oa.product_id))
+          !isUnavailId(oa.product_id)
       );
-      // Prefer provably in-stock `genuine_deal` offers when tied at `safeCurrentMinPrice`.
-      const preferredOffers = atMinOffers.some(
-        (oa) => oa.verdict === 'genuine_deal'
-      )
-        ? atMinOffers.filter((oa) => oa.verdict === 'genuine_deal')
-        : atMinOffers;
-      for (const oa of preferredOffers) {
+      const genuines = atMin.filter((oa) => oa.verdict === 'genuine_deal');
+      for (const oa of genuines.length > 0 ? genuines : atMin) {
         const orig = Number(oa.price_original);
         if (
           Number.isFinite(orig) &&
@@ -830,68 +871,20 @@ export default function PriceHistorySection({
     }
 
     return evaluateOmnibusPriceAudit({
+      ...omnibusSharedOpts,
       points: validPoints,
       currentPriceVnd: safeCurrentMinPrice,
       claimedOriginalPriceVnd: bestClaimedOrig,
       currentInStockPriceVnd: safeCurrentMinPrice,
       mode: 'market',
-      referenceOffers: effectiveReferenceOffers,
-      unavailableOfferIds,
-      minValidPriceVnd,
-      referenceTimestampMs: omnibusAnchorMs,
     });
   }, [
-    effectiveReferenceOffers,
-    minValidPriceVnd,
+    isUnavailId,
     offerAnalyses,
-    omnibusAnchorMs,
+    omnibusByOffer,
+    omnibusSharedOpts,
     safeCurrentMinPrice,
     selectedProductId,
-    unavailableOfferIds,
-    validPoints,
-  ]);
-
-  const omnibusByOffer = useMemo<Map<string, OmnibusPriceAuditResult>>(() => {
-    const map = new Map<string, OmnibusPriceAuditResult>();
-    if (validPoints.length === 0 || offerAnalyses.length === 0) return map;
-    const pointsByOfferId = new Map<string, PriceHistoryPoint[]>();
-    for (const pt of validPoints) {
-      if (pt.source === 'live_listing') continue;
-      const list = pointsByOfferId.get(pt.product_id);
-      if (list) list.push(pt);
-      else pointsByOfferId.set(pt.product_id, [pt]);
-    }
-    for (const oa of offerAnalyses) {
-      if (
-        unavailableOfferIds.has(oa.product_id) ||
-        unavailableOfferIds.has(normalizeOfferId(oa.product_id))
-      ) {
-        continue;
-      }
-      const pts = pointsByOfferId.get(oa.product_id);
-      if (!pts || pts.length < 2) continue;
-      map.set(
-        oa.product_id,
-        evaluateOmnibusPriceAudit({
-          points: pts,
-          currentPriceVnd: oa.price_current,
-          claimedOriginalPriceVnd: oa.price_original,
-          currentInStockPriceVnd: null,
-          mode: 'offer',
-          referenceOffers: effectiveReferenceOffers,
-          unavailableOfferIds,
-          minValidPriceVnd,
-          referenceTimestampMs: omnibusAnchorMs,
-        })
-      );
-    }
-    return map;
-  }, [
-    effectiveReferenceOffers,
-    minValidPriceVnd,
-    offerAnalyses,
-    omnibusAnchorMs,
-    unavailableOfferIds,
     validPoints,
   ]);
 
@@ -1086,7 +1079,7 @@ export default function PriceHistorySection({
         >
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <h3 className="h6 fw-bold text-dark d-flex align-items-center mb-0 gap-2">
-              <BsShieldCheck aria-hidden="true" className="text-danger" />
+              <BsCheckCircle aria-hidden="true" className="text-danger" />
               <span>{omnibusCopy.cardTitle}</span>
             </h3>
             <span
@@ -1106,89 +1099,79 @@ export default function PriceHistorySection({
           </div>
 
           <div className="row g-3">
-            <div className="col-lg-4 col-12">
-              <div className="rounded-4 bg-white h-100 border p-3">
-                <div className="text-muted small mb-1">
-                  {omnibusCopy.colCurrentTitle}
-                </div>
-                <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
-                  <span className="h5 fw-bold text-danger rate-tabular mb-0">
-                    {omnibusCopy.currentPriceText}
-                  </span>
-                  {omnibusCopy.claimedBadgeText && (
-                    <span className="badge bg-warning text-dark rounded-pill small">
-                      {omnibusCopy.claimedBadgeText}
-                    </span>
+            {[
+              {
+                k: 'cur',
+                title: omnibusCopy.colCurrentTitle,
+                val: omnibusCopy.currentPriceText,
+                valCls: 'h5 fw-bold text-danger rate-tabular mb-0',
+                badge: omnibusCopy.claimedBadgeText,
+                sub: omnibusCopy.currentSubText,
+                subCls:
+                  omnibusCopy.currentSubTone === 'bad'
+                    ? 'text-danger fw-semibold'
+                    : omnibusCopy.currentSubTone === 'good'
+                      ? 'text-success'
+                      : 'text-muted',
+                note: null,
+                testId: undefined,
+              },
+              {
+                k: 'flr',
+                title: omnibusCopy.colFloorTitle,
+                val: omnibusCopy.floorPriceText,
+                valCls: 'h5 fw-bold text-dark rate-tabular mb-1',
+                badge: null,
+                sub: omnibusCopy.floorDeltaText,
+                subCls:
+                  omnibusCopy.floorDeltaTone === 'good'
+                    ? 'text-success fw-semibold'
+                    : omnibusCopy.floorDeltaTone === 'bad'
+                      ? 'text-danger fw-semibold'
+                      : 'text-secondary',
+                note: omnibusCopy.floorDisclaimerText,
+                testId: undefined,
+              },
+              {
+                k: 'cyc',
+                title: omnibusCopy.colCycleTitle,
+                val: omnibusCopy.cycleValueText,
+                valCls: `fw-bold mb-1 ${
+                  omnibusCopy.cycleValueTone === 'good'
+                    ? 'text-success'
+                    : omnibusCopy.cycleValueTone === 'bad'
+                      ? 'text-danger'
+                      : 'text-dark'
+                }`,
+                badge: null,
+                sub: omnibusCopy.cycleSubText,
+                subCls: 'text-muted',
+                note: null,
+                testId: 'omnibus-cycle-signal',
+              },
+            ].map((col) => (
+              <div key={col.k} className="col-lg-4 col-12">
+                <div className="rounded-4 bg-white h-100 border p-3">
+                  <div className="text-muted small mb-1">{col.title}</div>
+                  {col.badge ? (
+                    <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
+                      <span className={col.valCls}>{col.val}</span>
+                      <span className="badge bg-warning text-dark rounded-pill small">
+                        {col.badge}
+                      </span>
+                    </div>
+                  ) : (
+                    <div data-testid={col.testId} className={col.valCls}>
+                      {col.val}
+                    </div>
+                  )}
+                  <div className={`small ${col.subCls}`}>{col.sub}</div>
+                  {col.note && (
+                    <div className="small text-muted mt-1">{col.note}</div>
                   )}
                 </div>
-                <div
-                  className={
-                    omnibusCopy.currentSubTone === 'bad'
-                      ? 'text-danger fw-semibold'
-                      : omnibusCopy.currentSubTone === 'good'
-                        ? 'text-success'
-                        : 'text-muted'
-                  }
-                  style={{ fontSize: '0.8125rem' }}
-                >
-                  {omnibusCopy.currentSubText}
-                </div>
               </div>
-            </div>
-
-            <div className="col-lg-4 col-12">
-              <div className="rounded-4 bg-white h-100 border p-3">
-                <div className="text-muted small mb-1">
-                  {omnibusCopy.colFloorTitle}
-                </div>
-                <div className="h5 fw-bold text-dark rate-tabular mb-1">
-                  {omnibusCopy.floorPriceText}
-                </div>
-                <div
-                  className={
-                    omnibusCopy.floorDeltaTone === 'good'
-                      ? 'text-success fw-semibold'
-                      : omnibusCopy.floorDeltaTone === 'bad'
-                        ? 'text-danger fw-semibold'
-                        : 'text-secondary'
-                  }
-                  style={{ fontSize: '0.8125rem' }}
-                >
-                  {omnibusCopy.floorDeltaText}
-                </div>
-                {omnibusCopy.floorDisclaimerText && (
-                  <div
-                    className="text-muted mt-1"
-                    style={{ fontSize: '0.8125rem' }}
-                  >
-                    {omnibusCopy.floorDisclaimerText}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="col-lg-4 col-12">
-              <div className="rounded-4 bg-white h-100 border p-3">
-                <div className="text-muted small mb-1">
-                  {omnibusCopy.colCycleTitle}
-                </div>
-                <div
-                  data-testid="omnibus-cycle-signal"
-                  className={`fw-bold mb-1 ${
-                    omnibusCopy.cycleValueTone === 'good'
-                      ? 'text-success'
-                      : omnibusCopy.cycleValueTone === 'bad'
-                        ? 'text-danger'
-                        : 'text-dark'
-                  }`}
-                >
-                  {omnibusCopy.cycleValueText}
-                </div>
-                <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
-                  {omnibusCopy.cycleSubText}
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       )}
