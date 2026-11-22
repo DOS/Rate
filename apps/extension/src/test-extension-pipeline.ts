@@ -10928,6 +10928,829 @@ async function runTests() {
       }
     }
   }
+
+  // --- DOS/Rate#1839: Czech (cs) VND non-breaking-space grouping & comma-decimal formatting ---
+  {
+    const {
+      buildCrowdIngestPayload,
+      buildExtensionObservationV1,
+      buildLookupParams,
+      buildProductSignalSignature,
+      formatSafeExtensionVnd,
+      formatSafeNumber,
+    } = await import('./security-guards.js');
+    const {
+      buildSvgSparkline,
+      ratingStarText,
+      renderLookupErrorHtml,
+      renderOffersCardHtml,
+      renderReviewCardHtml,
+      renderVariantPickerHtml,
+      riskScoreText,
+      trustText,
+    } = await import('./sidepanel/panel-view.js');
+    const { verdictTexts } = await import('./verdict-display.js');
+    const { formatCatalogueEntry } = await import('./i18n.js');
+    const { formatDecimal, formatPriceVnd } =
+      await import('../../web/src/lib/locale-format.js');
+
+    const NBSP = '\u00A0';
+    const catalogues = readLocaleCatalogues();
+
+    // 1. Direct helper checks across omitted, vi, en, and cs locales + parity with locale-format.ts.
+    for (const loc of [
+      undefined,
+      'vi',
+      'vi-VN',
+      'en',
+      'en-US',
+      'de',
+    ] as const) {
+      assert.equal(
+        formatSafeExtensionVnd(15_990_000, 'N/A', loc),
+        '15.990.000 ₫'
+      );
+      assert.equal(
+        formatSafeExtensionVnd(15_990_000, 'N/A', loc),
+        formatPriceVnd(
+          15_990_000,
+          loc === 'en' || loc === 'en-US' ? 'en' : 'vi'
+        )
+      );
+      assert.equal(
+        formatSafeNumber(4.5, { min: 0, max: 5, decimals: 1 }, loc),
+        '4.5'
+      );
+      assert.equal(
+        formatSafeNumber(8.8, { min: 0, max: 10, decimals: 1 }, loc),
+        '8.8'
+      );
+      assert.equal(formatSafeNumber(1250, { min: 0 }, loc), '1250');
+    }
+
+    for (const csLoc of ['cs', 'cs-CZ', 'CS_cz', ' cs '] as const) {
+      assert.equal(
+        formatSafeExtensionVnd(15_990_000, 'N/A', csLoc),
+        `15${NBSP}990${NBSP}000${NBSP}₫`
+      );
+      assert.equal(
+        formatSafeExtensionVnd(15_990_000, 'N/A', csLoc),
+        formatPriceVnd(15_990_000, 'cs')
+      );
+      assert.equal(formatSafeExtensionVnd(999, 'N/A', csLoc), `999${NBSP}₫`);
+      assert.equal(
+        formatSafeExtensionVnd(1_000_000_000, 'N/A', csLoc),
+        `1${NBSP}000${NBSP}000${NBSP}000${NBSP}₫`
+      );
+      assert.equal(
+        formatSafeNumber(4.5, { min: 0, max: 5, decimals: 1 }, csLoc),
+        '4,5'
+      );
+      assert.equal(
+        formatSafeNumber(4.5, { min: 0, max: 5, decimals: 1 }, csLoc),
+        formatDecimal(4.5, 'cs', 1)
+      );
+      assert.equal(
+        formatSafeNumber(8.8, { min: 0, max: 10, decimals: 1 }, csLoc),
+        '8,8'
+      );
+      assert.equal(
+        formatSafeNumber(8.8, { min: 0, max: 10, decimals: 1, locale: csLoc }),
+        '8,8'
+      );
+      assert.equal(
+        formatSafeNumber(5, { min: 0, max: 5, decimals: 1 }, csLoc),
+        '5,0'
+      );
+      assert.equal(formatSafeNumber(1250, { min: 0 }, csLoc), `1${NBSP}250`);
+      assert.equal(
+        formatSafeNumber(1250.5, { decimals: 1 }, csLoc),
+        `1${NBSP}250,5`
+      );
+      assert.equal(
+        formatSafeNumber(-1250.5, { decimals: 1 }, csLoc),
+        `-1${NBSP}250,5`
+      );
+    }
+
+    // Invalid inputs still return fallback across locales.
+    for (const badVnd of [
+      0,
+      0.2,
+      -5000,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      2_000_000_000,
+    ]) {
+      assert.equal(formatSafeExtensionVnd(badVnd, 'N/A', 'cs'), 'N/A');
+      assert.equal(formatSafeExtensionVnd(badVnd, 'N/A', 'vi'), 'N/A');
+    }
+    assert.equal(
+      formatSafeNumber('<script>', { decimals: 1, fallback: 0 }, 'cs'),
+      '0,0'
+    );
+
+    // 2. Machine-readable outputs, SVG coordinates, data-* attributes, and URLs remain locale-invariant.
+    const rawSignal1839 = {
+      platform: 'shopee' as const,
+      canonicalUrl: 'https://shopee.vn/item-i.88.99',
+      externalItemId: '99',
+      externalShopId: '88',
+      title: 'Phone 4.5G 256GB',
+      selectedVariant: '256GB - 4.5G',
+      price: 15_990_000,
+      originalPrice: 18_990_000,
+      ratingStar: 4.5,
+      ratingCount: 1250,
+      skuId: 'sku-4.5',
+      stockState: 'in_stock' as const,
+      stockQty: 12,
+      extractorSource: 'dom' as const,
+    };
+
+    const g = globalThis as Record<string, unknown>;
+    const savedGlobals1839 = (
+      [
+        'chrome',
+        'window',
+        'document',
+        'fetch',
+        'MutationObserver',
+        'requestAnimationFrame',
+        'setTimeout',
+        'clearTimeout',
+      ] as const
+    ).map((k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const);
+
+    const makeI18n = (locale: 'vi' | 'en' | 'cs') => ({
+      getMessage: (key: string, subs?: string | string[]) => {
+        const entry = catalogues[locale][key];
+        if (!entry) return '';
+        const list = Array.isArray(subs)
+          ? subs
+          : subs !== undefined
+            ? [subs]
+            : [];
+        return formatCatalogueEntry(entry, list);
+      },
+    });
+
+    try {
+      g.chrome = { i18n: makeI18n('cs') };
+
+      const lookupParamsCs = buildLookupParams(rawSignal1839, 'full');
+      assert.equal(lookupParamsCs.get('price'), '15990000');
+      assert.equal(lookupParamsCs.get('originalPrice'), '18990000');
+      assert.equal(lookupParamsCs.get('selectedVariant'), '256GB - 4.5G');
+      const obsCs = buildExtensionObservationV1(
+        rawSignal1839,
+        new Date('2026-11-22T00:00:00.000Z'),
+        '2.0.0'
+      );
+      assert.equal(obsCs?.price_vnd, 15_990_000);
+      assert.equal(obsCs?.variant_label, '256GB - 4.5G');
+      const crowdCs = buildCrowdIngestPayload(rawSignal1839);
+      assert.equal(crowdCs.price, 15_990_000);
+      assert.equal(crowdCs.ratingStar, 4.5);
+      assert.ok(
+        buildProductSignalSignature(rawSignal1839).includes('15990000')
+      );
+      const sparkCs = buildSvgSparkline([
+        { date: '2026-11-01', price: 15_990_000 },
+        { date: '2026-11-02', price: 16_990_000 },
+      ]);
+      assert.ok(!sparkCs.includes(NBSP) && sparkCs.includes('points="'));
+
+      // 3. Pure UI builders (panel-view.ts & verdict-display.ts) across vi, en, and cs.
+      const variantLookup = {
+        matchStatus: 'exact_listing' as const,
+        detectedStorageGb: 256,
+        selectedVariant: '256GB - 4.5G',
+        variantCandidates: [
+          {
+            slug: 'phone-256',
+            label: '256GB - 4.5G',
+            storageGb: 256,
+            minPrice: 15_990_000,
+          },
+          {
+            slug: 'phone-512',
+            label: '512GB - 4.5G',
+            storageGb: 512,
+            minPrice: 18_990_000,
+          },
+        ],
+      };
+      const offers1839: ExtensionOfferItem[] = [
+        {
+          id: 'off-cs-1',
+          platform: 'shopee',
+          title: 'Phone 256GB',
+          price_current: 15_990_000,
+          price_original: 18_990_000,
+          rating_star: 4.5,
+          rating_count: 120,
+          historical_sold: 300,
+          url: 'https://shopee.vn/item-i.88.99',
+          merchant: {
+            id: 'm-cs-1',
+            name: 'Official Flagship',
+            is_official: true,
+            risk_score: 12,
+            dosafe_risk_score: 4,
+            review_risk_score: 12,
+          },
+        },
+      ];
+      const reviewSummary1839 = {
+        total_analyzed: 1250,
+        authentic_pct: 92,
+        suspicious_pct: 5,
+        fake_pct: 3,
+        pros: [],
+        cons: [],
+        ai_summary: null,
+      };
+      const verdictInput1839 = {
+        badgeLabel: 'Fallback',
+        explanation: 'Fallback',
+        messageKey: 'above_market',
+        messageParams: {
+          effectivePrice: 15_990_000,
+          marketMedianPrice: 14_500_000,
+          vsMarketMedianPct: 10.3,
+        },
+      };
+
+      for (const loc of ['vi', 'en'] as const) {
+        g.chrome = { i18n: makeI18n(loc) };
+        const varHtml = renderVariantPickerHtml(variantLookup);
+        assert.ok(varHtml.includes('data-variant="256GB - 4.5G"'));
+        assert.ok(varHtml.includes('(15.990.000 ₫)'));
+        assert.equal(ratingStarText(4.5), '★ 4.5');
+        const offHtml = renderOffersCardHtml(offers1839);
+        assert.ok(offHtml.includes('15.990.000 ₫'));
+        assert.ok(offHtml.includes('★ 4.5'));
+        assert.ok(offHtml.includes('href="https://shopee.vn/item-i.88.99"'));
+        const revHtml = renderReviewCardHtml(reviewSummary1839, {
+          rating_score_5: 4.5,
+        });
+        assert.ok(revHtml.includes('★ 4.5 / 5'));
+        assert.ok(revHtml.includes('1250'));
+        const vTexts = verdictTexts(verdictInput1839);
+        assert.ok(vTexts.explanation.includes('15.990.000 ₫'));
+        assert.ok(vTexts.label.includes('10.3%'));
+      }
+
+      g.chrome = { i18n: makeI18n('cs') };
+      const varHtmlCs = renderVariantPickerHtml(variantLookup);
+      assert.ok(
+        varHtmlCs.includes('data-variant="256GB - 4.5G"'),
+        'machine data-variant attribute must remain unchanged under cs'
+      );
+      assert.ok(
+        varHtmlCs.includes(`(15${NBSP}990${NBSP}000${NBSP}₫)`),
+        'variant button label must format VND with Czech NBSP under cs'
+      );
+      assert.equal(ratingStarText(4.5), '★ 4,5');
+      const offHtmlCs = renderOffersCardHtml(offers1839);
+      assert.ok(offHtmlCs.includes(`15${NBSP}990${NBSP}000${NBSP}₫`));
+      assert.ok(offHtmlCs.includes('★ 4,5'));
+      assert.ok(offHtmlCs.includes('href="https://shopee.vn/item-i.88.99"'));
+      const revHtmlCs = renderReviewCardHtml(reviewSummary1839, {
+        rating_score_5: 4.5,
+      });
+      assert.ok(revHtmlCs.includes('★ 4,5 / 5'));
+      assert.ok(revHtmlCs.includes(`92 % (recenze: 1${NBSP}250)`));
+      assert.equal(
+        renderReviewCardHtml(
+          { ...reviewSummary1839, ai_summary: 'Pin tốt' },
+          { rating_score_5: 4.5 },
+          'vi'
+        ).includes('Pin tốt'),
+        false,
+        'Vietnamese ai_summary must stay hidden when catalogue langCode is cs even if explicit locale is vi'
+      );
+      g.chrome = { i18n: makeI18n('vi') };
+      assert.equal(
+        renderReviewCardHtml(
+          { ...reviewSummary1839, ai_summary: 'Pin tốt' },
+          { rating_score_5: 4.5 },
+          'vi-VN'
+        ).includes('Pin tốt'),
+        true,
+        'normalized vi-VN locale under vi catalogue must keep ai_summary'
+      );
+      g.chrome = { i18n: makeI18n('cs') };
+      assert.ok(
+        renderLookupErrorHtml('rate_limited', 'Phone', 1200).includes(
+          `1${NBSP}200${NBSP}s.`
+        )
+      );
+      assert.equal(trustText(88), 'Důvěra 88/100');
+      assert.equal(riskScoreText(12), '12');
+      const vTextsCs = verdictTexts(verdictInput1839);
+      assert.equal(vTextsCs.label, 'Nad trhem +10,3 %');
+      assert.ok(
+        vTextsCs.explanation.includes(`15${NBSP}990${NBSP}000${NBSP}₫`) &&
+          vTextsCs.explanation.includes(`14${NBSP}500${NBSP}000${NBSP}₫`) &&
+          vTextsCs.explanation.includes('10,3 %')
+      );
+
+      // 4. Content-script Shadow DOM Trust Pill rendered UI across vi, en, and cs.
+      {
+        let pillHost1839: { shadowRoot?: { innerHTML: string } } | null = null;
+        let shadowHtml1839 = '';
+        let mutCb1839: (() => void) | undefined;
+        let h1Title1839 = 'iPhone 16 Pro 256GB';
+        let activeLocale1839: 'vi' | 'en' | 'cs' = 'vi';
+        const rafs1839: Array<() => unknown> = [];
+        const timers1839: Array<() => unknown> = [];
+        const sentPayloads1839: Array<Record<string, unknown>> = [];
+        const flushPill1839 = async () => {
+          for (let i = 0; i < 6; i++) {
+            while (rafs1839.length) await rafs1839.shift()!();
+            await Promise.resolve();
+          }
+        };
+
+        g.window = {
+          location: { href: 'https://shopee.vn/iphone-i.1839.2026' },
+        };
+        g.document = {
+          body: {
+            appendChild: (el: { shadowRoot?: { innerHTML: string } }) => {
+              pillHost1839 = el;
+            },
+          },
+          getElementById: (id: string) =>
+            id === 'rate-vn-trust-pill-host' ? pillHost1839 : null,
+          createElement: () => {
+            const shadow = {
+              get innerHTML() {
+                return shadowHtml1839;
+              },
+              set innerHTML(v: string) {
+                shadowHtml1839 = v;
+              },
+              getElementById: () => ({ addEventListener() {} }),
+            };
+            const el = {
+              id: '',
+              shadowRoot: null as typeof shadow | null,
+              attachShadow() {
+                el.shadowRoot = shadow;
+                return shadow;
+              },
+              remove() {
+                pillHost1839 = null;
+              },
+            };
+            return el;
+          },
+          querySelectorAll: () => [],
+          querySelector: (s: string) =>
+            s === 'h1'
+              ? { textContent: h1Title1839 }
+              : s === '.pqTWkA'
+                ? { textContent: '15.990.000₫' }
+                : null,
+        };
+        g.MutationObserver = class {
+          constructor(cb: () => void) {
+            mutCb1839 = cb;
+          }
+          observe() {}
+        };
+        g.requestAnimationFrame = (cb: () => unknown) => {
+          rafs1839.push(cb);
+          return rafs1839.length;
+        };
+        g.setTimeout = ((cb: () => unknown) => {
+          timers1839.push(cb);
+          return timers1839.length;
+        }) as unknown;
+        g.clearTimeout = () => {};
+        g.chrome = {
+          i18n: {
+            getMessage: (key: string, subs?: string | string[]) =>
+              makeI18n(activeLocale1839).getMessage(key, subs),
+          },
+          runtime: {
+            sendMessage: async (msg: Record<string, unknown>) => {
+              sentPayloads1839.push(msg);
+              return {
+                ok: true,
+                data: {
+                  matchStatus: 'exact_listing',
+                  isAccessoryOrPart: false,
+                  priceAssessment: {
+                    verdict: 'genuine_deal',
+                    badgeLabel: 'Giá tốt',
+                    explanation: 'Giá tốt',
+                    messageKey: 'genuine_deal',
+                    messageParams: {
+                      effectivePrice: 15_990_000,
+                      marketMedianPrice: 17_490_000,
+                    },
+                    cheaperOfferCount: 3,
+                    maxSavingsAmount: 1_500_000,
+                    marketMinPrice: 14_490_000,
+                  },
+                  masterProduct: { rating_score_5: 4.5 },
+                  reviewSummary: {
+                    total_analyzed: 80,
+                    authentic_pct: 91,
+                    suspicious_pct: 5,
+                    fake_pct: 4,
+                    pros: [],
+                    cons: [],
+                    ai_summary: null,
+                  },
+                  radarSignal: {
+                    verdict: 'genuine_deal',
+                    savingsPct: 9,
+                    fakeMarkupPct: 0,
+                    spreadPct: 12,
+                    genuineDeal: { verdict: 'genuine_all_time_low' },
+                  },
+                },
+              };
+            },
+          },
+        };
+
+        await import(
+          new URL('./content/content-script.js?case=1839pill', import.meta.url)
+            .href
+        );
+        await flushPill1839();
+        assert.ok(shadowHtml1839.includes('4.5 (91% thật)'));
+        assert.ok(shadowHtml1839.includes('(-1.500.000 ₫)'));
+
+        activeLocale1839 = 'en';
+        h1Title1839 = 'iPhone 16 Pro 512GB';
+        mutCb1839!();
+        while (timers1839.length) timers1839.shift()!();
+        await flushPill1839();
+        assert.ok(shadowHtml1839.includes('4.5 (91% genuine)'));
+        assert.ok(shadowHtml1839.includes('(-1.500.000 ₫)'));
+
+        activeLocale1839 = 'cs';
+        h1Title1839 = 'iPhone 16 Pro 1TB';
+        mutCb1839!();
+        while (timers1839.length) timers1839.shift()!();
+        await flushPill1839();
+        assert.ok(
+          shadowHtml1839.includes('4,5 (91 % skutečných)'),
+          `cs pill rating must use comma decimal: ${shadowHtml1839}`
+        );
+        assert.ok(
+          shadowHtml1839.includes(
+            `Levnější obchody: 3 (-1${NBSP}500${NBSP}000${NBSP}₫)`
+          ),
+          `cs pill savings must use Czech NBSP grouping: ${shadowHtml1839}`
+        );
+        assert.ok(
+          shadowHtml1839.includes(
+            `aria-label="Rate.vn: Skutečně dobrá cena. Minimum napříč obchody (-9 %). 4,5 (91 % skutečných). Levnější obchody: 3 (-1${NBSP}500${NBSP}000${NBSP}₫). Detail. Otevřít panel s analýzou ceny"`
+          ),
+          'cs pill aria-label must match visible Czech-formatted text'
+        );
+        const csSentSignal = (
+          sentPayloads1839.at(-1) as { signal?: { price?: number } }
+        )?.signal;
+        assert.equal(csSentSignal?.price, 15_990_000);
+      }
+
+      // 5. Side panel (sidepanel.ts) full rendered UI across vi, en, and cs.
+      {
+        let activePanelLocale: 'vi' | 'en' | 'cs' = 'cs';
+        const root1839 = {
+          innerHTML: '',
+          querySelectorAll: () => [],
+          querySelector: () => null,
+        };
+        const radarSlot1839 = { innerHTML: '' };
+        const trustSlot1839 = { innerHTML: '' };
+        const storageListeners1839: Array<
+          (changes: Record<string, unknown>, area: string) => void
+        > = [];
+        let onDomReady1839: (() => void) | undefined;
+        const settle1839 = async () => {
+          for (let i = 0; i < 8; i++) await Promise.resolve();
+        };
+
+        const fullLookup1839: ExtensionLookupData = {
+          matchStatus: 'exact_listing',
+          platform: 'shopee',
+          canonicalUrl: 'https://shopee.vn/iphone-i.1839.99',
+          detectedStorageGb: 256,
+          selectedVariant: '256GB - 4.5G',
+          isAccessoryOrPart: false,
+          accessoryReason: null,
+          variantCandidates: variantLookup.variantCandidates,
+          masterProduct: {
+            id: 'mp-1839',
+            slug: 'iphone-16-pro-256gb',
+            name: 'iPhone 16 Pro 256GB',
+            brand: 'Apple',
+            model: 'iPhone 16 Pro',
+            storage_gb: 256,
+            ram_gb: 8,
+            min_price: 15_990_000,
+            max_price: 18_990_000,
+            merchant_count: 4,
+            rating_score_5: 4.5,
+            average_rating: 4.5,
+            user_rating_weighted: 4.5,
+            expert_rating: 8.8,
+            authentic_review_count: 1150,
+            total_reviews: 1250,
+          },
+          matchedOffer: offers1839[0]!,
+          topCheaperOffers: offers1839,
+          allOffers: offers1839,
+          merchantProfile: {
+            id: 'm-cs-1',
+            name: 'Official Flagship',
+            is_official: true,
+            trust_score: 92,
+            risk_score: 8,
+            dosafe_risk_score: 4,
+            review_risk_score: 8,
+          },
+          reviewSummary: reviewSummary1839,
+          priceHistory: {
+            lowestEverPrice: 14_990_000,
+            highestEverPrice: 19_990_000,
+            points: [
+              { date: '2026-11-01', price: 16_990_000 },
+              { date: '2026-11-15', price: 15_990_000 },
+            ],
+          },
+          categorySlug: 'smartphones',
+          compareUrl: '/compare?category=smartphones',
+          productDetailUrl: '/smartphones/iphone-16-pro-256gb',
+          versusUrl: '/compare?category=smartphones&ids=a,b',
+          leaderboardStandings: [
+            {
+              criterion: 'combined',
+              rank: 2,
+              totalInCategory: 45,
+              score5: 4.4,
+              score10: 8.8,
+              categorySlug: 'smartphones',
+            },
+            {
+              criterion: 'camera',
+              rank: 3,
+              totalInCategory: 45,
+              score5: 4.3,
+              score10: 8.6,
+              categorySlug: 'smartphones',
+            },
+          ],
+          radarSignal: {
+            verdict: 'genuine_deal',
+            savingsPct: 8,
+            fakeMarkupPct: 0,
+            spreadPct: 12,
+            genuineDeal: { verdict: 'genuine_all_time_low' },
+          },
+          priceAssessment: {
+            verdict: 'genuine_deal',
+            badgeLabel: 'Giá tốt',
+            explanation: 'Giá tốt',
+            messageKey: 'genuine_deal',
+            messageParams: {
+              effectivePrice: 15_990_000,
+              marketMedianPrice: 17_490_000,
+            },
+            observedPrice: 15_990_000,
+            observedOriginalPrice: 18_990_000,
+            claimedDiscountPct: 16,
+            vsMarketMedianPct: -8.6,
+            marketMinPrice: 15_990_000,
+            marketMedianPrice: 17_490_000,
+            marketMaxPrice: 18_990_000,
+            historicalMinPrice: 14_990_000,
+            historicalMaxPrice: 19_990_000,
+            cheaperOfferCount: 0,
+            maxSavingsAmount: 0,
+          },
+        };
+
+        g.fetch = async (url: unknown) => {
+          const u = String(url);
+          if (u.includes('/api/v1/rate/deals')) {
+            return {
+              ok: true,
+              json: async () => ({
+                ok: true,
+                data: {
+                  genuineDeals: [
+                    {
+                      id: 'd-cs',
+                      verdict: 'genuine_deal',
+                      verdictBadgeVi: 'Giá tốt',
+                      productSlug: 'ipad-air',
+                      productName: 'iPad Air',
+                      categorySlug: 'tablets',
+                      productHref: '/tablets/ipad-air',
+                      platform: 'shopee',
+                      merchantName: 'Apple Store',
+                      offerUrl: 'https://shopee.vn/ipad-i.1.2',
+                      priceCurrent: 13_990_000,
+                      priceOriginal: 15_990_000,
+                      savingsVsMedianVnd: 1_500_000,
+                      savingsVsMedianPct: 10,
+                      fakeMarkupPct: 0,
+                      explanationVi: 'Tốt',
+                    },
+                  ],
+                  priceSpreadLeaders: [
+                    {
+                      id: 'sp-cs',
+                      productSlug: 'iphone-16',
+                      productName: 'iPhone 16',
+                      productHref: '/smartphones/iphone-16',
+                      minPrice: 15_990_000,
+                      maxPrice: 18_490_000,
+                      spreadVnd: 2_500_000,
+                      spreadPct: 16,
+                      cheapestPlatform: 'shopee',
+                      cheapestOfferUrl: 'https://shopee.vn/p-i.1.2',
+                      priciestPlatform: 'tiki',
+                    },
+                  ],
+                  fakeSaleTraps: [
+                    {
+                      id: 'tr-cs',
+                      verdict: 'fake_sale_trap',
+                      verdictBadgeVi: 'Bẫy',
+                      productSlug: 's25',
+                      productName: 'Galaxy S25',
+                      categorySlug: 'smartphones',
+                      productHref: '/smartphones/s25',
+                      platform: 'lazada',
+                      merchantName: 'Trap Shop',
+                      offerUrl: 'https://lazada.vn/s25',
+                      priceCurrent: 19_990_000,
+                      priceOriginal: 29_990_000,
+                      savingsVsMedianVnd: 0,
+                      savingsVsMedianPct: 0,
+                      fakeMarkupPct: 50,
+                      explanationVi: 'Ảo',
+                    },
+                  ],
+                },
+              }),
+            };
+          }
+          if (u.includes('/api/v1/rate/merchants')) {
+            return {
+              ok: true,
+              json: async () => ({
+                ok: true,
+                data: [
+                  {
+                    id: 'm-dir-1',
+                    platform: 'shopee',
+                    name: 'Mega Official',
+                    slug: 'mega-official',
+                    is_official: true,
+                    dosafe_risk_score: 3,
+                    review_risk_score: 7,
+                    risk_score: 7,
+                    trust_score: 93,
+                    product_count: 1250,
+                  },
+                ],
+              }),
+            };
+          }
+          return { ok: false };
+        };
+
+        g.chrome = {
+          i18n: {
+            getMessage: (key: string, subs?: string | string[]) =>
+              makeI18n(activePanelLocale).getMessage(key, subs),
+          },
+          runtime: {
+            sendMessage: async (msg: Record<string, unknown>) => {
+              if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+                return {
+                  ok: true,
+                  settings: {
+                    apiBaseUrl: DEFAULT_API_BASE_URL,
+                    crowdContributeOptIn: false,
+                  },
+                  signal: rawSignal1839,
+                  data: fullLookup1839,
+                };
+              }
+              return { ok: false };
+            },
+          },
+          storage: {
+            local: {
+              get: async () => ({
+                apiBaseUrl: DEFAULT_API_BASE_URL,
+                crowdContributeOptIn: false,
+                crowdConsentVersion: 0,
+              }),
+            },
+            onChanged: {
+              addListener: (
+                fn: (c: Record<string, unknown>, a: string) => void
+              ) => storageListeners1839.push(fn),
+            },
+          },
+        };
+        g.document = {
+          documentElement: { lang: '' },
+          title: '',
+          querySelectorAll: () => [],
+          getElementById: (id: string) => {
+            if (id === 'panel-root') return root1839;
+            if (id === 'deal-radar-slot') return radarSlot1839;
+            if (id === 'merchant-trust-slot') return trustSlot1839;
+            return null;
+          },
+          addEventListener: (ev: string, cb: () => void) => {
+            if (ev === 'DOMContentLoaded') onDomReady1839 = cb;
+          },
+        };
+
+        await import(
+          new URL('./sidepanel/sidepanel.js?case=1839panel', import.meta.url)
+            .href
+        );
+        onDomReady1839!();
+        await settle1839();
+
+        // Czech panel assertions
+        assert.ok(
+          root1839.innerHTML.includes(`15${NBSP}990${NBSP}000${NBSP}₫`)
+        );
+        assert.ok(
+          root1839.innerHTML.includes(`17${NBSP}490${NBSP}000${NBSP}₫`)
+        );
+        assert.ok(
+          root1839.innerHTML.includes(`14${NBSP}990${NBSP}000${NBSP}₫`)
+        );
+        assert.ok(
+          root1839.innerHTML.includes(`19${NBSP}990${NBSP}000${NBSP}₫`)
+        );
+        assert.ok(root1839.innerHTML.includes('8,8 / 10'));
+        assert.ok(root1839.innerHTML.includes('(8,6)'));
+        assert.ok(root1839.innerHTML.includes('★ 4,5 / 5'));
+        assert.ok(root1839.innerHTML.includes('data-variant="256GB - 4.5G"'));
+        assert.ok(
+          root1839.innerHTML.includes(
+            'href="https://rate.vn/smartphones/iphone-16-pro-256gb"'
+          )
+        );
+        assert.ok(
+          radarSlot1839.innerHTML.includes(`13${NBSP}990${NBSP}000${NBSP}₫`) &&
+            radarSlot1839.innerHTML.includes(`1${NBSP}500${NBSP}000${NBSP}₫`) &&
+            radarSlot1839.innerHTML.includes(`2${NBSP}500${NBSP}000${NBSP}₫`) &&
+            radarSlot1839.innerHTML.includes(`29${NBSP}990${NBSP}000${NBSP}₫`)
+        );
+        assert.ok(
+          trustSlot1839.innerHTML.includes(`Produkty: 1${NBSP}250`) &&
+            trustSlot1839.innerHTML.includes('Důvěra 93/100')
+        );
+
+        // Switch to vi and en: dot-grouped VND and dot-decimal scores remain intact.
+        for (const loc of ['vi', 'en'] as const) {
+          activePanelLocale = loc;
+          storageListeners1839.at(-1)!(
+            { lookup_tab_latest: { newValue: loc } },
+            'session'
+          );
+          await settle1839();
+          assert.ok(root1839.innerHTML.includes('15.990.000 ₫'));
+          assert.ok(root1839.innerHTML.includes('8.8 / 10'));
+          assert.ok(root1839.innerHTML.includes('(8.6)'));
+          assert.ok(root1839.innerHTML.includes('★ 4.5 / 5'));
+          assert.ok(radarSlot1839.innerHTML.includes('13.990.000 ₫'));
+          assert.ok(trustSlot1839.innerHTML.includes('1250'));
+        }
+      }
+
+      console.log(
+        '  ✅ [Czech (cs) VND NBSP grouping & comma-decimal formatting across pill and sidepanel (#1839)] Verified'
+      );
+    } finally {
+      for (const [key, desc] of savedGlobals1839) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

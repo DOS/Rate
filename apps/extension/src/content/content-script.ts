@@ -35,8 +35,11 @@ function isValidPillVndPrice(amount: unknown): amount is number {
   );
 }
 
-function formatCurrencyVnd(amount: number | null | undefined): string {
-  return formatSafeExtensionVnd(amount, t('priceUpdating'));
+function formatCurrencyVnd(
+  amount: number | null | undefined,
+  locale = t('langCode')
+): string {
+  return formatSafeExtensionVnd(amount, t('priceUpdating'), locale);
 }
 
 /**
@@ -72,6 +75,7 @@ function renderShadowTrustPill(
     }
 
     const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    const uiLocale = t('langCode');
     const assessment = lookup.priceAssessment;
     // The verdict in the extension's language (DOS/Rate#1326).
     const verdict = verdictTexts(assessment);
@@ -95,11 +99,17 @@ function renderShadowTrustPill(
     const cheaperSummary =
       hasCheaperOffers && isValidPillVndPrice(assessment.maxSavingsAmount)
         ? t('pillCheaperAt', [
-            formatSafeNumber(assessment.cheaperOfferCount, { min: 1 }),
-            formatCurrencyVnd(assessment.maxSavingsAmount),
+            formatSafeNumber(
+              assessment.cheaperOfferCount,
+              { min: 1 },
+              uiLocale
+            ),
+            formatCurrencyVnd(assessment.maxSavingsAmount, uiLocale),
           ])
         : isValidPillVndPrice(assessment.marketMinPrice)
-          ? t('pillMarketLow', [formatCurrencyVnd(assessment.marketMinPrice)])
+          ? t('pillMarketLow', [
+              formatCurrencyVnd(assessment.marketMinPrice, uiLocale),
+            ])
           : t('pillPrompt');
     const radarSig = lookup.radarSignal;
     const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
@@ -112,14 +122,22 @@ function renderShadowTrustPill(
               cls: 'radar-deal',
               icon: '🔥',
               text: t('pillRadarDeal', [
-                formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 }),
+                formatSafeNumber(
+                  radarSig.savingsPct,
+                  { min: 0, max: 100 },
+                  uiLocale
+                ),
               ]),
             }
           : {
               cls: 'radar-deal',
               icon: '✅',
               text: t('pillRadarBelowMedian', [
-                formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 }),
+                formatSafeNumber(
+                  radarSig.savingsPct,
+                  { min: 0, max: 100 },
+                  uiLocale
+                ),
               ]),
             }
         : radarSig.verdict === 'fake_sale_trap'
@@ -127,10 +145,14 @@ function renderShadowTrustPill(
               cls: 'radar-trap',
               icon: '🚨',
               text: t('pillRadarTrap', [
-                formatSafeNumber(radarSig.fakeMarkupPct, {
-                  min: 0,
-                  max: 10000,
-                }),
+                formatSafeNumber(
+                  radarSig.fakeMarkupPct,
+                  {
+                    min: 0,
+                    max: 10000,
+                  },
+                  uiLocale
+                ),
               ]),
             }
           : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
@@ -138,7 +160,11 @@ function renderShadowTrustPill(
                 cls: 'radar-spread',
                 icon: '📊',
                 text: t('pillRadarSpread', [
-                  formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 }),
+                  formatSafeNumber(
+                    radarSig.spreadPct,
+                    { min: 0, max: 10000 },
+                    uiLocale
+                  ),
                 ]),
               }
             : null
@@ -147,7 +173,7 @@ function renderShadowTrustPill(
       ? `<span class="radar-chip ${radarBadge.cls}"><span aria-hidden="true">${radarBadge.icon} </span>${escapeHtml(radarBadge.text)}</span>`
       : '';
     const ratingText = trustedRating
-      ? `${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 })}${authenticRatio == null ? '' : ` ${t('pillAuthentic', [formatSafeNumber(authenticRatio, { min: 0, max: 100 })])}`}`
+      ? `${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 }, uiLocale)}${authenticRatio == null ? '' : ` ${t('pillAuthentic', [formatSafeNumber(authenticRatio, { min: 0, max: 100 }, uiLocale)])}`}`
       : '';
 
     shadow.innerHTML = `

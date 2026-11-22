@@ -1,5 +1,8 @@
 import { t, type MessageKey } from './i18n.js';
-import { MAX_VALID_EXTENSION_VND_PRICE } from './security-guards.js';
+import {
+  formatSafeExtensionVnd,
+  MAX_VALID_EXTENSION_VND_PRICE,
+} from './security-guards.js';
 import type { ExtensionLookupData, ExtensionPriceAssessment } from './types.js';
 
 type VerdictParamKind = 'price' | 'pct' | 'text';
@@ -105,9 +108,10 @@ export const VERDICT_MESSAGES: Readonly<Record<string, VerdictMessageSpec>> = {
 const MAX_KEYWORD_LENGTH = 64;
 
 /**
- * One parameter as the server prints it in Vietnamese: prices with
- * `toLocaleString('vi-VN')` and " ₫", percentages as plain numbers.
- * `null` when the value is missing or of the wrong type.
+ * Formats one verdict parameter in the active catalogue language: VND prices
+ * through `formatSafeExtensionVnd` (Czech NBSP grouping under `cs`, `vi-VN`
+ * dots otherwise) and percentages with a decimal comma under `cs`. Returns
+ * `null` when the value is missing or out of bounds.
  */
 function formatVerdictParam(
   params: Record<string, unknown>,
@@ -125,8 +129,8 @@ function formatVerdictParam(
       ) {
         return null;
       }
-      const formatted = value.toLocaleString('vi-VN');
-      return formatted === '0' ? null : `${formatted} ₫`;
+      const formatted = formatSafeExtensionVnd(value, '', t('langCode'));
+      return formatted || null;
     }
     case 'pct':
       // vi and en print the server's decimal point; Czech writes a comma, as

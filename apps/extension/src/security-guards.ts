@@ -544,9 +544,33 @@ export function escapeSafeExternalHref(
   }
 }
 
+const CZECH_NBSP = '\u00A0';
+
+function isCzechExtensionLocale(locale: unknown): boolean {
+  if (typeof locale !== 'string') return false;
+  const primary = locale.trim().slice(0, 32).toLowerCase().split(/[-_]/)[0];
+  return primary === 'cs';
+}
+
+function groupCzechIntegerString(intStr: string): string {
+  if (!/^-?\d+$/.test(intStr)) return intStr;
+  const negative = intStr.startsWith('-');
+  const digits = negative ? intStr.slice(1) : intStr;
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, CZECH_NBSP);
+  return negative ? `-${grouped}` : grouped;
+}
+
+function formatCzechDecimalString(fixedAscii: string): string {
+  if (!/^-?\d+(?:\.\d+)?$/.test(fixedAscii)) return fixedAscii;
+  const [intPart = '0', fracPart] = fixedAscii.split('.');
+  const groupedInt = groupCzechIntegerString(intPart);
+  return fracPart !== undefined ? `${groupedInt},${fracPart}` : groupedInt;
+}
+
 export function formatSafeExtensionVnd(
   val: number | null | undefined,
-  fallbackText = t('notAvailable')
+  fallbackText = t('notAvailable'),
+  locale?: string
 ): string {
   if (
     typeof val !== 'number' ||
@@ -556,7 +580,14 @@ export function formatSafeExtensionVnd(
   ) {
     return fallbackText;
   }
-  return `${Math.round(val).toLocaleString('vi-VN')} ₫`;
+  const rounded = Math.round(val);
+  if (rounded <= 0) {
+    return fallbackText;
+  }
+  if (isCzechExtensionLocale(locale)) {
+    return `${groupCzechIntegerString(String(rounded))}${CZECH_NBSP}₫`;
+  }
+  return `${rounded.toLocaleString('vi-VN')} ₫`;
 }
 
 export function resolveSafeApiRelativeUrl(
@@ -614,9 +645,12 @@ export function formatSafeNumber(
     max?: number;
     decimals?: number;
     fallback?: number;
-  } = {}
+    locale?: string;
+  } = {},
+  locale?: string
 ): string {
   const safeOpts = options && typeof options === 'object' ? options : {};
+  const effectiveLocale = locale ?? safeOpts.locale;
   const rawFallback =
     typeof safeOpts.fallback === 'number'
       ? safeOpts.fallback
@@ -649,9 +683,15 @@ export function formatSafeNumber(
     safeOpts.decimals >= 0
   ) {
     const decimals = Math.min(6, Math.floor(safeOpts.decimals));
-    return roundHalfUpDecimal(clamped, decimals).toFixed(decimals);
+    const fixed = roundHalfUpDecimal(clamped, decimals).toFixed(decimals);
+    return isCzechExtensionLocale(effectiveLocale)
+      ? formatCzechDecimalString(fixed)
+      : fixed;
   }
-  return String(roundHalfUpDecimal(clamped, 0));
+  const roundedInt = String(roundHalfUpDecimal(clamped, 0));
+  return isCzechExtensionLocale(effectiveLocale)
+    ? formatCzechDecimalString(roundedInt)
+    : roundedInt;
 }
 
 const ALLOWED_VERDICT_CLASS_SUFFIXES = new Set([

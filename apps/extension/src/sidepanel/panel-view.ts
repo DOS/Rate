@@ -98,7 +98,8 @@ export function renderVariantPickerHtml(
   lookup: Pick<
     ExtensionLookupData,
     'variantCandidates' | 'detectedStorageGb' | 'selectedVariant'
-  > & { matchStatus?: ExtensionLookupData['matchStatus'] }
+  > & { matchStatus?: ExtensionLookupData['matchStatus'] },
+  locale = t('langCode')
 ): string {
   if (lookup.variantCandidates.length <= 1) return '';
   return `
@@ -115,7 +116,7 @@ export function renderVariantPickerHtml(
                 aria-pressed="${active ? 'true' : 'false'}"
                 data-variant="${escapeHtml(v.label)}"
               >
-                ${contentTextHtml(v.label)} (${formatSafeExtensionVnd(v.minPrice)})
+                ${contentTextHtml(v.label)} (${formatSafeExtensionVnd(v.minPrice, t('notAvailable'), locale)})
               </button>
             `;
             })
@@ -206,11 +207,14 @@ export function offerMarks(offer: PanelOffer): string[] {
 }
 
 /** A star rating, or null when unknown or zero (DOS/Rate#1301). */
-export function ratingStarText(raw: unknown): string | null {
+export function ratingStarText(
+  raw: unknown,
+  locale = t('langCode')
+): string | null {
   const rating = normalizeFiveStarRating(raw);
   return rating == null
     ? null
-    : `★ ${formatSafeNumber(rating, { min: 0, max: 5, decimals: 1 })}`;
+    : `★ ${formatSafeNumber(rating, { min: 0, max: 5, decimals: 1 }, locale)}`;
 }
 
 export function officialBadgeHtml(): string {
@@ -219,11 +223,12 @@ export function officialBadgeHtml(): string {
 
 function renderOfferRowHtml(
   off: ExtensionOfferItem,
-  cheapest: boolean
+  cheapest: boolean,
+  locale: string
 ): string {
   const marks = offerMarkItems(off);
   const muted = !isOfferBuyable(off);
-  const star = ratingStarText(off.rating_star);
+  const star = ratingStarText(off.rating_star, locale);
   const meta = [
     escapeHtml(String(off.platform ?? '').toUpperCase()),
     star,
@@ -233,7 +238,11 @@ function renderOfferRowHtml(
       off.merchant.risk_score == null
         ? t('offerCombinedRiskNoData')
         : t('offerCombinedRisk', [
-            formatSafeNumber(off.merchant.risk_score, { min: 0, max: 100 }),
+            formatSafeNumber(
+              off.merchant.risk_score,
+              { min: 0, max: 100 },
+              locale
+            ),
           ])
     ),
   ].filter(Boolean);
@@ -264,23 +273,26 @@ function renderOfferRowHtml(
                 </div>
               </div>
               <a href="${escapeSafeExternalHref(off.url)}" target="_blank" rel="noopener noreferrer" class="offer-price${muted ? ' offer-price-muted' : ''}"${priceTitle} style="text-decoration:none;">
-                ${formatSafeExtensionVnd(off.price_current)}
+                ${formatSafeExtensionVnd(off.price_current, t('notAvailable'), locale)}
               </a>
             </div>
           `;
 }
 
 /** The store price list card, or '' with no offer (DOS/Rate#1297). */
-export function renderOffersCardHtml(offers: ExtensionOfferItem[]): string {
+export function renderOffersCardHtml(
+  offers: ExtensionOfferItem[],
+  locale = t('langCode')
+): string {
   if (offers.length === 0) return '';
   const ordered = orderOffersForPanel(offers);
   const cheapestId = cheapestBuyableOfferId(ordered);
   return `
       <div class="card">
-        <div class="card-title">${escapeHtml(t('offersCardTitle', [formatSafeNumber(offers.length, { min: 0 })]))}</div>
+        <div class="card-title">${escapeHtml(t('offersCardTitle', [formatSafeNumber(offers.length, { min: 0 }, locale)]))}</div>
         ${ordered
           .slice(0, 5)
-          .map((off) => renderOfferRowHtml(off, off.id === cheapestId))
+          .map((off) => renderOfferRowHtml(off, off.id === cheapestId, locale))
           .join('')}
       </div>
     `;
@@ -298,18 +310,22 @@ export function renderReviewCardHtml(
     | 'rating_score'
     | 'user_rating_weighted'
     | 'average_rating'
-  > | null
+  > | null,
+  locale = t('langCode')
 ): string {
   if (!reviews) return '';
-  const star = ratingStarText(resolveExtensionMasterRating(master));
+  const star = ratingStarText(resolveExtensionMasterRating(master), locale);
   const analysed = Number(reviews.total_analyzed);
   const hasReviews = Number.isFinite(analysed) && analysed > 0;
   // The server writes the summary in Vietnamese only. An English or Czech
   // panel leaves it out rather than machine-translating it or guessing its
   // language: the genuine share and the count above say the same
   // (DOS/Rate#1374).
+  const isViLocale =
+    typeof locale === 'string' &&
+    locale.trim().slice(0, 32).toLowerCase().split(/[-_]/)[0] === 'vi';
   const summary =
-    hasReviews && reviews.ai_summary && t('langCode') === 'vi'
+    hasReviews && reviews.ai_summary && isViLocale && t('langCode') === 'vi'
       ? reviews.ai_summary
       : null;
   return `
@@ -324,7 +340,7 @@ export function renderReviewCardHtml(
             <div class="stat-label">${escapeHtml(t('reviewAuthenticShare'))}</div>
             ${
               hasReviews
-                ? `<div class="stat-val" style="color: #34d399;">${escapeHtml(t('reviewAuthenticValue', [formatSafeNumber(reviews.authentic_pct, { min: 0, max: 100 }), formatSafeNumber(analysed, { min: 0 })]))}</div>`
+                ? `<div class="stat-val" style="color: #34d399;">${escapeHtml(t('reviewAuthenticValue', [formatSafeNumber(reviews.authentic_pct, { min: 0, max: 100 }, locale), formatSafeNumber(analysed, { min: 0 }, locale)]))}</div>`
                 : `<div class="stat-val">${escapeHtml(t('reviewNone'))}</div>`
             }
           </div>
@@ -409,7 +425,8 @@ const LOOKUP_FAILURE_MESSAGE = {
 export function renderLookupErrorHtml(
   kind: LookupFailureKind,
   productTitle?: string | null,
-  retryAfterSeconds?: number | null
+  retryAfterSeconds?: number | null,
+  locale = t('langCode')
 ): string {
   const title = stripLoneSurrogates(String(productTitle ?? '')).trim();
   // A rate limit says how long to wait when the server said so (DOS/Rate#1466).
@@ -422,7 +439,9 @@ export function renderLookupErrorHtml(
       : null;
   const message =
     wait !== null
-      ? t('lookupErrorRateLimitedWait', [String(wait)])
+      ? t('lookupErrorRateLimitedWait', [
+          formatSafeNumber(wait, { min: 1 }, locale),
+        ])
       : t(LOOKUP_FAILURE_MESSAGE[kind]);
   return `
       <div class="card" role="alert">
@@ -505,14 +524,22 @@ export function merchantTrustColor(
 // A risk score that is not known reads as no data, never as 0, the lowest risk: a store
 // with no analysed review (DOS/Rate#1258) or no DOSafe score (DOS/Rate#1465).
 /** "Trust N/100", or "no data yet" for a store with nothing to score (DOS/Rate#1484). */
-export function trustText(score: number | null | undefined): string {
+export function trustText(
+  score: number | null | undefined,
+  locale = t('langCode')
+): string {
   return typeof score !== 'number' || !Number.isFinite(score)
     ? t('merchantTrustNoData')
-    : t('merchantTrust', [formatSafeNumber(score, { min: 0, max: 100 })]);
+    : t('merchantTrust', [
+        formatSafeNumber(score, { min: 0, max: 100 }, locale),
+      ]);
 }
 
-export function riskScoreText(score: number | null | undefined): string {
+export function riskScoreText(
+  score: number | null | undefined,
+  locale = t('langCode')
+): string {
   return typeof score !== 'number' || !Number.isFinite(score)
     ? t('reviewRiskNoData')
-    : formatSafeNumber(score, { min: 0, max: 100 });
+    : formatSafeNumber(score, { min: 0, max: 100 }, locale);
 }
