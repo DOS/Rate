@@ -1221,6 +1221,8 @@
     "shareAuditCopyLinkTitle": "Sao chép đường dẫn sản phẩm",
     "shareAuditCopiedLinkBtn": "✓ Đã chép link!",
     "shareAuditCopyLinkBtn": "Chép link",
+    "shareAuditDownloadPngTitle": "Tải ảnh thẻ sự thật (PNG 4:5) để chia sẻ lên diễn đàn hoặc nhóm chat",
+    "shareAuditDownloadPngBtn": "Tải thẻ sự thật (PNG 4:5)",
     "specsToolbarCopiedMd": "Đã chép 10 nhóm thông số!",
     "specsToolbarCopyMd": "Sao chép 10 nhóm thông số MD",
     "specsToolbarExportCsv": "Xuất CSV thông số",

@@ -164,6 +164,221 @@ const OG_LOCALES: Record<string, string> = {
   cs: 'cs_CZ',
 };
 
+export const OG_TRUTH_CARD_WIDTH = 1200;
+export const OG_TRUTH_CARD_HEIGHT = 630;
+export const SOCIAL_TRUTH_CARD_WIDTH = 1080;
+export const SOCIAL_TRUTH_CARD_HEIGHT = 1350;
+
+export type OgTruthCardLocale = 'vi' | 'en' | 'cs';
+export type OgTruthCardFormat = 'og' | 'social';
+
+export type OgTruthCardTarget =
+  | {
+      readonly type: 'product';
+      readonly slug: string;
+      readonly variant?: string | null;
+      readonly locale?: string | null;
+      readonly format?: OgTruthCardFormat;
+      readonly download?: boolean;
+    }
+  | {
+      readonly type: 'versus';
+      readonly versus: string;
+      readonly locale?: string | null;
+      readonly format?: OgTruthCardFormat;
+      readonly download?: boolean;
+    }
+  | {
+      readonly type: 'deals';
+      readonly locale?: string | null;
+      readonly format?: OgTruthCardFormat;
+      readonly download?: boolean;
+    };
+
+const OG_CATALOG_SLUG_REGEX = /^(?=.*[a-zA-Z0-9])[a-zA-Z0-9._-]+$/;
+const OG_VERSUS_SIDE_LEADING_RE = /^[a-zA-Z0-9]/;
+const OG_VARIANT_KEY_REGEX = /^[a-z0-9][a-z0-9-]{0,40}$/;
+const DISALLOWED_OG_SLUG_TOKENS = new Set([
+  'null',
+  'undefined',
+  'nan',
+  'na',
+  'none',
+  'infinity',
+  '-infinity',
+  'true',
+  'false',
+  '__proto__',
+  'constructor',
+  'prototype',
+  ...Object.getOwnPropertyNames(Object.prototype).map((key) =>
+    key.toLowerCase()
+  ),
+]);
+
+export function normalizeOgLocale(locale: unknown): OgTruthCardLocale {
+  const cleaned =
+    typeof locale === 'string'
+      ? locale
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  return cleaned === 'en' || cleaned === 'cs' ? cleaned : 'vi';
+}
+
+export function isValidOgSlug(slug: unknown, maxLength = 120): boolean {
+  if (typeof slug !== 'string') return false;
+  const safeMax =
+    typeof maxLength === 'number' && Number.isFinite(maxLength) && maxLength > 0
+      ? Math.min(240, Math.floor(maxLength))
+      : 120;
+  if (
+    !slug ||
+    slug.length > safeMax ||
+    /[\s\p{Cc}\p{Cf}]/u.test(slug) ||
+    slug in Object.prototype
+  ) {
+    return false;
+  }
+  const lower = slug.toLowerCase();
+  return (
+    OG_CATALOG_SLUG_REGEX.test(slug) &&
+    (!slug.includes('.') || OG_VERSUS_SIDE_LEADING_RE.test(slug)) &&
+    !slug.startsWith('.') &&
+    !/^0+$/.test(slug) &&
+    !slug.endsWith('.') &&
+    !slug.includes('..') &&
+    !DISALLOWED_OG_SLUG_TOKENS.has(lower)
+  );
+}
+
+export function isValidOgVariantKey(variant: unknown): variant is string {
+  return (
+    typeof variant === 'string' &&
+    OG_VARIANT_KEY_REGEX.test(variant) &&
+    !(variant in Object.prototype) &&
+    !DISALLOWED_OG_SLUG_TOKENS.has(variant)
+  );
+}
+
+export function parseOgVersusPair(
+  versus: unknown,
+  maxSlugLength = 120,
+  keepCase = false
+): [string, string] | null {
+  if (typeof versus !== 'string') return null;
+  const trimmed = versus.replace(/\p{Cc}+/gu, '').trim();
+  const safeMax =
+    typeof maxSlugLength === 'number' &&
+    Number.isFinite(maxSlugLength) &&
+    maxSlugLength > 0
+      ? Math.min(240, Math.floor(maxSlugLength))
+      : 120;
+  if (!trimmed || trimmed.length > safeMax * 2 + 4 || /\s/.test(trimmed)) {
+    return null;
+  }
+  const parts = trimmed.split(/-vs-/i);
+  if (parts.length !== 2) return null;
+  const rawA = parts[0] ?? '';
+  const rawB = parts[1] ?? '';
+  const sideA = keepCase ? rawA : rawA.toLowerCase();
+  const sideB = keepCase ? rawB : rawB.toLowerCase();
+  if (
+    !isValidOgSlug(sideA, safeMax) ||
+    !isValidOgSlug(sideB, safeMax) ||
+    !OG_VERSUS_SIDE_LEADING_RE.test(sideA) ||
+    !OG_VERSUS_SIDE_LEADING_RE.test(sideB) ||
+    sideA.toLowerCase() === sideB.toLowerCase()
+  ) {
+    return null;
+  }
+  return [sideA, sideB];
+}
+
+export function buildOgTruthCardPath(target: OgTruthCardTarget): string {
+  if (!target || typeof target !== 'object') return SHARE_IMAGE.url;
+  const locale = normalizeOgLocale(target.locale);
+  const format: OgTruthCardFormat =
+    target.format === 'social' ? 'social' : 'og';
+  const params = new URLSearchParams();
+
+  if (target.type === 'product') {
+    const cleanSlug =
+      typeof target.slug === 'string'
+        ? target.slug.replace(/\p{Cc}+/gu, '').trim()
+        : '';
+    if (!isValidOgSlug(cleanSlug)) return SHARE_IMAGE.url;
+    params.set('type', 'product');
+    params.set('slug', cleanSlug);
+    if (typeof target.variant === 'string' && target.variant.trim()) {
+      const cleanVar = target.variant.trim().toLowerCase();
+      if (!isValidOgVariantKey(cleanVar)) return SHARE_IMAGE.url;
+      params.set('variant', cleanVar);
+    }
+  } else if (target.type === 'versus') {
+    const pair = parseOgVersusPair(target.versus, 120, true);
+    if (!pair) return SHARE_IMAGE.url;
+    params.set('type', 'versus');
+    params.set('versus', `${pair[0]}-vs-${pair[1]}`);
+  } else if (target.type === 'deals') {
+    params.set('type', 'deals');
+  } else {
+    return SHARE_IMAGE.url;
+  }
+
+  params.set('locale', locale);
+  if (format === 'social') {
+    params.set('format', 'social');
+  }
+  if (target.download === true) {
+    params.set('download', '1');
+  }
+  return `/api/v1/rate/og?${params.toString()}`;
+}
+
+export function buildOgTruthCardImage(
+  target: OgTruthCardTarget & { readonly alt?: string | null }
+) {
+  const relPath = buildOgTruthCardPath(target);
+  if (relPath === SHARE_IMAGE.url) {
+    return SHARE_IMAGE;
+  }
+  const safeAlt =
+    typeof target.alt === 'string'
+      ? target.alt
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 160) || 'Rate.vn'
+      : 'Rate.vn';
+  const isSocial = target.format === 'social';
+  return {
+    url: absoluteUrl(relPath),
+    width: isSocial ? SOCIAL_TRUTH_CARD_WIDTH : OG_TRUTH_CARD_WIDTH,
+    height: isSocial ? SOCIAL_TRUTH_CARD_HEIGHT : OG_TRUTH_CARD_HEIGHT,
+    type: 'image/png' as const,
+    alt: safeAlt,
+  };
+}
+
+export function defaultTwitterCard(
+  image:
+    | {
+        readonly url: string;
+        readonly width?: number;
+        readonly height?: number;
+        readonly alt?: string;
+      }
+    | string = SHARE_IMAGE
+) {
+  return {
+    card: 'summary_large_image' as const,
+    site: '@rate_vn',
+    images: [image],
+  };
+}
+
 /**
  * Base Open Graph fields shared by every route. A page that sets its own
  * `openGraph` replaces the layout's object, so it spreads this first and adds
