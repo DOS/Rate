@@ -150,7 +150,6 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
         fcc_approval: 'FCC ID BCG-E8692A',
         sar_head: '1.08 W/kg',
         sar_body: '1.17 W/kg',
-        certifications: 'CE, FCC, RoHS, QCVN (Bộ TT&TT Việt Nam)',
       },
     },
     key_specs: {
@@ -256,7 +255,6 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
         fcc_approval: 'FCC ID BCG-E8693A',
         sar_head: '1.12 W/kg',
         sar_body: '1.14 W/kg',
-        certifications: 'CE, FCC, RoHS, QCVN (Bộ TT&TT Việt Nam)',
       },
     },
     key_specs: {
@@ -358,7 +356,6 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
         fcc_approval: 'FCC ID BCG-E8431A',
         sar_head: '1.12 W/kg',
         sar_body: '1.14 W/kg',
-        certifications: 'CE, FCC, RoHS, QCVN',
       },
     },
     key_specs: {
@@ -484,7 +481,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fcc_approval: 'FCC ID A3LSMS928U',
         sar_head: '1.06 W/kg',
         sar_body: '0.66 W/kg',
-        certifications: 'CE, FCC, RoHS, QCVN',
       },
     },
     key_specs: {
@@ -500,6 +496,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'cellular.bands_5g': 'https://www.samsung.com/vn/smartphones/galaxy-s24-ultra/specs/',
       'connectivity.bluetooth': 'https://www.samsung.com/vn/smartphones/galaxy-s24-ultra/specs/',
     },
+    retract_spec_fields: ['regulatory.certifications'],
   },
 
   // 2. Apple iPhone 16 Pro Max 256GB (Triple Camera + LiDAR Flagship)
@@ -606,7 +603,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fcc_approval: 'FCC ID BCG-E8695A',
         sar_head: '1.16 W/kg',
         sar_body: '1.17 W/kg',
-        certifications: 'CE, FCC, RoHS, QCVN',
       },
     },
     key_specs: {
@@ -621,6 +617,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'cellular.bands_5g': 'https://support.apple.com/vi-vn/121032',
       'connectivity.bluetooth': 'https://support.apple.com/en-us/121032',
     },
+    retract_spec_fields: ['regulatory.certifications'],
   },
 
   // 3. Samsung Galaxy A55 5G 256GB (Mid-range Champion - Triple Camera)
@@ -721,7 +718,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fcc_approval: 'FCC ID A3LSMA556E',
         sar_head: '0.68 W/kg',
         sar_body: '1.04 W/kg',
-        certifications: 'CE, FCC, RoHS, QCVN',
       },
     },
     key_specs: {
@@ -732,7 +728,11 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB',
       ram: '8GB',
     },
-    retract_spec_fields: ['cellular.bands_5g', 'connectivity.bluetooth'],
+    retract_spec_fields: [
+      'cellular.bands_5g',
+      'connectivity.bluetooth',
+      'regulatory.certifications',
+    ],
   },
 
   // 4. Xiaomi 14 Ultra 5G 16GB/512GB (Quad Camera Leica 1-inch Sensor Flagship)
@@ -814,7 +814,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
           '8K@24/30fps, 4K@24/30/60/120fps, 1080p@30/60/120/240/480/960/1920fps, gyro-EIS, Dolby Vision HDR 10-bit rec., 4-mic array',
       },
       connectivity: {
-        bluetooth: '5.4, A2DP, LE, aptX HD, aptX Adaptive, LHDC',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band, Wi-Fi Direct',
         usb: 'USB Type-C 3.2 Gen 2 (10Gbps), DisplayPort, OTG',
         sensors:
@@ -843,7 +842,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fcc_approval: 'FCC ID 2AFZZPN82G',
         sar_head: '0.99 W/kg',
         sar_body: '1.19 W/kg',
-        certifications: 'CE, FCC, RoHS, TÜV Rheinland Triple Eye Protection, QCVN',
       },
     },
     key_specs: {
@@ -857,6 +855,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     sources: {
       'cellular.bands_5g': 'https://www.mi.com/global/product/xiaomi-14-ultra/specs/',
     },
+    retract_spec_fields: ['connectivity.bluetooth', 'regulatory.certifications'],
   },
 
   // 5. OPPO Find X8 5G 16GB/256GB (Hasselblad Triple Periscope Flagship)
@@ -932,7 +931,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         video_recording: '4K@30/60fps (Dolby Vision 10-bit), 1080p@30/60/240fps, gyro-EIS',
       },
       connectivity: {
-        bluetooth: '5.4, A2DP, LE, aptX HD, LHDC 5.0',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6/7, tri-band',
         usb: 'USB Type-C 3.0, OTG',
         sensors:
@@ -960,7 +958,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fcc_approval: 'CPH2651',
         sar_head: '0.98 W/kg',
         sar_body: '1.12 W/kg',
-        certifications: 'CE, RoHS, TÜV Rheinland Eye Comfort 4.0, IP69, QCVN',
       },
     },
     key_specs: {
@@ -975,6 +972,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'cellular.bands_5g': 'https://www.oppo.com/vn/smartphones/series-find-x/find-x8/specs/',
       'cellular.sim_type': 'https://www.oppo.com/vn/smartphones/series-find-x/find-x8/specs/',
     },
+    retract_spec_fields: ['connectivity.bluetooth', 'regulatory.certifications'],
   },
 
   // 6. Apple iPad Pro M4 11 inch Wi-Fi 256GB (Tablets Flagship)
@@ -1058,10 +1056,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        technology: 'Wi-Fi Only',
-        sim_type: 'No cellular connectivity (Wi-Fi model)',
-        volte: false,
-        vowifi: true,
       },
       multimedia: {
         loudspeaker: 'Hệ thống 4 loa Four-speaker audio chuẩn phòng thu',
@@ -1071,7 +1065,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       regulatory: {
         fcc_approval: 'FCC ID BCG-A2836',
         sar_body: '0.95 W/kg',
-        certifications: 'ENERGY STAR, CE, FCC, QCVN',
       },
     },
     key_specs: {
@@ -1085,6 +1078,13 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     sources: {
       'connectivity.bluetooth': 'https://support.apple.com/en-us/119892',
     },
+    retract_spec_fields: [
+      'cellular.technology',
+      'cellular.sim_type',
+      'cellular.volte',
+      'cellular.vowifi',
+      'regulatory.certifications',
+    ],
   },
 
   // 7. Apple MacBook Air 13 inch M3 16GB/256GB (Laptops Flagship)
@@ -1149,9 +1149,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         reverse_charging: true,
       },
       camera: {
-        rear_setup: 'FaceTime HD System',
-        main_camera: '1080p FaceTime HD camera với bộ xử lý tín hiệu hình ảnh ISP trên chip M3',
-        second_camera: '3-mic array with directional beamforming (Voice Isolation & Wide Spectrum)',
         front_camera: '1080p FaceTime HD (f/2.0)',
         video_recording: '1080p@30fps HD video recording',
       },
@@ -1166,10 +1163,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        technology: 'Wi-Fi 6E',
-        sim_type: 'No cellular slot',
-        volte: false,
-        vowifi: true,
       },
       multimedia: {
         loudspeaker: 'Hệ thống 4 loa Four-speaker sound system',
@@ -1179,7 +1172,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       regulatory: {
         fcc_approval: 'FCC ID BCGA3113',
-        certifications: 'ENERGY STAR, EPEAT Gold, CE, FCC, QCVN',
       },
     },
     key_specs: {
@@ -1190,6 +1182,16 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB',
       ram: '16GB',
     },
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'cellular.technology',
+      'cellular.sim_type',
+      'cellular.volte',
+      'cellular.vowifi',
+      'regulatory.certifications',
+    ],
   },
 
   // 8. Apple iPhone 16 Pro 256GB (Compact Flagship - Triple Camera 5x)
@@ -1294,7 +1296,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fcc_approval: 'FCC ID BCG-E8694A',
         sar_head: '1.09 W/kg',
         sar_body: '1.19 W/kg',
-        certifications: 'CE, FCC, RoHS, QCVN',
       },
     },
     key_specs: {
@@ -1311,6 +1312,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'regulatory.sar_head': 'https://www.apple.com/legal/rfexposure/iphone17,1/en/',
       'regulatory.sar_body': 'https://www.apple.com/legal/rfexposure/iphone17,1/en/',
     },
+    retract_spec_fields: ['regulatory.certifications'],
   },
 
   // 9. Apple Watch Series 10 42mm GPS Viền Nhôm (Smartwatches Flagship)
@@ -1390,8 +1392,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        volte: false,
-        vowifi: true,
       },
       multimedia: {
         loudspeaker: 'Loa tích hợp phát nhạc trực tiếp (Media playback speaker)',
@@ -1402,7 +1402,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fcc_approval: 'FCC ID BCG-A2997',
         sar_head: '0.28 W/kg',
         sar_body: '0.35 W/kg',
-        certifications: 'CE, FCC, RoHS, WR50, IP6X, QCVN',
       },
     },
     key_specs: {
@@ -1426,6 +1425,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'key_specs.camera',
       'cellular.technology',
       'cellular.sim_type',
+      'cellular.volte',
+      'cellular.vowifi',
+      'regulatory.certifications',
     ],
   },
 
@@ -1496,7 +1498,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       regulatory: {
         fcc_approval: 'FCC ID BCG-A3047 / A3048',
         sar_head: '0.09 W/kg',
-        certifications: 'CE, FCC, RoHS, IP54, QCVN',
       },
     },
     key_specs: {
@@ -1534,6 +1535,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'cellular.volte',
       'cellular.vowifi',
       'multimedia.headphone_jack_35mm',
+      'regulatory.certifications',
       'key_specs.screen',
       'key_specs.camera',
       'key_specs.storage',
@@ -1636,7 +1638,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       regulatory: {
         fcc_approval: 'FCC ID A3LSMX926B',
         sar_body: '0.88 W/kg',
-        certifications: 'CE, FCC, RoHS, IP68, QCVN',
       },
     },
     key_specs: {
@@ -1653,6 +1654,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'connectivity.bluetooth':
         'https://samsungmobilepress.com/media-assets/galaxy-tab-s10-ultra?tab=specs',
     },
+    retract_spec_fields: ['regulatory.certifications'],
   },
 
   // 12. Xiaomi Pad 6S Pro 12.4 256GB (Tablet High-Value Flagship)
@@ -1725,7 +1727,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         video_recording: '4K@30/60fps, 1080p@30/60fps',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE, LHDC',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6/7, dual-band, Wi-Fi Direct',
         usb: 'USB Type-C 3.2 Gen 1, DisplayPort, accessory connector',
         sensors: 'Fingerprint (side-mounted), accelerometer, gyro, proximity, compass',
@@ -1735,10 +1736,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        technology: 'Wi-Fi 7 (802.11be) + Bluetooth 5.3',
-        sim_type: 'Wi-Fi Only',
-        volte: false,
-        vowifi: false,
       },
       multimedia: {
         loudspeaker: '6 loa Stereo (4 woofer + 2 tweeter)',
@@ -1748,7 +1745,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       regulatory: {
         fcc_approval: 'CE / CMIIT ID 2024AP1092',
         sar_body: '0.72 W/kg',
-        certifications: 'CE, RoHS, TÜV Rheinland Low Blue Light, QCVN',
       },
     },
     key_specs: {
@@ -1759,6 +1755,14 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB UFS 4.0',
       ram: '8GB LPDDR5X',
     },
+    retract_spec_fields: [
+      'connectivity.bluetooth',
+      'cellular.technology',
+      'cellular.sim_type',
+      'cellular.volte',
+      'cellular.vowifi',
+      'regulatory.certifications',
+    ],
   },
 
   // 13. ASUS Zenbook S 14 OLED UX5406 32GB/1TB (Ultrabook Copilot+ PC Flagship)
@@ -1821,9 +1825,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         reverse_charging: true,
       },
       camera: {
-        rear_setup: 'Dual-Sensor AI Webcam & Ambient Color Array',
-        main_camera: '1080p FHD ASUS AiSense camera with 3DNR',
-        second_camera: 'Infrared (IR) depth sensor for Windows Hello + Ambient RGB color sensor',
         front_camera: '1080p FHD IR Webcam supporting Windows Studio Effects',
         video_recording: '1080p@30fps với AI Noise-Canceling 3D array microphone',
       },
@@ -1838,10 +1839,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        technology: 'Wi-Fi 7 (802.11be) + Bluetooth 5.4',
-        sim_type: 'No Cellular Slot (Wi-Fi 7)',
-        volte: false,
-        vowifi: false,
       },
       multimedia: {
         loudspeaker: 'Hệ thống 4 loa Harman Kardon (2 tweeter + 2 woofer) Smart Amp',
@@ -1861,6 +1858,15 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '1TB PCIe 4.0 NVMe SSD',
       ram: '32GB LPDDR5X-8533',
     },
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'cellular.technology',
+      'cellular.sim_type',
+      'cellular.volte',
+      'cellular.vowifi',
+    ],
   },
 
   // 14. Lenovo ThinkPad X1 Carbon Gen 12 32GB/512GB (Enterprise Ultrabook Flagship)
@@ -1925,9 +1931,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         reverse_charging: true,
       },
       camera: {
-        rear_setup: 'Communications Bar Dual-Sensor Array',
-        main_camera: 'FHD 1080p MIPI Webcam with Privacy Shutter',
-        second_camera: 'Discrete Infrared (IR) Camera + Ultrasonic Human Presence Detection',
         front_camera: '1080p FHD + IR Camera with Computer Vision Presence Detection',
         video_recording: '1080p@30fps với 2 micro 360 độ tầm xa Dolby Voice',
       },
@@ -1942,10 +1945,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        technology: 'Wi-Fi 6E / Wi-Fi 7 + WWAN Upgradable option',
-        sim_type: 'Optional Nano-SIM / eSIM on WWAN SKU',
-        volte: false,
-        vowifi: false,
       },
       multimedia: {
         loudspeaker: 'Stereo speakers (2W x2) hidden under keyboard',
@@ -1965,6 +1964,15 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '512GB PCIe 4.0x4 NVMe SSD',
       ram: '32GB LPDDR5X',
     },
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'cellular.technology',
+      'cellular.sim_type',
+      'cellular.volte',
+      'cellular.vowifi',
+    ],
   },
 
   // 15. Apple Watch Ultra 2 49mm GPS + Cellular 64GB (Smartwatch Rugged Flagship)
@@ -2062,7 +2070,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fcc_approval: 'FCC ID BCG-E8411A',
         sar_head: '0.48 W/kg',
         sar_body: '0.35 W/kg',
-        certifications: 'EN13319 Dive Accessory, MIL-STD 810H, IP6X, CE, FCC, QCVN',
       },
     },
     key_specs: {
@@ -2086,6 +2093,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'camera.video_recording',
       'key_specs.camera',
       'hardware.storage_expansion',
+      'regulatory.certifications',
     ],
   },
 
@@ -2157,7 +2165,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       // (DOS/Rate#1796).
       camera: {},
       connectivity: {
-        bluetooth: '5.3, A2DP, AVRCP, HFP, HSP',
         wlan: 'Wi-Fi 802.11 a/b/g/n, dual-band (2.4GHz + 5GHz)',
         usb: 'Magnetic Wireless Charging Puck',
         sensors:
@@ -2182,7 +2189,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         fcc_approval: 'FCC ID A3LSML705U',
         sar_head: '0.32 W/kg',
         sar_body: '0.68 W/kg',
-        certifications: 'IP68, 10ATM, MIL-STD-810H, CE, FCC, QCVN',
       },
     },
     key_specs: {
@@ -2203,6 +2209,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'hardware.storage_expansion',
       // Stray CJK text, and no Samsung spec page value for it (DOS/Rate#1798).
       'cellular.technology',
+      'connectivity.bluetooth',
+      'regulatory.certifications',
     ],
   },
 
@@ -2281,8 +2289,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        volte: false,
-        vowifi: false,
       },
       multimedia: {
         loudspeaker: 'Beeper cảnh báo Pace / Nhịp tim + Phát nhạc qua tai nghe Bluetooth',
@@ -2291,7 +2297,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       regulatory: {
         fcc_approval: 'FCC ID IPH-04428',
-        certifications: '5 ATM, CE, FCC, ANT+ Certified, QCVN',
       },
     },
     key_specs: {
@@ -2312,7 +2317,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'key_specs.camera',
       'cellular.technology',
       'cellular.sim_type',
+      'cellular.volte',
+      'cellular.vowifi',
       'hardware.storage_expansion',
+      'regulatory.certifications',
     ],
   },
 
@@ -2366,7 +2374,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       camera: {},
       connectivity: {
-        bluetooth: '5.3, A2DP, AVRCP, HFP, HSP, TMAP, CSIP, MCP, VCP, CCP (SBC, AAC, LDAC, LC3)',
         usb: 'USB Type-C port',
         sensors: 'Bone conduction sensor, IR proximity sensor, gyro head-tracking sensor',
         other:
@@ -2381,7 +2388,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       regulatory: {
         fcc_approval: 'FCC ID AK8YY2963',
-        certifications: 'Hi-Res Audio Wireless Certified, IPX4, CE, FCC, RoHS, QCVN',
       },
     },
     key_specs: {
@@ -2410,6 +2416,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'camera.second_camera',
       'camera.front_camera',
       'camera.video_recording',
+      'connectivity.bluetooth',
       'connectivity.wlan',
       'connectivity.location',
       'connectivity.nfc',
@@ -2419,6 +2426,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'cellular.volte',
       'cellular.vowifi',
       'multimedia.headphone_jack_35mm',
+      'regulatory.certifications',
       'key_specs.screen',
       'key_specs.camera',
       'key_specs.storage',
@@ -2477,8 +2485,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       camera: {},
       connectivity: {
-        bluetooth:
-          '5.4, A2DP, AVRCP, HFP, PBP, TMAP (SSC HiFi, SSC UHQ 24-bit/96kHz, AAC, SBC, LC3)',
         usb: 'USB Type-C port',
         sensors:
           'Accelerometer, Gyro Sensor, Hall Sensor, Pressure Sensor, Proximity Sensor, Touch Sensor, VPU',
@@ -2493,7 +2499,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       regulatory: {
         fcc_approval: 'FCC ID A3LSMR630',
-        certifications: 'IP57, Bluetooth 5.4 SIG, CE, FCC, RoHS, QCVN',
       },
     },
     key_specs: {
@@ -2522,6 +2527,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'camera.second_camera',
       'camera.front_camera',
       'camera.video_recording',
+      'connectivity.bluetooth',
       'connectivity.wlan',
       'connectivity.location',
       'connectivity.nfc',
@@ -2531,6 +2537,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'cellular.volte',
       'cellular.vowifi',
       'multimedia.headphone_jack_35mm',
+      'regulatory.certifications',
       'key_specs.screen',
       'key_specs.camera',
       'key_specs.storage',
@@ -2623,7 +2630,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         technology: 'GSM / HSPA / LTE / 5G',
       },
       connectivity: {
-        bluetooth: '6.0, A2DP, LE, aptX HD, aptX Adaptive, LHDC 5.0',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band, Wi-Fi Direct',
         usb: 'USB Type-C 3.2 Gen 2, DisplayPort, OTG',
         nfc: true,
@@ -2644,9 +2650,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       regulatory: {
         sar_head: '0.98 W/kg',
         sar_body: '1.05 W/kg',
-        certifications: 'CE, FCC, RoHS, TÜV Rheinland Flicker-Free, QCVN (BTTTT Vietnam)',
       },
     },
+    retract_spec_fields: ['connectivity.bluetooth', 'regulatory.certifications'],
   },
   {
     categorySlug: 'smartphones',
@@ -2725,7 +2731,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         technology: 'GSM / HSPA / LTE / 5G',
       },
       connectivity: {
-        bluetooth: '5.4, A2DP, LE, aptX HD, aptX Adaptive, LHDC 5.0',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, dual-band or tri-band',
         usb: 'USB Type-C 3.2 Gen 2, DisplayPort, OTG',
         nfc: true,
@@ -2749,6 +2754,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     },
     retract_spec_fields: [
       'cellular.sim_type',
+      'connectivity.bluetooth',
       'multimedia.audio_features',
       'regulatory.certifications',
     ],
@@ -2831,7 +2837,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         technology: 'GSM / HSPA / LTE / 5G',
       },
       connectivity: {
-        bluetooth: '5.4, A2DP, LE, aptX HD, LHDC 5.0',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band',
         usb: 'USB Type-C 3.2, OTG',
         nfc: true,
@@ -2852,12 +2857,12 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       regulatory: {
         sar_head: '0.97 W/kg',
         sar_body: '1.11 W/kg',
-        certifications: 'CE, RoHS, QCVN (BTTTT Vietnam)',
       },
     },
     sources: {
       'cellular.sim_type': 'https://www.oppo.com/vn/smartphones/series-find-x/find-x9-pro/specs/',
     },
+    retract_spec_fields: ['connectivity.bluetooth', 'regulatory.certifications'],
   },
   // 29. Apple iPad Pro M5 11 inch 256GB (2025/2026 Flagship Tablet)
   {
@@ -2930,7 +2935,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: true,
-        bands_5g: '5G Sub-6GHz (trên bản Wi-Fi + Cellular)',
+        bands_5g:
+          '5G NR n1/n2/n3/n5/n7/n8/n12/n14/n20/n25/n26/n28/n29/n30/n38/n40/n41/n48/n66/n70/n71/n75/n77/n78/n79',
         bands_4g: 'Gigabit LTE',
         sim_type: 'eSIM',
         data_speed: '5G (sub-6 GHz) with 4x4 MIMO, Gigabit LTE with 4x4 MIMO',
@@ -2957,13 +2963,14 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       regulatory: {
         sar_head: '0.98 W/kg',
         sar_body: '1.12 W/kg',
-        certifications: 'CE, FCC, Energy Star, QCVN (BTTTT Vietnam)',
       },
     },
     sources: {
+      'cellular.bands_5g': 'https://www.apple.com/ipad-pro/specs/',
       'cellular.data_speed': 'https://www.apple.com/ipad-pro/specs/',
       'connectivity.bluetooth': 'https://www.apple.com/ipad-pro/specs/',
     },
+    retract_spec_fields: ['regulatory.certifications'],
   },
   // 30. Xiaomi Pad 7 Pro 256GB (2025/2026 Flagship Android Tablet)
   {
@@ -3036,11 +3043,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        sim_type: 'No cellular connectivity (Wi-Fi 7 edition)',
-        technology: 'Wi-Fi Only',
       },
       connectivity: {
-        bluetooth: '5.4, A2DP, LE, LHDC 5.0',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, dual-band, Wi-Fi Direct',
         usb: 'USB Type-C 3.2 Gen 1, magnetic accessory connector',
         nfc: true,
@@ -3058,14 +3062,19 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       regulatory: {
         sar_body: '0.89 W/kg',
-        certifications: 'CE, RoHS, TÜV Low Blue Light, QCVN (BTTTT Vietnam)',
       },
     },
     sources: {
       'hardware.ram_gb': 'https://www.mi.com/global/product/xiaomi-pad-7-pro/specs/',
       'hardware.storage_gb': 'https://www.mi.com/global/product/xiaomi-pad-7-pro/specs/',
     },
-    retract_spec_fields: ['multimedia.audio_features'],
+    retract_spec_fields: [
+      'cellular.sim_type',
+      'cellular.technology',
+      'connectivity.bluetooth',
+      'multimedia.audio_features',
+      'regulatory.certifications',
+    ],
   },
   // 31. Apple MacBook Air M4 13 inch 256GB (2025/2026 Flagship Ultrabook)
   {
@@ -3117,10 +3126,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         os: 'macOS Sequoia',
       },
       camera: {
-        rear_setup: 'Dual External 6K Display Engine via Thunderbolt 4',
-        main_camera: '12MP Center Stage camera with support for Desk View',
-        second_camera:
-          'Desk View Top-Down Workspace Framing + Continuity Camera Wireless iPhone Array',
         video_recording: '1080p HD video recording with Advanced ISP',
         front_camera: '12MP Center Stage 1080p FaceTime HD camera',
       },
@@ -3142,8 +3147,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        sim_type: 'No cellular (Continuity Instant Hotspot via iPhone)',
-        technology: 'Wi-Fi 6E + Bluetooth 5.3',
       },
       connectivity: {
         bluetooth: '5.3',
@@ -3163,10 +3166,16 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         status: 'Available. Released 2025, March 12',
         prices_msrp: '26.990.000₫',
       },
-      regulatory: {
-        certifications: 'ENERGY STAR, EPEAT Gold, CE, FCC, QCVN (BTTTT Vietnam)',
-      },
+      regulatory: {},
     },
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'cellular.sim_type',
+      'cellular.technology',
+      'regulatory.certifications',
+    ],
   },
   // 32. Apple MacBook Pro M4 Pro 14 inch 512GB (2025/2026 Flagship Workstation Laptop)
   {
@@ -3214,10 +3223,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         os: 'macOS Sequoia',
       },
       camera: {
-        rear_setup: '3x Thunderbolt 5 (120Gb/s) + HDMI 2.1 (8K@60Hz / 4K@240Hz) + SDXC',
-        main_camera: '12MP Center Stage camera with Desk View support',
-        second_camera:
-          'Desk View Top-Down Workspace Framing + Studio-Quality 3-Mic Directional Array',
         video_recording: '1080p HD video recording with computational video ISP',
         front_camera: '12MP Center Stage 1080p FaceTime HD camera',
       },
@@ -3239,8 +3244,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: false,
-        sim_type: 'No cellular',
-        technology: 'Wi-Fi 6E + Bluetooth 5.3',
       },
       connectivity: {
         bluetooth: '5.3',
@@ -3259,10 +3262,16 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         status: 'Available. Released 2024, November 08',
         prices_msrp: '49.990.000₫',
       },
-      regulatory: {
-        certifications: 'ENERGY STAR, EPEAT Gold, CE, FCC, QCVN (BTTTT Vietnam)',
-      },
+      regulatory: {},
     },
+    retract_spec_fields: [
+      'camera.rear_setup',
+      'camera.main_camera',
+      'camera.second_camera',
+      'cellular.sim_type',
+      'cellular.technology',
+      'regulatory.certifications',
+    ],
   },
   // 33. Apple Watch Series 11 46mm GPS 64GB (2025/2026 Flagship Smartwatch)
   {
@@ -3356,7 +3365,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       regulatory: {
         sar_head: '0.32 W/kg',
         sar_body: '0.45 W/kg',
-        certifications: 'FDA Cleared ECG & Sleep Apnea, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
     sources: {
@@ -3373,6 +3381,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'key_specs.camera',
       'cellular.technology',
       'cellular.sim_type',
+      'regulatory.certifications',
     ],
   },
   // 34. Apple Watch Ultra 3 49mm 64GB (2025/2026 Flagship Adventure Smartwatch)
@@ -3442,7 +3451,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {
         has_5g: true,
-        bands_5g: '5G RedCap + LTE + Satellite Emergency SOS',
+        bands_5g:
+          'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n14/n20/n25/n26/n28/n66/n71; TDD-5G NR n38/n40/n41/n53',
         sim_type: 'eSIM',
         technology: 'GSM / HSPA / LTE / 5G RedCap / Satellite',
       },
@@ -3469,10 +3479,10 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       regulatory: {
         sar_head: '0.38 W/kg',
         sar_body: '0.52 W/kg',
-        certifications: 'MIL-STD-810H, EN13319 Dive Certified, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
     sources: {
+      'cellular.bands_5g': 'https://support.apple.com/en-us/125095',
       'connectivity.bluetooth': 'https://support.apple.com/en-us/125095',
     },
     // Health sensors as cameras (DOS/Rate#1796).
@@ -3483,6 +3493,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'camera.front_camera',
       'camera.video_recording',
       'key_specs.camera',
+      'regulatory.certifications',
     ],
   },
   // 35. Apple AirPods Pro 3 USB-C (2025/2026 Flagship ANC Earbuds)
@@ -3533,7 +3544,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {},
       connectivity: {
-        bluetooth: '5.4, A2DP, LE Audio, AAC-ELD, Apple Lossless Audio Protocol',
         usb: 'USB Type-C',
         sensors:
           'In-ear heart rate sensor, in-ear temperature sensor, skin-detect sensor, motion-detecting accelerometer, speech-detecting accelerometer',
@@ -3550,7 +3560,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       regulatory: {
         sar_head: '0.09 W/kg',
-        certifications: 'FDA OTC Hearing Aid Authorized, IP54, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
     // Template text an earlier version of this seed wrote: a display, cameras, a cellular
@@ -3575,10 +3584,12 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'cellular.has_5g',
       'cellular.sim_type',
       'cellular.technology',
+      'connectivity.bluetooth',
       'connectivity.wlan',
       'connectivity.nfc',
       'connectivity.location',
       'multimedia.headphone_jack_35mm',
+      'regulatory.certifications',
       'key_specs.screen',
       'key_specs.ram',
       'key_specs.storage',
@@ -3640,7 +3651,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       cellular: {},
       connectivity: {
-        bluetooth: '5.4, A2DP, AVRCP, HFP, HSP, TMAP, CSIP, MCP, VCP, CCP (SBC, AAC, LDAC, LC3)',
         usb: 'USB Type-C + Qi Wireless Charging',
         sensors:
           'Bone conduction sensor, dual proximity sensors, gyro/accelerometer for head gestures',
@@ -3657,7 +3667,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       regulatory: {
         sar_head: '0.08 W/kg',
-        certifications: 'Hi-Res Audio Wireless Certified, IPX4, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
     // Template text an earlier version of this seed wrote: a display, cameras, a cellular
@@ -3682,9 +3691,11 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       'cellular.has_5g',
       'cellular.sim_type',
       'cellular.technology',
+      'connectivity.bluetooth',
       'connectivity.wlan',
       'connectivity.nfc',
       'multimedia.headphone_jack_35mm',
+      'regulatory.certifications',
       'key_specs.screen',
       'key_specs.ram',
       'key_specs.storage',
