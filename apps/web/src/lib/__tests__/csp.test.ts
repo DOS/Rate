@@ -1,4 +1,7 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import assert from 'node:assert/strict';
+
+Object.assign(globalThis, { AsyncLocalStorage });
 
 // The report-only Content Security Policy (DOS/Rate#1311): a nonce per request on
 // both the request (for Next.js) and the response, a script-src with no inline
@@ -192,7 +195,7 @@ async function main() {
     'utf8'
   );
   const rule = nextConfig.match(
-    /source: ("[^"]+"),\s*headers: \[\s*\{\s*key: "Content-Security-Policy",\s*value:\s*("[^"]+")/
+    /source:\s*("[^"]+"),\s*headers: \[\s*\{\s*key: "Content-Security-Policy",\s*value:\s*("[^"]+")/
   );
   assert.ok(rule, 'next.config.mjs has one Content-Security-Policy rule');
   assert.equal(JSON.parse(rule[2]!), STATIC_CSP, 'the same static policy');
@@ -206,33 +209,58 @@ async function main() {
     sensitive: false,
     delimiter: '/',
   }) as RegExp;
+  const { getMiddlewareMatchers } = (await import(
+    'next/dist/build/analysis/get-page-static-info' as string
+  )) as {
+    getMiddlewareMatchers: (
+      matchers: string[],
+      options: { i18n?: undefined }
+    ) => Array<{ regexp: string }>;
+  };
   const { config: proxyConfig } = await import('../../proxy');
-  const proxied = proxyConfig.matcher.map(
-    (m) =>
-      pathToRegexp(m, [], {
-        strict: true,
-        sensitive: false,
-        delimiter: '/',
-      }) as RegExp
-  );
+  // Next.js evaluates middleware matchers without /i (getMiddlewareRouteMatcher),
+  // whereas routes-manifest.json headers run with caseSensitive: false (#1807).
+  const proxied = getMiddlewareMatchers(proxyConfig.matcher, {
+    i18n: undefined,
+  }).map((m) => new RegExp(m.regexp));
   for (const p of [
     '/',
     '/smartphones',
     '/smartphones/iphone-16-pro-max-256gb',
+    '/smartphones/nokia-8.1',
+    '/en/smartphones/nokia-8.1',
+    '/Vi/smartphones/nokia-8.1',
+    '/merchants/anker.vn',
+    '/merchants/viettel.store',
+    '/en/merchants/anker.vn',
+    '/EN/merchants/anker.vn',
+    '/cs/merchants/anker.vn',
+    '/Merchants/anker.vn',
+    '/compare/nokia-7.2-vs-nokia-8.1',
+    '/en/compare/nokia-7.2-vs-nokia-8.1',
+    '/CS/compare/nokia-7.2-vs-nokia-8.1',
     '/inspect',
     '/compare',
     '/api/health',
+    '/API/health',
     '/_next/static/chunks/a.js',
+    '/_NEXT/static/chunks/a.js',
+    '/_VERCEL/insights/script.js',
     '/robots.txt',
     '/robots-txt',
     '/favicon.ico',
     '/apple-touch-icon.png',
     '/apisomething',
+    '/APIsomething',
     '/smartphones/',
     '/en/smartphones',
     '/sitemap.xml',
+    '/Sitemap',
     '/monitoring',
+    '/Monitoring',
     '/img/logo.png',
+    '/unknown/asset.js',
+    '/en/foo.png',
   ]) {
     const byProxy = proxied.some((re) => re.test(p));
     assert.notEqual(

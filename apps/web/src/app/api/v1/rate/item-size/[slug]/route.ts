@@ -6,12 +6,15 @@ import {
   withPublicOfferReviewRisk,
 } from '@/server/rate/api-handler';
 
-// Cached like the product pages: the route reads nothing from the request but
-// its path, so each size's answer is cached and refreshed every 5 minutes.
-export const revalidate = 300;
-
-export function generateStaticParams(): { slug: string }[] {
-  return [];
+// Cached via `withRateDataCache` inside `loadItemSizePanel` and edge
+// `Cache-Control` (5 min fresh, 10 min stale-while-revalidate). Dynamic route
+// execution allows `OPTIONS()` preflight without Next.js ISR prerender
+// rejecting non-GET handlers (#1285, #1811).
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
 }
 
 type RouteContext = { params: Promise<{ slug: string }> };

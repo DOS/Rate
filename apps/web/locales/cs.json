@@ -1078,7 +1078,20 @@
     "listingUnavailableBadge": "Není skladem",
     "listingUnavailableTitle": "Obchod jej hlásí jako vyprodaný nebo ukončený. Cena je naposledy zjištěná, ne aktuální.",
     "listingUnavailableAudit": "Není skladem, sleva se neposuzuje",
-    "listingDiscontinuedBadge": "Ukončený prodej"
+    "listingDiscontinuedBadge": "Ukončený prodej",
+    "dirMdHeading": "### 🛡️ Adresář důvěryhodnosti obchodů Rate.vn ({count, plural, one {# obchod} few {# obchody} other {# obchodů}})",
+    "dirMdColMerchant": "Obchod",
+    "dirMdColPlatform": "Platforma",
+    "dirMdColOfficialMall": "Oficiální obchod",
+    "dirMdColTrustScore": "Skóre důvěryhodnosti (/100)",
+    "dirMdColReviewRisk": "Riziko recenzí (/100)",
+    "dirMdColGenuineDeals": "Nabídky pod mediánem",
+    "dirMdColFakeTraps": "Falešné slevy",
+    "dirMdColAuthenticReviews": "Skutečné recenze",
+    "dirMdColTrackedProducts": "Sledované produkty",
+    "dirMdYes": "Ano",
+    "dirMdNo": "Ne",
+    "dirMdUnknownMerchant": "Neznámý obchod"
   },
   "productDetail": {
     "jumpNavAria": "Přejít na sekci",
@@ -1300,7 +1313,20 @@
     "unknownSizeNote": "Prodejce neuvádí velikost úložiště, proto tyto ceny nejsou součástí ceny „od“ produktu.",
     "sizePanelLoading": "Načítání této varianty…",
     "sizePanelLoadFailed": "Tuto variantu se nepodařilo načíst.",
-    "sizePanelRetry": "Zkusit znovu"
+    "sizePanelRetry": "Zkusit znovu",
+    "priceHistoryMdHeading": "### 📈 Historie cen a kontrola falešných slev na Rate.vn: {name}",
+    "priceHistoryMdCurrentLowest": "Aktuální nejnižší cena",
+    "priceHistoryMdAllTimeLowest": "Nejnižší zaznamenaná cena",
+    "priceHistoryMdFakeAlerts": "Upozornění na falešné slevy",
+    "priceHistoryMdGenuineDeals": "Skutečné slevy",
+    "priceHistoryMdPriceSignal": "Cenový signál",
+    "priceHistoryMdColMerchant": "Obchod",
+    "priceHistoryMdColPlatform": "Platforma",
+    "priceHistoryMdColCurrentPrice": "Aktuální cena (VND)",
+    "priceHistoryMdColOriginalPrice": "Původní cena (VND)",
+    "priceHistoryMdColMedian90d": "90d medián (VND)",
+    "priceHistoryMdColLow90d": "90d minimum (VND)",
+    "priceHistoryMdColVerdict": "Verdikt ceny"
   },
   "homePage": {
     "catDescSmartphones": "Filtrovat podle čipsetu, RAM/ROM, obnovovací frekvence Hz, baterie mAh a nabíjení W",
@@ -1822,6 +1848,9 @@
       "chipKeyword": "Klíčové slovo: \"{query}\"",
       "chipBrand": "Značka: {brand}",
       "chipPrice": "Cena: {min} - {max}",
+      "chipPriceZero": "0 VND",
+      "chipPriceMillion": "{amount}M VND",
+      "chipPriceMillionPlus": "{amount}M+ VND",
       "searchLabel": "Zařízení",
       "brandLabel": "Značka",
       "searchBtn": "Hledat",
@@ -1868,7 +1897,15 @@
       "copyMdBtn": "Kopírovat katalog Markdown",
       "exportCsvBtn": "Exportovat CSV kategorie",
       "exportJsonBtn": "Exportovat JSON",
-      "exportMenu": "Exportovat data"
+      "exportMenu": "Exportovat data",
+      "mdTitle": "### 📂 Katalog kategorie Rate.vn: {title} ({count, plural, one {# zařízení} few {# zařízení} other {# zařízení}})",
+      "mdColModel": "Model",
+      "mdColBrand": "Značka",
+      "mdColUserRating": "Hodnocení kupujících (/5,0)",
+      "mdColExpertScore": "Hodnocení expertů (/10)",
+      "mdColAuthenticReviews": "Skutečné recenze",
+      "mdColMinPrice": "Nejnižší cena (VND)",
+      "mdColPriceSignal": "Cenový signál"
     },
     "sidebar": {
       "filterTitle": "Filtry parametrů",
@@ -1888,7 +1925,8 @@
       "rangeTo": "Do:",
       "minPriceAria": "Minimální cena",
       "maxPriceAria": "Maximální cena",
-      "closeAria": "Zavřít filtry"
+      "closeAria": "Zavřít filtry",
+      "priceMillionUnit": "M VND"
     }
   },
   "heroSearch": {

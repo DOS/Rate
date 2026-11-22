@@ -803,7 +803,12 @@ export {
   type DealRadarVerdict,
 } from './deals';
 
-export { getItemCatalogPage, groupCatalogRowsByItem } from './item-directory';
+export {
+  getItemCatalogPage,
+  groupCatalogRowsByItem,
+  groupCatalogRowsByItemWithStatus,
+  type CatalogItemGroupingResult,
+} from './item-directory';
 export type { ItemCatalogRow } from '@/lib/item-directory';
 
 export {

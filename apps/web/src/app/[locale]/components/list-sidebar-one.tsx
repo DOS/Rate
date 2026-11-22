@@ -76,6 +76,47 @@ export function sanitizeSidebarBrands(csvOrValue: unknown): string[] {
   return out;
 }
 
+export function resolveSidebarActiveBrands(
+  brandsParam: unknown,
+  legacyBrandParam?: unknown
+): string[] {
+  const multi = sanitizeSidebarBrands(brandsParam);
+  if (multi.length > 0) return multi;
+  if (typeof legacyBrandParam !== 'string') return [];
+  const single = legacyBrandParam
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, 64);
+  if (!single || single.includes(',')) return [];
+  return [single];
+}
+
+export function applySidebarBrandToggle(
+  params: URLSearchParams,
+  brand: string
+): void {
+  const cleanVal = brand
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, 64);
+  if (!cleanVal || cleanVal.includes(',')) return;
+  const existing = resolveSidebarActiveBrands(
+    params.get('brands'),
+    params.get('brand')
+  );
+  params.delete('brand');
+  const lower = cleanVal.toLowerCase();
+  const has = existing.some((x) => x.toLowerCase() === lower);
+  const next = has
+    ? existing.filter((x) => x.toLowerCase() !== lower)
+    : [...existing, cleanVal];
+  if (next.length > 0) {
+    params.set('brands', next.join(','));
+  } else {
+    params.delete('brands');
+  }
+}
+
 export function sanitizeSidebarPriceMillion(
   rawPriceVnd: unknown,
   sliderMin: number,
@@ -143,7 +184,10 @@ export default function ListSidebarOne({
   // Parse active filter state from URL query params
   const currentQ = sanitizeSidebarKeyword(searchParams?.get('q'));
   const currentMinRating = sanitizeSidebarRating(searchParams?.get('rating'));
-  const currentBrands = sanitizeSidebarBrands(searchParams?.get('brands'));
+  const currentBrands = resolveSidebarActiveBrands(
+    searchParams?.get('brands'),
+    searchParams?.get('brand')
+  );
   const currentRams = sanitizeSidebarPositiveInts(
     searchParams?.get('ram'),
     1024
@@ -276,7 +320,12 @@ export default function ListSidebarOne({
       .trim()
       .slice(0, 64);
     if (!cleanVal) return;
+    if (paramKey === 'brands' && cleanVal.includes(',')) return;
     updateUrlParams((params) => {
+      if (paramKey === 'brands') {
+        applySidebarBrandToggle(params, cleanVal);
+        return;
+      }
       const existing = sanitizeSidebarBrands(params.get(paramKey));
       const lower = cleanVal.toLowerCase();
       const has = existing.some((x) => x.toLowerCase() === lower);
@@ -642,7 +691,7 @@ export default function ListSidebarOne({
                         max={sliderMax}
                         step={schema.priceRangeMillion.step}
                         value={priceRange}
-                        unitSuffix="tr ₫"
+                        unitSuffix={t('sidebar.priceMillionUnit')}
                         onChange={setPriceRange}
                         onChangeComplete={handlePriceSliderComplete}
                       />

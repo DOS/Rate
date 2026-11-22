@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { fetchAllPages, parseShopeeEnqueueUrl, resolveBackfillSupabaseTarget } from '../paging.js';
+import {
+  fetchAllPages,
+  fetchByKey,
+  parseShopeeEnqueueUrl,
+  parseStrictMasterUuid,
+  resolveBackfillSupabaseTarget,
+} from '../paging.js';
 import { auditMasterSpecs, mergeKeySpecs, sanitizeKeySpecKey } from '../jobs/backfill-specs.js';
 
 // A fake query over `total` rows that, like PostgREST, never returns more than
@@ -187,28 +193,34 @@ async function run() {
 
   await assert.rejects(
     auditMasterSpecs({
-      from: () => ({
-        select: () => ({
-          order: () => ({
-            range: (from: number) =>
-              Promise.resolve({
-                data:
-                  from === 0
-                    ? [
-                        null,
-                        {
-                          id: 'm1',
-                          name: 'Phone\u0000\u0085X',
-                          model_key: 'phone\u0007-x',
-                          specifications: null,
-                        },
-                      ]
-                    : [],
-                error: null,
-              }),
-          }),
-        }),
-      }),
+      from: () => {
+        let after: string | null = null;
+        const builder = {
+          select: () => builder,
+          gt: (_col: string, val: string) => {
+            after = val;
+            return builder;
+          },
+          order: () => builder,
+          limit: () =>
+            Promise.resolve({
+              data:
+                after === null
+                  ? [
+                      null,
+                      {
+                        id: 'm1',
+                        name: 'Phone\u0000\u0085X',
+                        model_key: 'phone\u0007-x',
+                        specifications: null,
+                      },
+                    ]
+                  : [],
+              error: null,
+            }),
+        };
+        return builder;
+      },
     } as never),
     /Phone X \(phone -x\) failed ProductSpecificationsSchema validation/
   );
@@ -271,7 +283,164 @@ async function run() {
   });
   assert.equal(mappedNonBool?.result.include_in_rating, false);
 
-  console.log('✅ fetchAllPages & parseShopeeEnqueueUrl suite passed');
+  // Issue #1665: keyset fetchByKey pagination (past 1000 rows, past 500 pages, concurrent insert safety) & parseStrictMasterUuid
+  {
+    const keysetRows = Array.from({ length: 2350 }, (_, i) => ({
+      id: `row-${String(i + 1).padStart(5, '0')}`,
+      seq: i + 1,
+    }));
+    const cursors: Array<string | null> = [];
+    const keysetClient = {
+      from: (table: string) => {
+        assert.equal(table, 'items_test');
+        let current = [...keysetRows];
+        let after: string | null = null;
+        const builder = {
+          select: () => builder,
+          gt: (col: string, val: string) => {
+            assert.equal(col, 'id');
+            after = val;
+            current = current.filter(r => r.id > val);
+            return builder;
+          },
+          order: (col: string) => {
+            assert.equal(col, 'id');
+            current.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+            return builder;
+          },
+          limit: (n: number) => {
+            cursors.push(after);
+            // Concurrent crawl write inserts a row BEFORE the current cursor after page 1:
+            // OFFSET paging would shift page 2 and duplicate row-01000, whereas keyset ignores it.
+            if (cursors.length === 1) {
+              keysetRows.unshift({ id: 'row-00000', seq: 0 });
+            }
+            return Promise.resolve({ data: current.slice(0, Math.min(n, 1000)), error: null });
+          },
+        };
+        return builder;
+      },
+    };
+    const fetched = await fetchByKey<{ id: string; seq: number }>(
+      keysetClient as never,
+      'items_test',
+      'id, seq',
+      'id'
+    );
+    assert.equal(fetched.length, 2350, 'keyset reads all 2350 rows without duplicating row-01000');
+    assert.deepEqual(cursors, [null, 'row-01000', 'row-02000', 'row-02350']);
+    assert.equal(new Set(fetched.map(r => r.id)).size, 2350);
+
+    // Lowered PostgREST max-rows (500 < pageSize 1000) still reads all 1200 rows without truncation
+    const loweredRows = Array.from({ length: 1200 }, (_, i) => ({
+      id: `lr-${String(i + 1).padStart(5, '0')}`,
+    }));
+    const loweredClient = {
+      from: () => {
+        let current = [...loweredRows];
+        const builder = {
+          select: () => builder,
+          gt: (_col: string, val: string) => {
+            current = current.filter(r => r.id > val);
+            return builder;
+          },
+          order: () => builder,
+          limit: (n: number) =>
+            Promise.resolve({ data: current.slice(0, Math.min(n, 500)), error: null }),
+        };
+        return builder;
+      },
+    };
+    const loweredFetched = await fetchByKey<{ id: string }>(
+      loweredClient as never,
+      'lowered_table',
+      'id',
+      'id',
+      q => q,
+      1000
+    );
+    assert.equal(loweredFetched.length, 1200, 'fetchByKey handles max-rows < pageSize cleanly');
+
+    // Exceeds the old 500-page OFFSET ceiling cleanly (550 keyset pages at pageSize=2)
+    const manyPagesRows = Array.from({ length: 1101 }, (_, i) => ({
+      id: `k-${String(i + 1).padStart(5, '0')}`,
+    }));
+    const manyPagesClient = {
+      from: () => {
+        let current = [...manyPagesRows];
+        const builder = {
+          select: () => builder,
+          gt: (_col: string, val: string) => {
+            current = current.filter(r => r.id > val);
+            return builder;
+          },
+          order: () => builder,
+          limit: (n: number) => Promise.resolve({ data: current.slice(0, n), error: null }),
+        };
+        return builder;
+      },
+    };
+    const over500Pages = await fetchByKey<{ id: string }>(
+      manyPagesClient as never,
+      'deep_table',
+      'id',
+      'id',
+      q => q,
+      2
+    );
+    assert.equal(over500Pages.length, 1101, 'fetchByKey has no 500-page ceiling');
+
+    // Fails closed if tail row lacks key (even on a 1-row response at default pageSize=1000) or cursor fails to advance
+    const missingKeyClient = {
+      from: () => {
+        const builder = {
+          select: () => builder,
+          gt: () => builder,
+          order: () => builder,
+          limit: () => Promise.resolve({ data: [{ other: 'a' }], error: null }),
+        };
+        return builder;
+      },
+    };
+    await assert.rejects(
+      fetchByKey(missingKeyClient as never, 'bad_cols', 'other', 'id'),
+      /bad_cols: missing key "id" on page tail row/
+    );
+
+    const stuckCursorClient = {
+      from: () => {
+        const builder = {
+          select: () => builder,
+          gt: () => builder, // broken mock ignores .gt()
+          order: () => builder,
+          limit: () => Promise.resolve({ data: [{ id: 'a' }, { id: 'b' }], error: null }),
+        };
+        return builder;
+      },
+    };
+    await assert.rejects(
+      fetchByKey(stuckCursorClient as never, 'stuck_table', 'id', 'id', q => q, 2),
+      /stuck_table: keyset cursor "id" did not advance past "b"/
+    );
+
+    // parseStrictMasterUuid normalizes valid UUIDs and rejects malformed values
+    assert.equal(
+      parseStrictMasterUuid('A0000000-0000-4000-8000-000000000001'),
+      'a0000000-0000-4000-8000-000000000001'
+    );
+    for (const bad of [
+      '',
+      '   ',
+      'not-a-uuid',
+      ' a0000000-0000-4000-8000-000000000001 ',
+      null,
+      42,
+    ]) {
+      assert.throws(() => parseStrictMasterUuid(bad), /UUID/);
+    }
+  }
+
+  console.log('✅ fetchAllPages, fetchByKey & parseShopeeEnqueueUrl suite passed');
 }
 
 run().catch(err => {

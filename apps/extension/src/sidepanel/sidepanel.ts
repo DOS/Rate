@@ -8,9 +8,15 @@ import {
   escapeSafeExternalHref,
   formatSafeExtensionVnd,
   formatSafeNumber,
+  normalizeAllowedApiBaseUrl,
   resolveSafeApiRelativeUrl,
   sanitizeVerdictClassSuffix,
 } from '../security-guards.js';
+import {
+  encodeSurrogateSafeUriComponent,
+  sliceCodePoints,
+  stripLoneSurrogates,
+} from '../surrogate-safe.js';
 import {
   applyDocumentMessages,
   contentLangAttr,
@@ -38,8 +44,18 @@ import {
 } from './panel-view.js';
 import { verdictTexts } from '../verdict-display.js';
 
-function formatVnd(val: number | null | undefined): string {
-  return formatSafeExtensionVnd(val);
+function formatVnd(
+  val: number | null | undefined,
+  locale = t('langCode')
+): string {
+  return formatSafeExtensionVnd(val, t('notAvailable'), locale);
+}
+
+function cleanUrlSegment(raw: unknown, maxCodePoints: number): string {
+  if (typeof raw !== 'string') return '';
+  const cleaned = stripLoneSurrogates(raw).trim();
+  if (!cleaned) return '';
+  return sliceCodePoints(cleaned, maxCodePoints).trim();
 }
 
 interface DealRadarFeedItem {
@@ -81,10 +97,13 @@ async function fetchAndRenderDealRadar(
 ): Promise<void> {
   const slot = document.getElementById('deal-radar-slot');
   if (!slot) return;
+  const generationAtStart = panelLoadGeneration;
+  slot.innerHTML = '';
 
   try {
-    const catParam = categorySlug
-      ? `&category=${encodeURIComponent(categorySlug)}`
+    const safeCategory = cleanUrlSegment(categorySlug, 120);
+    const catParam = safeCategory
+      ? `&category=${encodeSurrogateSafeUriComponent(safeCategory)}`
       : '';
     const res = await fetch(
       `${settings.apiBaseUrl}/api/v1/rate/deals?limit=4${catParam}`,
@@ -99,15 +118,33 @@ async function fetchAndRenderDealRadar(
         priceSpreadLeaders?: PriceSpreadFeedItem[];
       };
     };
-    const deals = json?.data?.genuineDeals || [];
-    const traps = json?.data?.fakeSaleTraps || [];
-    const spreads = json?.data?.priceSpreadLeaders || [];
+    if (generationAtStart !== panelLoadGeneration) return;
+    if (!json || json.ok === false) return;
+    const deals = (
+      Array.isArray(json.data?.genuineDeals) ? json.data.genuineDeals : []
+    ).filter((d): d is DealRadarFeedItem =>
+      Boolean(d && typeof d === 'object')
+    );
+    const traps = (
+      Array.isArray(json.data?.fakeSaleTraps) ? json.data.fakeSaleTraps : []
+    ).filter((d): d is DealRadarFeedItem =>
+      Boolean(d && typeof d === 'object')
+    );
+    const spreads = (
+      Array.isArray(json.data?.priceSpreadLeaders)
+        ? json.data.priceSpreadLeaders
+        : []
+    ).filter((s): s is PriceSpreadFeedItem =>
+      Boolean(s && typeof s === 'object')
+    );
     if (deals.length === 0 && traps.length === 0 && spreads.length === 0)
       return;
 
-    slot.innerHTML = `
-      <div class="card">
-        <div class="card-title">🔥 ${escapeHtml(t('radarDealsTitle'))}</div>
+    const uiLocale = t('langCode');
+    const sections: string[] = [];
+    if (deals.length > 0) {
+      sections.push(`
+        <div class="card-title"><span aria-hidden="true">🔥 </span>${escapeHtml(t('radarDealsTitle'))}</div>
         ${deals
           .slice(0, 4)
           .map(
@@ -116,72 +153,76 @@ async function fetchAndRenderDealRadar(
               <div>
                 <div class="offer-shop">
                   <a href="${resolveSafeApiRelativeUrl(settings.apiBaseUrl, d.productHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
-                    ${contentTextHtml(d.productName)}
+                    ${contentTextHtml(stripLoneSurrogates(String(d.productName ?? '')))}
                   </a>
                 </div>
                 <div class="offer-meta">
-                  ${escapeHtml(d.platform.toUpperCase())} (${contentTextHtml(d.merchantName)}) - ${escapeHtml(t('radarSavings', [formatVnd(d.savingsVsMedianVnd), formatSafeNumber(d.savingsVsMedianPct, { min: 0, max: 100 })]))}
+                  ${escapeHtml(String(d.platform ?? '').toUpperCase())} (${contentTextHtml(stripLoneSurrogates(String(d.merchantName ?? '')))}) - ${escapeHtml(t('radarSavings', [formatVnd(d.savingsVsMedianVnd, uiLocale), formatSafeNumber(d.savingsVsMedianPct, { min: 0, max: 100 }, uiLocale)]))}
                 </div>
               </div>
               <a href="${escapeSafeExternalHref(d.offerUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#34d399;">
-                ${formatVnd(d.priceCurrent)}
+                ${formatVnd(d.priceCurrent, uiLocale)}
               </a>
             </div>
           `
           )
           .join('')}
-        ${
-          spreads.length > 0
-            ? `
-            <div style="margin-top:10px;padding-top:8px;border-top:1px solid #2a2f3a;">
-              <div class="card-title" style="color:#60a5fa;">📊 ${escapeHtml(t('radarSpreadTitle'))}</div>
-              ${spreads
-                .slice(0, 2)
-                .map(
-                  (s) => `
-                  <div class="offer-item">
-                    <div>
-                      <div class="offer-shop">${contentTextHtml(s.productName)}</div>
-                      <div class="offer-meta" style="color:#93c5fd;">
-                        ${escapeHtml(t('radarSpreadVersus', [s.cheapestPlatform.toUpperCase(), formatVnd(s.minPrice), s.priciestPlatform.toUpperCase(), formatVnd(s.maxPrice)]))}
-                      </div>
-                    </div>
-                    <a href="${escapeSafeExternalHref(s.cheapestOfferUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#60a5fa;">
-                      ${escapeHtml(t('radarSpreadAmount', [formatVnd(s.spreadVnd)]))}
-                    </a>
-                  </div>
-                `
-                )
-                .join('')}
+      `);
+    }
+    if (spreads.length > 0) {
+      sections.push(`
+        <div class="card-title" style="color:#60a5fa;"><span aria-hidden="true">📊 </span>${escapeHtml(t('radarSpreadTitle'))}</div>
+        ${spreads
+          .slice(0, 2)
+          .map(
+            (s) => `
+            <div class="offer-item">
+              <div>
+                <div class="offer-shop">${contentTextHtml(stripLoneSurrogates(String(s.productName ?? '')))}</div>
+                <div class="offer-meta" style="color:#93c5fd;">
+                  ${escapeHtml(t('radarSpreadVersus', [String(s.cheapestPlatform ?? '').toUpperCase(), formatVnd(s.minPrice, uiLocale), String(s.priciestPlatform ?? '').toUpperCase(), formatVnd(s.maxPrice, uiLocale)]))}
+                </div>
+              </div>
+              <a href="${escapeSafeExternalHref(s.cheapestOfferUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#60a5fa;">
+                ${escapeHtml(t('radarSpreadAmount', [formatVnd(s.spreadVnd, uiLocale)]))}
+              </a>
             </div>
           `
-            : ''
-        }
-        ${
-          traps.length > 0
-            ? `
-            <div style="margin-top:10px;padding-top:8px;border-top:1px solid #2a2f3a;">
-              <div class="card-title" style="color:#f87171;">⚠️ ${escapeHtml(t('radarTrapsTitle'))}</div>
-              ${traps
-                .slice(0, 2)
-                .map(
-                  (trap) => `
-                  <div class="offer-item">
-                    <div>
-                      <div class="offer-shop">${contentTextHtml(trap.productName)}</div>
-                      <div class="offer-meta" style="color:#fca5a5;">
-                        ${escapeHtml(trap.platform.toUpperCase())} - ${escapeHtml(t('radarTrapMarkup', [formatSafeNumber(trap.fakeMarkupPct, { min: 0, max: 10000 }), formatVnd(trap.priceOriginal)]))}
-                      </div>
-                    </div>
-                    <span class="offer-price" style="color:#f87171;">${formatVnd(trap.priceCurrent)}</span>
-                  </div>
-                `
-                )
-                .join('')}
+          )
+          .join('')}
+      `);
+    }
+    if (traps.length > 0) {
+      sections.push(`
+        <div class="card-title" style="color:#f87171;"><span aria-hidden="true">⚠️ </span>${escapeHtml(t('radarTrapsTitle'))}</div>
+        ${traps
+          .slice(0, 2)
+          .map(
+            (trap) => `
+            <div class="offer-item">
+              <div>
+                <div class="offer-shop">${contentTextHtml(stripLoneSurrogates(String(trap.productName ?? '')))}</div>
+                <div class="offer-meta" style="color:#fca5a5;">
+                  ${escapeHtml(String(trap.platform ?? '').toUpperCase())} - ${escapeHtml(t('radarTrapMarkup', [formatSafeNumber(trap.fakeMarkupPct, { min: 0, max: 10000 }, uiLocale), formatVnd(trap.priceOriginal, uiLocale)]))}
+                </div>
+              </div>
+              <span class="offer-price" style="color:#f87171;">${formatVnd(trap.priceCurrent, uiLocale)}</span>
             </div>
           `
-            : ''
-        }
+          )
+          .join('')}
+      `);
+    }
+
+    slot.innerHTML = `
+      <div class="card">
+        ${sections
+          .map((section, idx) =>
+            idx === 0
+              ? `<div>${section}</div>`
+              : `<div style="margin-top:10px;padding-top:8px;border-top:1px solid #2a2f3a;">${section}</div>`
+          )
+          .join('')}
       </div>
     `;
   } catch {
@@ -211,6 +252,8 @@ async function fetchAndRenderMerchantTrustDirectory(
 ): Promise<void> {
   const slot = document.getElementById('merchant-trust-slot');
   if (!slot) return;
+  const generationAtStart = panelLoadGeneration;
+  slot.innerHTML = '';
 
   try {
     const res = await fetch(
@@ -222,33 +265,46 @@ async function fetchAndRenderMerchantTrustDirectory(
       ok?: boolean;
       data?: MerchantTrustFeedItem[];
     };
-    const allMerchants = json?.data || [];
+    if (generationAtStart !== panelLoadGeneration) return;
+    if (!json || json.ok === false) return;
+    const allMerchants = (Array.isArray(json.data) ? json.data : []).filter(
+      (m): m is MerchantTrustFeedItem => Boolean(m && typeof m === 'object')
+    );
     if (allMerchants.length === 0) return;
 
     const sorted = [...allMerchants].sort((a, b) => {
       if (platform) {
         const aMatch =
-          a.platform.toLowerCase() === platform.toLowerCase() ? 1 : 0;
+          String(a.platform ?? '').toLowerCase() === platform.toLowerCase()
+            ? 1
+            : 0;
         const bMatch =
-          b.platform.toLowerCase() === platform.toLowerCase() ? 1 : 0;
+          String(b.platform ?? '').toLowerCase() === platform.toLowerCase()
+            ? 1
+            : 0;
         if (aMatch !== bMatch) return bMatch - aMatch;
       }
       // A store with no trust score sorts last (DOS/Rate#1484).
       return (
         (b.trust_score ?? -1) - (a.trust_score ?? -1) ||
-        b.product_count - a.product_count
+        (Number(b.product_count) || 0) - (Number(a.product_count) || 0)
       );
     });
 
+    const uiLocale = t('langCode');
     slot.innerHTML = `
       <div class="card">
-        <div class="card-title">🛡️ ${escapeHtml(t('merchantDirTitle', [formatSafeNumber(allMerchants.length, { min: 0 })]))}</div>
+        <div class="card-title"><span aria-hidden="true">🛡️ </span>${escapeHtml(t('merchantDirTitle', [formatSafeNumber(allMerchants.length, { min: 0 }, uiLocale)]))}</div>
         ${sorted
           .slice(0, 5)
           .map((m) => {
+            const merchantSegment =
+              cleanUrlSegment(m.slug, 200) || cleanUrlSegment(m.id, 200);
             const detailHref = resolveSafeApiRelativeUrl(
               settings.apiBaseUrl,
-              `/merchants/${encodeURIComponent(m.slug || m.id)}`,
+              merchantSegment
+                ? `/merchants/${encodeSurrogateSafeUriComponent(merchantSegment)}`
+                : '/merchants',
               '/merchants'
             );
             const trustColor =
@@ -260,12 +316,12 @@ async function fetchAndRenderMerchantTrustDirectory(
                 <div>
                   <div class="offer-shop">
                     <a href="${detailHref}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
-                      ${contentTextHtml(m.name)}
+                      ${contentTextHtml(stripLoneSurrogates(String(m.name ?? '')))}
                     </a>
                     ${m.is_official ? officialBadgeHtml() : ''}
                   </div>
                   <div class="offer-meta">
-                    ${escapeHtml(m.platform.toUpperCase())} (${escapeHtml(t('merchantProductCount', [formatSafeNumber(m.product_count, { min: 0 })]))}) - ${escapeHtml(t('merchantScamRisk', [riskScoreText(m.dosafe_risk_score)]))} | ${escapeHtml(t('merchantReviewRisk', [riskScoreText(m.review_risk_score)]))}
+                    ${escapeHtml(String(m.platform ?? '').toUpperCase())} (${escapeHtml(t('merchantProductCount', [formatSafeNumber(m.product_count, { min: 0 }, uiLocale)]))}) - ${escapeHtml(t('merchantScamRisk', [riskScoreText(m.dosafe_risk_score)]))} | ${escapeHtml(t('merchantReviewRisk', [riskScoreText(m.review_risk_score)]))}
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
@@ -329,6 +385,7 @@ function renderPanelContent(
     return;
   }
 
+  const uiLocale = t('langCode');
   const assessment = lookup.priceAssessment;
   // The verdict in the extension's language (DOS/Rate#1326).
   const verdict = verdictTexts(assessment);
@@ -336,7 +393,7 @@ function renderPanelContent(
   const reviews = lookup.reviewSummary;
   const merchant = lookup.merchantProfile;
 
-  const variantButtonsHtml = renderVariantPickerHtml(lookup);
+  const variantButtonsHtml = renderVariantPickerHtml(lookup, uiLocale);
 
   const keySpecs = master?.key_specs;
   const keySpecsHtml =
@@ -374,9 +431,9 @@ function renderPanelContent(
   const offersList =
     lookup.allOffers.length > 0 ? lookup.allOffers : lookup.topCheaperOffers;
 
-  const offersHtml = renderOffersCardHtml(offersList);
+  const offersHtml = renderOffersCardHtml(offersList, uiLocale);
 
-  const reviewHtml = renderReviewCardHtml(reviews, master);
+  const reviewHtml = renderReviewCardHtml(reviews, master, uiLocale);
 
   const merchantNoTrust =
     !merchant ||
@@ -389,7 +446,7 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantTrustScore'))}</div>
-            <div class="stat-val" style="color: ${merchantNoTrust ? '#9ca3af' : merchantTrustColor(merchant)};">${escapeHtml(merchantNoTrust ? t('noDataYet') : `${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100`)}</div>
+            <div class="stat-val" style="color: ${merchantNoTrust ? '#9ca3af' : merchantTrustColor(merchant)};">${escapeHtml(merchantNoTrust ? t('noDataYet') : `${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 }, uiLocale)}/100`)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantRiskPair'))}</div>
@@ -408,11 +465,11 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('historyLow'))}</div>
-            <div class="stat-val" style="color: #34d399;">${formatVnd(lookup.priceHistory.lowestEverPrice)}</div>
+            <div class="stat-val" style="color: #34d399;">${formatVnd(lookup.priceHistory.lowestEverPrice, uiLocale)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('historyHigh'))}</div>
-            <div class="stat-val">${formatVnd(lookup.priceHistory.highestEverPrice)}</div>
+            <div class="stat-val">${formatVnd(lookup.priceHistory.highestEverPrice, uiLocale)}</div>
           </div>
         </div>
       </div>
@@ -461,11 +518,11 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('leaderboardRank'))}</div>
-            <div class="stat-val" style="color: #ff6b6b;">#${formatSafeNumber(overallBadge.rank, { min: 1 })} / ${formatSafeNumber(overallBadge.totalInCategory, { min: 1 })}</div>
+            <div class="stat-val" style="color: #ff6b6b;">#${formatSafeNumber(overallBadge.rank, { min: 1 }, uiLocale)} / ${formatSafeNumber(overallBadge.totalInCategory, { min: 1 }, uiLocale)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('leaderboardScore'))}</div>
-            <div class="stat-val" style="color: #34d399;">${formatSafeNumber(overallBadge.score10, { min: 0, max: 10, decimals: 1 })} / 10</div>
+            <div class="stat-val" style="color: #34d399;">${formatSafeNumber(overallBadge.score10, { min: 0, max: 10, decimals: 1 }, uiLocale)} / 10</div>
           </div>
         </div>
         ${
@@ -474,7 +531,7 @@ function renderPanelContent(
                 ${subBadges
                   .map(
                     (sr) =>
-                      `<span style="font-size: 13px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;">🏆 #${formatSafeNumber(sr.rank, { min: 1 })} ${escapeHtml(focusLabel(sr.criterion))} (${formatSafeNumber(sr.score10, { min: 0, max: 10, decimals: 1 })})</span>`
+                      `<span style="font-size: 13px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;"><span aria-hidden="true">🏆 </span>#${formatSafeNumber(sr.rank, { min: 1 }, uiLocale)} ${escapeHtml(focusLabel(sr.criterion))} (${formatSafeNumber(sr.score10, { min: 0, max: 10, decimals: 1 }, uiLocale)})</span>`
                   )
                   .join('')}
               </div>`
@@ -507,20 +564,25 @@ function renderPanelContent(
         `/compare?category=${categorySlug}`
       )
     : null;
+  const rawInspectTarget =
+    cleanUrlSegment(signal.canonicalUrl, 2048) ||
+    cleanUrlSegment(master?.slug, 200) ||
+    cleanUrlSegment(signal.title, 500);
   const inspectUrl = resolveSafeApiRelativeUrl(
     settings.apiBaseUrl,
-    `/inspect?q=${encodeURIComponent(
-      signal.canonicalUrl || master?.slug || signal.title
-    )}`,
+    rawInspectTarget
+      ? `/inspect?q=${encodeSurrogateSafeUriComponent(rawInspectTarget)}`
+      : '/inspect',
     '/inspect'
   );
   // Alerts are per size: an Item page with no stated size adds nothing until
   // a size is picked (DOS/Rate#1158).
   const sizeUnknown = Boolean(lookup.item) && !lookup.selectedVariant;
+  const watchlistSlug = !sizeUnknown ? cleanUrlSegment(master?.slug, 200) : '';
   const watchlistUrl = resolveSafeApiRelativeUrl(
     settings.apiBaseUrl,
-    master?.slug && !sizeUnknown
-      ? `/watchlist?add=${encodeURIComponent(master.slug)}`
+    watchlistSlug
+      ? `/watchlist?add=${encodeSurrogateSafeUriComponent(watchlistSlug)}`
       : '/watchlist',
     '/watchlist'
   );
@@ -532,12 +594,12 @@ function renderPanelContent(
       ? // Only a 3+ offer floor is the multi-platform floor; fewer offers are
         // just below the median (DOS/Rate#1145).
         radarSig.genuineDeal?.verdict === 'genuine_all_time_low'
-        ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 ${escapeHtml(t('radarPillDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
-        : `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">✅ ${escapeHtml(t('radarPillBelowMedian', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
+        ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;"><span aria-hidden="true">🔥 </span>${escapeHtml(t('radarPillDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 }, uiLocale)]))}</span>`
+        : `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;"><span aria-hidden="true">✅ </span>${escapeHtml(t('radarPillBelowMedian', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 }, uiLocale)]))}</span>`
       : radarSig.verdict === 'fake_sale_trap'
-        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;">🚨 ${escapeHtml(t('radarPillTrap', [formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })]))}</span>`
+        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;"><span aria-hidden="true">🚨 </span>${escapeHtml(t('radarPillTrap', [formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 }, uiLocale)]))}</span>`
         : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
-          ? `<span class="verdict-pill" style="margin-left:6px;background:#1e293b;color:#38bdf8;border:1px solid #0284c7;">📊 ${escapeHtml(t('radarPillSpread', [formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 })]))}</span>`
+          ? `<span class="verdict-pill" style="margin-left:6px;background:#1e293b;color:#38bdf8;border:1px solid #0284c7;"><span aria-hidden="true">📊 </span>${escapeHtml(t('radarPillSpread', [formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 }, uiLocale)]))}</span>`
           : ''
     : '';
 
@@ -546,10 +608,12 @@ function renderPanelContent(
   const actionLinks: PanelActionLink[] = [
     { href: detailUrl, label: t('linkDetail'), primary: true },
     { href: compareUrl, label: t('linkCompare') },
-    { href: leaderboardUrl, label: `🏆 ${t('linkLeaderboard')}` },
-    ...(versusUrl ? [{ href: versusUrl, label: `⚔️ ${t('linkVersus')}` }] : []),
-    { href: inspectUrl, label: `🔬 ${t('linkInspect')}` },
-    { href: watchlistUrl, label: `🔔 ${t('linkWatch')}` },
+    { href: leaderboardUrl, icon: '🏆', label: t('linkLeaderboard') },
+    ...(versusUrl
+      ? [{ href: versusUrl, icon: '⚔️', label: t('linkVersus') }]
+      : []),
+    { href: inspectUrl, icon: '🔬', label: t('linkInspect') },
+    { href: watchlistUrl, icon: '🔔', label: t('linkWatch') },
   ];
 
   root.innerHTML = `
@@ -568,11 +632,11 @@ function renderPanelContent(
       <div class="stats-grid">
         <div class="stat-box">
           <div class="stat-label">${escapeHtml(t('observedPrice'))}</div>
-          <div class="stat-val">${formatVnd(assessment.observedPrice ?? signal.price)}</div>
+          <div class="stat-val">${formatVnd(assessment.observedPrice ?? signal.price, uiLocale)}</div>
         </div>
         <div class="stat-box">
           <div class="stat-label">${escapeHtml(t('marketMedian'))}</div>
-          <div class="stat-val">${formatVnd(assessment.marketMedianPrice)}</div>
+          <div class="stat-val">${formatVnd(assessment.marketMedianPrice, uiLocale)}</div>
         </div>
       </div>
       ${renderActionRowsHtml(actionLinks)}
@@ -601,7 +665,36 @@ function renderPanelContent(
   });
 }
 
+const OPT_IN_CONSENT_VERSION = 2;
+
 let panelLoadGeneration = 0;
+let consentHydrated = false;
+let apiBaseHydrated = false;
+let sawRawConsentStorage = false;
+let storedOptIn = false;
+let storedConsentVersion = 0;
+let lastConfirmedOptIn = false;
+let consentMutationSeq = 0;
+let optInOpCounter = 0;
+let lastConfirmedOptInSeq = 0;
+let optInSaveInFlight = 0;
+let bufferedConsentUpdate: {
+  hasOptIn: boolean;
+  optIn: boolean;
+  hasVersion: boolean;
+  consentVersion: number;
+} | null = null;
+
+let lastConfirmedApiBaseUrl = DEFAULT_API_BASE_URL;
+let lastLoadedPanelApiBaseUrl = DEFAULT_API_BASE_URL;
+let apiBaseMutationSeq = 0;
+let apiBaseOpCounter = 0;
+let lastConfirmedApiBaseSeq = 0;
+let apiBaseSaveInFlight = 0;
+
+function isEffectiveConsentOptIn(): boolean {
+  return storedOptIn && storedConsentVersion === OPT_IN_CONSENT_VERSION;
+}
 
 /**
  * A full lookup the service worker marks stale (a newer tab detection started
@@ -628,6 +721,8 @@ async function loadSidePanel(
   ) as HTMLInputElement | null;
   if (!root) return;
   const generation = ++panelLoadGeneration;
+  const consentSeqAtStart = consentMutationSeq;
+  const apiSeqAtStart = apiBaseMutationSeq;
 
   try {
     const res = (await chrome.runtime.sendMessage({
@@ -650,16 +745,51 @@ async function loadSidePanel(
       return;
     }
 
-    const settings: ExtensionSettings = res?.settings || {
-      apiBaseUrl: DEFAULT_API_BASE_URL,
-      crowdContributeOptIn: false,
+    const rawSettings = res?.settings;
+    const settings: ExtensionSettings = {
+      apiBaseUrl: normalizeAllowedApiBaseUrl(rawSettings?.apiBaseUrl),
+      crowdContributeOptIn: rawSettings?.crowdContributeOptIn === true,
     };
+    lastLoadedPanelApiBaseUrl = settings.apiBaseUrl;
 
-    if (chkOptIn) {
-      chkOptIn.checked = Boolean(settings.crowdContributeOptIn);
+    if (
+      rawSettings &&
+      consentMutationSeq === consentSeqAtStart &&
+      optInSaveInFlight === 0
+    ) {
+      if (!sawRawConsentStorage) {
+        storedOptIn = settings.crowdContributeOptIn;
+        storedConsentVersion = 0;
+        lastConfirmedOptIn = settings.crowdContributeOptIn;
+        if (chkOptIn) {
+          chkOptIn.checked = settings.crowdContributeOptIn;
+        }
+      } else if (consentHydrated) {
+        lastConfirmedOptIn = isEffectiveConsentOptIn();
+        if (chkOptIn) {
+          chkOptIn.checked = lastConfirmedOptIn;
+        }
+      }
+    } else if (
+      !rawSettings &&
+      chkOptIn &&
+      optInSaveInFlight === 0 &&
+      consentHydrated &&
+      sawRawConsentStorage
+    ) {
+      chkOptIn.checked = isEffectiveConsentOptIn();
     }
-    if (inpApiBase && !inpApiBase.value) {
-      inpApiBase.value = settings.apiBaseUrl;
+
+    if (apiBaseMutationSeq === apiSeqAtStart && apiBaseSaveInFlight === 0) {
+      if (
+        typeof rawSettings?.apiBaseUrl === 'string' &&
+        rawSettings.apiBaseUrl.trim()
+      ) {
+        lastConfirmedApiBaseUrl = settings.apiBaseUrl;
+      }
+      if (inpApiBase && !inpApiBase.value.trim()) {
+        inpApiBase.value = lastConfirmedApiBaseUrl;
+      }
     }
 
     if (res?.ok === false) {
@@ -739,9 +869,10 @@ async function runQuickQuery(query: string): Promise<void> {
     };
     if (generation !== panelLoadGeneration) return;
 
-    const settings: ExtensionSettings = res?.settings || {
-      apiBaseUrl: DEFAULT_API_BASE_URL,
-      crowdContributeOptIn: false,
+    const rawSettings = res?.settings;
+    const settings: ExtensionSettings = {
+      apiBaseUrl: normalizeAllowedApiBaseUrl(rawSettings?.apiBaseUrl),
+      crowdContributeOptIn: rawSettings?.crowdContributeOptIn === true,
     };
 
     if (res?.ok === false) {
@@ -790,6 +921,34 @@ document.addEventListener('DOMContentLoaded', () => {
     'inp-api-base'
   ) as HTMLInputElement | null;
 
+  const hasLocalStorageGet =
+    typeof chrome !== 'undefined' &&
+    typeof chrome.storage?.local?.get === 'function';
+
+  consentHydrated = !hasLocalStorageGet;
+  apiBaseHydrated = !hasLocalStorageGet;
+  sawRawConsentStorage = hasLocalStorageGet;
+  storedOptIn = false;
+  storedConsentVersion = 0;
+  lastConfirmedOptIn = false;
+  consentMutationSeq = 0;
+  optInOpCounter = 0;
+  lastConfirmedOptInSeq = 0;
+  optInSaveInFlight = 0;
+  bufferedConsentUpdate = null;
+
+  lastConfirmedApiBaseUrl = inpApiBase?.value.trim()
+    ? normalizeAllowedApiBaseUrl(inpApiBase.value)
+    : DEFAULT_API_BASE_URL;
+  lastLoadedPanelApiBaseUrl = lastConfirmedApiBaseUrl;
+  apiBaseMutationSeq = 0;
+  apiBaseOpCounter = 0;
+  lastConfirmedApiBaseSeq = 0;
+  apiBaseSaveInFlight = 0;
+  if (chkOptIn) {
+    chkOptIn.checked = false;
+  }
+
   btnRefresh?.addEventListener('click', () => {
     void loadSidePanel();
   });
@@ -801,40 +960,240 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  chrome.storage.onChanged?.addListener((changes, areaName) => {
-    const change = changes.crowdContributeOptIn;
-    if (areaName === 'local' && change && chkOptIn) {
-      chkOptIn.checked = change.newValue === true;
+  const finishStorageHydration = (
+    stored: Record<string, unknown> | undefined
+  ) => {
+    if (!consentHydrated) {
+      const buffered = bufferedConsentUpdate;
+      bufferedConsentUpdate = null;
+      sawRawConsentStorage = true;
+      const baseOptIn = stored?.crowdContributeOptIn === true;
+      const baseVersion =
+        typeof stored?.crowdConsentVersion === 'number'
+          ? stored.crowdConsentVersion
+          : 0;
+      storedOptIn = buffered?.hasOptIn ? buffered.optIn : baseOptIn;
+      storedConsentVersion = buffered?.hasVersion
+        ? buffered.consentVersion
+        : baseVersion;
+      lastConfirmedOptIn = isEffectiveConsentOptIn();
+      consentHydrated = true;
+      if (optInSaveInFlight === 0 && chkOptIn) {
+        chkOptIn.checked = lastConfirmedOptIn;
+      }
+    }
+
+    if (!apiBaseHydrated) {
+      apiBaseHydrated = true;
+      if (
+        apiBaseMutationSeq === 0 &&
+        apiBaseSaveInFlight === 0 &&
+        stored &&
+        typeof stored.apiBaseUrl === 'string' &&
+        stored.apiBaseUrl.trim()
+      ) {
+        const normalized = normalizeAllowedApiBaseUrl(stored.apiBaseUrl);
+        lastConfirmedApiBaseUrl = normalized;
+        if (inpApiBase && !inpApiBase.value.trim()) {
+          inpApiBase.value = normalized;
+        }
+      }
+    }
+  };
+
+  if (hasLocalStorageGet) {
+    void Promise.resolve(
+      chrome.storage.local.get([
+        'crowdContributeOptIn',
+        'crowdConsentVersion',
+        'apiBaseUrl',
+      ])
+    )
+      .then((stored) => {
+        finishStorageHydration(stored);
+      })
+      .catch(() => {
+        finishStorageHydration(undefined);
+      });
+  }
+
+  chrome.storage?.onChanged?.addListener((changes, areaName) => {
+    if (areaName === 'session') {
+      if (changes.lookup_tab_latest) {
+        void loadSidePanel();
+      }
+      return;
+    }
+    if (areaName !== 'local') return;
+
+    if (Object.prototype.hasOwnProperty.call(changes, 'apiBaseUrl')) {
+      const rawNewApiBase = changes.apiBaseUrl?.newValue;
+      const nextApiBase = normalizeAllowedApiBaseUrl(
+        typeof rawNewApiBase === 'string' ? rawNewApiBase : null
+      );
+      apiBaseHydrated = true;
+      lastConfirmedApiBaseUrl = nextApiBase;
+      if (apiBaseSaveInFlight === 0) {
+        apiBaseMutationSeq += 1;
+        if (inpApiBase) {
+          inpApiBase.value = nextApiBase;
+        }
+      }
+    }
+
+    const hasOptIn = Object.prototype.hasOwnProperty.call(
+      changes,
+      'crowdContributeOptIn'
+    );
+    const hasVersion = Object.prototype.hasOwnProperty.call(
+      changes,
+      'crowdConsentVersion'
+    );
+    if (!hasOptIn && !hasVersion) return;
+
+    consentMutationSeq += 1;
+    sawRawConsentStorage = true;
+    const nextOptInValue = changes.crowdContributeOptIn?.newValue === true;
+    const nextVersionValue =
+      typeof changes.crowdConsentVersion?.newValue === 'number'
+        ? changes.crowdConsentVersion.newValue
+        : 0;
+
+    if (!consentHydrated) {
+      if (hasOptIn && hasVersion) {
+        consentHydrated = true;
+        bufferedConsentUpdate = null;
+        storedOptIn = nextOptInValue;
+        storedConsentVersion = nextVersionValue;
+        lastConfirmedOptIn = isEffectiveConsentOptIn();
+        if (optInSaveInFlight === 0 && chkOptIn) {
+          chkOptIn.checked = lastConfirmedOptIn;
+        }
+        return;
+      }
+      bufferedConsentUpdate = {
+        hasOptIn: hasOptIn || Boolean(bufferedConsentUpdate?.hasOptIn),
+        optIn: hasOptIn
+          ? nextOptInValue
+          : (bufferedConsentUpdate?.optIn ?? false),
+        hasVersion: hasVersion || Boolean(bufferedConsentUpdate?.hasVersion),
+        consentVersion: hasVersion
+          ? nextVersionValue
+          : (bufferedConsentUpdate?.consentVersion ?? 0),
+      };
+      if (
+        (hasOptIn && !nextOptInValue) ||
+        (hasVersion && nextVersionValue !== OPT_IN_CONSENT_VERSION)
+      ) {
+        lastConfirmedOptIn = false;
+        if (optInSaveInFlight === 0 && chkOptIn) {
+          chkOptIn.checked = false;
+        }
+      }
+      return;
+    }
+
+    if (hasOptIn) {
+      storedOptIn = nextOptInValue;
+    }
+    if (hasVersion) {
+      storedConsentVersion = nextVersionValue;
+    }
+    lastConfirmedOptIn = isEffectiveConsentOptIn();
+    if (optInSaveInFlight === 0 && chkOptIn) {
+      chkOptIn.checked = lastConfirmedOptIn;
     }
   });
 
   chkOptIn?.addEventListener('change', async () => {
-    await chrome.runtime.sendMessage({
-      type: 'RATE_UPDATE_SETTINGS',
-      crowdContributeOptIn: chkOptIn.checked,
-    });
-  });
-
-  inpApiBase?.addEventListener('change', async () => {
-    if (inpApiBase.value.trim()) {
-      const updated = (await chrome.runtime.sendMessage({
+    const desired = Boolean(chkOptIn.checked);
+    consentMutationSeq += 1;
+    const opSeq = ++optInOpCounter;
+    optInSaveInFlight += 1;
+    try {
+      const res = (await chrome.runtime.sendMessage({
         type: 'RATE_UPDATE_SETTINGS',
-        apiBaseUrl: inpApiBase.value.trim(),
-      })) as { settings?: ExtensionSettings } | undefined;
-      if (updated?.settings?.apiBaseUrl) {
-        inpApiBase.value = updated.settings.apiBaseUrl;
+        crowdContributeOptIn: desired,
+      })) as { ok?: boolean; settings?: ExtensionSettings } | undefined;
+      if (
+        !res ||
+        res.ok === false ||
+        typeof res.settings?.crowdContributeOptIn !== 'boolean' ||
+        res.settings.crowdContributeOptIn !== desired
+      ) {
+        throw new Error('Settings update failed');
       }
-      void loadSidePanel();
+      if (opSeq >= lastConfirmedOptInSeq) {
+        lastConfirmedOptInSeq = opSeq;
+        consentHydrated = true;
+        bufferedConsentUpdate = null;
+        sawRawConsentStorage = true;
+        storedOptIn = desired;
+        storedConsentVersion = desired ? OPT_IN_CONSENT_VERSION : 0;
+        lastConfirmedOptIn = desired;
+      }
+    } catch {
+      // Reconciled against latest confirmed state in finally once in-flight saves settle.
+    } finally {
+      optInSaveInFlight = Math.max(0, optInSaveInFlight - 1);
+      if (optInSaveInFlight === 0 && chkOptIn) {
+        chkOptIn.checked =
+          sawRawConsentStorage && consentHydrated
+            ? isEffectiveConsentOptIn()
+            : lastConfirmedOptIn;
+      }
     }
   });
 
-  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
-    chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName === 'session' && changes.lookup_tab_latest) {
-        void loadSidePanel();
+  inpApiBase?.addEventListener('change', async () => {
+    const rawInput = inpApiBase.value.trim();
+    const requestedApiBase = rawInput || DEFAULT_API_BASE_URL;
+    apiBaseMutationSeq += 1;
+    const opSeq = ++apiBaseOpCounter;
+    apiBaseSaveInFlight += 1;
+    let succeeded = false;
+    if (!rawInput) {
+      inpApiBase.value = DEFAULT_API_BASE_URL;
+    }
+    try {
+      const updated = (await chrome.runtime.sendMessage({
+        type: 'RATE_UPDATE_SETTINGS',
+        apiBaseUrl: requestedApiBase,
+      })) as { ok?: boolean; settings?: ExtensionSettings } | undefined;
+      if (
+        !updated ||
+        updated.ok === false ||
+        typeof updated.settings?.apiBaseUrl !== 'string' ||
+        !updated.settings.apiBaseUrl.trim()
+      ) {
+        throw new Error('API base URL update failed');
       }
-    });
-  }
+      const savedApiBase = normalizeAllowedApiBaseUrl(
+        updated.settings.apiBaseUrl
+      );
+      succeeded = true;
+      apiBaseHydrated = true;
+      if (opSeq >= lastConfirmedApiBaseSeq) {
+        lastConfirmedApiBaseSeq = opSeq;
+        lastConfirmedApiBaseUrl = savedApiBase;
+      }
+    } catch {
+      // Reconciled against lastConfirmedApiBaseUrl in finally once in-flight saves settle.
+    } finally {
+      apiBaseSaveInFlight = Math.max(0, apiBaseSaveInFlight - 1);
+      if (apiBaseSaveInFlight === 0) {
+        if (inpApiBase) {
+          inpApiBase.value = lastConfirmedApiBaseUrl;
+        }
+        if (
+          succeeded ||
+          lastConfirmedApiBaseUrl !== lastLoadedPanelApiBaseUrl
+        ) {
+          void loadSidePanel();
+        }
+      }
+    }
+  });
 
   void loadSidePanel();
 });

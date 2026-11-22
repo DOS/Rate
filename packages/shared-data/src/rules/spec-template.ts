@@ -145,20 +145,38 @@ const SPEC_TEMPLATES: Readonly<Record<string, CategorySpecTemplate>> = {
 const normalizeSlug = (categorySlug: unknown): string =>
   typeof categorySlug === 'string' ? categorySlug.trim().toLowerCase() : '';
 
+const ownValue = <T>(
+  record: Readonly<Record<string, T>> | null | undefined,
+  key: string
+): T | undefined =>
+  record && key && Object.prototype.hasOwnProperty.call(record, key)
+    ? record[key]
+    : undefined;
+
 /** The template for a category slug; unknown slugs keep the full phone template. */
 export function getCategorySpecTemplate(
   categorySlug: string | null | undefined
 ): CategorySpecTemplate {
-  return SPEC_TEMPLATES[normalizeSlug(categorySlug)] ?? PHONE_TEMPLATE;
+  return (
+    ownValue(SPEC_TEMPLATES, normalizeSlug(categorySlug)) ?? PHONE_TEMPLATE
+  );
 }
+
+const ownList = (
+  record: Partial<Record<SpecGroupKey, readonly string[]>> | null | undefined,
+  group: SpecGroupKey
+): readonly string[] => {
+  const list = ownValue(record, group);
+  return Array.isArray(list) ? list : [];
+};
 
 const hiddenIn = (
   template: CategorySpecTemplate,
   group: SpecGroupKey,
   forStorage: boolean
 ): readonly string[] => [
-  ...(template.hiddenFields[group] ?? []),
-  ...(forStorage ? [] : (template.displayHiddenFields[group] ?? [])),
+  ...ownList(template.hiddenFields, group),
+  ...(forStorage ? [] : ownList(template.displayHiddenFields, group)),
 ];
 
 /** Whether the page shows a field of a group for the category. */
@@ -168,6 +186,8 @@ export function specFieldApplies(
   field: string
 ): boolean {
   return (
+    Boolean(template) &&
+    Array.isArray(template.groups) &&
     template.groups.includes(group) &&
     !hiddenIn(template, group, false).includes(field)
   );
@@ -245,8 +265,10 @@ const withoutFiveGText = (
 export function applyCategorySpecTemplate<T extends CategoryScopedSpecs>(
   categorySlug: string | null | undefined,
   product: T,
-  { forStorage = false }: { forStorage?: boolean } = {}
+  options?: { forStorage?: boolean } | null
 ): T {
+  if (!isRecord(product)) return product;
+  const forStorage = options?.forStorage === true;
   const template = getCategorySpecTemplate(categorySlug);
   if (template === PHONE_TEMPLATE) return product;
   const out: T = { ...product };
@@ -255,7 +277,16 @@ export function applyCategorySpecTemplate<T extends CategoryScopedSpecs>(
     const specs: Record<string, unknown> = {};
     for (const [group, value] of Object.entries(product.specifications)) {
       if (!(ALL_GROUPS as readonly string[]).includes(group)) {
-        specs[group] = value;
+        if (group === '__proto__') {
+          Object.defineProperty(specs, group, {
+            value,
+            enumerable: true,
+            configurable: true,
+            writable: true,
+          });
+        } else {
+          specs[group] = value;
+        }
         continue;
       }
       if (!template.groups.includes(group as SpecGroupKey)) continue;
@@ -270,7 +301,7 @@ export function applyCategorySpecTemplate<T extends CategoryScopedSpecs>(
     }
     // The page hides 5G for the category, so it also leaves it out of the
     // free-text network fields.
-    const shownCellular = specs.cellular;
+    const shownCellular = ownValue(specs, 'cellular');
     if (!forStorage && !template.has5g && isRecord(shownCellular)) {
       specs.cellular = withoutFiveGText(shownCellular);
     }

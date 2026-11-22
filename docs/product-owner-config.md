@@ -1,10 +1,10 @@
 # Product Owner config: DOS/Rate
 
 Values for the cc-po plugin's `product-owner` and `task-claim` skills in
-this repository (used by the Qwen Code PO; the Claude Code PO runs Rate's own
-`.claude/skills/product-owner` skill). `AGENTS.md` and the documents it
-routes to win over the plugin wherever they differ. Check this file with the
-plugin's `check-config.mjs`.
+this repository (used by the Qwen Code PO and the Antigravity PO; the Claude
+Code PO runs Rate's own `.claude/skills/product-owner` skill). `AGENTS.md`
+and the documents it routes to win over the plugin wherever they differ.
+Check this file with the plugin's `check-config.mjs`.
 
 This file lives at `docs/product-owner-config.md` (lower-case `docs`), the
 one path cc-po reads, although Rate's documentation folder is `Docs/`. On a
@@ -20,9 +20,11 @@ This config covers Rate Core (DOS/Rate). Rate Services issues
 `.claude/skills/product-owner/SKILL.md`: no `dev` branch, no `task-claim`
 check, PRs into `main`.
 
-The PO's own state file follows `AGENTS.md` section 6, which wins over the
-plugin's check-in and handoff file names: `po-state.qwen.md` (or
-`po-state.claude.md`) in that PO's own notes folder, outside the repository.
+The PO's own state file follows `AGENTS.md` section 6, which keeps each
+runtime's state outside the repository: `po-state.claude.md` or
+`po-state.qwen.md` in that PO's own notes folder, and
+`dos-rate-core-antigravity-po-checkin.md` (under `~/.claude/po-state/`) for
+the Antigravity PO.
 
 ## Owner and reporting
 
@@ -84,8 +86,15 @@ side as "Triage" in that skill says.
 - test_environment: Vercel builds `dev` as a Preview deployment; check it there
   before a promotion (`Docs/Resources/RELEASE.md`). Previews have no database
   env.
-- promotion_notes: `Docs/Resources/RELEASE.md`; promotions run
-  `node scripts/ops/promote.mjs`, then `node scripts/ops/verify-live.mjs`.
+- promotion_notes: `Docs/Resources/RELEASE.md`; promotions are batched at
+  checkpoints without per-release owner approval (`AGENTS.md` 0.2) and need no
+  `main` -> `dev` back-merge (`promote.mjs` merges `dev` -> `main` with
+  `--merge`). Run `node scripts/ops/promote.mjs` (Antigravity PO passes
+  `--claimant antigravity:<conversation id>`), then
+  `node scripts/ops/verify-live.mjs --wait 900`. `promote.mjs` accepts
+  `claude:` or `antigravity:` claimants (Claude Code PO normally, or
+  Antigravity PO on Claude quota failover / JOY assignment; Qwen remains
+  blocked).
 
 ## Checks and review
 
@@ -100,7 +109,8 @@ side as "Triage" in that skill says.
   says: a fresh-context subagent review of the diff (`AGENTS.md` sections 0.2
   and 5), then a Codex review where Codex is available; a PR without one
   says so
-- agent_model: sonnet
+- promotion_reviews: none
+- agent_model: sonnet (Antigravity: inherit on Orchestrator (Neon), Orchestrator (Carbon), Gemini 4 Neon, or Gemini 4 Carbon)
 
 ## Claim lock and parallel POs
 
@@ -109,9 +119,12 @@ side as "Triage" in that skill says.
   DOS/Rate checkout. Never set `RATE_CLAIMANT` in a shell profile or an
   environment other sessions (sub-sessions included) inherit.
 - pr_issue_keyword: Closes
-- po_labels: claude: po:claude, qwen: po:qwen
-- promotion_po: claude
+- po_labels: claude: po:claude, qwen: po:qwen, antigravity: po:antigravity
+- promotion_po: claude (or antigravity on Claude quota failover / JOY assignment)
 
 ## Sessions
 
 - gatekeeper_model: haiku
+- gatekeeper_heartbeat_active_minutes: 180
+- gatekeeper_heartbeat_idle_minutes: 720
+- po_context_compact_tokens: 120000

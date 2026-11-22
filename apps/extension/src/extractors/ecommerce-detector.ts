@@ -3,6 +3,7 @@ import type {
   ExtractedStockState,
   SupportedEcommercePlatform,
 } from '../types.js';
+import { sliceCodePoints, stripLoneSurrogates } from '../surrogate-safe.js';
 
 /**
  * Strip all tracking query strings (sp_atk, xptdk, utm_*, fbclid, etc.) and hashes.
@@ -785,7 +786,7 @@ export function extractRatingFromJsonLd(aggRaw: unknown): {
 
 export function cleanExtractedProductTitle(rawTitle: string): string {
   if (typeof rawTitle !== 'string') return '';
-  const withoutPlatformSuffix = rawTitle
+  const withoutPlatformSuffix = stripLoneSurrogates(rawTitle)
     .replace(/\p{Cc}+/gu, ' ')
     .replace(
       /\s*(?:\||[-–—])\s*(?:Shopee(?:\s*Việt\s*Nam|\s*VN)?|Lazada(?:\s*Việt\s*Nam|\s*VN)?|Tiki(?:\.vn)?|TikTok\s*Shop|CellphoneS(?:\.com\.vn)?|Thế\s*Giới\s*Di\s*Động|Thegioididong(?:\.com)?|TopZone(?:\.vn)?|Điện\s*Máy\s*Xanh|FPT\s*Shop|Fptshop(?:\.com\.vn)?|Hoàng\s*Hà\s*Mobile|HoangHaMobile(?:\.com)?|Di\s*Động\s*Việt|Didongviet(?:\.vn)?|Phong\s*Vũ|Phongvu(?:\.vn)?).*$/i,
@@ -795,7 +796,7 @@ export function cleanExtractedProductTitle(rawTitle: string): string {
     .trim();
 
   if (!withoutPlatformSuffix.includes('|')) {
-    return withoutPlatformSuffix.slice(0, 500);
+    return sliceCodePoints(withoutPlatformSuffix, 500);
   }
 
   const pipeSegments = withoutPlatformSuffix
@@ -812,7 +813,10 @@ export function cleanExtractedProductTitle(rawTitle: string): string {
     }
   }
 
-  return keptSegments.join(' ').replace(/\s+/g, ' ').trim().slice(0, 500);
+  return sliceCodePoints(
+    keptSegments.join(' ').replace(/\s+/g, ' ').trim(),
+    500
+  );
 }
 
 const CONCRETE_WAI_ARIA_ROLES = new Set([
@@ -944,7 +948,7 @@ export function extractSelectedVariantFromDom(doc: Document): string | null {
           return;
         }
       }
-      const txt = (node.textContent || '')
+      const txt = stripLoneSurrogates(node.textContent || '')
         .replace(/\p{Cc}+/gu, ' ')
         .replace(/\s+/g, ' ')
         .trim();
@@ -959,7 +963,7 @@ export function extractSelectedVariantFromDom(doc: Document): string | null {
   }
 
   if (pickedLabels.length > 0) {
-    return pickedLabels.join(' - ').slice(0, 200);
+    return sliceCodePoints(pickedLabels.join(' - '), 200) || null;
   }
   return null;
 }

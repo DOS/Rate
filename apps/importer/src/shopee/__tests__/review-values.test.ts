@@ -7,6 +7,7 @@ import {
   changedValues,
   expectedMasterRatings,
   masterRatingMatches,
+  parseReviewValuesArgs,
   reviewValueInput,
   runReviewValuesJob,
   storeBatch,
@@ -411,6 +412,30 @@ async function run() {
     [7, 8].map(id)
   );
   await assert.rejects(runReviewValuesJob(one.client, { masterId: 'not-a-uuid' }), /UUID/);
+  await assert.rejects(runReviewValuesJob(one.client, { masterId: '' }), /UUID/);
+
+  // CLI flag parsing: supports --master <uuid> and --master=<uuid>, fails closed on invalid/unknown (#1665).
+  assert.deepEqual(parseReviewValuesArgs([]), { apply: false, masterId: null });
+  assert.deepEqual(parseReviewValuesArgs(['--apply', `--master=${M2.toUpperCase()}`]), {
+    apply: true,
+    masterId: M2,
+  });
+  assert.deepEqual(parseReviewValuesArgs(['--master', M1]), { apply: false, masterId: M1 });
+  for (const badArgv of [
+    ['--master'],
+    ['--master='],
+    ['--master', '--apply'],
+    ['--master=not-a-uuid'],
+    ['--master', M1, '--master', M2],
+    ['--apply', '--apply'],
+    ['--unknown-flag'],
+  ]) {
+    assert.throws(
+      () => parseReviewValuesArgs(badArgv),
+      /UUID|repeated|Unknown CLI argument/,
+      `expected fail-closed throw for ${JSON.stringify(badArgv)}`
+    );
+  }
 
   // A big master: 2500 reviews with 2 lines each, read past PostgREST's 1000-row pages,
   // both for the whole table and for one master.

@@ -12,6 +12,11 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
+import {
+  collapseWhitespace,
+  formatNumber,
+  localizeDecimalPoints,
+} from '@/lib/locale-format';
 import { formatScoreFixed, roundScore } from '@/lib/rating-display';
 
 interface ProductShareAuditButtonProps {
@@ -29,12 +34,11 @@ interface ProductShareAuditButtonProps {
 
 export function sanitizeShareAuditText(
   value: unknown,
-  maxLength = 200
+  maxLength = 200,
+  locale?: string | null
 ): string {
   if (typeof value !== 'string') return '';
-  return value
-    .replace(/\p{Cc}+/gu, ' ')
-    .replace(/\s+/g, ' ')
+  return collapseWhitespace(value.replace(/\p{Cc}+/gu, ' '), locale)
     .trim()
     .slice(0, maxLength);
 }
@@ -46,6 +50,106 @@ export function sanitizeShareAuditCodeSpan(
   maxLength = 200
 ): string {
   return sanitizeShareAuditText(value, maxLength).replace(/`/g, "'");
+}
+
+export type ShareAuditMarkdownTranslatorKey =
+  | 'shareAuditPriceSources'
+  | 'shareAuditUpdating'
+  | 'shareAuditMdUserScoreVal'
+  | 'shareAuditMdNoReviews'
+  | 'shareAuditMdNoExpert'
+  | 'shareAuditMdTitle'
+  | 'shareAuditMdUserScore'
+  | 'shareAuditMdExpertScore'
+  | 'shareAuditMdKeySpecs'
+  | 'shareAuditMdMinPrice'
+  | 'shareAuditMdRadar'
+  | 'shareAuditMdModelKey'
+  | 'shareAuditMdUrl';
+
+export function buildShareAuditMarkdown(params: {
+  readonly name: string;
+  readonly brand: string;
+  readonly modelKey: string;
+  readonly userScore5: number;
+  readonly expertScore10: number | null;
+  readonly authenticReviews: number;
+  readonly minPriceVnd: number;
+  readonly offerCount: number;
+  readonly keySpecLine?: string;
+  readonly radarSignal?: RadarSignal | null;
+  readonly url: string;
+  readonly locale?: string | null;
+  readonly t: (
+    key: ShareAuditMarkdownTranslatorKey,
+    values?: Record<string, string | number>
+  ) => string;
+}): string {
+  const locale =
+    typeof params.locale === 'string' && params.locale.trim()
+      ? params.locale
+      : 'vi';
+  const {
+    safeUserScore5,
+    safeExpertScore10,
+    safeAuthenticReviews,
+    safeMinPriceVnd,
+    safeOfferCount,
+  } = normalizeShareAuditFields({
+    modelKey: params.modelKey,
+    userScore5: params.userScore5,
+    expertScore10: params.expertScore10,
+    authenticReviews: params.authenticReviews,
+    minPriceVnd: params.minPriceVnd,
+    offerCount: params.offerCount,
+  });
+  const safeName = sanitizeShareAuditText(params.name, 160, locale);
+  const safeBrand = sanitizeShareAuditText(params.brand, 80, locale);
+  const safeKeySpecLine = params.keySpecLine
+    ? sanitizeShareAuditText(params.keySpecLine, 240, locale)
+    : '';
+  const priceStr =
+    safeMinPriceVnd > 0
+      ? params.t('shareAuditPriceSources', {
+          price: formatNumber(safeMinPriceVnd, locale),
+          count: safeOfferCount,
+        })
+      : params.t('shareAuditUpdating');
+  const userScoreStr =
+    safeUserScore5 > 0
+      ? params.t('shareAuditMdUserScoreVal', {
+          score: localizeDecimalPoints(
+            formatScoreFixed(safeUserScore5, 2),
+            locale
+          ),
+          count: safeAuthenticReviews,
+        })
+      : params.t('shareAuditMdNoReviews');
+  const expertScoreStr =
+    safeExpertScore10 != null
+      ? `${localizeDecimalPoints(formatScoreFixed(safeExpertScore10, 1), locale)}/10`
+      : params.t('shareAuditMdNoExpert');
+  const radarSignalLabel = params.radarSignal
+    ? radarLabel(params.radarSignal, 0, locale)
+    : '';
+  const t = params.t;
+  const lines = [
+    t('shareAuditMdTitle', { name: safeName, brand: safeBrand }),
+    t('shareAuditMdUserScore', { score: userScoreStr }),
+    t('shareAuditMdExpertScore', { score: expertScoreStr }),
+    ...(safeKeySpecLine
+      ? [t('shareAuditMdKeySpecs', { specs: safeKeySpecLine })]
+      : []),
+    t('shareAuditMdMinPrice', { price: priceStr }),
+    ...(radarSignalLabel
+      ? [t('shareAuditMdRadar', { signal: radarSignalLabel })]
+      : []),
+    t('shareAuditMdModelKey', {
+      modelKey: sanitizeShareAuditCodeSpan(params.modelKey, 120),
+    }),
+    t('shareAuditMdUrl', { url: params.url }),
+  ];
+  return lines.join('\n');
 }
 
 export function normalizeShareAuditFields(input: {
@@ -143,44 +247,22 @@ export default function ProductShareAuditButton({
   const handleCopyMarkdown = async () => {
     if (typeof window === 'undefined') return;
     try {
-      const priceStr =
-        safeMinPriceVnd > 0
-          ? t('shareAuditPriceSources', {
-              price: safeMinPriceVnd.toLocaleString('vi-VN'),
-              count: safeOfferCount,
-            })
-          : t('shareAuditUpdating');
-      const userScoreStr =
-        safeUserScore5 > 0
-          ? t('shareAuditMdUserScoreVal', {
-              score: formatScoreFixed(safeUserScore5, 2),
-              count: safeAuthenticReviews,
-            })
-          : t('shareAuditMdNoReviews');
-      const expertScoreStr =
-        safeExpertScore10 != null
-          ? `${formatScoreFixed(safeExpertScore10, 1)}/10`
-          : t('shareAuditMdNoExpert');
-      const radarSignalLabel = radarSignal
-        ? radarLabel(radarSignal, 0, locale)
-        : '';
-      const lines = [
-        t('shareAuditMdTitle', { name: safeName, brand: safeBrand }),
-        t('shareAuditMdUserScore', { score: userScoreStr }),
-        t('shareAuditMdExpertScore', { score: expertScoreStr }),
-        ...(safeKeySpecLine
-          ? [t('shareAuditMdKeySpecs', { specs: safeKeySpecLine })]
-          : []),
-        t('shareAuditMdMinPrice', { price: priceStr }),
-        ...(radarSignalLabel
-          ? [t('shareAuditMdRadar', { signal: radarSignalLabel })]
-          : []),
-        t('shareAuditMdModelKey', {
-          modelKey: sanitizeShareAuditCodeSpan(modelKey, 120),
-        }),
-        t('shareAuditMdUrl', { url: window.location.href }),
-      ];
-      await navigator.clipboard.writeText(lines.join('\n'));
+      const md = buildShareAuditMarkdown({
+        name,
+        brand,
+        modelKey,
+        userScore5,
+        expertScore10,
+        authenticReviews,
+        minPriceVnd,
+        offerCount,
+        keySpecLine,
+        radarSignal,
+        url: window.location.href,
+        locale,
+        t,
+      });
+      await navigator.clipboard.writeText(md);
       setCopiedMd(true);
       setTimeout(() => setCopiedMd(false), 2200);
     } catch {

@@ -273,13 +273,26 @@ test('the spec audit accepts a master whose camera group states no rear camera',
     ['Samsung Galaxy S24 Ultra 256GB', 'Apple iPhone 16e 128GB']
   );
   const client = {
-    from: () => ({
-      select: () => ({
-        order: () => ({
-          range: async (from: number) => ({ data: from === 0 ? rows : [], error: null }),
-        }),
-      }),
-    }),
+    from: () => {
+      let current = [...rows];
+      const builder = {
+        select: () => builder,
+        gt: (col: string, val: string) => {
+          current = current.filter(r => String((r as Record<string, unknown>)[col] ?? '') > val);
+          return builder;
+        },
+        order: (col: string) => {
+          current = [...current].sort((a, b) => {
+            const av = String((a as Record<string, unknown>)[col] ?? '');
+            const bv = String((b as Record<string, unknown>)[col] ?? '');
+            return av < bv ? -1 : av > bv ? 1 : 0;
+          });
+          return builder;
+        },
+        limit: async (n: number) => ({ data: current.slice(0, n), error: null }),
+      };
+      return builder;
+    },
   };
   assert.equal(await auditMasterSpecs(client as never), rows.length);
 });

@@ -18,7 +18,6 @@ import {
   merchantDirectoryFilterParams,
   parseMerchantDirectoryFilters,
   type MerchantDirectoryFilters,
-  type MerchantDirectoryPage,
   type MerchantDirectorySummary,
   type MerchantRiskTier,
   type MerchantSeedingTier,
@@ -28,7 +27,6 @@ import {
   hasReviewRiskEvidence,
   knownDosafeRiskScore,
   merchantRiskTone,
-  reviewRiskScoreOrNull,
   type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import { selectMerchantRadar } from '@/lib/deal-radar';
@@ -55,6 +53,7 @@ import {
   sanitizeMerchantCount,
 } from '@/components/merchants/MerchantShareAuditButton';
 import {
+  collapseWhitespace,
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
@@ -73,28 +72,43 @@ function parseFiniteDirectoryNumber(value: unknown): number | null {
     return null;
   }
   if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return null;
     const trimmed = value.trim();
-    if (/\p{Cc}/u.test(trimmed)) return null;
     if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
       return null;
     }
     const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
+    if (!Number.isFinite(parsed)) return null;
+    return parsed === 0 ? 0 : parsed;
   }
-  return Number.isFinite(value) ? value : null;
+  if (!Number.isFinite(value)) return null;
+  return value === 0 ? 0 : value;
 }
 
 export function merchantDirectoryDosafeDisplay(
-  merchant: Parameters<typeof knownDosafeRiskScore>[0]
+  merchant:
+    | {
+        dosafe_risk_score?: unknown;
+        dosafe_risk_known?: boolean;
+      }
+    | null
+    | undefined
 ): {
   score: number;
   tone: MerchantRiskTone;
   badgeClass: string;
   statusKey: 'scamStatusClean' | 'scamStatusCaution' | 'scamStatusAlert';
 } | null {
-  const rawDosafeScore = knownDosafeRiskScore(merchant);
+  if (!merchant || merchant.dosafe_risk_known === false) return null;
+  const parsedScore = parseFiniteDirectoryNumber(merchant.dosafe_risk_score);
+  if (parsedScore == null) return null;
+  const rawDosafeScore = knownDosafeRiskScore({
+    dosafe_risk_score: parsedScore,
+    dosafe_risk_known: merchant.dosafe_risk_known,
+  });
   if (rawDosafeScore == null) return null;
-  const dosafeScore = Math.min(100, Math.max(0, Math.round(rawDosafeScore)));
+  const clamped = Math.min(100, Math.max(0, Math.round(rawDosafeScore)));
+  const dosafeScore = clamped === 0 ? 0 : clamped;
   const tone = merchantRiskTone(dosafeScore);
   return {
     score: dosafeScore,
@@ -130,9 +144,20 @@ export function merchantDirectoryReviewRiskDisplay(
   if (!merchant || !hasReviewRiskEvidence(merchant.review_risk_breakdown)) {
     return null;
   }
+  const brk = merchant.review_risk_breakdown;
+  if (
+    brk &&
+    typeof brk === 'object' &&
+    'total_reviews' in brk &&
+    brk.total_reviews !== undefined
+  ) {
+    const count = parseFiniteDirectoryNumber(brk.total_reviews);
+    if (count == null || count <= 0) return null;
+  }
   const rawScore = parseFiniteDirectoryNumber(merchant.review_risk_score);
   if (rawScore == null) return null;
-  const reviewScore = Math.min(100, Math.max(0, Math.round(rawScore)));
+  const clamped = Math.min(100, Math.max(0, Math.round(rawScore)));
+  const reviewScore = clamped === 0 ? 0 : clamped;
   const tone = merchantRiskTone(reviewScore);
   return {
     score: reviewScore,
@@ -196,9 +221,161 @@ export function formatMerchantDirectoryPriceRange(
   return formatPriceVnd((safeMin ?? safeMax)!, locale);
 }
 
+export type MerchantDirectoryExplorerItem = Omit<
+  MerchantSummary,
+  'dosafe_risk_score' | 'review_risk_score' | 'dosafe_risk_known'
+> & {
+  dosafe_risk_score: number | null;
+  review_risk_score: number | null;
+  dosafe_risk_known?: boolean;
+};
+
+export interface MerchantDirectoryExplorerPage {
+  items: MerchantDirectoryExplorerItem[];
+  /** Stores matching the filters, across all pages. */
+  matched: number;
+  offset: number;
+}
+
+export type MerchantDirectoryMarkdownKey =
+  | 'dirMdHeading'
+  | 'dirMdColMerchant'
+  | 'dirMdColPlatform'
+  | 'dirMdColOfficialMall'
+  | 'dirMdColTrustScore'
+  | 'dirMdColReviewRisk'
+  | 'dirMdColGenuineDeals'
+  | 'dirMdColFakeTraps'
+  | 'dirMdColAuthenticReviews'
+  | 'dirMdColTrackedProducts'
+  | 'dirMdYes'
+  | 'dirMdNo'
+  | 'dirMdUnknownMerchant'
+  | 'trustNoData'
+  | 'reviewRiskNoDataShort';
+
+export type MerchantDirectoryMarkdownTranslator = (
+  key: MerchantDirectoryMarkdownKey,
+  values?: Record<string, string | number>
+) => string;
+
+const DIRECTORY_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+function sanitizeMerchantDirectoryMarkdownCell(
+  value: unknown,
+  fallback = '-',
+  locale?: string | null,
+  maxLen = 160
+): string {
+  if (typeof value !== 'string') return fallback;
+  const cleaned = collapseWhitespace(
+    value.replace(DIRECTORY_CONTROL_CHARS_RE, ' ').replace(/\|/g, '-'),
+    locale
+  )
+    .trim()
+    .slice(0, maxLen);
+  return cleaned || fallback;
+}
+
+export function buildMerchantsDirectoryMarkdown(params: {
+  merchants: readonly MerchantDirectoryExplorerItem[];
+  radarPayload?: Parameters<typeof selectMerchantRadar>[0];
+  t: MerchantDirectoryMarkdownTranslator;
+  locale: string;
+}): string {
+  const { merchants, radarPayload, t, locale } = params;
+  const headers = [
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColMerchant'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColPlatform'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColOfficialMall'),
+      '-',
+      locale
+    ),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColTrustScore'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColReviewRisk'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColGenuineDeals'),
+      '-',
+      locale
+    ),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColFakeTraps'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColAuthenticReviews'),
+      '-',
+      locale
+    ),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColTrackedProducts'),
+      '-',
+      locale
+    ),
+  ];
+  const sep = headers.map(() => '---');
+  const yesCell = sanitizeMerchantDirectoryMarkdownCell(
+    t('dirMdYes'),
+    '-',
+    locale
+  );
+  const noCell = sanitizeMerchantDirectoryMarkdownCell(
+    t('dirMdNo'),
+    '-',
+    locale
+  );
+  const unknownMerchant = sanitizeMerchantDirectoryMarkdownCell(
+    t('dirMdUnknownMerchant'),
+    '-',
+    locale
+  );
+  const trustNoData = sanitizeMerchantDirectoryMarkdownCell(
+    t('trustNoData'),
+    '-',
+    locale
+  );
+  const reviewNoData = sanitizeMerchantDirectoryMarkdownCell(
+    t('reviewRiskNoDataShort'),
+    '-',
+    locale
+  );
+  const rows = merchants.map((m) => {
+    const rStats = selectMerchantRadar(radarPayload, m);
+    const trust = merchantDirectoryTrustDisplay(m.trust_score);
+    const review = merchantDirectoryReviewRiskDisplay(m);
+    return [
+      sanitizeMerchantDirectoryMarkdownCell(m.name, unknownMerchant, locale),
+      sanitizeMerchantDirectoryMarkdownCell(
+        m.platform,
+        'shopee',
+        locale,
+        32
+      ).toUpperCase(),
+      m.is_official ? yesCell : noCell,
+      // No trust score: no number (DOS/Rate#1484).
+      trust == null ? trustNoData : `${formatNumber(trust.score, locale)}/100`,
+      review == null
+        ? reviewNoData
+        : `${formatNumber(review.score, locale)}/100`,
+      formatNumber(sanitizeMerchantCount(rStats.genuineDealCount), locale),
+      formatNumber(sanitizeMerchantCount(rStats.fakeTrapCount), locale),
+      formatNumber(
+        sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count),
+        locale
+      ),
+      formatNumber(sanitizeMerchantCount(m.product_count), locale),
+    ];
+  });
+  return [
+    t('dirMdHeading', { count: merchants.length }),
+    '',
+    `| ${headers.join(' | ')} |`,
+    `| ${sep.join(' | ')} |`,
+    ...rows.map((r) => `| ${r.join(' | ')} |`),
+  ].join('\n');
+}
+
 interface MerchantDirectoryExplorerProps {
   /** First page for the initial filters, rendered on the server. */
-  readonly initialPage: MerchantDirectoryPage;
+  readonly initialPage: MerchantDirectoryExplorerPage;
   /** Whole-directory stats; they do not depend on the filters. */
   readonly summary: MerchantDirectorySummary;
   readonly locale?: string;
@@ -209,7 +386,7 @@ async function fetchDirectoryPage(
   offset: number,
   limit: number,
   signal?: AbortSignal
-): Promise<MerchantDirectoryPage> {
+): Promise<MerchantDirectoryExplorerPage> {
   const params = merchantDirectoryFilterParams(filters);
   params.set('offset', String(offset));
   params.set('limit', String(limit));
@@ -217,7 +394,7 @@ async function fetchDirectoryPage(
     signal,
   });
   if (!resp.ok) throw new Error(`merchant directory HTTP ${resp.status}`);
-  const body = (await resp.json()) as { data: MerchantDirectoryPage };
+  const body = (await resp.json()) as { data: MerchantDirectoryExplorerPage };
   return body.data;
 }
 
@@ -353,8 +530,10 @@ export default function MerchantDirectoryExplorer({
     }
   };
   /** Every store matching the current filters, for the exports. */
-  const fetchAllMatching = async (): Promise<MerchantSummary[]> => {
-    const all: MerchantSummary[] = [];
+  const fetchAllMatching = async (): Promise<
+    MerchantDirectoryExplorerItem[]
+  > => {
+    const all: MerchantDirectoryExplorerItem[] = [];
     for (let pageIdx = 0; pageIdx < MAX_MERCHANT_EXPORT_PAGES; pageIdx += 1) {
       const offset = pageIdx * EXPORT_PAGE_SIZE;
       const page = await fetchDirectoryPage(filters, offset, EXPORT_PAGE_SIZE);
@@ -466,7 +645,7 @@ export default function MerchantDirectoryExplorer({
     setSortBy('trust_desc');
   };
 
-  const getMerchantRadarStats = (m: MerchantSummary) => {
+  const getMerchantRadarStats = (m: MerchantDirectoryExplorerItem) => {
     const r = selectMerchantRadar(radarPayload, m);
     return {
       genuineDealCount: r.genuineDealCount,
@@ -475,45 +654,15 @@ export default function MerchantDirectoryExplorer({
     };
   };
 
-  const buildMerchantsMarkdown = (filteredMerchants: MerchantSummary[]) => {
-    const headers = [
-      'Merchant',
-      'Platform',
-      'Official Mall',
-      'Trust Score (/100)',
-      'Review risk (/100)',
-      'Genuine Deals',
-      'Fake Sale Traps',
-      'Authentic Reviews',
-      'Tracked Products',
-    ];
-    const sep = headers.map(() => '---');
-    const rows = filteredMerchants.map((m) => {
-      const rStats = getMerchantRadarStats(m);
-      const trust = merchantDirectoryTrustDisplay(m.trust_score);
-      const review = merchantDirectoryReviewRiskDisplay(m);
-      return [
-        sanitizeMerchantAuditText(m.name, 'Unknown'),
-        sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
-        m.is_official ? 'Yes' : 'No',
-        // No trust score: no number (DOS/Rate#1484).
-        trust == null ? labels.trustNoData : `${trust.score}/100`,
-        review == null ? labels.reviewRiskNoData : `${review.score}/100`,
-        String(sanitizeMerchantCount(rStats.genuineDealCount)),
-        String(sanitizeMerchantCount(rStats.fakeTrapCount)),
-        String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
-        String(sanitizeMerchantCount(m.product_count)),
-      ];
+  const buildMerchantsMarkdown = (
+    filteredMerchants: MerchantDirectoryExplorerItem[]
+  ) =>
+    buildMerchantsDirectoryMarkdown({
+      merchants: filteredMerchants,
+      radarPayload,
+      t: (key, values) => t(key, values),
+      locale,
     });
-    const md = [
-      `### 🛡️ Rate.vn Merchant Trust Directory (${filteredMerchants.length} merchants)`,
-      '',
-      `| ${headers.join(' | ')} |`,
-      `| ${sep.join(' | ')} |`,
-      ...rows.map((r) => `| ${r.join(' | ')} |`),
-    ].join('\n');
-    return md;
-  };
 
   const handleCopyMerchantsMarkdown = async () => {
     if (typeof navigator === 'undefined' || matchedCount === 0) return;
@@ -546,7 +695,7 @@ export default function MerchantDirectoryExplorer({
 
   const handleDownloadMerchantsCsv = async () => {
     if (typeof document === 'undefined' || matchedCount === 0) return;
-    let filteredMerchants: MerchantSummary[];
+    let filteredMerchants: MerchantDirectoryExplorerItem[];
     try {
       filteredMerchants = await fetchAllMatching();
     } catch {
@@ -611,7 +760,7 @@ export default function MerchantDirectoryExplorer({
 
   const handleDownloadMerchantsJson = async () => {
     if (typeof document === 'undefined' || matchedCount === 0) return;
-    let filteredMerchants: MerchantSummary[];
+    let filteredMerchants: MerchantDirectoryExplorerItem[];
     try {
       filteredMerchants = await fetchAllMatching();
     } catch {
@@ -621,14 +770,20 @@ export default function MerchantDirectoryExplorer({
       source: 'Rate.vn Merchant Trust Directory',
       exportedAt: new Date().toISOString(),
       merchantCount: filteredMerchants.length,
-      merchants: filteredMerchants.map((m) => ({
-        ...m,
-        min_price: sanitizeMerchantDirectoryPriceVnd(m.min_price),
-        max_price: sanitizeMerchantDirectoryPriceVnd(m.max_price),
-        // Null without analysed reviews (DOS/Rate#1258).
-        review_risk_score: reviewRiskScoreOrNull(m),
-        dealRadarStats: getMerchantRadarStats(m),
-      })),
+      merchants: filteredMerchants.map((m) => {
+        const { dosafe_risk_known: _dosafeKnown, ...rest } = m;
+        void _dosafeKnown;
+        return {
+          ...rest,
+          min_price: sanitizeMerchantDirectoryPriceVnd(m.min_price),
+          max_price: sanitizeMerchantDirectoryPriceVnd(m.max_price),
+          dosafe_risk_score: merchantDirectoryDosafeDisplay(m)?.score ?? null,
+          // Null without analysed reviews (DOS/Rate#1258, #1821).
+          review_risk_score:
+            merchantDirectoryReviewRiskDisplay(m)?.score ?? null,
+          dealRadarStats: getMerchantRadarStats(m),
+        };
+      }),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8;',

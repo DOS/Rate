@@ -1159,7 +1159,7 @@ async function testReviewsHideFakeAnd413Cors() {
 }
 
 async function testMyReviewValues() {
-  const { POST } = await import('../reviews/my-values/route');
+  const { POST, OPTIONS } = await import('../reviews/my-values/route');
   const MINE = 'aaaaaaaa-1111-4222-8333-444444444444';
   const OTHER = 'aaaaaaaa-1111-4222-8333-555555555555';
   const breakdown = {
@@ -1169,14 +1169,85 @@ async function testMyReviewValues() {
     tier: 'complete',
     gaps: ['photo', 'not_a_gap', 'verified', 'photo'],
   };
+  const assertMyValuesHeaders = (response: Response) => {
+    assert.equal(response.headers.get('access-control-allow-origin'), '*');
+    assert.equal(
+      response.headers.get('access-control-allow-methods'),
+      'POST, OPTIONS'
+    );
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  };
+
+  const preflight = await OPTIONS();
+  assert.equal(preflight.status, 204);
+  assertMyValuesHeaders(preflight);
 
   // Nobody signed in: no call to the database.
   calls = [];
   let res = await POST(post('/api/v1/rate/reviews/my-values', { ids: [MINE] }));
   assert.equal(res.status, 401);
+  assertMyValuesHeaders(res);
   assert.equal(rpcCalls('my_review_values').length, 0);
 
-  // Bad ids are refused before the database.
+  // Empty ids still require auth, and skip the RPC when authenticated.
+  calls = [];
+  res = await POST(post('/api/v1/rate/reviews/my-values', { ids: [] }));
+  assert.equal(res.status, 401);
+  assertMyValuesHeaders(res);
+  assert.equal(calls.length, 0);
+
+  calls = [];
+  res = await POST(
+    post('/api/v1/rate/reviews/my-values', { ids: [] }, GOOD_TOKEN)
+  );
+  assert.equal(res.status, 200);
+  assertMyValuesHeaders(res);
+  assert.deepEqual(await res.json(), { ok: true, values: [] });
+  assert.equal(rpcCalls('my_review_values').length, 0);
+
+  // Oversized and malformed payloads are rejected before authenticateRateRequest (#1811).
+  calls = [];
+  const oversizeRes = await POST(
+    new Request('http://localhost/api/v1/rate/reviews/my-values', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': String(8 * 1024 + 1),
+        Authorization: `Bearer ${GOOD_TOKEN}`,
+      },
+      body: '{}',
+    })
+  );
+  assert.equal(oversizeRes.status, 413);
+  assert.equal((await oversizeRes.json()).code, 'PAYLOAD_TOO_LARGE');
+  assertMyValuesHeaders(oversizeRes);
+  assert.equal(
+    calls.length,
+    0,
+    'oversized payload must not call Supabase auth or RPC'
+  );
+
+  calls = [];
+  const malformedRes = await POST(
+    new Request('http://localhost/api/v1/rate/reviews/my-values', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GOOD_TOKEN}`,
+      },
+      body: '{not-json',
+    })
+  );
+  assert.equal(malformedRes.status, 400);
+  assert.equal((await malformedRes.json()).code, 'INVALID_IDS');
+  assertMyValuesHeaders(malformedRes);
+  assert.equal(
+    calls.length,
+    0,
+    'malformed JSON must not call Supabase auth or RPC'
+  );
+
+  // Bad ids are refused before auth and before the database.
   for (const ids of [
     'x',
     [MINE, 'not-a-uuid'],
@@ -1190,7 +1261,12 @@ async function testMyReviewValues() {
       post('/api/v1/rate/reviews/my-values', { ids }, GOOD_TOKEN)
     );
     assert.equal(res.status, 400);
-    assert.equal(rpcCalls('my_review_values').length, 0);
+    assertMyValuesHeaders(res);
+    assert.equal(
+      calls.length,
+      0,
+      'invalid ids must be rejected before auth and RPC'
+    );
   }
 
   // The writer's call goes out with their own token; the answer keeps only
@@ -1219,7 +1295,7 @@ async function testMyReviewValues() {
     )
   );
   assert.equal(res.status, 200);
-  assert.match(res.headers.get('cache-control') ?? '', /no-store/);
+  assertMyValuesHeaders(res);
   assert.deepEqual(await res.json(), {
     ok: true,
     values: [{ id: MINE, score: 62, gaps: ['photo', 'verified'] }],
@@ -1242,11 +1318,38 @@ async function testMyReviewValues() {
     post('/api/v1/rate/reviews/my-values', { ids: [MINE] }, GOOD_TOKEN)
   );
   assert.equal(res.status, 503);
+  assertMyValuesHeaders(res);
   rpcResponder = () => ({ status: 500, json: { code: 'XX000' } });
   res = await POST(
     post('/api/v1/rate/reviews/my-values', { ids: [MINE] }, GOOD_TOKEN)
   );
   assert.equal(res.status, 502);
+  assertMyValuesHeaders(res);
+
+  // Unexpected runtime failure (e.g. an aborted/errored body stream) inside POST
+  // preserves MY_VALUES_HEADERS and hides internal details (#1811).
+  const brokenBody = new ReadableStream<Uint8Array>({
+    pull() {
+      throw new Error('internal socket ECONNRESET');
+    },
+  });
+  res = await POST(
+    new Request('http://localhost/api/v1/rate/reviews/my-values', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GOOD_TOKEN}`,
+      },
+      body: brokenBody,
+      duplex: 'half',
+    } as RequestInit)
+  );
+  assert.equal(res.status, 500);
+  assertMyValuesHeaders(res);
+  const body500 = await res.json();
+  assert.equal(body500.ok, false);
+  assert.equal(body500.code, 'INTERNAL_ERROR');
+  assert.ok(!JSON.stringify(body500).includes('ECONNRESET'));
 }
 
 async function testExtensionObservations() {
@@ -2856,6 +2959,224 @@ async function testMerchantCacheRevalidateAndDomainBounds() {
   );
 }
 
+async function testLeaderboardAllCategoryCompareUrl() {
+  const { NextRequest } = await import('next/server');
+  const { GET, OPTIONS } = await import('../leaderboard/route');
+
+  const optRes = await OPTIONS();
+  assert.equal(optRes.status, 204);
+  assert.equal(optRes.headers.get('access-control-allow-origin'), '*');
+
+  const CAT_PHONES = '77777777-8888-4777-8666-000000000001';
+  const CAT_LAPTOPS = '77777777-8888-4777-8666-000000000002';
+  const CAT_TABLETS = '77777777-8888-4777-8666-000000000003';
+  const mkMaster = (
+    idSuffix: string,
+    slug: string,
+    brand: string,
+    categorySlug: 'smartphones' | 'laptops' | 'tablets',
+    categoryId: string,
+    rating: number
+  ) => ({
+    id: `99999999-8888-4777-8666-${idSuffix}`,
+    category_id: categoryId,
+    slug,
+    name: slug,
+    brand,
+    model: slug,
+    status: 'published',
+    rating_score: rating,
+    user_rating_weighted: rating,
+    expert_rating: rating * 2,
+    authentic_review_count: 10,
+    total_reviews: 10,
+    min_price: 20_000_000,
+    max_price: 22_000_000,
+    merchant_count: 2,
+    metadata: { category_slug: categorySlug },
+    specifications: { category_slug: categorySlug },
+    key_specs: {},
+  });
+
+  const rows = [
+    mkMaster(
+      '000000000101',
+      'alpha-phone-1',
+      'AlphaBrand1811',
+      'smartphones',
+      CAT_PHONES,
+      4.9
+    ),
+    mkMaster(
+      '000000000102',
+      'alpha-laptop-1',
+      'AlphaBrand1811',
+      'laptops',
+      CAT_LAPTOPS,
+      4.8
+    ),
+    mkMaster(
+      '000000000103',
+      'alpha-phone-2',
+      'AlphaBrand1811',
+      'smartphones',
+      CAT_PHONES,
+      4.7
+    ),
+    mkMaster(
+      '000000000104',
+      'alpha-phone-3',
+      'AlphaBrand1811',
+      'smartphones',
+      CAT_PHONES,
+      4.6
+    ),
+    mkMaster(
+      '000000000201',
+      'beta-laptop-1',
+      'BetaBrand1811',
+      'laptops',
+      CAT_LAPTOPS,
+      4.9
+    ),
+    mkMaster(
+      '000000000202',
+      'beta-phone-1',
+      'BetaBrand1811',
+      'smartphones',
+      CAT_PHONES,
+      4.8
+    ),
+    mkMaster(
+      '000000000203',
+      'beta-tablet-1',
+      'BetaBrand1811',
+      'tablets',
+      CAT_TABLETS,
+      4.7
+    ),
+    mkMaster(
+      '000000000204',
+      'beta-laptop-2',
+      'BetaBrand1811',
+      'laptops',
+      CAT_LAPTOPS,
+      4.6
+    ),
+    {
+      ...mkMaster(
+        '000000000301',
+        'gamma-phone-256gb',
+        'GammaBrand1811',
+        'smartphones',
+        CAT_PHONES,
+        4.9
+      ),
+      item_id: '11111111-1111-4111-8111-000000001811',
+    },
+    mkMaster(
+      '000000000302',
+      'gamma-laptop-1',
+      'GammaBrand1811',
+      'laptops',
+      CAT_LAPTOPS,
+      4.8
+    ),
+    {
+      ...mkMaster(
+        '000000000303',
+        'gamma-phone-128gb',
+        'GammaBrand1811',
+        'smartphones',
+        CAT_PHONES,
+        4.7
+      ),
+      item_id: '11111111-1111-4111-8111-000000001811',
+    },
+  ];
+
+  const savedRpcResponder = rpcResponder;
+  const savedItemFlag = process.env.RATE_ITEM_MODEL;
+  try {
+    rpcResponder = (name, rpcBody) => {
+      if (name === 'search_master_products') {
+        const args = (rpcBody ?? {}) as { p_offset?: number };
+        return Number(args.p_offset ?? 0) > 0
+          ? { status: 200, json: [] }
+          : { status: 200, json: rows };
+      }
+      return { status: 200, json: [] };
+    };
+
+    // 1. category=all where #1 and #3 are smartphones and #2 is laptops:
+    // compare_top_3_url filters out cross-category #2 instead of sending a laptop slug to /compare?cat=smartphones.
+    let res = await GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=all&brand=AlphaBrand1811'
+      )
+    );
+    assert.equal(res.status, 200);
+    let body = await res.json();
+    assert.deepEqual(
+      body.podium_top_3.map((x: { slug: string }) => x.slug),
+      ['alpha-phone-1', 'alpha-laptop-1', 'alpha-phone-2']
+    );
+    assert.equal(
+      body.compare_top_3_url,
+      '/compare?cat=smartphones&slugs=alpha-phone-1,alpha-phone-2'
+    );
+    assert.equal(body.data.compare_top_3_url, body.compare_top_3_url);
+
+    // 2. category=all where #1, #2, #3 are all distinct categories:
+    // fewer than 2 podium items match compareCategory, so compare_top_3_url is null.
+    res = await GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=all&brand=BetaBrand1811'
+      )
+    );
+    assert.equal(res.status, 200);
+    body = await res.json();
+    assert.deepEqual(
+      body.podium_top_3.map((x: { slug: string }) => x.slug),
+      ['beta-laptop-1', 'beta-phone-1', 'beta-tablet-1']
+    );
+    assert.equal(body.compare_top_3_url, null);
+    assert.equal(body.data.compare_top_3_url, null);
+
+    // 3. Single-category leaderboard keeps all 3 same-category podium slugs.
+    res = await GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=smartphones&brand=AlphaBrand1811'
+      )
+    );
+    assert.equal(res.status, 200);
+    body = await res.json();
+    assert.equal(
+      body.compare_top_3_url,
+      '/compare?cat=smartphones&slugs=alpha-phone-1,alpha-phone-2,alpha-phone-3'
+    );
+
+    // 4. Under RATE_ITEM_MODEL, same-Item podium variants are deduplicated so /compare does not collapse to 1 Item.
+    process.env.RATE_ITEM_MODEL = 'item';
+    res = await GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=all&brand=GammaBrand1811'
+      )
+    );
+    assert.equal(res.status, 200);
+    body = await res.json();
+    assert.equal(body.compare_top_3_url, null);
+  } finally {
+    rpcResponder = savedRpcResponder;
+    if (savedItemFlag === undefined) delete process.env.RATE_ITEM_MODEL;
+    else process.env.RATE_ITEM_MODEL = savedItemFlag;
+  }
+
+  console.log(
+    '  ✅ Leaderboard category=all filters compare_top_3_url to compareCategory (#1811)'
+  );
+}
+
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
@@ -2873,6 +3194,7 @@ async function main() {
   await testRequestAuthAndRouteBounds();
   await testExtensionAndInspectBounds();
   await testMerchantCacheRevalidateAndDomainBounds();
+  await testLeaderboardAllCategoryCompareUrl();
   testSharedDataClients();
   console.log('✅ Public write-path security suite passed');
 }

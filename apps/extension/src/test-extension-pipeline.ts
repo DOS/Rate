@@ -8624,6 +8624,3133 @@ async function runTests() {
       }
     }
   }
+
+  // DOS/Rate#1809: clear stale pill, badge, and session lookup state on SPA exit,
+  // catch chrome.sidePanel.open rejections, and validate sender.url on content-script messages.
+  {
+    const g = globalThis as Record<string, unknown>;
+    const saved = [
+      'chrome',
+      'document',
+      'window',
+      'fetch',
+      'MutationObserver',
+      'requestAnimationFrame',
+      'setTimeout',
+      'clearTimeout',
+    ].map((k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const);
+    try {
+      // 1. Content-script SPA exit: in-flight PDP lookup discarded, pill removed, and RATE_PRODUCT_CLEARED emitted once.
+      let pillHost: { shadowRoot?: { innerHTML: string } } | null = null;
+      let shadowHtml = '';
+      let mutCb: (() => void) | undefined;
+      let popstateCb: (() => void) | undefined;
+      let navEntryChangeCb: (() => void) | undefined;
+      let prerenderChangeCb: (() => void) | undefined;
+      let isPrerendering = false;
+      let currentHref = 'https://shopee.vn/Dien-thoai-iPhone-16-Pro-i.101.202';
+      const h1Title = 'iPhone 16 Pro 256GB';
+      const rafs: Array<() => unknown> = [];
+      let nextTimerId = 1;
+      const plannedTimers = new Map<number, () => unknown>();
+      const drainTimers = () => {
+        const cbs = [...plannedTimers.values()];
+        plannedTimers.clear();
+        for (const cb of cbs) cb();
+      };
+      const sentMessages: Array<{ type?: string; signal?: unknown }> = [];
+      const pendingDetectResolvers: Array<
+        (res: Record<string, unknown>) => void
+      > = [];
+      const flushContent = async () => {
+        for (let i = 0; i < 6; i++) {
+          while (rafs.length) void rafs.shift()!();
+          await Promise.resolve();
+        }
+      };
+      g.window = {
+        location: {
+          get href() {
+            return currentHref;
+          },
+          set href(v: string) {
+            currentHref = v;
+          },
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'popstate') popstateCb = cb;
+        },
+        navigation: {
+          addEventListener: (ev: string, cb: () => void) => {
+            if (ev === 'currententrychange') navEntryChangeCb = cb;
+          },
+        },
+      };
+      g.document = {
+        get prerendering() {
+          return isPrerendering;
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'prerenderingchange') prerenderChangeCb = cb;
+        },
+        body: {
+          appendChild: (el: { shadowRoot?: { innerHTML: string } }) => {
+            pillHost = el;
+          },
+        },
+        getElementById: (id: string) =>
+          id === 'rate-vn-trust-pill-host' ? pillHost : null,
+        createElement: () => {
+          const shadow = {
+            get innerHTML() {
+              return shadowHtml;
+            },
+            set innerHTML(v: string) {
+              shadowHtml = v;
+            },
+            getElementById: () => ({ addEventListener() {} }),
+          };
+          const el = {
+            id: '',
+            shadowRoot: null as typeof shadow | null,
+            attachShadow() {
+              el.shadowRoot = shadow;
+              return shadow;
+            },
+            remove() {
+              pillHost = null;
+            },
+          };
+          return el;
+        },
+        querySelectorAll: () => [],
+        querySelector: (s: string) =>
+          s === 'h1'
+            ? { textContent: h1Title }
+            : s === '.pqTWkA'
+              ? { textContent: '28.990.000₫' }
+              : null,
+      };
+      g.MutationObserver = class {
+        constructor(cb: () => void) {
+          mutCb = cb;
+        }
+        observe() {}
+      };
+      g.requestAnimationFrame = (cb: () => unknown) => {
+        rafs.push(cb);
+        return rafs.length;
+      };
+      g.setTimeout = ((cb: () => unknown) => {
+        const id = nextTimerId++;
+        plannedTimers.set(id, cb);
+        return id;
+      }) as unknown;
+      g.clearTimeout = ((id: number) => {
+        plannedTimers.delete(id);
+      }) as unknown;
+      g.chrome = {
+        runtime: {
+          sendMessage: (msg: { type?: string; signal?: unknown }) => {
+            sentMessages.push(msg);
+            if (msg.type === 'RATE_PRODUCT_DETECTED') {
+              return new Promise<Record<string, unknown>>((resolve) => {
+                pendingDetectResolvers.push(resolve);
+              });
+            }
+            return Promise.resolve({ ok: true });
+          },
+        },
+      };
+
+      const dealPayload = {
+        ok: true,
+        data: {
+          matchStatus: 'exact_listing',
+          isAccessoryOrPart: false,
+          priceAssessment: {
+            verdict: 'genuine_deal',
+            badgeLabel: 'Good deal',
+            explanation: 'Good deal',
+            cheaperOfferCount: 0,
+            maxSavingsAmount: 0,
+            marketMinPrice: 28_990_000,
+          },
+          masterProduct: { rating_score_5: 4.9 },
+          reviewSummary: null,
+          radarSignal: null,
+        },
+      };
+
+      await import(
+        new URL('./content/content-script.js?case=1809', import.meta.url).href
+      );
+      await flushContent();
+      assert.equal(pendingDetectResolvers.length, 1);
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
+        0
+      );
+
+      // Navigate SPA away via pushState BEFORE the 700ms MutationObserver timer fires,
+      // then resolve the in-flight PDP lookup during the debounce window:
+      // canonicalUrl mismatch must discard the pill and immediately emit RATE_PRODUCT_CLEARED.
+      currentHref = 'https://shopee.vn/search?keyword=iphone';
+      mutCb!();
+      assert.equal(
+        plannedTimers.size,
+        1,
+        '700ms MutationObserver debounce timer still pending'
+      );
+      pendingDetectResolvers.shift()!(dealPayload);
+      await flushContent();
+      assert.equal(
+        pillHost,
+        null,
+        'in-flight PDP lookup resolving during pushState debounce window must never render a pill'
+      );
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
+        1,
+        'URL mismatch on late lookup resolution must immediately inspect and emit RATE_PRODUCT_CLEARED'
+      );
+
+      // Extra DOM mutations while remaining on /search must NOT spam duplicate RATE_PRODUCT_CLEARED messages.
+      drainTimers();
+      mutCb!();
+      drainTimers();
+      await flushContent();
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
+        1,
+        'repeated non-PDP mutations must not re-send RATE_PRODUCT_CLEARED'
+      );
+
+      // Navigating back to the same PDP renders the pill, and Navigation API currententrychange to / clears it immediately.
+      currentHref = 'https://shopee.vn/Dien-thoai-iPhone-16-Pro-i.101.202';
+      navEntryChangeCb!();
+      await flushContent();
+      assert.equal(pendingDetectResolvers.length, 1);
+      pendingDetectResolvers.shift()!(dealPayload);
+      await flushContent();
+      assert.ok(pillHost, 'pill renders when returning to PDP');
+
+      currentHref = 'https://shopee.vn/';
+      navEntryChangeCb!();
+      await flushContent();
+      assert.equal(pillHost, null, 'SPA exit to / must remove rendered pill');
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_PRODUCT_CLEARED').length,
+        2,
+        'transitioning away from rendered PDP to / must emit RATE_PRODUCT_CLEARED'
+      );
+
+      // Already-scheduled 429 rateLimitRetry timer is genuinely cancelled via clearTimeout on SPA exit to /cart.
+      currentHref = 'https://shopee.vn/Dien-thoai-iPhone-16-Pro-i.101.202';
+      popstateCb!();
+      await flushContent();
+      assert.equal(pendingDetectResolvers.length, 1);
+      pendingDetectResolvers.shift()!({
+        ok: false,
+        status: 429,
+        retryAfterSeconds: 5,
+      });
+      await flushContent();
+      assert.equal(
+        plannedTimers.size,
+        1,
+        '429 on PDP schedules one retry timer'
+      );
+      currentHref = 'https://shopee.vn/cart';
+      popstateCb!();
+      await flushContent();
+      assert.equal(
+        plannedTimers.size,
+        0,
+        'SPA exit to /cart must cancel already-scheduled 429 retry timer via clearTimeout'
+      );
+      drainTimers();
+      await flushContent();
+      assert.equal(pendingDetectResolvers.length, 0);
+
+      // Speculation Rules prerendering defers detection until prerenderingchange fires.
+      isPrerendering = true;
+      currentHref = 'https://shopee.vn/Dien-thoai-Galaxy-S25-i.101.303';
+      navEntryChangeCb!();
+      await flushContent();
+      assert.equal(
+        pendingDetectResolvers.length,
+        0,
+        'prerendered document must defer RATE_PRODUCT_DETECTED until activated'
+      );
+      assert.ok(prerenderChangeCb, 'must attach prerenderingchange listener');
+      isPrerendering = false;
+      prerenderChangeCb!();
+      await flushContent();
+      assert.equal(
+        pendingDetectResolvers.length,
+        1,
+        'activating prerendered PDP must run inspectCurrentPage'
+      );
+      pendingDetectResolvers.shift()!(dealPayload);
+      await flushContent();
+      assert.ok(pillHost, 'pill renders after prerender activation');
+    } finally {
+      for (const [key, desc] of saved) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+
+    const savedSw = ['chrome', 'fetch'].map(
+      (k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const
+    );
+    try {
+      // 2. Service worker: RATE_PRODUCT_CLEARED, sidePanel.open rejection handling, and sender.url validation.
+      let swOnMsg:
+        | ((
+            m: Record<string, unknown>,
+            s: Record<string, unknown>,
+            cb: (r: unknown) => void
+          ) => boolean | void)
+        | undefined;
+      const sessionStore = new Map<string, unknown>();
+      const sessionChangedEvents: Array<
+        Record<string, { oldValue?: unknown; newValue?: unknown }>
+      > = [];
+      const badges = new Map<number, { text: string; color?: string }>();
+      const sidePanelCalls: Array<Record<string, unknown>> = [];
+      let sidePanelShouldReject = false;
+      let activeTabId = 42;
+      let allowSessionRemove = true;
+      let delaySessionGetOnce = false;
+      let onSessionGetBlocked: (() => void) | null = null;
+      let releaseSessionGet: (() => void) | null = null;
+      let delayLocalGetOnce = false;
+      let onLocalGetBlocked: (() => void) | null = null;
+      let releaseLocalGet: (() => void) | null = null;
+      const fetchedUrls: string[] = [];
+      let swFetchImpl: (u: string) => Promise<Response> = async (u) => {
+        fetchedUrls.push(u);
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              matchStatus: 'exact_listing',
+              isAccessoryOrPart: false,
+              priceAssessment: { verdict: 'genuine_deal' },
+              queryIndex: fetchedUrls.length,
+            },
+          }),
+          { status: 200 }
+        );
+      };
+      g.chrome = {
+        runtime: {
+          id: 'rate-ext-1809',
+          getManifest: () => ({ version: '2.0.0' }),
+          onStartup: { addListener() {} },
+          onInstalled: { addListener() {} },
+          onMessage: {
+            addListener(fn: NonNullable<typeof swOnMsg>) {
+              swOnMsg = fn;
+            },
+          },
+          getURL: (p: string) => `chrome-extension://rate-ext-1809/${p}`,
+        },
+        sidePanel: {
+          setPanelBehavior: async () => {},
+          open: (opts: Record<string, unknown>) => {
+            sidePanelCalls.push(opts);
+            if (sidePanelShouldReject) {
+              return Promise.reject(
+                new Error(
+                  'sidePanel.open() may only be called in response to a user gesture'
+                )
+              );
+            }
+            return Promise.resolve();
+          },
+        },
+        storage: {
+          local: {
+            get: async () => {
+              if (delayLocalGetOnce) {
+                delayLocalGetOnce = false;
+                const gate = new Promise<void>((r) => {
+                  releaseLocalGet = r;
+                });
+                onLocalGetBlocked?.();
+                await gate;
+              }
+              return {
+                apiBaseUrl: 'https://rate.vn',
+                crowdContributeOptIn: false,
+              };
+            },
+            set: async () => {},
+            remove: async () => {},
+          },
+          session: {
+            get: async (keys?: string | string[]) => {
+              if (delaySessionGetOnce) {
+                delaySessionGetOnce = false;
+                const gate = new Promise<void>((r) => {
+                  releaseSessionGet = r;
+                });
+                onSessionGetBlocked?.();
+                await gate;
+              }
+              const list = Array.isArray(keys) ? keys : keys ? [keys] : [];
+              return Object.fromEntries(
+                list
+                  .filter((k) => sessionStore.has(k))
+                  .map((k) => [k, sessionStore.get(k)])
+              );
+            },
+            set: async (obj: Record<string, unknown>) => {
+              const changes: Record<
+                string,
+                { oldValue?: unknown; newValue?: unknown }
+              > = {};
+              for (const [k, v] of Object.entries(obj)) {
+                const hadOld = sessionStore.has(k);
+                const oldVal = sessionStore.get(k);
+                sessionStore.set(k, v);
+                if (!hadOld || oldVal !== v) {
+                  changes[k] = {
+                    ...(hadOld ? { oldValue: oldVal } : {}),
+                    newValue: v,
+                  };
+                }
+              }
+              if (Object.keys(changes).length > 0) {
+                sessionChangedEvents.push(changes);
+              }
+            },
+            get remove() {
+              if (!allowSessionRemove) return undefined;
+              return async (keys: string | string[]) => {
+                const changes: Record<
+                  string,
+                  { oldValue?: unknown; newValue?: unknown }
+                > = {};
+                for (const k of Array.isArray(keys) ? keys : [keys]) {
+                  if (sessionStore.has(k)) {
+                    changes[k] = { oldValue: sessionStore.get(k) };
+                    sessionStore.delete(k);
+                  }
+                }
+                if (Object.keys(changes).length > 0) {
+                  sessionChangedEvents.push(changes);
+                }
+              };
+            },
+          },
+        },
+        action: {
+          setBadgeText: async ({
+            text,
+            tabId,
+          }: {
+            text: string;
+            tabId?: number;
+          }) => {
+            if (tabId) badges.set(tabId, { ...badges.get(tabId), text });
+          },
+          setBadgeBackgroundColor: async ({
+            color,
+            tabId,
+          }: {
+            color: string;
+            tabId?: number;
+          }) => {
+            if (tabId) {
+              badges.set(tabId, {
+                text: badges.get(tabId)?.text ?? '',
+                color,
+              });
+            }
+          },
+          onClicked: { addListener() {} },
+        },
+        tabs: {
+          query: async () => [{ id: activeTabId, active: true }],
+          create: async () => ({ id: 1 }),
+        },
+      };
+      g.fetch = ((u: string | URL) => swFetchImpl(String(u))) as unknown;
+      await import(
+        new URL('./background/service-worker.js?case=1809', import.meta.url)
+          .href
+      );
+      assert.ok(swOnMsg, 'service worker registered onMessage');
+
+      const callSw = (
+        msg: Record<string, unknown>,
+        sender: Record<string, unknown>
+      ) =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          swOnMsg!(msg, sender, (r) => resolve(r as Record<string, unknown>));
+        });
+      const panelSender = {
+        id: 'rate-ext-1809',
+        tab: undefined,
+        url: 'chrome-extension://rate-ext-1809/sidepanel/sidepanel.html',
+      };
+      const shopeeSignal = {
+        platform: 'shopee',
+        canonicalUrl: 'https://shopee.vn/Phone-A-i.10.20',
+        externalItemId: '20',
+        externalShopId: '10',
+        title: 'Phone A 256GB',
+        selectedVariant: '256GB',
+        price: 25_990_000,
+        originalPrice: 29_990_000,
+        ratingStar: 4.9,
+        ratingCount: 100,
+      };
+
+      // (a) PDP -> /search clears badge, tab_42, lookup_tab_42, tab_latest, and lookup_tab_latest.
+      const detectRes = await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20?sp_atk=abc',
+        }
+      );
+      assert.equal(detectRes.ok, true);
+      assert.equal(badges.get(42)?.text, 'TỐT');
+      assert.ok(sessionStore.get('tab_42'));
+      assert.ok(sessionStore.get('lookup_tab_42'));
+      assert.ok(sessionStore.get('tab_latest'));
+      assert.ok(sessionStore.get('lookup_tab_latest'));
+
+      const clearRes = await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/search?keyword=phone',
+        }
+      );
+      assert.equal(clearRes.ok, true);
+      assert.equal(badges.get(42)?.text, '');
+      assert.equal(sessionStore.has('tab_42'), false);
+      assert.equal(sessionStore.has('lookup_tab_42'), false);
+      assert.equal(sessionStore.has('tab_latest'), false);
+      assert.equal(sessionStore.has('lookup_tab_latest'), false);
+
+      const fullAfterClear = await callSw(
+        { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: null },
+        panelSender
+      );
+      assert.equal(fullAfterClear.ok, true);
+      assert.equal(fullAfterClear.signal, null);
+      assert.equal(fullAfterClear.data, null);
+
+      // (b) PDP -> manual quick_query -> /search clears tab_42 & badge while preserving newer quick_query tab_latest.
+      await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      assert.equal(badges.get(42)?.text, 'TỐT');
+      const quickRes = await callSw(
+        { type: 'RATE_SIDEPANEL_QUICK_QUERY', query: 'Galaxy S25 Ultra' },
+        panelSender
+      );
+      assert.equal(quickRes.ok, true);
+      const fetchCountAfterQuick = fetchedUrls.length;
+
+      const clearAfterQuick = await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/',
+        }
+      );
+      assert.equal(clearAfterQuick.ok, true);
+      assert.equal(
+        badges.get(42)?.text,
+        '',
+        'tab badge must still clear on SPA exit even when quick_query owns tab_latest'
+      );
+      assert.equal(sessionStore.has('tab_42'), false);
+      assert.equal(sessionStore.has('lookup_tab_42'), false);
+      assert.equal(
+        (sessionStore.get('tab_latest') as { source?: string })?.source,
+        'quick_query',
+        'newer quick_query tab_latest must be preserved across SPA exit'
+      );
+      assert.deepEqual(sessionStore.get('lookup_tab_latest'), quickRes.data);
+
+      const fullUsingPreservedQuick = await callSw(
+        { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: null },
+        panelSender
+      );
+      assert.equal(fullUsingPreservedQuick.ok, true);
+      assert.deepEqual(fullUsingPreservedQuick.data, quickRes.data);
+      assert.equal(
+        fetchedUrls.length,
+        fetchCountAfterQuick,
+        'pendingQuickQueryReceipt must remain intact when SPA exit preserves quick_query'
+      );
+
+      // (c) Minimal storage mock without session.remove clears keys to null cleanly.
+      allowSessionRemove = false;
+      await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/cart',
+        }
+      );
+      assert.equal(sessionStore.get('tab_42'), null);
+      assert.equal(sessionStore.get('lookup_tab_42'), null);
+      assert.equal(sessionStore.get('tab_latest'), null);
+      assert.equal(sessionStore.get('lookup_tab_latest'), null);
+      allowSessionRemove = true;
+      sessionStore.clear();
+
+      // (d) Background tab RATE_PRODUCT_CLEARED clears only its own tab state without wiping active tab_latest.
+      await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      const lazadaSignal = {
+        ...shopeeSignal,
+        platform: 'lazada',
+        canonicalUrl: 'https://www.lazada.vn/products/Phone-B-i30-s40.html',
+        externalItemId: '30',
+        externalShopId: '40',
+        title: 'Phone B',
+      };
+      await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: lazadaSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 99, active: false },
+          url: 'https://www.lazada.vn/products/Phone-B-i30-s40.html',
+        }
+      );
+      assert.equal(badges.get(99)?.text, 'TỐT');
+      assert.ok(sessionStore.get('tab_99'));
+
+      await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 99, active: false },
+          url: 'https://www.lazada.vn/cart',
+        }
+      );
+      assert.equal(badges.get(99)?.text, '');
+      assert.equal(sessionStore.has('tab_99'), false);
+      assert.equal(sessionStore.has('lookup_tab_99'), false);
+      assert.equal(
+        (
+          sessionStore.get('tab_latest') as {
+            signal?: { canonicalUrl?: string };
+          }
+        )?.signal?.canonicalUrl,
+        shopeeSignal.canonicalUrl,
+        'background tab SPA exit must not wipe active tab_latest'
+      );
+      assert.ok(sessionStore.get('lookup_tab_latest'));
+
+      // (e) In-flight RATE_PRODUCT_DETECTED resolving after RATE_PRODUCT_CLEARED stays stale and writes nothing,
+      // and cold-session lookup_tab_latest === undefined still fires lookup_tab_latest storage.onChanged.
+      sessionStore.delete('lookup_tab_latest');
+      sessionChangedEvents.length = 0;
+      let resolveSlowPill!: (res: Response) => void;
+      swFetchImpl = () =>
+        new Promise<Response>((resolve) => {
+          resolveSlowPill = resolve;
+        });
+      const slowDetectPromise = callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      await new Promise((r) => setImmediate(r));
+      await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/search?keyword=phone',
+        }
+      );
+      assert.equal(badges.get(42)?.text, '');
+      assert.equal(sessionStore.has('lookup_tab_42'), false);
+      assert.equal(sessionStore.has('lookup_tab_latest'), false);
+      assert.equal(
+        sessionChangedEvents.some((ev) => 'lookup_tab_latest' in ev),
+        true,
+        'SPA exit before lookup_tab_latest was ever written must still fire lookup_tab_latest storage.onChanged'
+      );
+
+      resolveSlowPill(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              matchStatus: 'exact_listing',
+              isAccessoryOrPart: false,
+              priceAssessment: { verdict: 'inflated_fake_sale' },
+            },
+          }),
+          { status: 200 }
+        )
+      );
+      const slowDetectRes = await slowDetectPromise;
+      assert.equal(slowDetectRes.stale, true);
+      assert.equal(
+        badges.get(42)?.text,
+        '',
+        'superseded PDP lookup must not restore stale badge after RATE_PRODUCT_CLEARED'
+      );
+      assert.equal(sessionStore.has('lookup_tab_42'), false);
+      assert.equal(sessionStore.has('lookup_tab_latest'), false);
+
+      swFetchImpl = async (u) => {
+        fetchedUrls.push(u);
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              matchStatus: 'exact_listing',
+              isAccessoryOrPart: false,
+              priceAssessment: { verdict: 'genuine_deal' },
+            },
+          }),
+          { status: 200 }
+        );
+      };
+
+      // (e2) In-flight RATE_PRODUCT_CLEARED superseded by a newer RATE_PRODUCT_DETECTED must not wipe newer state.
+      delaySessionGetOnce = true;
+      const clearBlockedOnGet = new Promise<void>((r) => {
+        onSessionGetBlocked = r;
+      });
+      const supersededClearPromise = callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/search?keyword=phone',
+        }
+      );
+      await clearBlockedOnGet;
+      const newerDetectRes = await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      assert.equal(newerDetectRes.ok, true);
+      releaseSessionGet!();
+      const supersededClearRes = await supersededClearPromise;
+      assert.equal(supersededClearRes.stale, true);
+      assert.equal(badges.get(42)?.text, 'TỐT');
+      assert.ok(sessionStore.get('tab_42'));
+      assert.ok(sessionStore.get('tab_latest'));
+      assert.ok(sessionStore.get('lookup_tab_42'));
+      assert.ok(sessionStore.get('lookup_tab_latest'));
+
+      // (e3) In-flight RATE_SIDEPANEL_FETCH_FULL fallback (reading tab_latest from non-product active tab)
+      // superseded by RATE_PRODUCT_CLEARED must return stale: true and never resurrect tab_latest.
+      activeTabId = 88;
+      delayLocalGetOnce = true;
+      const fullBlockedOnSettings = new Promise<void>((r) => {
+        onLocalGetBlocked = r;
+      });
+      const fallbackFullPromise = callSw(
+        { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: '512GB' },
+        panelSender
+      );
+      await fullBlockedOnSettings;
+      await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/',
+        }
+      );
+      assert.equal(sessionStore.has('tab_latest'), false);
+      releaseLocalGet!();
+      const fallbackFullRes = await fallbackFullPromise;
+      assert.equal(
+        fallbackFullRes.stale,
+        true,
+        'fallback full lookup superseded by RATE_PRODUCT_CLEARED must be marked stale'
+      );
+      assert.equal(
+        sessionStore.has('tab_latest'),
+        false,
+        'superseded fallback overrideVariant write must not resurrect cleared tab_latest'
+      );
+      activeTabId = 42;
+
+      // (f) chrome.sidePanel.open rejections on RATE_OPEN_SIDE_PANEL are caught cleanly without unhandledRejection.
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown) => {
+        unhandled.push(reason);
+      };
+      process.on('unhandledRejection', onUnhandled);
+      try {
+        sidePanelShouldReject = true;
+        sidePanelCalls.length = 0;
+        const openTabRes = await callSw(
+          { type: 'RATE_OPEN_SIDE_PANEL' },
+          {
+            id: 'rate-ext-1809',
+            tab: { id: 42, windowId: 7 },
+            url: 'https://shopee.vn/Phone-A-i.10.20',
+          }
+        );
+        const openWindowRes = await callSw(
+          { type: 'RATE_OPEN_SIDE_PANEL' },
+          {
+            id: 'rate-ext-1809',
+            tab: { windowId: 7 },
+            url: 'https://www.topzone.vn/iphone/iphone-16-pro-max',
+          }
+        );
+        await new Promise((r) => setTimeout(r, 20));
+        assert.equal(openTabRes.ok, true);
+        assert.equal(openWindowRes.ok, true);
+        assert.deepEqual(sidePanelCalls, [{ tabId: 42 }, { windowId: 7 }]);
+        assert.equal(
+          unhandled.length,
+          0,
+          'rejected chrome.sidePanel.open must never trigger unhandledRejection'
+        );
+      } finally {
+        sidePanelShouldReject = false;
+        process.off('unhandledRejection', onUnhandled);
+      }
+
+      // (g) sender.url origin & platform validation on RATE_PRODUCT_DETECTED, RATE_PRODUCT_CLEARED, and RATE_OPEN_SIDE_PANEL.
+      await callSw(
+        { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://shopee.vn/Phone-A-i.10.20',
+        }
+      );
+      assert.equal(badges.get(42)?.text, 'TỐT');
+      const fetchesBeforeUntrusted = fetchedUrls.length;
+      sidePanelCalls.length = 0;
+
+      for (const badUrl of [
+        'https://evil.example.com/Phone-A-i.10.20',
+        'https://shopee.vn.evil.com/Phone-A-i.10.20',
+        'https://evilshopee.vn/Phone-A-i.10.20',
+        'https://rate.vn/smartphones/iphone-16',
+        'https://www.rate.vn/',
+        'http://shopee.vn/Phone-A-i.10.20',
+        'https://shopee.vn:8443/Phone-A-i.10.20',
+        'https://user:pass@shopee.vn/Phone-A-i.10.20',
+        'https://m.tiktok.com/v/12345',
+        'chrome-extension://rate-ext-1809/onboarding/onboarding.html',
+        'chrome-extension://rate-ext-1809/sidepanel/sidepanel.html',
+        'about:blank',
+        '',
+      ]) {
+        const badSender = {
+          id: 'rate-ext-1809',
+          tab: { id: 42, windowId: 7, active: true },
+          url: badUrl,
+        };
+        const rejDetect = await callSw(
+          { type: 'RATE_PRODUCT_DETECTED', signal: shopeeSignal },
+          badSender
+        );
+        const rejClear = await callSw(
+          { type: 'RATE_PRODUCT_CLEARED' },
+          badSender
+        );
+        const rejOpen = await callSw(
+          { type: 'RATE_OPEN_SIDE_PANEL' },
+          badSender
+        );
+        assert.equal(rejDetect.ok, false, `must reject detect from ${badUrl}`);
+        assert.equal(rejClear.ok, false, `must reject clear from ${badUrl}`);
+        assert.equal(rejOpen.ok, false, `must reject open from ${badUrl}`);
+      }
+
+      // Platform-mismatched and cross-origin sister-domain/subdomain sender.url on RATE_PRODUCT_DETECTED.
+      for (const [mismatchSenderUrl, mismatchSignal] of [
+        ['https://www.lazada.vn/products/p-i1-s2.html', shopeeSignal],
+        ['https://shopee.vn/Phone-A-i.10.20', lazadaSignal],
+        [
+          'https://shopee.vn/Phone-A-i.10.20',
+          {
+            ...shopeeSignal,
+            canonicalUrl: 'https://www.lazada.vn/products/p-i1-s2.html',
+          },
+        ],
+        [
+          'https://shopee.vn/Phone-A-i.10.20',
+          {
+            ...shopeeSignal,
+            canonicalUrl: 'https://evil.example.com/p-i.10.20',
+          },
+        ],
+        [
+          'https://shopee.vn/Phone-A-i.10.20',
+          { ...shopeeSignal, canonicalUrl: '' },
+        ],
+        [
+          'https://topzone.vn/iphone/iphone-16-pro-max',
+          {
+            ...shopeeSignal,
+            platform: 'tgdd',
+            canonicalUrl:
+              'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
+          },
+        ],
+        ['https://pages.lazada.vn/wow/gcp/vn', lazadaSignal],
+        [
+          'https://www.tiktok.com/@apple/product/12345',
+          {
+            ...shopeeSignal,
+            platform: 'tiktok',
+            canonicalUrl: 'https://shop.tiktok.com/view/product/12345',
+          },
+        ],
+      ] as const) {
+        const mismatchRes = await callSw(
+          { type: 'RATE_PRODUCT_DETECTED', signal: mismatchSignal },
+          {
+            id: 'rate-ext-1809',
+            tab: { id: 42, active: true },
+            url: mismatchSenderUrl,
+          }
+        );
+        assert.equal(
+          mismatchRes.ok,
+          false,
+          `must reject mismatched sender ${mismatchSenderUrl}`
+        );
+      }
+
+      // Missing/undefined signal, tabless sender, TAB_ID_NONE (-1), non-active documentLifecycle,
+      // subframe sender (frameId !== 0), opaque origin, and foreign extension id must all be rejected.
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_DETECTED' },
+            {
+              id: 'rate-ext-1809',
+              tab: { id: 42, active: true },
+              url: 'https://www.lazada.vn/products/Phone-B-i30-s40.html',
+            }
+          )
+        ).ok,
+        false,
+        'RATE_PRODUCT_DETECTED without signal must be rejected'
+      );
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_CLEARED' },
+            { id: 'rate-ext-1809' }
+          )
+        ).ok,
+        false,
+        'tabless sender must be rejected'
+      );
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_CLEARED' },
+            {
+              id: 'rate-ext-1809',
+              tab: { id: -1, active: true },
+              url: 'https://shopee.vn/search',
+            }
+          )
+        ).ok,
+        false,
+        'TAB_ID_NONE (-1) sender must be rejected'
+      );
+      for (const lifecycle of ['prerender', 'cached', 'pending_deletion']) {
+        assert.equal(
+          (
+            await callSw(
+              { type: 'RATE_PRODUCT_CLEARED' },
+              {
+                id: 'rate-ext-1809',
+                documentLifecycle: lifecycle,
+                tab: { id: 42, active: true },
+                url: 'https://shopee.vn/search',
+              }
+            )
+          ).ok,
+          false,
+          `inactive documentLifecycle ${lifecycle} must be rejected`
+        );
+      }
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_CLEARED' },
+            {
+              id: 'rate-ext-1809',
+              frameId: 1,
+              tab: { id: 42, active: true },
+              url: 'https://shopee.vn/search',
+            }
+          )
+        ).ok,
+        false
+      );
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_OPEN_SIDE_PANEL' },
+            {
+              id: 'foreign-ext-id',
+              tab: { id: 42, windowId: 7 },
+              url: 'https://shopee.vn/Phone-A-i.10.20',
+            }
+          )
+        ).ok,
+        false
+      );
+      assert.equal(
+        (
+          await callSw(
+            { type: 'RATE_PRODUCT_CLEARED' },
+            {
+              id: 'rate-ext-1809',
+              origin: 'null',
+              tab: { id: 42, active: true },
+              url: 'https://shopee.vn/search',
+            }
+          )
+        ).ok,
+        false
+      );
+
+      assert.equal(
+        fetchedUrls.length,
+        fetchesBeforeUntrusted,
+        'rejected senders must never trigger lookup network requests'
+      );
+      assert.equal(
+        sidePanelCalls.length,
+        0,
+        'rejected senders must never invoke chrome.sidePanel.open'
+      );
+      assert.equal(
+        badges.get(42)?.text,
+        'TỐT',
+        'rejected RATE_PRODUCT_CLEARED/DETECTED must not mutate existing badge or session state'
+      );
+      assert.ok(sessionStore.get('tab_42'));
+      assert.ok(sessionStore.get('lookup_tab_42'));
+
+      // Valid TikTok SPA exit to /foryou on www.tiktok.com is accepted on RATE_PRODUCT_CLEARED.
+      const tiktokClearRes = await callSw(
+        { type: 'RATE_PRODUCT_CLEARED' },
+        {
+          id: 'rate-ext-1809',
+          tab: { id: 42, active: true },
+          url: 'https://www.tiktok.com/foryou',
+        }
+      );
+      assert.equal(tiktokClearRes.ok, true);
+      assert.equal(badges.get(42)?.text, '');
+
+      console.log(
+        '  ✅ [SPA exit stale pill/badge/session cleanup, sidePanel.open catch & sender.url checks (#1809)] Verified'
+      );
+    } finally {
+      for (const [key, desc] of savedSw) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+  }
+
+  // DOS/Rate#1812: surrogate-safe code-point truncation, side panel consent version sync,
+  // settings UI rollback + cleared inpApiBase default restore, and Deal Radar UI/a11y fixes.
+  {
+    const {
+      encodeSurrogateSafeUriComponent,
+      sliceCodePoints,
+      stripLoneSurrogates,
+    } = await import('./surrogate-safe.js');
+    const {
+      buildExtensionObservationV1,
+      buildLookupParams,
+      sanitizeExtensionProductSignal,
+    } = await import('./security-guards.js');
+    const { renderActionRowsHtml, renderLookupErrorHtml, renderNotFoundHtml } =
+      await import('./sidepanel/panel-view.js');
+    const { t } = await import('./i18n.js');
+
+    const hasLoneSurrogate = (s: string) =>
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(
+        s
+      );
+
+    // 1. Surrogate-safe helpers & astral boundary truncation (200 / 500 limits).
+    assert.equal(stripLoneSurrogates(null), '');
+    assert.equal(stripLoneSurrogates(42), '');
+    assert.equal(
+      stripLoneSurrogates('\uD83DiPhone \uDC00🔥\uDC00\uD800 16\uD83D'),
+      'iPhone 🔥 16'
+    );
+    assert.equal(sliceCodePoints('abc', 0), '');
+    assert.equal(sliceCodePoints('abc', -5), '');
+    assert.equal(sliceCodePoints('abc', Number.NaN), '');
+
+    const titleStraddling500 = `${'a'.repeat(499)}🔥 extra`;
+    // Verify raw UTF-16 .slice(0, 500) would split the surrogate pair and throw URIError.
+    assert.equal(hasLoneSurrogate(titleStraddling500.slice(0, 500)), true);
+    assert.throws(
+      () => encodeURIComponent(titleStraddling500.slice(0, 500)),
+      URIError
+    );
+
+    const safe500 = sliceCodePoints(titleStraddling500, 500);
+    assert.equal(safe500, `${'a'.repeat(499)}🔥`);
+    assert.equal(Array.from(safe500).length, 500);
+    assert.equal(hasLoneSurrogate(safe500), false);
+    assert.doesNotThrow(() => encodeURIComponent(safe500));
+    assert.equal(
+      encodeSurrogateSafeUriComponent(titleStraddling500, 500),
+      `${'a'.repeat(499)}%F0%9F%94%A5`
+    );
+
+    const boldMathTitle = `${'𝗶'.repeat(505)} | Shopee VN`;
+    const cleanedMathTitle = cleanExtractedProductTitle(boldMathTitle);
+    assert.equal(Array.from(cleanedMathTitle).length, 500);
+    assert.equal(hasLoneSurrogate(cleanedMathTitle), false);
+    assert.doesNotThrow(() => encodeURIComponent(cleanedMathTitle));
+
+    const cleanedStraddleNoPipe = cleanExtractedProductTitle(
+      `${'x'.repeat(499)}🔥 tail | Lazada VN`
+    );
+    assert.equal(cleanedStraddleNoPipe, `${'x'.repeat(499)}🔥`);
+    assert.equal(hasLoneSurrogate(cleanedStraddleNoPipe), false);
+    assert.doesNotThrow(() => encodeURIComponent(cleanedStraddleNoPipe));
+
+    const cleanedStraddleWithPipe = cleanExtractedProductTitle(
+      `${'y'.repeat(493)} | 256GB🔥 | Tiki.vn`
+    );
+    // 'y'*493 + ' 256GB' = 499 BMP chars + '🔥' = 500 code points (straddling UTF-16 index 500).
+    assert.equal(cleanedStraddleWithPipe, `${'y'.repeat(493)} 256GB🔥`);
+    assert.equal(hasLoneSurrogate(cleanedStraddleWithPipe), false);
+    assert.doesNotThrow(() => encodeURIComponent(cleanedStraddleWithPipe));
+
+    const cleanedLoneSurrogateTitle = cleanExtractedProductTitle(
+      'Điện thoại \uD83D iPhone 16 Pro \uDC00 | Shopee'
+    );
+    assert.equal(cleanedLoneSurrogateTitle, 'Điện thoại iPhone 16 Pro');
+
+    // Variant straddling the 200-char limit in extractSelectedVariantFromDom & security-guards.
+    const variantDomStraddle = {
+      querySelectorAll: (sel: string) =>
+        sel === 'button.product-variation--selected'
+          ? [
+              { textContent: 'A'.repeat(55) },
+              { textContent: 'B'.repeat(55) },
+              { textContent: 'C'.repeat(55) },
+              { textContent: `${'D'.repeat(25)}🔥X` },
+            ]
+          : [],
+    } as unknown as Document;
+    // Joined: 55 + 3 + 55 + 3 + 55 + 3 + 25 = 199 BMP chars + '🔥' at 200th code point!
+    const extractedVariant = extractSelectedVariantFromDom(variantDomStraddle);
+    assert.ok(extractedVariant && extractedVariant.endsWith('🔥'));
+    assert.equal(Array.from(extractedVariant!).length, 200);
+    assert.equal(hasLoneSurrogate(extractedVariant!), false);
+    assert.doesNotThrow(() => encodeURIComponent(extractedVariant!));
+
+    const loneOnlyVariantDom = {
+      querySelectorAll: (sel: string) =>
+        sel === 'button.product-variation--selected'
+          ? [{ textContent: '\uD800\uDC00'.slice(0, 1) }]
+          : [],
+    } as unknown as Document;
+    assert.equal(extractSelectedVariantFromDom(loneOnlyVariantDom), null);
+
+    const sanitizedStraddle = sanitizeExtensionProductSignal({
+      platform: 'shopee',
+      canonicalUrl: 'https://shopee.vn/p-i.1.2',
+      externalItemId: '2',
+      externalShopId: '1',
+      title: `${'a'.repeat(499)}🔥 extra`,
+      selectedVariant: `${'v'.repeat(199)}🔥 extra`,
+      price: 20_000_000,
+      originalPrice: null,
+      ratingStar: null,
+      ratingCount: null,
+    });
+    assert.equal(sanitizedStraddle.title, `${'a'.repeat(499)}🔥`);
+    assert.equal(sanitizedStraddle.selectedVariant, `${'v'.repeat(199)}🔥`);
+    assert.equal(hasLoneSurrogate(sanitizedStraddle.title), false);
+    assert.equal(
+      hasLoneSurrogate(sanitizedStraddle.selectedVariant ?? ''),
+      false
+    );
+    const lookupParams = buildLookupParams(sanitizedStraddle, 'full');
+    assert.equal(lookupParams.get('title'), `${'a'.repeat(499)}🔥`);
+    assert.equal(lookupParams.get('selectedVariant'), `${'v'.repeat(199)}🔥`);
+    assert.equal(lookupParams.get('title')?.includes('\uFFFD'), false);
+
+    const obsWithLoneVariant = buildExtensionObservationV1(
+      {
+        ...sanitizedStraddle,
+        selectedVariant: '256GB \uD83D Natural 🔥',
+      },
+      new Date('2026-11-21T12:00:00Z'),
+      '2.1.0'
+    );
+    assert.ok(obsWithLoneVariant);
+    assert.equal(obsWithLoneVariant.variant_label, '256GB Natural 🔥');
+
+    // panel-view renderNotFoundHtml & renderLookupErrorHtml never throw URIError on lone surrogates or straddling emoji.
+    const notFoundStraddleHtml = renderNotFoundHtml(
+      { title: `${'z'.repeat(499)}🔥\uD83D` },
+      'https://rate.vn',
+      false
+    );
+    assert.ok(
+      notFoundStraddleHtml.includes(
+        `href="https://rate.vn/inspect?q=${'z'.repeat(499)}%F0%9F%94%A5"`
+      )
+    );
+    assert.equal(hasLoneSurrogate(notFoundStraddleHtml), false);
+
+    const notFoundLoneOnlyHtml = renderNotFoundHtml(
+      { title: '\uD83D' },
+      'https://rate.vn',
+      false
+    );
+    assert.ok(notFoundLoneOnlyHtml.includes('href="https://rate.vn/inspect"'));
+    assert.equal(hasLoneSurrogate(notFoundLoneOnlyHtml), false);
+
+    const errLoneHtml = renderLookupErrorHtml('network', 'Phone \uD83D 16');
+    assert.equal(hasLoneSurrogate(errLoneHtml), false);
+
+    const actionIconRows = renderActionRowsHtml([
+      {
+        href: 'https://rate.vn/inspect?q=test',
+        icon: '🔬',
+        label: 'Kiểm tra chi tiết',
+      },
+    ]);
+    assert.ok(
+      actionIconRows.includes(
+        '<span aria-hidden="true">🔬 </span>Kiểm tra chi tiết'
+      )
+    );
+
+    // 2. Runtime verification of sidepanel.ts:
+    //    - surrogate-safe inspect/watchlist/radar/merchant URL encoding (no false lookupErrorNetwork)
+    //    - crowdConsentVersion === 2 gating on hydration & storage.onChanged
+    //    - try/catch + UI rollback on chkOptIn and inpApiBase change handlers
+    //    - cleared inpApiBase reset to DEFAULT_API_BASE_URL
+    //    - Deal Radar hiding radarDealsTitle when deals.length === 0, json.ok === false, null platform guards, and aria-hidden emojis.
+    const g = globalThis as Record<string, unknown>;
+    const savedGlobals = ['chrome', 'document', 'fetch'].map(
+      (key) => [key, Object.getOwnPropertyDescriptor(g, key)] as const
+    );
+    const unhandled1812: unknown[] = [];
+    const onUnhandled1812 = (reason: unknown) => {
+      unhandled1812.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled1812);
+    const settle = () => new Promise((r) => setTimeout(r, 15));
+
+    try {
+      const root = {
+        innerHTML: '',
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      };
+      const radarSlot = { innerHTML: '' };
+      const trustSlot = { innerHTML: '' };
+      const chkHandlers: Array<() => unknown> = [];
+      const apiHandlers: Array<() => unknown> = [];
+      const submitHandlers: Array<(e: { preventDefault: () => void }) => void> =
+        [];
+      const chkOptIn = {
+        checked: false,
+        addEventListener: (ev: string, cb: () => unknown) => {
+          if (ev === 'change') chkHandlers.push(cb);
+        },
+      };
+      const inpApiBase = {
+        value: '',
+        addEventListener: (ev: string, cb: () => unknown) => {
+          if (ev === 'change') apiHandlers.push(cb);
+        },
+      };
+      const inpQuickQuery = { value: '' };
+      const formQuickInspect = {
+        addEventListener: (
+          ev: string,
+          cb: (e: { preventDefault: () => void }) => void
+        ) => {
+          if (ev === 'submit') submitHandlers.push(cb);
+        },
+      };
+
+      let onDomReady: (() => void) | undefined;
+      const storageListeners: Array<
+        (changes: Record<string, unknown>, areaName: string) => void
+      > = [];
+      const sentMessages: Array<Record<string, unknown>> = [];
+      const fetchedRadarUrls: string[] = [];
+
+      const storedLocalState: Record<string, unknown> = {
+        apiBaseUrl: 'http://localhost:3000',
+        crowdContributeOptIn: true,
+        crowdConsentVersion: 1,
+      };
+      let localGetImpl = async () => ({ ...storedLocalState });
+
+      let dealsJsonPayload: unknown = {
+        ok: true,
+        data: {
+          genuineDeals: [],
+          priceSpreadLeaders: [
+            {
+              id: 'sp-1',
+              productSlug: 'iphone-16',
+              productName: 'iPhone 16\uD83D',
+              productHref: '/smartphones/iphone-16',
+              minPrice: 19_990_000,
+              maxPrice: 22_990_000,
+              spreadVnd: 3_000_000,
+              spreadPct: 15,
+              cheapestPlatform: null,
+              cheapestOfferUrl: 'https://shopee.vn/p-i.1.2',
+              priciestPlatform: undefined,
+            },
+          ],
+          fakeSaleTraps: [
+            {
+              id: 'tr-1',
+              verdict: 'fake_sale_trap',
+              verdictBadgeVi: 'Bẫy sale ảo',
+              productSlug: 'galaxy-s25',
+              productName: 'Galaxy S25',
+              categorySlug: 'smartphones',
+              productHref: '/smartphones/galaxy-s25',
+              platform: null,
+              merchantName: 'Trap Shop',
+              offerUrl: 'https://shopee.vn/t-i.3.4',
+              priceCurrent: 24_990_000,
+              priceOriginal: 35_990_000,
+              savingsVsMedianVnd: 0,
+              savingsVsMedianPct: 0,
+              fakeMarkupPct: 44,
+              explanationVi: 'Nâng khống',
+            },
+          ],
+        },
+      };
+      let merchantsJsonPayload: unknown = {
+        ok: true,
+        data: [
+          {
+            id: 'm-lone-\uD83D',
+            platform: null,
+            name: 'Official Store\uD83D',
+            slug: 'official-\uD83D-store',
+            is_official: true,
+            dosafe_risk_score: 5,
+            review_risk_score: 8,
+            risk_score: 8,
+            trust_score: 92,
+            product_count: 12,
+          },
+        ],
+      };
+
+      const matchedLookupWithAstral: ExtensionLookupData = {
+        matchStatus: 'exact_listing',
+        platform: 'shopee',
+        canonicalUrl: null,
+        detectedStorageGb: 256,
+        isAccessoryOrPart: false,
+        accessoryReason: null,
+        variantCandidates: [],
+        masterProduct: {
+          id: 'mp-1812',
+          slug: '',
+          name: 'iPhone 16 Pro 256GB',
+          brand: 'Apple',
+          model: 'iPhone 16 Pro',
+          storage_gb: 256,
+          ram_gb: 8,
+          min_price: 25_990_000,
+          max_price: 28_990_000,
+          merchant_count: 4,
+          average_rating: 4.9,
+          user_rating_weighted: 4.9,
+          expert_rating: null,
+          authentic_review_count: 25,
+          total_reviews: 30,
+        },
+        matchedOffer: null,
+        topCheaperOffers: [],
+        allOffers: [],
+        merchantProfile: null,
+        reviewSummary: null,
+        priceHistory: null,
+        categorySlug: 'smartphones',
+        compareUrl: '/compare?category=smartphones',
+        productDetailUrl: '/smartphones/iphone-16-pro',
+        versusUrl: '/compare?category=smartphones&ids=a,b',
+        leaderboardStandings: [
+          {
+            criterion: 'combined',
+            rank: 1,
+            totalInCategory: 20,
+            score5: 4.8,
+            score10: 9.6,
+            categorySlug: 'smartphones',
+          },
+          {
+            criterion: 'camera',
+            rank: 2,
+            totalInCategory: 20,
+            score5: 4.7,
+            score10: 9.4,
+            categorySlug: 'smartphones',
+          },
+        ],
+        radarSignal: {
+          verdict: 'genuine_deal',
+          savingsPct: 8,
+          fakeMarkupPct: 0,
+          spreadPct: 12,
+          genuineDeal: { verdict: 'genuine_all_time_low' },
+        },
+        priceAssessment: {
+          verdict: 'genuine_deal',
+          badgeLabel: 'Giá tốt',
+          explanation: 'Thấp hơn trung vị',
+          observedPrice: 25_990_000,
+          observedOriginalPrice: 28_990_000,
+          claimedDiscountPct: 10,
+          vsMarketMedianPct: -8,
+          marketMinPrice: 25_990_000,
+          marketMedianPrice: 28_200_000,
+          marketMaxPrice: 28_990_000,
+          historicalMinPrice: 25_990_000,
+          historicalMaxPrice: 29_990_000,
+          cheaperOfferCount: 0,
+          maxSavingsAmount: 0,
+        },
+      };
+
+      let sendMessageImpl = async (
+        msg: Record<string, unknown>
+      ): Promise<unknown> => {
+        if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: String(
+                storedLocalState.apiBaseUrl ?? DEFAULT_API_BASE_URL
+              ),
+              crowdContributeOptIn:
+                storedLocalState.crowdContributeOptIn === true &&
+                storedLocalState.crowdConsentVersion === 2,
+            },
+            signal: {
+              platform: 'shopee',
+              canonicalUrl: '',
+              externalItemId: '2',
+              externalShopId: '1',
+              // Raw lone surrogate + straddling emoji when canonicalUrl and master.slug are empty!
+              title: `${'q'.repeat(499)}\uD83D`,
+              selectedVariant: null,
+              price: 25_990_000,
+              originalPrice: null,
+              ratingStar: null,
+              ratingCount: null,
+            },
+            data: matchedLookupWithAstral,
+          };
+        }
+        if (msg.type === 'RATE_SIDEPANEL_QUICK_QUERY') {
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: String(
+                storedLocalState.apiBaseUrl ?? DEFAULT_API_BASE_URL
+              ),
+              crowdContributeOptIn: false,
+            },
+            signal: {
+              platform: 'shopee',
+              canonicalUrl: '',
+              externalItemId: null,
+              externalShopId: null,
+              title: `${'m'.repeat(499)}\uD83D`,
+              selectedVariant: null,
+              price: null,
+              originalPrice: null,
+              ratingStar: null,
+              ratingCount: null,
+            },
+            data: null,
+          };
+        }
+        if (msg.type === 'RATE_UPDATE_SETTINGS') {
+          if (typeof msg.apiBaseUrl === 'string') {
+            storedLocalState.apiBaseUrl = normalizeAllowedApiBaseUrl(
+              msg.apiBaseUrl
+            );
+          }
+          if (typeof msg.crowdContributeOptIn === 'boolean') {
+            storedLocalState.crowdContributeOptIn = msg.crowdContributeOptIn;
+            storedLocalState.crowdConsentVersion = msg.crowdContributeOptIn
+              ? 2
+              : null;
+          }
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: String(
+                storedLocalState.apiBaseUrl ?? DEFAULT_API_BASE_URL
+              ),
+              crowdContributeOptIn:
+                storedLocalState.crowdContributeOptIn === true &&
+                storedLocalState.crowdConsentVersion === 2,
+            },
+          };
+        }
+        return { ok: false };
+      };
+
+      g.fetch = async (url: unknown) => {
+        const u = String(url);
+        if (u.includes('/api/v1/rate/deals')) {
+          fetchedRadarUrls.push(u);
+          return {
+            ok: true,
+            json: async () => dealsJsonPayload,
+          };
+        }
+        if (u.includes('/api/v1/rate/merchants')) {
+          return {
+            ok: true,
+            json: async () => merchantsJsonPayload,
+          };
+        }
+        return { ok: false };
+      };
+      g.chrome = {
+        runtime: {
+          sendMessage: (msg: Record<string, unknown>) => {
+            sentMessages.push(msg);
+            return sendMessageImpl(msg);
+          },
+        },
+        storage: {
+          local: { get: () => localGetImpl() },
+          onChanged: {
+            addListener: (
+              fn: (c: Record<string, unknown>, a: string) => void
+            ) => storageListeners.push(fn),
+          },
+        },
+      };
+      g.document = {
+        documentElement: {},
+        title: '',
+        querySelectorAll: () => [],
+        getElementById: (id: string) => {
+          switch (id) {
+            case 'panel-root':
+              return root;
+            case 'deal-radar-slot':
+              return radarSlot;
+            case 'merchant-trust-slot':
+              return trustSlot;
+            case 'chk-crowd-optin':
+              return chkOptIn;
+            case 'inp-api-base':
+              return inpApiBase;
+            case 'inp-quick-query':
+              return inpQuickQuery;
+            case 'form-quick-inspect':
+              return formQuickInspect;
+            default:
+              return null;
+          }
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'DOMContentLoaded') onDomReady = cb;
+        },
+      };
+
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1812a', import.meta.url).href
+      );
+      onDomReady!();
+      await settle();
+
+      // (a) Product card with lone-surrogate title did NOT throw URIError into lookupErrorNetwork.
+      assert.equal(
+        root.innerHTML.includes(t('lookupErrorNetwork')),
+        false,
+        'lone surrogate in signal.title must never trigger false lookupErrorNetwork'
+      );
+      assert.ok(
+        root.innerHTML.includes(
+          `href="http://localhost:3000/inspect?q=${'q'.repeat(499)}"`
+        ),
+        'inspectUrl strips lone surrogate cleanly'
+      );
+      // Decorative emojis in product card, leaderboard sub-badge, radar pill, and action links have aria-hidden="true".
+      for (const expectedIcon of ['🏆', '⚔️', '🔬', '🔔', '🔥']) {
+        assert.ok(
+          root.innerHTML.includes(
+            `<span aria-hidden="true">${expectedIcon} </span>`
+          ),
+          `icon ${expectedIcon} must be wrapped with aria-hidden="true"`
+        );
+      }
+
+      // (b) Deal Radar with deals.length === 0 hides radarDealsTitle, guards null platforms, and marks emojis aria-hidden.
+      assert.equal(
+        radarSlot.innerHTML.includes(t('radarDealsTitle')),
+        false,
+        'radarDealsTitle must be hidden when genuineDeals is empty'
+      );
+      assert.ok(radarSlot.innerHTML.includes(t('radarSpreadTitle')));
+      assert.ok(radarSlot.innerHTML.includes(t('radarTrapsTitle')));
+      assert.ok(
+        radarSlot.innerHTML.includes('<span aria-hidden="true">📊 </span>')
+      );
+      assert.ok(
+        radarSlot.innerHTML.includes('<span aria-hidden="true">⚠️ </span>')
+      );
+      assert.equal(
+        radarSlot.innerHTML.indexOf('border-top:1px solid #2a2f3a;') >
+          radarSlot.innerHTML.indexOf(t('radarSpreadTitle')),
+        true,
+        'first rendered radar section must not carry a leading separator border'
+      );
+      assert.match(
+        radarSlot.innerHTML,
+        /<div class="card">\s*<div>\s*<div class="card-title"/,
+        'first rendered radar section must be wrapped in a <div> so .offer-item:last-child prevents double borders'
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes('<span aria-hidden="true">🛡️ </span>')
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes(
+          'href="http://localhost:3000/merchants/official--store"'
+        )
+      );
+
+      // (c) Deal Radar & Merchant Trust Directory guard json.ok === false, and deals.length > 0 shows radarDealsTitle with aria-hidden 🔥.
+      dealsJsonPayload = {
+        ok: false,
+        data: {
+          genuineDeals: [
+            {
+              id: 'd-ignored',
+              productName: 'Should Not Render',
+            },
+          ],
+        },
+      };
+      merchantsJsonPayload = {
+        ok: false,
+        data: [{ id: 'm-ignored', name: 'Should Not Render' }],
+      };
+      storageListeners.forEach((fn) =>
+        fn({ lookup_tab_latest: { newValue: 2 } }, 'session')
+      );
+      await settle();
+      assert.equal(
+        radarSlot.innerHTML,
+        '',
+        'Deal Radar must render nothing when json.ok === false'
+      );
+      assert.equal(
+        trustSlot.innerHTML,
+        '',
+        'Merchant directory must render nothing when json.ok === false'
+      );
+
+      dealsJsonPayload = {
+        ok: true,
+        data: {
+          genuineDeals: [
+            {
+              id: 'd-1',
+              verdict: 'genuine_deal',
+              verdictBadgeVi: 'Giá tốt',
+              productSlug: 'ipad-air',
+              productName: 'iPad Air M2',
+              categorySlug: 'tablets',
+              productHref: '/tablets/ipad-air',
+              platform: null,
+              merchantName: 'Apple Store',
+              offerUrl: 'https://shopee.vn/ipad-i.1.2',
+              priceCurrent: 14_990_000,
+              priceOriginal: 16_990_000,
+              savingsVsMedianVnd: 1_500_000,
+              savingsVsMedianPct: 9,
+              fakeMarkupPct: 0,
+              explanationVi: 'Tốt',
+            },
+          ],
+          priceSpreadLeaders: [],
+          fakeSaleTraps: [],
+        },
+      };
+      storageListeners.forEach((fn) =>
+        fn({ lookup_tab_latest: { newValue: 3 } }, 'session')
+      );
+      await settle();
+      assert.ok(radarSlot.innerHTML.includes(t('radarDealsTitle')));
+      assert.ok(
+        radarSlot.innerHTML.includes('<span aria-hidden="true">🔥 </span>')
+      );
+
+      // Quick query with lone-surrogate not-found signal renders notFoundTitle instead of lookupErrorNetwork.
+      inpQuickQuery.value = `${'m'.repeat(499)}🔥 tail`;
+      submitHandlers[0]!({ preventDefault() {} });
+      await settle();
+      assert.ok(root.innerHTML.includes(t('notFoundTitle')));
+      assert.equal(root.innerHTML.includes(t('lookupErrorNetwork')), false);
+
+      // (d) Consent gating on crowdConsentVersion === 2 in hydration and storage.onChanged.
+      // Stored local had { crowdContributeOptIn: true, crowdConsentVersion: 1 }, so chkOptIn MUST be false!
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'v1 consent must leave chkOptIn unchecked'
+      );
+      const emitLocalChange = (changes: Record<string, unknown>) =>
+        storageListeners.forEach((fn) => fn(changes, 'local'));
+
+      // crowdContributeOptIn: true alone while storedConsentVersion === 1 stays false!
+      emitLocalChange({ crowdContributeOptIn: { newValue: true } });
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'crowdContributeOptIn without crowdConsentVersion === 2 must stay unchecked'
+      );
+
+      // Upgrading crowdConsentVersion to 2 while crowdContributeOptIn is true turns chkOptIn true!
+      emitLocalChange({ crowdConsentVersion: { newValue: 2 } });
+      assert.equal(chkOptIn.checked, true);
+
+      // Downgrading or clearing crowdConsentVersion revokes chkOptIn back to false!
+      emitLocalChange({ crowdConsentVersion: { newValue: 1 } });
+      assert.equal(chkOptIn.checked, false);
+      emitLocalChange({
+        crowdContributeOptIn: { newValue: true },
+        crowdConsentVersion: { newValue: 2 },
+      });
+      assert.equal(chkOptIn.checked, true);
+      emitLocalChange({ crowdConsentVersion: { newValue: null } });
+      assert.equal(chkOptIn.checked, false);
+
+      // (e) chkOptIn change handler rollback on rejected sendMessage AND { ok: false }.
+      const baseImpl = sendMessageImpl;
+      // Turning ON fails with rejection -> rolls back to false.
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_UPDATE_SETTINGS') {
+          throw new Error('storage quota exceeded');
+        }
+        return baseImpl(msg);
+      };
+      chkOptIn.checked = true;
+      await chkHandlers[0]!();
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'chkOptIn must roll back to false when RATE_UPDATE_SETTINGS throws'
+      );
+
+      // Turning ON succeeds -> checked === true; then turning OFF fails with { ok: false } -> rolls back to true!
+      sendMessageImpl = baseImpl;
+      chkOptIn.checked = true;
+      await chkHandlers[0]!();
+      assert.equal(chkOptIn.checked, true);
+
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_UPDATE_SETTINGS') {
+          return { ok: false, error: 'write failed' };
+        }
+        return baseImpl(msg);
+      };
+      chkOptIn.checked = false;
+      await chkHandlers[0]!();
+      assert.equal(
+        chkOptIn.checked,
+        true,
+        'chkOptIn must roll back to true when disabling fails with ok: false'
+      );
+
+      // (f) inpApiBase rollback on failure & cleared inpApiBase reset to DEFAULT_API_BASE_URL.
+      assert.equal(inpApiBase.value, 'http://localhost:3000');
+      // Changing to https://www.rate.vn fails -> rolls back to http://localhost:3000.
+      inpApiBase.value = 'https://www.rate.vn';
+      await apiHandlers[0]!();
+      assert.equal(
+        inpApiBase.value,
+        'http://localhost:3000',
+        'inpApiBase must roll back to previous confirmed URL when RATE_UPDATE_SETTINGS returns ok: false'
+      );
+
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_UPDATE_SETTINGS') {
+          throw new Error('worker unavailable');
+        }
+        return baseImpl(msg);
+      };
+      inpApiBase.value = '';
+      await apiHandlers[0]!();
+      assert.equal(
+        inpApiBase.value,
+        'http://localhost:3000',
+        'clearing inpApiBase when storage update throws must roll back to previous confirmed URL'
+      );
+
+      // Now restore working sendMessage and clear inpApiBase -> persists & restores DEFAULT_API_BASE_URL!
+      sendMessageImpl = baseImpl;
+      sentMessages.length = 0;
+      inpApiBase.value = '   ';
+      await apiHandlers[0]!();
+      await settle();
+      assert.equal(
+        inpApiBase.value,
+        DEFAULT_API_BASE_URL,
+        'clearing inpApiBase must restore DEFAULT_API_BASE_URL'
+      );
+      assert.equal(storedLocalState.apiBaseUrl, DEFAULT_API_BASE_URL);
+      assert.ok(
+        sentMessages.some(
+          (m) =>
+            m.type === 'RATE_UPDATE_SETTINGS' &&
+            m.apiBaseUrl === DEFAULT_API_BASE_URL
+        ),
+        'clearing inpApiBase must persist DEFAULT_API_BASE_URL via RATE_UPDATE_SETTINGS'
+      );
+      assert.ok(
+        sentMessages.some((m) => m.type === 'RATE_SIDEPANEL_FETCH_FULL'),
+        'clearing inpApiBase must reload the side panel against DEFAULT_API_BASE_URL'
+      );
+
+      // (g) Pre-hydration partial storage.onChanged buffering in sidepanel.ts.
+      let resolveSlowHydration!: (v: Record<string, unknown>) => void;
+      localGetImpl = () =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          resolveSlowHydration = resolve;
+        });
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1812b', import.meta.url).href
+      );
+      onDomReady!();
+      const latestStorageListener = storageListeners.at(-1)!;
+      // Partial opt-in true before hydration finishes must NOT turn chkOptIn true until version === 2 is confirmed!
+      latestStorageListener(
+        { crowdContributeOptIn: { newValue: true } },
+        'local'
+      );
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'pre-hydration partial opt-in must stay unchecked until crowdConsentVersion === 2 is confirmed'
+      );
+      resolveSlowHydration({
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 2,
+        apiBaseUrl: DEFAULT_API_BASE_URL,
+      });
+      await settle();
+      assert.equal(
+        chkOptIn.checked,
+        true,
+        'buffered opt-in true + hydrated crowdConsentVersion === 2 must reconcile chkOptIn to true'
+      );
+
+      // (h) Whitespace/lone-surrogate-only canonicalUrl, master.slug, and m.slug fall back cleanly without trailing %20.
+      merchantsJsonPayload = {
+        ok: true,
+        data: [
+          {
+            id: 'merchant-fallback-id',
+            platform: 'shopee',
+            name: 'Fallback Shop',
+            slug: ' \uD83D \uDC00 '.slice(0, 3),
+            is_official: false,
+            dosafe_risk_score: 10,
+            review_risk_score: 10,
+            risk_score: 10,
+            trust_score: 90,
+            product_count: 5,
+          },
+        ],
+      };
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: DEFAULT_API_BASE_URL,
+              crowdContributeOptIn: false,
+            },
+            signal: {
+              platform: 'shopee',
+              canonicalUrl: ' \uD83D ',
+              externalItemId: '2',
+              externalShopId: '1',
+              title: 'Phone 16 \uD83D',
+              selectedVariant: null,
+              price: 25_990_000,
+              originalPrice: null,
+              ratingStar: null,
+              ratingCount: null,
+            },
+            data: {
+              ...matchedLookupWithAstral,
+              masterProduct: {
+                ...matchedLookupWithAstral.masterProduct!,
+                slug: ' \uDC00 ',
+              },
+            },
+          };
+        }
+        return baseImpl(msg);
+      };
+      latestStorageListener({ lookup_tab_latest: { newValue: 9 } }, 'session');
+      await settle();
+      assert.ok(
+        root.innerHTML.includes('href="https://rate.vn/inspect?q=Phone%2016"'),
+        'whitespace/lone-surrogate canonicalUrl and master.slug must fall back to trimmed signal.title without trailing %20'
+      );
+      assert.ok(
+        root.innerHTML.includes('href="https://rate.vn/watchlist"'),
+        'lone-surrogate-only master.slug must fall back to /watchlist without ?add=%20'
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes(
+          'href="https://rate.vn/merchants/merchant-fallback-id"'
+        ),
+        'lone-surrogate-only m.slug must fall back to m.id'
+      );
+
+      // (i) Fail-closed v2 consent when local.get rejects or returns {}: unversioned res.settings.crowdContributeOptIn
+      //     and partial storage.onChanged without crowdConsentVersion === 2 must NEVER check chkOptIn.
+      localGetImpl = async () => {
+        throw new Error('storage read error');
+      };
+      sendMessageImpl = async (msg) => {
+        if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+          return {
+            ok: true,
+            settings: {
+              apiBaseUrl: DEFAULT_API_BASE_URL,
+              crowdContributeOptIn: true,
+            },
+            signal: null,
+            data: null,
+          };
+        }
+        return baseImpl(msg);
+      };
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1812c', import.meta.url).href
+      );
+      onDomReady!();
+      await settle();
+      const listener1812c = storageListeners.at(-1)!;
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'rejected storage.local.get must fail closed even if res.settings claims crowdContributeOptIn: true'
+      );
+      listener1812c({ crowdContributeOptIn: { newValue: true } }, 'local');
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'partial crowdContributeOptIn without crowdConsentVersion === 2 after rejected hydration must remain unchecked'
+      );
+
+      // (j) Overlapping inpApiBase and chkOptIn saves reconcile to latest persisted value without mid-flight flicker.
+      localGetImpl = async () => ({
+        apiBaseUrl: DEFAULT_API_BASE_URL,
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 0,
+      });
+      sendMessageImpl = baseImpl;
+      storedLocalState.apiBaseUrl = DEFAULT_API_BASE_URL;
+      storedLocalState.crowdContributeOptIn = false;
+      storedLocalState.crowdConsentVersion = 0;
+      chkHandlers.length = 0;
+      apiHandlers.length = 0;
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1812d', import.meta.url).href
+      );
+      onDomReady!();
+      await settle();
+      const listener1812d = storageListeners.at(-1)!;
+
+      // Overlapping inpApiBase saves: Save #1 (http://localhost:3000) succeeds while Save #2 (https://www.rate.vn) fails.
+      let resolveApiSave1!: (v: unknown) => void;
+      let rejectApiSave2!: (e: Error) => void;
+      let apiCallIdx = 0;
+      sendMessageImpl = (msg) => {
+        if (msg.type === 'RATE_UPDATE_SETTINGS' && 'apiBaseUrl' in msg) {
+          apiCallIdx += 1;
+          if (apiCallIdx === 1) {
+            return new Promise((r) => {
+              resolveApiSave1 = r;
+            });
+          }
+          return new Promise((_, rej) => {
+            rejectApiSave2 = rej;
+          });
+        }
+        return baseImpl(msg);
+      };
+      sentMessages.length = 0;
+      inpApiBase.value = 'http://localhost:3000';
+      const pApi1 = apiHandlers[0]!();
+      inpApiBase.value = 'https://www.rate.vn';
+      const pApi2 = apiHandlers[0]!();
+      storedLocalState.apiBaseUrl = 'http://localhost:3000';
+      listener1812d(
+        { apiBaseUrl: { newValue: 'http://localhost:3000' } },
+        'local'
+      );
+      assert.equal(
+        inpApiBase.value,
+        'https://www.rate.vn',
+        'in-flight second inpApiBase edit must not flicker when first save fires onChanged'
+      );
+      resolveApiSave1({
+        ok: true,
+        settings: {
+          apiBaseUrl: 'http://localhost:3000',
+          crowdContributeOptIn: false,
+        },
+      });
+      await pApi1;
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_SIDEPANEL_FETCH_FULL')
+          .length,
+        0,
+        'superseded first inpApiBase save must not trigger premature reload while second save is in flight'
+      );
+      rejectApiSave2(new Error('save 2 failed'));
+      await pApi2;
+      await settle();
+      assert.equal(
+        inpApiBase.value,
+        'http://localhost:3000',
+        'failed second inpApiBase save must roll back to Save #1 persisted URL, not pre-Save-#1 URL'
+      );
+      assert.equal(
+        sentMessages.filter((m) => m.type === 'RATE_SIDEPANEL_FETCH_FULL')
+          .length,
+        1,
+        'panel must reload once against Save #1 persisted URL after Save #2 settles'
+      );
+
+      // Overlapping chkOptIn saves: Toggle #1 (true) succeeds while Toggle #2 (false) fails -> reconciles to true without mid-flight flicker.
+      let resolveChk1!: (v: unknown) => void;
+      let resolveChk2!: (v: unknown) => void;
+      let chkCallIdx = 0;
+      sendMessageImpl = (msg) => {
+        if (
+          msg.type === 'RATE_UPDATE_SETTINGS' &&
+          'crowdContributeOptIn' in msg
+        ) {
+          chkCallIdx += 1;
+          if (chkCallIdx === 1) {
+            return new Promise((r) => {
+              resolveChk1 = r;
+            });
+          }
+          return new Promise((r) => {
+            resolveChk2 = r;
+          });
+        }
+        return baseImpl(msg);
+      };
+      chkOptIn.checked = true;
+      const pChk1 = chkHandlers[0]!();
+      chkOptIn.checked = false;
+      const pChk2 = chkHandlers[0]!();
+      listener1812d(
+        {
+          crowdContributeOptIn: { newValue: true },
+          crowdConsentVersion: { newValue: 2 },
+        },
+        'local'
+      );
+      assert.equal(
+        chkOptIn.checked,
+        false,
+        'chkOptIn must not flicker back to true while Toggle #2 (false) is still in flight'
+      );
+      resolveChk1({
+        ok: true,
+        settings: {
+          apiBaseUrl: 'http://localhost:3000',
+          crowdContributeOptIn: true,
+        },
+      });
+      await pChk1;
+      resolveChk2({ ok: false, error: 'toggle 2 failed' });
+      await pChk2;
+      assert.equal(
+        chkOptIn.checked,
+        true,
+        'failed Toggle #2 must reconcile chkOptIn to Toggle #1 persisted true state'
+      );
+
+      assert.equal(
+        unhandled1812.length,
+        0,
+        'side panel settings failures must never trigger unhandledRejection'
+      );
+
+      // 3. Service worker serialization of concurrent RATE_UPDATE_SETTINGS & astral 200/500 bounds.
+      {
+        let swMsgHandler:
+          | ((
+              msg: Record<string, unknown>,
+              sender: Record<string, unknown>,
+              sendResponse: (res: unknown) => void
+            ) => unknown)
+          | undefined;
+        const swLocal = new Map<string, unknown>([
+          ['apiBaseUrl', 'https://rate.vn'],
+          ['crowdContributeOptIn', false],
+        ]);
+        const swSession = new Map<string, unknown>();
+        let delayCooldownClearOnce = true;
+        let releaseCooldownClear!: () => void;
+        let onCooldownPaused: (() => void) | undefined;
+
+        g.chrome = {
+          runtime: {
+            id: 'rate-ext-1812-sw',
+            getURL: (p: string) => `chrome-extension://rate-ext-1812-sw/${p}`,
+            getManifest: () => ({ version: '2.1.0' }),
+            onInstalled: { addListener() {} },
+            onStartup: { addListener() {} },
+            onMessage: {
+              addListener: (fn: typeof swMsgHandler) => {
+                swMsgHandler = fn;
+              },
+            },
+          },
+          sidePanel: {
+            setPanelBehavior: async () => {},
+            open: async () => {},
+          },
+          storage: {
+            local: {
+              get: async (keys?: string | string[]) => {
+                const list = Array.isArray(keys) ? keys : keys ? [keys] : [];
+                return Object.fromEntries(
+                  list
+                    .filter((k) => swLocal.has(k))
+                    .map((k) => [k, swLocal.get(k)])
+                );
+              },
+              set: async (obj: Record<string, unknown>) => {
+                for (const [k, v] of Object.entries(obj)) swLocal.set(k, v);
+              },
+              remove: async (keys: string | string[]) => {
+                for (const k of Array.isArray(keys) ? keys : [keys]) {
+                  swLocal.delete(k);
+                }
+              },
+            },
+            session: {
+              get: async (keys?: string | string[]) => {
+                const list = Array.isArray(keys) ? keys : keys ? [keys] : [];
+                return Object.fromEntries(
+                  list
+                    .filter((k) => swSession.has(k))
+                    .map((k) => [k, swSession.get(k)])
+                );
+              },
+              set: async (obj: Record<string, unknown>) => {
+                if (
+                  delayCooldownClearOnce &&
+                  obj.lookup_rate_limited_until === 0
+                ) {
+                  delayCooldownClearOnce = false;
+                  const gate = new Promise<void>((r) => {
+                    releaseCooldownClear = r;
+                  });
+                  onCooldownPaused?.();
+                  await gate;
+                }
+                for (const [k, v] of Object.entries(obj)) swSession.set(k, v);
+              },
+            },
+          },
+          action: {
+            setBadgeText: async () => {},
+            setBadgeBackgroundColor: async () => {},
+            onClicked: { addListener() {} },
+          },
+          tabs: {
+            query: async () => [{ id: 1, active: true }],
+            create: async () => ({ id: 2 }),
+          },
+        };
+        g.fetch = async () =>
+          new Response(JSON.stringify({ ok: true, data: null }), {
+            status: 200,
+          });
+
+        await import(
+          new URL('./background/service-worker.js?case=1812sw', import.meta.url)
+            .href
+        );
+        const callSw1812 = (msg: Record<string, unknown>) =>
+          new Promise<Record<string, unknown>>((resolve) => {
+            swMsgHandler!(
+              msg,
+              {
+                id: 'rate-ext-1812-sw',
+                tab: undefined,
+                url: 'chrome-extension://rate-ext-1812-sw/sidepanel/sidepanel.html',
+              },
+              (r) => resolve(r as Record<string, unknown>)
+            );
+          });
+
+        // Concurrent RATE_UPDATE_SETTINGS: Request 1 (localhost) pauses at lookupCooldown.clear() while Request 2 (reset to https://rate.vn) is queued behind it.
+        const pausedOnClear = new Promise<void>((r) => {
+          onCooldownPaused = r;
+        });
+        const req1 = callSw1812({
+          type: 'RATE_UPDATE_SETTINGS',
+          apiBaseUrl: 'http://localhost:3000',
+          crowdContributeOptIn: true,
+        });
+        const req2 = callSw1812({
+          type: 'RATE_UPDATE_SETTINGS',
+          apiBaseUrl: DEFAULT_API_BASE_URL,
+          crowdContributeOptIn: false,
+        });
+        await pausedOnClear;
+        releaseCooldownClear();
+        const [res1, res2] = await Promise.all([req1, req2]);
+        assert.equal(res1.ok, true);
+        assert.equal(res2.ok, true);
+        assert.equal(
+          swLocal.get('apiBaseUrl'),
+          DEFAULT_API_BASE_URL,
+          'serialized RATE_UPDATE_SETTINGS must preserve later reset to DEFAULT_API_BASE_URL'
+        );
+        assert.equal(
+          swLocal.get('crowdContributeOptIn'),
+          false,
+          'serialized RATE_UPDATE_SETTINGS must preserve later opt-out'
+        );
+        assert.equal(swLocal.get('crowdConsentVersion'), null);
+
+        // Service worker quick query (500 limit) & selectedVariant override (200 limit) preserve astral pairs cleanly.
+        const quickAstralRes = await callSw1812({
+          type: 'RATE_SIDEPANEL_QUICK_QUERY',
+          query: `${'k'.repeat(499)}🔥 extra`,
+        });
+        assert.equal(quickAstralRes.ok, true);
+        const quickSig = quickAstralRes.signal as { title: string };
+        assert.equal(quickSig.title, `${'k'.repeat(499)}🔥`);
+        assert.equal(hasLoneSurrogate(quickSig.title), false);
+
+        const fullAstralRes = await callSw1812({
+          type: 'RATE_SIDEPANEL_FETCH_FULL',
+          selectedVariant: `${'s'.repeat(199)}🔥 extra`,
+        });
+        assert.equal(fullAstralRes.ok, true);
+        const fullSig = fullAstralRes.signal as { selectedVariant: string };
+        assert.equal(fullSig.selectedVariant, `${'s'.repeat(199)}🔥`);
+        assert.equal(hasLoneSurrogate(fullSig.selectedVariant), false);
+      }
+
+      console.log(
+        '  ✅ [Surrogate-safe URL encoding, consent v2 sync, settings rollback & Deal Radar UI/a11y (#1812)] Verified'
+      );
+    } finally {
+      process.off('unhandledRejection', onUnhandled1812);
+      for (const [key, desc] of savedGlobals) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+  }
+
+  // --- DOS/Rate#1839: Czech (cs) VND non-breaking-space grouping & comma-decimal formatting ---
+  {
+    const {
+      buildCrowdIngestPayload,
+      buildExtensionObservationV1,
+      buildLookupParams,
+      buildProductSignalSignature,
+      formatSafeExtensionVnd,
+      formatSafeNumber,
+    } = await import('./security-guards.js');
+    const {
+      buildSvgSparkline,
+      ratingStarText,
+      renderLookupErrorHtml,
+      renderOffersCardHtml,
+      renderReviewCardHtml,
+      renderVariantPickerHtml,
+      riskScoreText,
+      trustText,
+    } = await import('./sidepanel/panel-view.js');
+    const { verdictTexts } = await import('./verdict-display.js');
+    const { formatCatalogueEntry } = await import('./i18n.js');
+    const { formatDecimal, formatPriceVnd } =
+      await import('../../web/src/lib/locale-format.js');
+
+    const NBSP = '\u00A0';
+    const catalogues = readLocaleCatalogues();
+
+    // 1. Direct helper checks across omitted, vi, en, and cs locales + parity with locale-format.ts.
+    for (const loc of [
+      undefined,
+      'vi',
+      'vi-VN',
+      'en',
+      'en-US',
+      'de',
+    ] as const) {
+      assert.equal(
+        formatSafeExtensionVnd(15_990_000, 'N/A', loc),
+        '15.990.000 ₫'
+      );
+      assert.equal(
+        formatSafeExtensionVnd(15_990_000, 'N/A', loc),
+        formatPriceVnd(
+          15_990_000,
+          loc === 'en' || loc === 'en-US' ? 'en' : 'vi'
+        )
+      );
+      assert.equal(
+        formatSafeNumber(4.5, { min: 0, max: 5, decimals: 1 }, loc),
+        '4.5'
+      );
+      assert.equal(
+        formatSafeNumber(8.8, { min: 0, max: 10, decimals: 1 }, loc),
+        '8.8'
+      );
+      assert.equal(formatSafeNumber(1250, { min: 0 }, loc), '1250');
+    }
+
+    for (const csLoc of ['cs', 'cs-CZ', 'CS_cz', ' cs '] as const) {
+      assert.equal(
+        formatSafeExtensionVnd(15_990_000, 'N/A', csLoc),
+        `15${NBSP}990${NBSP}000${NBSP}₫`
+      );
+      assert.equal(
+        formatSafeExtensionVnd(15_990_000, 'N/A', csLoc),
+        formatPriceVnd(15_990_000, 'cs')
+      );
+      assert.equal(formatSafeExtensionVnd(999, 'N/A', csLoc), `999${NBSP}₫`);
+      assert.equal(
+        formatSafeExtensionVnd(1_000_000_000, 'N/A', csLoc),
+        `1${NBSP}000${NBSP}000${NBSP}000${NBSP}₫`
+      );
+      assert.equal(
+        formatSafeNumber(4.5, { min: 0, max: 5, decimals: 1 }, csLoc),
+        '4,5'
+      );
+      assert.equal(
+        formatSafeNumber(4.5, { min: 0, max: 5, decimals: 1 }, csLoc),
+        formatDecimal(4.5, 'cs', 1)
+      );
+      assert.equal(
+        formatSafeNumber(8.8, { min: 0, max: 10, decimals: 1 }, csLoc),
+        '8,8'
+      );
+      assert.equal(
+        formatSafeNumber(8.8, { min: 0, max: 10, decimals: 1, locale: csLoc }),
+        '8,8'
+      );
+      assert.equal(
+        formatSafeNumber(5, { min: 0, max: 5, decimals: 1 }, csLoc),
+        '5,0'
+      );
+      assert.equal(formatSafeNumber(1250, { min: 0 }, csLoc), `1${NBSP}250`);
+      assert.equal(
+        formatSafeNumber(1250.5, { decimals: 1 }, csLoc),
+        `1${NBSP}250,5`
+      );
+      assert.equal(
+        formatSafeNumber(-1250.5, { decimals: 1 }, csLoc),
+        `-1${NBSP}250,5`
+      );
+    }
+
+    // Invalid inputs still return fallback across locales.
+    for (const badVnd of [
+      0,
+      0.2,
+      -5000,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      2_000_000_000,
+    ]) {
+      assert.equal(formatSafeExtensionVnd(badVnd, 'N/A', 'cs'), 'N/A');
+      assert.equal(formatSafeExtensionVnd(badVnd, 'N/A', 'vi'), 'N/A');
+    }
+    assert.equal(
+      formatSafeNumber('<script>', { decimals: 1, fallback: 0 }, 'cs'),
+      '0,0'
+    );
+
+    // 2. Machine-readable outputs, SVG coordinates, data-* attributes, and URLs remain locale-invariant.
+    const rawSignal1839 = {
+      platform: 'shopee' as const,
+      canonicalUrl: 'https://shopee.vn/item-i.88.99',
+      externalItemId: '99',
+      externalShopId: '88',
+      title: 'Phone 4.5G 256GB',
+      selectedVariant: '256GB - 4.5G',
+      price: 15_990_000,
+      originalPrice: 18_990_000,
+      ratingStar: 4.5,
+      ratingCount: 1250,
+      skuId: 'sku-4.5',
+      stockState: 'in_stock' as const,
+      stockQty: 12,
+      extractorSource: 'dom' as const,
+    };
+
+    const g = globalThis as Record<string, unknown>;
+    const savedGlobals1839 = (
+      [
+        'chrome',
+        'window',
+        'document',
+        'fetch',
+        'MutationObserver',
+        'requestAnimationFrame',
+        'setTimeout',
+        'clearTimeout',
+      ] as const
+    ).map((k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const);
+
+    const makeI18n = (locale: 'vi' | 'en' | 'cs') => ({
+      getMessage: (key: string, subs?: string | string[]) => {
+        const entry = catalogues[locale][key];
+        if (!entry) return '';
+        const list = Array.isArray(subs)
+          ? subs
+          : subs !== undefined
+            ? [subs]
+            : [];
+        return formatCatalogueEntry(entry, list);
+      },
+    });
+
+    try {
+      g.chrome = { i18n: makeI18n('cs') };
+
+      const lookupParamsCs = buildLookupParams(rawSignal1839, 'full');
+      assert.equal(lookupParamsCs.get('price'), '15990000');
+      assert.equal(lookupParamsCs.get('originalPrice'), '18990000');
+      assert.equal(lookupParamsCs.get('selectedVariant'), '256GB - 4.5G');
+      const obsCs = buildExtensionObservationV1(
+        rawSignal1839,
+        new Date('2026-11-22T00:00:00.000Z'),
+        '2.0.0'
+      );
+      assert.equal(obsCs?.price_vnd, 15_990_000);
+      assert.equal(obsCs?.variant_label, '256GB - 4.5G');
+      const crowdCs = buildCrowdIngestPayload(rawSignal1839);
+      assert.equal(crowdCs.price, 15_990_000);
+      assert.equal(crowdCs.ratingStar, 4.5);
+      assert.ok(
+        buildProductSignalSignature(rawSignal1839).includes('15990000')
+      );
+      const sparkCs = buildSvgSparkline([
+        { date: '2026-11-01', price: 15_990_000 },
+        { date: '2026-11-02', price: 16_990_000 },
+      ]);
+      assert.ok(!sparkCs.includes(NBSP) && sparkCs.includes('points="'));
+
+      // 3. Pure UI builders (panel-view.ts & verdict-display.ts) across vi, en, and cs.
+      const variantLookup = {
+        matchStatus: 'exact_listing' as const,
+        detectedStorageGb: 256,
+        selectedVariant: '256GB - 4.5G',
+        variantCandidates: [
+          {
+            slug: 'phone-256',
+            label: '256GB - 4.5G',
+            storageGb: 256,
+            minPrice: 15_990_000,
+          },
+          {
+            slug: 'phone-512',
+            label: '512GB - 4.5G',
+            storageGb: 512,
+            minPrice: 18_990_000,
+          },
+        ],
+      };
+      const offers1839: ExtensionOfferItem[] = [
+        {
+          id: 'off-cs-1',
+          platform: 'shopee',
+          title: 'Phone 256GB',
+          price_current: 15_990_000,
+          price_original: 18_990_000,
+          rating_star: 4.5,
+          rating_count: 120,
+          historical_sold: 300,
+          url: 'https://shopee.vn/item-i.88.99',
+          merchant: {
+            id: 'm-cs-1',
+            name: 'Official Flagship',
+            is_official: true,
+            risk_score: 12,
+            dosafe_risk_score: 4,
+            review_risk_score: 12,
+          },
+        },
+      ];
+      const reviewSummary1839 = {
+        total_analyzed: 1250,
+        authentic_pct: 92,
+        suspicious_pct: 5,
+        fake_pct: 3,
+        pros: [],
+        cons: [],
+        ai_summary: null,
+      };
+      const verdictInput1839 = {
+        badgeLabel: 'Fallback',
+        explanation: 'Fallback',
+        messageKey: 'above_market',
+        messageParams: {
+          effectivePrice: 15_990_000,
+          marketMedianPrice: 14_500_000,
+          vsMarketMedianPct: 10.3,
+        },
+      };
+
+      for (const loc of ['vi', 'en'] as const) {
+        g.chrome = { i18n: makeI18n(loc) };
+        const varHtml = renderVariantPickerHtml(variantLookup);
+        assert.ok(varHtml.includes('data-variant="256GB - 4.5G"'));
+        assert.ok(varHtml.includes('(15.990.000 ₫)'));
+        assert.equal(ratingStarText(4.5), '★ 4.5');
+        const offHtml = renderOffersCardHtml(offers1839);
+        assert.ok(offHtml.includes('15.990.000 ₫'));
+        assert.ok(offHtml.includes('★ 4.5'));
+        assert.ok(offHtml.includes('href="https://shopee.vn/item-i.88.99"'));
+        const revHtml = renderReviewCardHtml(reviewSummary1839, {
+          rating_score_5: 4.5,
+        });
+        assert.ok(revHtml.includes('★ 4.5 / 5'));
+        assert.ok(revHtml.includes('1250'));
+        const vTexts = verdictTexts(verdictInput1839);
+        assert.ok(vTexts.explanation.includes('15.990.000 ₫'));
+        assert.ok(vTexts.label.includes('10.3%'));
+      }
+
+      g.chrome = { i18n: makeI18n('cs') };
+      const varHtmlCs = renderVariantPickerHtml(variantLookup);
+      assert.ok(
+        varHtmlCs.includes('data-variant="256GB - 4.5G"'),
+        'machine data-variant attribute must remain unchanged under cs'
+      );
+      assert.ok(
+        varHtmlCs.includes(`(15${NBSP}990${NBSP}000${NBSP}₫)`),
+        'variant button label must format VND with Czech NBSP under cs'
+      );
+      assert.equal(ratingStarText(4.5), '★ 4,5');
+      const offHtmlCs = renderOffersCardHtml(offers1839);
+      assert.ok(offHtmlCs.includes(`15${NBSP}990${NBSP}000${NBSP}₫`));
+      assert.ok(offHtmlCs.includes('★ 4,5'));
+      assert.ok(offHtmlCs.includes('href="https://shopee.vn/item-i.88.99"'));
+      const revHtmlCs = renderReviewCardHtml(reviewSummary1839, {
+        rating_score_5: 4.5,
+      });
+      assert.ok(revHtmlCs.includes('★ 4,5 / 5'));
+      assert.ok(revHtmlCs.includes(`92 % (recenze: 1${NBSP}250)`));
+      assert.equal(
+        renderReviewCardHtml(
+          { ...reviewSummary1839, ai_summary: 'Pin tốt' },
+          { rating_score_5: 4.5 },
+          'vi'
+        ).includes('Pin tốt'),
+        false,
+        'Vietnamese ai_summary must stay hidden when catalogue langCode is cs even if explicit locale is vi'
+      );
+      g.chrome = { i18n: makeI18n('vi') };
+      assert.equal(
+        renderReviewCardHtml(
+          { ...reviewSummary1839, ai_summary: 'Pin tốt' },
+          { rating_score_5: 4.5 },
+          'vi-VN'
+        ).includes('Pin tốt'),
+        true,
+        'normalized vi-VN locale under vi catalogue must keep ai_summary'
+      );
+      g.chrome = { i18n: makeI18n('cs') };
+      assert.ok(
+        renderLookupErrorHtml('rate_limited', 'Phone', 1200).includes(
+          `1${NBSP}200${NBSP}s.`
+        )
+      );
+      assert.equal(trustText(88), 'Důvěra 88/100');
+      assert.equal(riskScoreText(12), '12');
+      const vTextsCs = verdictTexts(verdictInput1839);
+      assert.equal(vTextsCs.label, 'Nad trhem +10,3 %');
+      assert.ok(
+        vTextsCs.explanation.includes(`15${NBSP}990${NBSP}000${NBSP}₫`) &&
+          vTextsCs.explanation.includes(`14${NBSP}500${NBSP}000${NBSP}₫`) &&
+          vTextsCs.explanation.includes('10,3 %')
+      );
+
+      // 4. Content-script Shadow DOM Trust Pill rendered UI across vi, en, and cs.
+      {
+        let pillHost1839: { shadowRoot?: { innerHTML: string } } | null = null;
+        let shadowHtml1839 = '';
+        let mutCb1839: (() => void) | undefined;
+        let h1Title1839 = 'iPhone 16 Pro 256GB';
+        let activeLocale1839: 'vi' | 'en' | 'cs' = 'vi';
+        const rafs1839: Array<() => unknown> = [];
+        const timers1839: Array<() => unknown> = [];
+        const sentPayloads1839: Array<Record<string, unknown>> = [];
+        const flushPill1839 = async () => {
+          for (let i = 0; i < 6; i++) {
+            while (rafs1839.length) await rafs1839.shift()!();
+            await Promise.resolve();
+          }
+        };
+
+        g.window = {
+          location: { href: 'https://shopee.vn/iphone-i.1839.2026' },
+        };
+        g.document = {
+          body: {
+            appendChild: (el: { shadowRoot?: { innerHTML: string } }) => {
+              pillHost1839 = el;
+            },
+          },
+          getElementById: (id: string) =>
+            id === 'rate-vn-trust-pill-host' ? pillHost1839 : null,
+          createElement: () => {
+            const shadow = {
+              get innerHTML() {
+                return shadowHtml1839;
+              },
+              set innerHTML(v: string) {
+                shadowHtml1839 = v;
+              },
+              getElementById: () => ({ addEventListener() {} }),
+            };
+            const el = {
+              id: '',
+              shadowRoot: null as typeof shadow | null,
+              attachShadow() {
+                el.shadowRoot = shadow;
+                return shadow;
+              },
+              remove() {
+                pillHost1839 = null;
+              },
+            };
+            return el;
+          },
+          querySelectorAll: () => [],
+          querySelector: (s: string) =>
+            s === 'h1'
+              ? { textContent: h1Title1839 }
+              : s === '.pqTWkA'
+                ? { textContent: '15.990.000₫' }
+                : null,
+        };
+        g.MutationObserver = class {
+          constructor(cb: () => void) {
+            mutCb1839 = cb;
+          }
+          observe() {}
+        };
+        g.requestAnimationFrame = (cb: () => unknown) => {
+          rafs1839.push(cb);
+          return rafs1839.length;
+        };
+        g.setTimeout = ((cb: () => unknown) => {
+          timers1839.push(cb);
+          return timers1839.length;
+        }) as unknown;
+        g.clearTimeout = () => {};
+        g.chrome = {
+          i18n: {
+            getMessage: (key: string, subs?: string | string[]) =>
+              makeI18n(activeLocale1839).getMessage(key, subs),
+          },
+          runtime: {
+            sendMessage: async (msg: Record<string, unknown>) => {
+              sentPayloads1839.push(msg);
+              return {
+                ok: true,
+                data: {
+                  matchStatus: 'exact_listing',
+                  isAccessoryOrPart: false,
+                  priceAssessment: {
+                    verdict: 'genuine_deal',
+                    badgeLabel: 'Giá tốt',
+                    explanation: 'Giá tốt',
+                    messageKey: 'genuine_deal',
+                    messageParams: {
+                      effectivePrice: 15_990_000,
+                      marketMedianPrice: 17_490_000,
+                    },
+                    cheaperOfferCount: 3,
+                    maxSavingsAmount: 1_500_000,
+                    marketMinPrice: 14_490_000,
+                  },
+                  masterProduct: { rating_score_5: 4.5 },
+                  reviewSummary: {
+                    total_analyzed: 80,
+                    authentic_pct: 91,
+                    suspicious_pct: 5,
+                    fake_pct: 4,
+                    pros: [],
+                    cons: [],
+                    ai_summary: null,
+                  },
+                  radarSignal: {
+                    verdict: 'genuine_deal',
+                    savingsPct: 9,
+                    fakeMarkupPct: 0,
+                    spreadPct: 12,
+                    genuineDeal: { verdict: 'genuine_all_time_low' },
+                  },
+                },
+              };
+            },
+          },
+        };
+
+        await import(
+          new URL('./content/content-script.js?case=1839pill', import.meta.url)
+            .href
+        );
+        await flushPill1839();
+        assert.ok(shadowHtml1839.includes('4.5 (91% thật)'));
+        assert.ok(shadowHtml1839.includes('(-1.500.000 ₫)'));
+
+        activeLocale1839 = 'en';
+        h1Title1839 = 'iPhone 16 Pro 512GB';
+        mutCb1839!();
+        while (timers1839.length) timers1839.shift()!();
+        await flushPill1839();
+        assert.ok(shadowHtml1839.includes('4.5 (91% genuine)'));
+        assert.ok(shadowHtml1839.includes('(-1.500.000 ₫)'));
+
+        activeLocale1839 = 'cs';
+        h1Title1839 = 'iPhone 16 Pro 1TB';
+        mutCb1839!();
+        while (timers1839.length) timers1839.shift()!();
+        await flushPill1839();
+        assert.ok(
+          shadowHtml1839.includes('4,5 (91 % skutečných)'),
+          `cs pill rating must use comma decimal: ${shadowHtml1839}`
+        );
+        assert.ok(
+          shadowHtml1839.includes(
+            `Levnější obchody: 3 (-1${NBSP}500${NBSP}000${NBSP}₫)`
+          ),
+          `cs pill savings must use Czech NBSP grouping: ${shadowHtml1839}`
+        );
+        assert.ok(
+          shadowHtml1839.includes(
+            `aria-label="Rate.vn: Skutečně dobrá cena. Minimum napříč obchody (-9 %). 4,5 (91 % skutečných). Levnější obchody: 3 (-1${NBSP}500${NBSP}000${NBSP}₫). Detail. Otevřít panel s analýzou ceny"`
+          ),
+          'cs pill aria-label must match visible Czech-formatted text'
+        );
+        const csSentSignal = (
+          sentPayloads1839.at(-1) as { signal?: { price?: number } }
+        )?.signal;
+        assert.equal(csSentSignal?.price, 15_990_000);
+      }
+
+      // 5. Side panel (sidepanel.ts) full rendered UI across vi, en, and cs.
+      {
+        let activePanelLocale: 'vi' | 'en' | 'cs' = 'cs';
+        const root1839 = {
+          innerHTML: '',
+          querySelectorAll: () => [],
+          querySelector: () => null,
+        };
+        const radarSlot1839 = { innerHTML: '' };
+        const trustSlot1839 = { innerHTML: '' };
+        const storageListeners1839: Array<
+          (changes: Record<string, unknown>, area: string) => void
+        > = [];
+        let onDomReady1839: (() => void) | undefined;
+        const settle1839 = async () => {
+          for (let i = 0; i < 8; i++) await Promise.resolve();
+        };
+
+        const fullLookup1839: ExtensionLookupData = {
+          matchStatus: 'exact_listing',
+          platform: 'shopee',
+          canonicalUrl: 'https://shopee.vn/iphone-i.1839.99',
+          detectedStorageGb: 256,
+          selectedVariant: '256GB - 4.5G',
+          isAccessoryOrPart: false,
+          accessoryReason: null,
+          variantCandidates: variantLookup.variantCandidates,
+          masterProduct: {
+            id: 'mp-1839',
+            slug: 'iphone-16-pro-256gb',
+            name: 'iPhone 16 Pro 256GB',
+            brand: 'Apple',
+            model: 'iPhone 16 Pro',
+            storage_gb: 256,
+            ram_gb: 8,
+            min_price: 15_990_000,
+            max_price: 18_990_000,
+            merchant_count: 4,
+            rating_score_5: 4.5,
+            average_rating: 4.5,
+            user_rating_weighted: 4.5,
+            expert_rating: 8.8,
+            authentic_review_count: 1150,
+            total_reviews: 1250,
+          },
+          matchedOffer: offers1839[0]!,
+          topCheaperOffers: offers1839,
+          allOffers: offers1839,
+          merchantProfile: {
+            id: 'm-cs-1',
+            name: 'Official Flagship',
+            is_official: true,
+            trust_score: 92,
+            risk_score: 8,
+            dosafe_risk_score: 4,
+            review_risk_score: 8,
+          },
+          reviewSummary: reviewSummary1839,
+          priceHistory: {
+            lowestEverPrice: 14_990_000,
+            highestEverPrice: 19_990_000,
+            points: [
+              { date: '2026-11-01', price: 16_990_000 },
+              { date: '2026-11-15', price: 15_990_000 },
+            ],
+          },
+          categorySlug: 'smartphones',
+          compareUrl: '/compare?category=smartphones',
+          productDetailUrl: '/smartphones/iphone-16-pro-256gb',
+          versusUrl: '/compare?category=smartphones&ids=a,b',
+          leaderboardStandings: [
+            {
+              criterion: 'combined',
+              rank: 2,
+              totalInCategory: 45,
+              score5: 4.4,
+              score10: 8.8,
+              categorySlug: 'smartphones',
+            },
+            {
+              criterion: 'camera',
+              rank: 3,
+              totalInCategory: 45,
+              score5: 4.3,
+              score10: 8.6,
+              categorySlug: 'smartphones',
+            },
+          ],
+          radarSignal: {
+            verdict: 'genuine_deal',
+            savingsPct: 8,
+            fakeMarkupPct: 0,
+            spreadPct: 12,
+            genuineDeal: { verdict: 'genuine_all_time_low' },
+          },
+          priceAssessment: {
+            verdict: 'genuine_deal',
+            badgeLabel: 'Giá tốt',
+            explanation: 'Giá tốt',
+            messageKey: 'genuine_deal',
+            messageParams: {
+              effectivePrice: 15_990_000,
+              marketMedianPrice: 17_490_000,
+            },
+            observedPrice: 15_990_000,
+            observedOriginalPrice: 18_990_000,
+            claimedDiscountPct: 16,
+            vsMarketMedianPct: -8.6,
+            marketMinPrice: 15_990_000,
+            marketMedianPrice: 17_490_000,
+            marketMaxPrice: 18_990_000,
+            historicalMinPrice: 14_990_000,
+            historicalMaxPrice: 19_990_000,
+            cheaperOfferCount: 0,
+            maxSavingsAmount: 0,
+          },
+        };
+
+        g.fetch = async (url: unknown) => {
+          const u = String(url);
+          if (u.includes('/api/v1/rate/deals')) {
+            return {
+              ok: true,
+              json: async () => ({
+                ok: true,
+                data: {
+                  genuineDeals: [
+                    {
+                      id: 'd-cs',
+                      verdict: 'genuine_deal',
+                      verdictBadgeVi: 'Giá tốt',
+                      productSlug: 'ipad-air',
+                      productName: 'iPad Air',
+                      categorySlug: 'tablets',
+                      productHref: '/tablets/ipad-air',
+                      platform: 'shopee',
+                      merchantName: 'Apple Store',
+                      offerUrl: 'https://shopee.vn/ipad-i.1.2',
+                      priceCurrent: 13_990_000,
+                      priceOriginal: 15_990_000,
+                      savingsVsMedianVnd: 1_500_000,
+                      savingsVsMedianPct: 10,
+                      fakeMarkupPct: 0,
+                      explanationVi: 'Tốt',
+                    },
+                  ],
+                  priceSpreadLeaders: [
+                    {
+                      id: 'sp-cs',
+                      productSlug: 'iphone-16',
+                      productName: 'iPhone 16',
+                      productHref: '/smartphones/iphone-16',
+                      minPrice: 15_990_000,
+                      maxPrice: 18_490_000,
+                      spreadVnd: 2_500_000,
+                      spreadPct: 16,
+                      cheapestPlatform: 'shopee',
+                      cheapestOfferUrl: 'https://shopee.vn/p-i.1.2',
+                      priciestPlatform: 'tiki',
+                    },
+                  ],
+                  fakeSaleTraps: [
+                    {
+                      id: 'tr-cs',
+                      verdict: 'fake_sale_trap',
+                      verdictBadgeVi: 'Bẫy',
+                      productSlug: 's25',
+                      productName: 'Galaxy S25',
+                      categorySlug: 'smartphones',
+                      productHref: '/smartphones/s25',
+                      platform: 'lazada',
+                      merchantName: 'Trap Shop',
+                      offerUrl: 'https://lazada.vn/s25',
+                      priceCurrent: 19_990_000,
+                      priceOriginal: 29_990_000,
+                      savingsVsMedianVnd: 0,
+                      savingsVsMedianPct: 0,
+                      fakeMarkupPct: 50,
+                      explanationVi: 'Ảo',
+                    },
+                  ],
+                },
+              }),
+            };
+          }
+          if (u.includes('/api/v1/rate/merchants')) {
+            return {
+              ok: true,
+              json: async () => ({
+                ok: true,
+                data: [
+                  {
+                    id: 'm-dir-1',
+                    platform: 'shopee',
+                    name: 'Mega Official',
+                    slug: 'mega-official',
+                    is_official: true,
+                    dosafe_risk_score: 3,
+                    review_risk_score: 7,
+                    risk_score: 7,
+                    trust_score: 93,
+                    product_count: 1250,
+                  },
+                ],
+              }),
+            };
+          }
+          return { ok: false };
+        };
+
+        g.chrome = {
+          i18n: {
+            getMessage: (key: string, subs?: string | string[]) =>
+              makeI18n(activePanelLocale).getMessage(key, subs),
+          },
+          runtime: {
+            sendMessage: async (msg: Record<string, unknown>) => {
+              if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+                return {
+                  ok: true,
+                  settings: {
+                    apiBaseUrl: DEFAULT_API_BASE_URL,
+                    crowdContributeOptIn: false,
+                  },
+                  signal: rawSignal1839,
+                  data: fullLookup1839,
+                };
+              }
+              return { ok: false };
+            },
+          },
+          storage: {
+            local: {
+              get: async () => ({
+                apiBaseUrl: DEFAULT_API_BASE_URL,
+                crowdContributeOptIn: false,
+                crowdConsentVersion: 0,
+              }),
+            },
+            onChanged: {
+              addListener: (
+                fn: (c: Record<string, unknown>, a: string) => void
+              ) => storageListeners1839.push(fn),
+            },
+          },
+        };
+        g.document = {
+          documentElement: { lang: '' },
+          title: '',
+          querySelectorAll: () => [],
+          getElementById: (id: string) => {
+            if (id === 'panel-root') return root1839;
+            if (id === 'deal-radar-slot') return radarSlot1839;
+            if (id === 'merchant-trust-slot') return trustSlot1839;
+            return null;
+          },
+          addEventListener: (ev: string, cb: () => void) => {
+            if (ev === 'DOMContentLoaded') onDomReady1839 = cb;
+          },
+        };
+
+        await import(
+          new URL('./sidepanel/sidepanel.js?case=1839panel', import.meta.url)
+            .href
+        );
+        onDomReady1839!();
+        await settle1839();
+
+        // Czech panel assertions
+        assert.ok(
+          root1839.innerHTML.includes(`15${NBSP}990${NBSP}000${NBSP}₫`)
+        );
+        assert.ok(
+          root1839.innerHTML.includes(`17${NBSP}490${NBSP}000${NBSP}₫`)
+        );
+        assert.ok(
+          root1839.innerHTML.includes(`14${NBSP}990${NBSP}000${NBSP}₫`)
+        );
+        assert.ok(
+          root1839.innerHTML.includes(`19${NBSP}990${NBSP}000${NBSP}₫`)
+        );
+        assert.ok(root1839.innerHTML.includes('8,8 / 10'));
+        assert.ok(root1839.innerHTML.includes('(8,6)'));
+        assert.ok(root1839.innerHTML.includes('★ 4,5 / 5'));
+        assert.ok(root1839.innerHTML.includes('data-variant="256GB - 4.5G"'));
+        assert.ok(
+          root1839.innerHTML.includes(
+            'href="https://rate.vn/smartphones/iphone-16-pro-256gb"'
+          )
+        );
+        assert.ok(
+          radarSlot1839.innerHTML.includes(`13${NBSP}990${NBSP}000${NBSP}₫`) &&
+            radarSlot1839.innerHTML.includes(`1${NBSP}500${NBSP}000${NBSP}₫`) &&
+            radarSlot1839.innerHTML.includes(`2${NBSP}500${NBSP}000${NBSP}₫`) &&
+            radarSlot1839.innerHTML.includes(`29${NBSP}990${NBSP}000${NBSP}₫`)
+        );
+        assert.ok(
+          trustSlot1839.innerHTML.includes(`Produkty: 1${NBSP}250`) &&
+            trustSlot1839.innerHTML.includes('Důvěra 93/100')
+        );
+
+        // Switch to vi and en: dot-grouped VND and dot-decimal scores remain intact.
+        for (const loc of ['vi', 'en'] as const) {
+          activePanelLocale = loc;
+          storageListeners1839.at(-1)!(
+            { lookup_tab_latest: { newValue: loc } },
+            'session'
+          );
+          await settle1839();
+          assert.ok(root1839.innerHTML.includes('15.990.000 ₫'));
+          assert.ok(root1839.innerHTML.includes('8.8 / 10'));
+          assert.ok(root1839.innerHTML.includes('(8.6)'));
+          assert.ok(root1839.innerHTML.includes('★ 4.5 / 5'));
+          assert.ok(radarSlot1839.innerHTML.includes('13.990.000 ₫'));
+          assert.ok(trustSlot1839.innerHTML.includes('1250'));
+        }
+      }
+
+      console.log(
+        '  ✅ [Czech (cs) VND NBSP grouping & comma-decimal formatting across pill and sidepanel (#1839)] Verified'
+      );
+    } finally {
+      for (const [key, desc] of savedGlobals1839) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

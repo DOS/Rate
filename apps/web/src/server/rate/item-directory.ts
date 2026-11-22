@@ -61,6 +61,66 @@ const getCachedItemLinks = async (
   return new Map(entries);
 };
 
+export interface CatalogItemGroupingResult<T extends MasterProduct> {
+  rows: Array<T & ItemCatalogRow>;
+  /** True when `RATE_ITEM_MODEL` is on and the Item tables exist. */
+  itemModelActive: boolean;
+  /**
+   * True when `RATE_ITEM_MODEL` is on and the Item link read failed, so `rows`
+   * fell back to ungrouped variant rows whose Item slugs are unknown (#1834).
+   */
+  degraded: boolean;
+}
+
+/**
+ * Catalogue rows grouped into one row per Item, together with whether the Item
+ * model was active and whether a failed link read degraded to variant rows
+ * (DOS/Rate#1834).
+ */
+export async function groupCatalogRowsByItemWithStatus<T extends MasterProduct>(
+  rows: readonly T[]
+): Promise<CatalogItemGroupingResult<T>> {
+  if (!isItemModelOn()) {
+    return {
+      rows: rows as Array<T & ItemCatalogRow>,
+      itemModelActive: false,
+      degraded: false,
+    };
+  }
+  try {
+    const links = await getCachedItemLinks(
+      rows.map((r) => r.id).filter(Boolean)
+    );
+    return {
+      rows: groupRowsByItem(rows, links),
+      itemModelActive: true,
+      degraded: false,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof ItemModelUnavailableError) {
+      log.warn('item model unavailable, showing variants', {
+        what: 'catalogue rows',
+        message,
+      });
+      return {
+        rows: rows as Array<T & ItemCatalogRow>,
+        itemModelActive: false,
+        degraded: false,
+      };
+    }
+    log.error('item read failed, showing variants', {
+      what: 'catalogue rows',
+      message,
+    });
+    return {
+      rows: rows as Array<T & ItemCatalogRow>,
+      itemModelActive: true,
+      degraded: true,
+    };
+  }
+}
+
 /**
  * Catalogue rows grouped into one row per Item (one card, one leaderboard
  * slot); the rows unchanged while the Item model is off.
@@ -68,13 +128,8 @@ const getCachedItemLinks = async (
 export async function groupCatalogRowsByItem<T extends MasterProduct>(
   rows: readonly T[]
 ): Promise<Array<T & ItemCatalogRow>> {
-  const grouped = await whenItemModel('catalogue rows', async () =>
-    groupRowsByItem(
-      rows,
-      await getCachedItemLinks(rows.map((r) => r.id).filter(Boolean))
-    )
-  );
-  return grouped ?? (rows as Array<T & ItemCatalogRow>);
+  const { rows: grouped } = await groupCatalogRowsByItemWithStatus(rows);
+  return grouped;
 }
 
 // The catalogue read returns at most 500 variants; a category is read in

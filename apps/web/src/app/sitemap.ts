@@ -2,6 +2,8 @@ import type { MetadataRoute } from 'next';
 import {
   canonicalVersusOrder,
   isParseableVersusPair,
+  itemSlugFromProductAnswer,
+  versusHref,
 } from '@/lib/item-compare';
 import { env } from '@/env.mjs';
 import { createLogger, serializeError } from '@/lib/logger';
@@ -10,9 +12,11 @@ import {
   getCachedSitemapRows,
   getMasterProductCategorySlug,
   getMasterProductHref,
+  sanitizeCachedProductSlug,
 } from '@/server/rate';
 import {
   buildPopular1v1BattlesForCategory,
+  rankMasterProductsForLeaderboard,
   VALID_LEADERBOARD_CATEGORIES,
 } from '@/lib/leaderboard-engine';
 import type { CanonicalCategorySlug } from '@/lib/rate-domain-core';
@@ -140,6 +144,23 @@ function staticEntries(
   });
 }
 
+function isSafeVersusSlug(slug: string): boolean {
+  return (
+    Boolean(slug) &&
+    !slug.toLowerCase().includes('-vs-') &&
+    itemSlugFromProductAnswer({ ok: true, data: { item: { slug } } }, '') ===
+      slug
+  );
+}
+
+function isValidMasterCatalogSlug(slug: string): boolean {
+  return slug.length > 0 && sanitizeCachedProductSlug(slug) === slug;
+}
+
+function isValidMasterVersusSlug(slug: string): boolean {
+  return isValidMasterCatalogSlug(slug) && isSafeVersusSlug(slug);
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     // Product and merchant URLs come from the whole catalogue; the curated
@@ -153,9 +174,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const itemSlugs = rows.itemSlugByVariantSlug ?? null;
     const catSlugById = rows.categorySlugById;
 
+    const variantsByItemSlug = new Map<string, string[]>();
+    const itemSlugBySlug: Record<string, string> | null = itemSlugs
+      ? (Object.create(null) as Record<string, string>)
+      : null;
+    if (itemSlugs && itemSlugBySlug) {
+      for (const [variantSlug, itemSlug] of itemSlugs) {
+        if (!variantSlug || !itemSlug) continue;
+        if (variantSlug !== '__proto__') {
+          itemSlugBySlug[variantSlug] = itemSlug;
+        }
+        const list = variantsByItemSlug.get(itemSlug);
+        if (list) list.push(variantSlug);
+        else variantsByItemSlug.set(itemSlug, [variantSlug]);
+      }
+    }
+
     const dates = buildSitemapLastModified(
       rows.products.map((product) => ({
         slug: product.slug,
+        fallbackSlugs: variantsByItemSlug.get(product.slug),
         categorySlug: getMasterProductCategorySlug(product, catSlugById),
         updatedAt: product.updated_at,
       }))
@@ -166,7 +204,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       return {
         ...product,
         metadata: {
-          ...(product.metadata && typeof product.metadata === 'object'
+          ...(product.metadata &&
+          typeof product.metadata === 'object' &&
+          !Array.isArray(product.metadata)
             ? product.metadata
             : {}),
           category_slug: catSlug,
@@ -188,44 +228,125 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const versusSeen = new Set<string>();
     const versusEntries: MetadataRoute.Sitemap =
-      VALID_LEADERBOARD_CATEGORIES.flatMap((category) =>
-        buildPopular1v1BattlesForCategory(stampedProducts, category, 3).flatMap(
-          (pair) => {
-            const slugA =
-              itemSlugs?.get(pair.productA.slug) ?? pair.productA.slug;
-            const slugB =
-              itemSlugs?.get(pair.productB.slug) ?? pair.productB.slug;
-            // Sides sorted: the pair's one canonical URL (DOS/Rate#1367).
-            const href = itemSlugs
-              ? `/compare/${canonicalVersusOrder(slugA, slugB).join('-vs-')}`
-              : pair.versusHref;
-            // Two sizes of one Item are no versus, and a pair is listed once.
-            // One entry per Item pair, whichever way round it was ranked.
-            const pairKey = [slugA, slugB].sort().join('|');
-            if (
-              itemSlugs &&
-              (slugA === slugB ||
-                versusSeen.has(pairKey) ||
-                slugA.includes('-vs-') ||
-                slugB.includes('-vs-') ||
-                // Neither order parses back: no versus page (#1367).
-                !isParseableVersusPair(...canonicalVersusOrder(slugA, slugB)))
-            ) {
-              return [];
-            }
-            versusSeen.add(pairKey);
-            const lastModified = versusLastModified(dates, slugA, slugB);
-            return [
-              {
-                url: `${baseUrl}${href}`,
-                ...(lastModified ? { lastModified } : {}),
-                changeFrequency: 'daily' as const,
-                priority: 0.83,
-              },
-            ];
+      VALID_LEADERBOARD_CATEGORIES.flatMap((category) => {
+        // Deduplicate category candidates per Item (when RATE_ITEM_MODEL is
+        // active) and per case-insensitive side slug before pairing, so
+        // multi-size Items do not pair with themselves and starve the 3
+        // curated 1v1 slots (DOS/Rate#1822).
+        const ranked = rankMasterProductsForLeaderboard(stampedProducts, {
+          category,
+          criterion: 'combined',
+        });
+        const seenItemKeys = new Set<string>();
+        const seenSideKeys = new Set<string>();
+        const sideByVariantSlug = new Map<
+          string,
+          { side: string; mappedItemSlug?: string }
+        >();
+        const categoryCandidates: typeof products = [];
+
+        for (const entry of ranked) {
+          const variantSlug = entry.slug;
+          if (!variantSlug) continue;
+          const mappedItemSlug = itemSlugs
+            ? (itemSlugs.get(entry.product.slug) ?? itemSlugs.get(variantSlug))
+            : undefined;
+          // An Item whose stored slug holds "-vs-" has no versus route (#1275),
+          // even when versusHref would fall back to the variant slug.
+          if (
+            typeof mappedItemSlug === 'string' &&
+            mappedItemSlug.toLowerCase().includes('-vs-')
+          ) {
+            continue;
           }
-        )
-      );
+          const hasSafeItemSlug =
+            typeof mappedItemSlug === 'string' &&
+            isSafeVersusSlug(mappedItemSlug);
+          if (hasSafeItemSlug) {
+            // Canonical Item URLs may preserve mixed case (#1383), provided the
+            // variant row itself has a valid lowercase master slug for
+            // getCachedCompareMasterProducts on /compare/[versus].
+            if (!isValidMasterCatalogSlug(variantSlug)) {
+              continue;
+            }
+          } else if (!isValidMasterVersusSlug(variantSlug)) {
+            // Variant mode, unlinked rows, and fallback variant URLs must be
+            // exact lowercase master slugs without "-vs-" so /compare/[versus]
+            // neither 308s nor 404s.
+            continue;
+          }
+          const effectiveSide = hasSafeItemSlug ? mappedItemSlug : variantSlug;
+          const itemKey = mappedItemSlug ? mappedItemSlug.toLowerCase() : null;
+          const sideKey = effectiveSide.toLowerCase();
+          if (
+            (itemKey && seenItemKeys.has(itemKey)) ||
+            seenSideKeys.has(sideKey)
+          ) {
+            continue;
+          }
+          if (itemKey) seenItemKeys.add(itemKey);
+          seenSideKeys.add(sideKey);
+          if (itemSlugBySlug && mappedItemSlug && variantSlug !== '__proto__') {
+            itemSlugBySlug[variantSlug] = mappedItemSlug;
+          }
+          sideByVariantSlug.set(variantSlug, {
+            side: effectiveSide,
+            ...(mappedItemSlug ? { mappedItemSlug } : {}),
+          });
+          categoryCandidates.push(entry.product);
+        }
+
+        const categoryEntries: MetadataRoute.Sitemap = [];
+        for (const pair of buildPopular1v1BattlesForCategory(
+          categoryCandidates,
+          category,
+          20
+        )) {
+          if (categoryEntries.length >= 3) break;
+          const variantSlugA = pair.productA.slug;
+          const variantSlugB = pair.productB.slug;
+          const resolvedA = sideByVariantSlug.get(variantSlugA);
+          const resolvedB = sideByVariantSlug.get(variantSlugB);
+          if (!resolvedA || !resolvedB) continue;
+
+          // Build canonical 1v1 URL via versusHref and enforce parseable /
+          // case-insensitive duplicate guards in both Item and variant modes
+          // (DOS/Rate#1367, #1768, #1822).
+          const href = versusHref(variantSlugA, variantSlugB, itemSlugBySlug);
+          const [firstSlug, secondSlug] = canonicalVersusOrder(
+            resolvedA.side,
+            resolvedB.side
+          );
+          const pairKey = [firstSlug.toLowerCase(), secondSlug.toLowerCase()]
+            .sort()
+            .join('|');
+          if (
+            href !== `/compare/${firstSlug}-vs-${secondSlug}` ||
+            firstSlug.toLowerCase() === secondSlug.toLowerCase() ||
+            versusSeen.has(pairKey) ||
+            !isSafeVersusSlug(firstSlug) ||
+            !isSafeVersusSlug(secondSlug) ||
+            firstSlug.toLowerCase().includes('-vs-') ||
+            secondSlug.toLowerCase().includes('-vs-') ||
+            !isParseableVersusPair(firstSlug, secondSlug)
+          ) {
+            continue;
+          }
+          versusSeen.add(pairKey);
+          const lastModified = versusLastModified(
+            dates,
+            [resolvedA.side, resolvedA.mappedItemSlug, variantSlugA],
+            [resolvedB.side, resolvedB.mappedItemSlug, variantSlugB]
+          );
+          categoryEntries.push({
+            url: `${baseUrl}${href}`,
+            ...(lastModified ? { lastModified } : {}),
+            changeFrequency: 'daily',
+            priority: 0.83,
+          });
+        }
+        return categoryEntries;
+      });
 
     const merchantEntries: MetadataRoute.Sitemap = rows.merchants.map(
       (merchant) => {

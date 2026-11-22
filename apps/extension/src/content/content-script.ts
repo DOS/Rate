@@ -1,4 +1,7 @@
-import { extractProductSignalFromDom } from '../extractors/ecommerce-detector.js';
+import {
+  extractProductSignalFromDom,
+  sanitizeProductUrl,
+} from '../extractors/ecommerce-detector.js';
 import {
   buildProductSignalSignature,
   formatSafeExtensionVnd,
@@ -32,21 +35,38 @@ function isValidPillVndPrice(amount: unknown): amount is number {
   );
 }
 
-function formatCurrencyVnd(amount: number | null | undefined): string {
-  return formatSafeExtensionVnd(amount, t('priceUpdating'));
+function formatCurrencyVnd(
+  amount: number | null | undefined,
+  locale = t('langCode')
+): string {
+  return formatSafeExtensionVnd(amount, t('priceUpdating'), locale);
 }
 
 /**
  * Render an isolated Shadow DOM Floating Trust Pill on supported e-commerce pages.
  * Zero host CSS pollution; clicking opens the Chrome Native Side Panel.
  */
-function renderShadowTrustPill(lookup: ExtensionLookupData): void {
+function renderShadowTrustPill(
+  lookup: ExtensionLookupData,
+  expectedGeneration = detectGeneration,
+  expectedCanonicalUrl?: string
+): void {
   if (!shouldRenderTrustPill(lookup)) {
     removeTrustPillHost();
     return;
   }
 
   requestAnimationFrame(() => {
+    if (expectedGeneration !== detectGeneration) {
+      return;
+    }
+    if (
+      expectedCanonicalUrl &&
+      sanitizeProductUrl(window.location.href) !== expectedCanonicalUrl
+    ) {
+      void inspectCurrentPage();
+      return;
+    }
     let host = document.getElementById(HOST_ID);
     if (!host) {
       host = document.createElement('div');
@@ -55,6 +75,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
     }
 
     const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    const uiLocale = t('langCode');
     const assessment = lookup.priceAssessment;
     // The verdict in the extension's language (DOS/Rate#1326).
     const verdict = verdictTexts(assessment);
@@ -78,11 +99,17 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
     const cheaperSummary =
       hasCheaperOffers && isValidPillVndPrice(assessment.maxSavingsAmount)
         ? t('pillCheaperAt', [
-            formatSafeNumber(assessment.cheaperOfferCount, { min: 1 }),
-            formatCurrencyVnd(assessment.maxSavingsAmount),
+            formatSafeNumber(
+              assessment.cheaperOfferCount,
+              { min: 1 },
+              uiLocale
+            ),
+            formatCurrencyVnd(assessment.maxSavingsAmount, uiLocale),
           ])
         : isValidPillVndPrice(assessment.marketMinPrice)
-          ? t('pillMarketLow', [formatCurrencyVnd(assessment.marketMinPrice)])
+          ? t('pillMarketLow', [
+              formatCurrencyVnd(assessment.marketMinPrice, uiLocale),
+            ])
           : t('pillPrompt');
     const radarSig = lookup.radarSignal;
     const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
@@ -95,14 +122,22 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
               cls: 'radar-deal',
               icon: '🔥',
               text: t('pillRadarDeal', [
-                formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 }),
+                formatSafeNumber(
+                  radarSig.savingsPct,
+                  { min: 0, max: 100 },
+                  uiLocale
+                ),
               ]),
             }
           : {
               cls: 'radar-deal',
               icon: '✅',
               text: t('pillRadarBelowMedian', [
-                formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 }),
+                formatSafeNumber(
+                  radarSig.savingsPct,
+                  { min: 0, max: 100 },
+                  uiLocale
+                ),
               ]),
             }
         : radarSig.verdict === 'fake_sale_trap'
@@ -110,10 +145,14 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
               cls: 'radar-trap',
               icon: '🚨',
               text: t('pillRadarTrap', [
-                formatSafeNumber(radarSig.fakeMarkupPct, {
-                  min: 0,
-                  max: 10000,
-                }),
+                formatSafeNumber(
+                  radarSig.fakeMarkupPct,
+                  {
+                    min: 0,
+                    max: 10000,
+                  },
+                  uiLocale
+                ),
               ]),
             }
           : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
@@ -121,7 +160,11 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
                 cls: 'radar-spread',
                 icon: '📊',
                 text: t('pillRadarSpread', [
-                  formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 }),
+                  formatSafeNumber(
+                    radarSig.spreadPct,
+                    { min: 0, max: 10000 },
+                    uiLocale
+                  ),
                 ]),
               }
             : null
@@ -130,7 +173,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
       ? `<span class="radar-chip ${radarBadge.cls}"><span aria-hidden="true">${radarBadge.icon} </span>${escapeHtml(radarBadge.text)}</span>`
       : '';
     const ratingText = trustedRating
-      ? `${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 })}${authenticRatio == null ? '' : ` ${t('pillAuthentic', [formatSafeNumber(authenticRatio, { min: 0, max: 100 })])}`}`
+      ? `${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 }, uiLocale)}${authenticRatio == null ? '' : ` ${t('pillAuthentic', [formatSafeNumber(authenticRatio, { min: 0, max: 100 }, uiLocale)])}`}`
       : '';
 
     shadow.innerHTML = `
@@ -254,7 +297,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
     const trigger = shadow.getElementById('rate-pill-trigger');
     if (trigger) {
       const openSidePanel = () => {
-        void chrome.runtime.sendMessage({ type: 'RATE_OPEN_SIDE_PANEL' });
+        sendRuntimeMessageFireAndForget({ type: 'RATE_OPEN_SIDE_PANEL' });
       };
       trigger.addEventListener('click', openSidePanel);
       trigger.addEventListener('keydown', (event: KeyboardEvent) => {
@@ -267,27 +310,79 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
   });
 }
 
+function sendRuntimeMessageFireAndForget(
+  payload: Record<string, unknown>
+): void {
+  try {
+    void Promise.resolve(chrome.runtime.sendMessage(payload)).catch(() => {
+      // Ignore messaging rejections during page unload or worker restart
+    });
+  } catch {
+    // Ignore synchronous messaging errors if extension context was invalidated
+  }
+}
+
 // Lookups sent from this page, so a late answer for an earlier product is
-// ignored (DOS/Rate#1300).
+// ignored (DOS/Rate#1300, #1809).
 let detectGeneration = 0;
 let lastProcessedSignature = '';
+let hasDetectedProduct = false;
+let prerenderListenerAttached = false;
 // After a rate limit the same product is looked up again once the wait is over
 // (DOS/Rate#1466).
 const rateLimitRetry = new RateLimitRetry();
 
+function deferWhilePrerendering(): boolean {
+  const prerenderingDoc = document as Document & {
+    prerendering?: boolean;
+    addEventListener?: (
+      type: string,
+      listener: () => void,
+      options?: { once?: boolean }
+    ) => void;
+  };
+  if (prerenderingDoc.prerendering !== true) {
+    return false;
+  }
+  if (
+    !prerenderListenerAttached &&
+    typeof prerenderingDoc.addEventListener === 'function'
+  ) {
+    prerenderListenerAttached = true;
+    prerenderingDoc.addEventListener(
+      'prerenderingchange',
+      () => {
+        prerenderListenerAttached = false;
+        void inspectCurrentPage();
+      },
+      { once: true }
+    );
+  }
+  return true;
+}
+
 async function inspectCurrentPage(): Promise<void> {
+  if (deferWhilePrerendering()) return;
   requestAnimationFrame(async () => {
+    if (deferWhilePrerendering()) return;
     const signal = extractProductSignalFromDom(document, window.location.href);
     if (!signal) {
+      ++detectGeneration;
+      const shouldNotifyCleared = hasDetectedProduct;
+      hasDetectedProduct = false;
       lastProcessedSignature = '';
       rateLimitRetry.track('');
       removeTrustPillHost();
+      if (shouldNotifyCleared) {
+        sendRuntimeMessageFireAndForget({ type: 'RATE_PRODUCT_CLEARED' });
+      }
       return;
     }
 
     const signature = buildProductSignalSignature(signal);
     if (signature === lastProcessedSignature) return;
     lastProcessedSignature = signature;
+    hasDetectedProduct = true;
     rateLimitRetry.track(signature);
     // Only the latest page's answer may draw or clear the pill: on a
     // single-page shop an earlier lookup can answer after a later one.
@@ -306,12 +401,22 @@ async function inspectCurrentPage(): Promise<void> {
       };
 
       if (generation !== detectGeneration || response?.stale === true) return;
+      if (sanitizeProductUrl(window.location.href) !== signal.canonicalUrl) {
+        void inspectCurrentPage();
+        return;
+      }
+      if (response?.ok === false && response.status === undefined) {
+        lastProcessedSignature = '';
+        hasDetectedProduct = false;
+        removeTrustPillHost();
+        return;
+      }
       rateLimitRetry.after(signature, response, () => {
         lastProcessedSignature = '';
         void inspectCurrentPage();
       });
       if (response?.ok && response.data) {
-        renderShadowTrustPill(response.data);
+        renderShadowTrustPill(response.data, generation, signal.canonicalUrl);
       } else {
         // Nothing matched or the lookup failed: never leave the previous
         // product's pill on a single-page shop (DOS/Rate#1300).
@@ -325,13 +430,39 @@ async function inspectCurrentPage(): Promise<void> {
   });
 }
 
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleImmediateInspection(): void {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  void inspectCurrentPage();
+}
+
 // Initial inspection + lightweight observation for SPA route/variant selection changes
 void inspectCurrentPage();
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+if (typeof window !== 'undefined') {
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('popstate', scheduleImmediateInspection);
+    window.addEventListener('hashchange', scheduleImmediateInspection);
+  }
+  const nav = (
+    window as Window & {
+      navigation?: {
+        addEventListener?: (type: string, listener: () => void) => void;
+      };
+    }
+  ).navigation;
+  if (nav && typeof nav.addEventListener === 'function') {
+    nav.addEventListener('currententrychange', scheduleImmediateInspection);
+  }
+}
+
 const observer = new MutationObserver(() => {
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
+    debounceTimer = null;
     void inspectCurrentPage();
   }, 700);
 });

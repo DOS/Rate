@@ -60,8 +60,10 @@ function createDb(handler: (call: Call) => Result | undefined) {
     // One page of rows: later pages are empty.
     b.range = (from: number) => Promise.resolve(from > 0 ? { data: [], error: null } : run(call));
     b.maybeSingle = () => Promise.resolve(run(call));
-    b.then = (resolve: (r: Result) => unknown, reject?: (e: unknown) => unknown) =>
-      Promise.resolve(run(call)).then(resolve, reject);
+    b.then = (resolve: (r: Result) => unknown, reject?: (e: unknown) => unknown) => {
+      const res = call.filters.some(([op]) => op === 'gt') ? { data: [], error: null } : run(call);
+      return Promise.resolve(res).then(resolve, reject);
+    };
     return b;
   };
   const client = {

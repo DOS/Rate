@@ -8,6 +8,7 @@ import {
   REVIEW_POINTS_MAX,
   REVIEW_VERDICT_MAX,
   getRatingCriteria,
+  getRatingCriterionLabel,
   type RatingCriterion,
 } from '@repo/shared-data/rules';
 import type { ReviewItem } from '@/lib/rate-domain';
@@ -309,8 +310,7 @@ export default function ReviewFormV2({
     () => getRatingCriteria(categorySlug ?? null),
     [categorySlug]
   );
-  const labelOf = (c: RatingCriterion) =>
-    locale === 'vi' ? c.label.vi : c.label.en;
+  const labelOf = (c: RatingCriterion) => getRatingCriterionLabel(c, locale);
   const draftKey = masterProductId
     ? `${REVIEW_V2_DRAFT_PREFIX}${masterProductId}`
     : null;

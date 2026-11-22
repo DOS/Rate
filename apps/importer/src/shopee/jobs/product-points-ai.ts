@@ -16,7 +16,12 @@
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { aggregateProductPoints, type PointCluster, type PointLine } from '@repo/shared-data/rules';
-import { fetchAllPages, resolveBackfillSupabaseTarget } from '../paging.js';
+import {
+  fetchByKey,
+  parseStrictMasterUuid,
+  resolveBackfillSupabaseTarget,
+  STRICT_UUID_REGEX,
+} from '../paging.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
 import {
@@ -47,13 +52,114 @@ import {
   type BatchRequest,
   type ReviewAiClient,
 } from './review-ai-points.js';
-import { fetchByKey } from './review-values.js';
 
 const logger = createImporterLogger('ProductPointsAiJob');
 const IN_CHUNK = 150;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = STRICT_UUID_REGEX;
 const DEFAULT_WAIT_MINUTES = 30;
+const MAX_WAIT_MINUTES = 1440;
 const POLL_MS = 5_000;
+
+export interface ProductPointsAiCliArgs {
+  readonly apply: boolean;
+  readonly force: boolean;
+  readonly masterId: string | null;
+  readonly hideAiLines: boolean;
+  readonly waitMinutes: number;
+}
+
+function parseWaitMinutesValue(raw: string): number {
+  const trimmed = raw.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) {
+    throw new Error('--wait-minutes must be a positive whole number between 1 and 1440.');
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_WAIT_MINUTES) {
+    throw new Error('--wait-minutes must be a positive whole number between 1 and 1440.');
+  }
+  return parsed;
+}
+
+/**
+ * Strictly parses CLI arguments (`process.argv.slice(2)`) for `product-points-ai.ts`.
+ * Supports `--master <uuid>` and `--master=<uuid>` (plus `--wait-minutes <n>` / `=<n>`),
+ * failing closed before any auth or DB call on missing/empty/malformed values,
+ * repeated flags, or unknown CLI flags.
+ */
+export function parseProductPointsAiArgs(
+  argv: readonly string[],
+  env: Record<string, string | undefined> = process.env
+): ProductPointsAiCliArgs {
+  let apply = false;
+  let force = false;
+  let masterId: string | null = null;
+  let waitMinutes: number | null = null;
+  let hideAiSeen = false;
+  let hideAiLines = hideAiLinesFrom([], env);
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]!;
+    if (arg === '--apply') {
+      if (apply) throw new Error('--apply is repeated.');
+      apply = true;
+      continue;
+    }
+    if (arg === '--force') {
+      if (force) throw new Error('--force is repeated.');
+      force = true;
+      continue;
+    }
+    if (arg === '--master') {
+      if (masterId !== null) throw new Error('--master is repeated.');
+      const next = argv[i + 1];
+      if (next === undefined || next === '' || next.startsWith('-')) {
+        throw new Error('--master requires a valid UUID.');
+      }
+      masterId = parseStrictMasterUuid(next, '--master');
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--master=')) {
+      if (masterId !== null) throw new Error('--master is repeated.');
+      const raw = arg.slice('--master='.length);
+      if (!raw) throw new Error('--master requires a valid UUID.');
+      masterId = parseStrictMasterUuid(raw, '--master');
+      continue;
+    }
+    if (arg === '--wait-minutes') {
+      if (waitMinutes !== null) throw new Error('--wait-minutes is repeated.');
+      const next = argv[i + 1];
+      if (next === undefined || next === '' || next.startsWith('-')) {
+        throw new Error('--wait-minutes requires a positive integer.');
+      }
+      waitMinutes = parseWaitMinutesValue(next);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--wait-minutes=')) {
+      if (waitMinutes !== null) throw new Error('--wait-minutes is repeated.');
+      const raw = arg.slice('--wait-minutes='.length);
+      if (!raw) throw new Error('--wait-minutes requires a positive integer.');
+      waitMinutes = parseWaitMinutesValue(raw);
+      continue;
+    }
+    if (arg === '--hide-ai' || arg.startsWith('--hide-ai=')) {
+      if (hideAiSeen) throw new Error('--hide-ai is repeated.');
+      hideAiSeen = true;
+      hideAiLines = hideAiLinesFrom([arg], env);
+      continue;
+    }
+    throw new Error(`Unknown CLI argument: ${JSON.stringify(arg)}.`);
+  }
+
+  return {
+    apply,
+    force,
+    masterId,
+    hideAiLines,
+    waitMinutes: waitMinutes ?? DEFAULT_WAIT_MINUTES,
+  };
+}
 
 export interface StoredProductPointRow {
   id: string;
@@ -150,19 +256,19 @@ export async function runProductPointsAiJob(
   const apply = options.apply === true;
   const force = options.force === true;
   const now = options.now ?? new Date();
-  const only = options.masterId ?? null;
-  if (only !== null && !UUID_RE.test(only)) throw new Error('--master must be a UUID.');
+  const only =
+    options.masterId === undefined || options.masterId === null
+      ? null
+      : parseStrictMasterUuid(options.masterId, '--master');
   const model = options.model ?? DEFAULT_REVIEW_AI_MODEL;
   const hideAiLines = options.hideAiLines === true;
 
-  const stored = await fetchAllPages<StoredProductPointRow>('product_points', (from, to) =>
-    supabase
-      .from('product_points')
-      .select(
-        'id, master_id, criterion_key, kind, label, support, reviewer_count, has_expert, first_seen, last_seen, method, updated_at'
-      )
-      .order('id')
-      .range(from, to)
+  const stored = await fetchByKey<StoredProductPointRow>(
+    supabase,
+    'product_points',
+    'id, master_id, criterion_key, kind, label, support, reviewer_count, has_expert, first_seen, last_seen, method, updated_at',
+    'id',
+    only === null ? undefined : query => query.eq('master_id', only)
   );
 
   const codeByMaster = new Map<string, StoredProductPointRow[]>();
@@ -228,9 +334,7 @@ export async function runProductPointsAiJob(
     'id',
     dueMasterIds
   );
-  const categories = await fetchAllPages<CategoryRow>('categories', (from, to) =>
-    supabase.from('categories').select('id, slug').order('id').range(from, to)
-  );
+  const categories = await fetchByKey<CategoryRow>(supabase, 'categories', 'id, slug', 'id');
   const listings = await selectIn<PointListingRow>(
     supabase,
     'products',
@@ -489,6 +593,28 @@ if (isDirectExecution) {
   dotenv.config({ quiet: true });
   dotenv.config({ path: '../../.env', quiet: true });
   (async () => {
+    const { apply, force, masterId, hideAiLines, waitMinutes } = parseProductPointsAiArgs(
+      process.argv.slice(2),
+      process.env
+    );
+    const rawModel = (process.env.REVIEW_AI_MODEL || DEFAULT_REVIEW_AI_MODEL).trim();
+    if (!isReviewAiModel(rawModel)) {
+      throw new Error(`Unsupported REVIEW_AI_MODEL: ${JSON.stringify(rawModel)}.`);
+    }
+
+    let aiClient: ReviewAiClient | null = null;
+    if (apply) {
+      const aiKey = (process.env.DOS_AI_API_KEY || '').trim();
+      if (!aiKey) {
+        throw new Error('Missing DOS_AI_API_KEY in environment for --apply.');
+      }
+      const aiBase = (process.env.DOS_AI_BASE_URL || DOS_AI_DEFAULT_BASE_URL).trim();
+      if (!/^https:\/\/[^/\s]+(\/[^\s]*)?$/.test(aiBase)) {
+        throw new Error('DOS_AI_BASE_URL must be an https:// URL.');
+      }
+      aiClient = dosAiReviewAiClient(aiKey, aiBase);
+    }
+
     const { createClient } = await import('@supabase/supabase-js');
     const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const key = (
@@ -514,51 +640,29 @@ if (isDirectExecution) {
         `Sign-in as the rate_worker user failed: ${authError?.message ?? 'no session'}`
       );
     }
-    const role = (auth.user?.role ?? '').trim();
-    if (role !== 'rate_worker') {
-      throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
-    }
-    const apply = process.argv.includes('--apply');
-    const force = process.argv.includes('--force');
-    const masterIdx = process.argv.indexOf('--master');
-    const masterId = masterIdx >= 0 ? (process.argv[masterIdx + 1] ?? '') : null;
-    const waitIdx = process.argv.indexOf('--wait-minutes');
-    const waitMinutes =
-      waitIdx >= 0 ? Number.parseInt(process.argv[waitIdx + 1] ?? '', 10) : DEFAULT_WAIT_MINUTES;
-    const hideAiLines = hideAiLinesFrom(process.argv, process.env);
-    const rawModel = (process.env.REVIEW_AI_MODEL || DEFAULT_REVIEW_AI_MODEL).trim();
-    if (!isReviewAiModel(rawModel)) {
-      throw new Error(`Unsupported REVIEW_AI_MODEL: ${JSON.stringify(rawModel)}.`);
-    }
-
-    let aiClient: ReviewAiClient | null = null;
-    if (apply) {
-      const aiKey = (process.env.DOS_AI_API_KEY || '').trim();
-      if (!aiKey) {
-        throw new Error('Missing DOS_AI_API_KEY in environment for --apply.');
+    try {
+      const role = (auth.user?.role ?? '').trim();
+      if (role !== 'rate_worker') {
+        throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
       }
-      const aiBase = (process.env.DOS_AI_BASE_URL || DOS_AI_DEFAULT_BASE_URL).trim();
-      if (!/^https:\/\/[^/\s]+(\/[^\s]*)?$/.test(aiBase)) {
-        throw new Error('DOS_AI_BASE_URL must be an https:// URL.');
-      }
-      aiClient = dosAiReviewAiClient(aiKey, aiBase);
-    }
 
-    logger.info(
-      'product_points_ai.target',
-      `Target: ${host} (${apply ? 'apply' : 'dry run'}${force ? ', force' : ''}${hideAiLines ? ', AI lines hidden' : ''})`,
-      { host, apply, force, hideAiLines, model: rawModel }
-    );
-    await runProductPointsAiJob(scopeSupabaseToRate(client), {
-      apply,
-      force,
-      masterId,
-      hideAiLines,
-      model: rawModel,
-      waitMinutes:
-        Number.isFinite(waitMinutes) && waitMinutes > 0 ? waitMinutes : DEFAULT_WAIT_MINUTES,
-      aiClient,
-    });
+      logger.info(
+        'product_points_ai.target',
+        `Target: ${host} (${apply ? 'apply' : 'dry run'}${force ? ', force' : ''}${hideAiLines ? ', AI lines hidden' : ''})`,
+        { host, apply, force, hideAiLines, model: rawModel }
+      );
+      await runProductPointsAiJob(scopeSupabaseToRate(client), {
+        apply,
+        force,
+        masterId,
+        hideAiLines,
+        model: rawModel,
+        waitMinutes,
+        aiClient,
+      });
+    } finally {
+      await client.auth.signOut().catch(() => undefined);
+    }
   })().catch((err: unknown) => {
     logger.error(
       'product_points_ai.fatal',

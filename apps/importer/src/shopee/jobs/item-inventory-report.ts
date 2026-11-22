@@ -18,7 +18,7 @@ import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { FLAGSHIP_DEVICES_TO_SEED, type FlagshipDeviceSeed } from '../flagship-seed-data.js';
 import { createImporterLogger } from '../logger.js';
-import { fetchAllPages, resolveBackfillSupabaseTarget } from '../paging.js';
+import { fetchByKey, resolveBackfillSupabaseTarget } from '../paging.js';
 import { ProductNormalizer } from '../product-normalizer.js';
 import { scopeSupabaseToRate, type RateSupabaseClient, type ShopeeProduct } from '../types.js';
 
@@ -267,23 +267,25 @@ export function buildInventoryReport(input: {
   };
 }
 
+export function parseItemInventoryArgs(argv: readonly string[]): void {
+  if (argv.length > 0) {
+    throw new Error(`Unknown CLI argument: ${JSON.stringify(argv[0])}.`);
+  }
+}
+
 export async function loadInventory(supabase: RateSupabaseClient) {
-  const categories = await fetchAllPages<InventoryCategory>('categories', (from, to) =>
-    supabase.from('categories').select('id, slug').order('id').range(from, to)
+  const categories = await fetchByKey<InventoryCategory>(supabase, 'categories', 'id, slug', 'id');
+  const masters = await fetchByKey<InventoryMaster>(
+    supabase,
+    'master_products',
+    'id, model_key, slug, name, brand, status, category_id, storage_gb',
+    'id'
   );
-  const masters = await fetchAllPages<InventoryMaster>('master_products', (from, to) =>
-    supabase
-      .from('master_products')
-      .select('id, model_key, slug, name, brand, status, category_id, storage_gb')
-      .order('id')
-      .range(from, to)
-  );
-  const listings = await fetchAllPages<InventoryListing>('products', (from, to) =>
-    supabase
-      .from('products')
-      .select('id, cluster_id, title, platform, platform_item_id, price_min, price_max')
-      .order('id')
-      .range(from, to)
+  const listings = await fetchByKey<InventoryListing>(
+    supabase,
+    'products',
+    'id, cluster_id, title, platform, platform_item_id, price_min, price_max',
+    'id'
   );
   return { categories, masters, listings };
 }
@@ -298,6 +300,7 @@ if (isDirectExecution) {
   dotenv.config({ quiet: true });
   dotenv.config({ path: '../../.env', quiet: true });
   (async () => {
+    parseItemInventoryArgs(process.argv.slice(2));
     const { createClient } = await import('@supabase/supabase-js');
     const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     // The anon key on purpose: the report must see what any visitor sees, and nothing more.
