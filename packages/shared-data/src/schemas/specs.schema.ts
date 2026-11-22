@@ -188,7 +188,23 @@ export const SupportedEcommercePlatformSchema = z.enum([
   'hoangha',
   'didongviet',
   'phongvu',
+  'dienmayxanh',
+  'topzone',
+  'gearvn',
+  'nguyenkim',
+  'shopdunk',
+  'hacom',
+  'clickbuy',
+  'viettelstore',
+  'pico',
+  'mediamart',
+  'memoryzone',
+  'anphatpc',
 ]);
+
+export type SupportedEcommercePlatform = z.infer<
+  typeof SupportedEcommercePlatformSchema
+>;
 
 export const ScrapedReviewerSchema = z.object({
   key: z.string().max(128).optional(),

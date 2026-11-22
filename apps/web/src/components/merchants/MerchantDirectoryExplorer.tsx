@@ -619,6 +619,18 @@ export default function MerchantDirectoryExplorer({
       'hoangha',
       'didongviet',
       'phongvu',
+      'dienmayxanh',
+      'topzone',
+      'gearvn',
+      'nguyenkim',
+      'shopdunk',
+      'hacom',
+      'clickbuy',
+      'viettelstore',
+      'pico',
+      'mediamart',
+      'memoryzone',
+      'anphatpc',
     ];
     for (const p of platformCounts.keys()) {
       if (!base.includes(p)) base.push(p);

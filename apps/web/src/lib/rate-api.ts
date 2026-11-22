@@ -39,6 +39,7 @@ import {
   sanitizePostgrestFilterToken,
   type ParsedEcommerceUrl,
   parseEcommerceUrlOrQuery,
+  sanitizeAnPhatItemId,
   extractProductKeywordFromUrl,
   firstImageUrl,
   resolveCompareEffectiveUserRating,
@@ -69,6 +70,7 @@ export {
   filterAndSortMerchants,
   sanitizePostgrestFilterToken,
   parseEcommerceUrlOrQuery,
+  sanitizeAnPhatItemId,
   stripEcommerceNoiseTokens,
   extractProductKeywordFromUrl,
 } from './rate-domain-core';
@@ -4495,11 +4497,36 @@ const PLATFORM_ITEM_ID_PREFIX: Partial<
   tiktok: 'tts-',
   cellphones: 'cps-',
   tgdd: 'tgdd-',
+  dienmayxanh: 'dmx-',
+  topzone: 'tz-',
   fptshop: 'fpt-',
   hoangha: 'hhm-',
   didongviet: 'ddv-',
   phongvu: 'pv-',
+  gearvn: 'gearvn-',
+  nguyenkim: 'nk-',
+  shopdunk: 'shopdunk-',
+  hacom: 'hacom-',
+  clickbuy: 'cb-',
+  viettelstore: 'vts-',
+  pico: 'pico-',
+  mediamart: 'mm-',
+  memoryzone: 'mz-',
+  anphatpc: 'ap-',
 };
+
+const WAVE_UNDERSCORE_ENCODED_PLATFORMS = new Set<
+  NonNullable<ParsedEcommerceUrl['platform']>
+>([
+  'nguyenkim',
+  'shopdunk',
+  'hacom',
+  'clickbuy',
+  'viettelstore',
+  'pico',
+  'mediamart',
+  'memoryzone',
+]);
 
 function lookupOfferDiscountAnalysis(
   byOffer: Record<string, OfferDiscountAnalysis> | null | undefined,
@@ -4560,7 +4587,7 @@ export function selectOfferForUrlInspection(
 }
 
 /**
- * Inspect an e-commerce product/shop URL (all 10 platforms) or keyword:
+ * Inspect an e-commerce product/shop URL (all 22 platforms) or keyword:
  * - Resolves exact `platform_item_id` or `url` against `rate.products`
  * - Or resolves `platform_shop_id` / merchant name against `rate.merchants`
  * - Or resolves product slug / keyword against `rate.master_products`
@@ -4602,36 +4629,124 @@ export async function inspectProductOrShopUrl(
 
   // 1. Direct lookup by platform_item_id if parsed from URL
   if (parsedUrl.platformItemId) {
-    const candidateIds = new Set<string>([parsedUrl.platformItemId]);
-    if (parsedUrl.platformShopId) {
-      candidateIds.add(
-        `${parsedUrl.platformShopId}_${parsedUrl.platformItemId}`
-      );
-    }
+    const rawItemId = parsedUrl.platformItemId;
+    const lowerItemId = rawItemId.toLowerCase();
+    const candidateIds = new Set<string>([rawItemId, lowerItemId]);
     const prefix = parsedUrl.platform
       ? PLATFORM_ITEM_ID_PREFIX[parsedUrl.platform]
       : undefined;
-    if (prefix && !parsedUrl.platformItemId.startsWith(prefix)) {
-      candidateIds.add(`${prefix}${parsedUrl.platformItemId}`);
+    const isOverlongRetailSlug = (slug: string): boolean =>
+      Boolean(prefix && parsedUrl.platform !== 'anphatpc' && slug.length > 120);
+    const barePrefixedInput =
+      prefix &&
+      lowerItemId.startsWith(prefix) &&
+      rawItemId.length > prefix.length
+        ? rawItemId.slice(prefix.length)
+        : rawItemId;
+    if (!isOverlongRetailSlug(barePrefixedInput)) {
+      candidateIds.add(rawItemId);
+      candidateIds.add(lowerItemId);
+    } else {
+      candidateIds.clear();
+    }
+    if (!prefix && parsedUrl.platformShopId && !rawItemId.includes('_')) {
+      candidateIds.add(`${parsedUrl.platformShopId}_${rawItemId}`);
+    }
+    if (prefix) {
+      const rawSlugs = [rawItemId];
+      if (lowerItemId.startsWith(prefix) && rawItemId.length > prefix.length) {
+        rawSlugs.push(rawItemId.slice(prefix.length));
+      }
+      for (const slugCandidate of rawSlugs) {
+        if (isOverlongRetailSlug(slugCandidate)) continue;
+        const lowerSlug = slugCandidate.toLowerCase();
+        if (`${prefix}${slugCandidate}`.length <= 128) {
+          candidateIds.add(`${prefix}${slugCandidate}`);
+        }
+        if (`${prefix}${lowerSlug}`.length <= 128) {
+          candidateIds.add(`${prefix}${lowerSlug}`);
+        }
+        if (
+          parsedUrl.platform &&
+          WAVE_UNDERSCORE_ENCODED_PLATFORMS.has(parsedUrl.platform) &&
+          lowerSlug.includes('_')
+        ) {
+          const waveEncoded = `${prefix}${lowerSlug.replace(/_/g, '_5f')}`;
+          if (waveEncoded.length <= 128) candidateIds.add(waveEncoded);
+        }
+        if (parsedUrl.platform === 'anphatpc') {
+          const apEncoded = sanitizeAnPhatItemId(slugCandidate);
+          if (apEncoded && apEncoded.length <= 128) {
+            candidateIds.add(apEncoded);
+          }
+        }
+      }
+    }
+    if (
+      parsedUrl.platform === 'topzone' ||
+      parsedUrl.platform === 'dienmayxanh'
+    ) {
+      const bareMwg = rawItemId.replace(/^(?:tz|dmx|tgdd)-/i, '');
+      if (bareMwg && bareMwg.length <= 120) {
+        if (prefix && /^tgdd-/i.test(rawItemId)) {
+          candidateIds.add(`${prefix}${bareMwg}`);
+          candidateIds.add(`${prefix}${bareMwg.toLowerCase()}`);
+        }
+        candidateIds.add(`tgdd-${bareMwg}`);
+        candidateIds.add(`tgdd-${bareMwg.toLowerCase()}`);
+      }
     }
 
-    const { data: prodRow, error: prodErr } = await supabase
-      .from('products')
-      .select('id, cluster_id, merchant_id, platform_item_id')
-      .in('platform_item_id', Array.from(candidateIds))
-      .limit(1)
-      .maybeSingle();
-
-    if (prodErr) {
-      throw new RateDataUnavailableError('URL product listing lookup', prodErr);
-    }
-
-    const matchedProd = prodRow as {
+    type ListingLookupRow = {
       id: string;
       cluster_id: string | null;
       merchant_id: string;
+      platform?: string | null;
       platform_item_id: string;
-    } | null;
+    };
+    const orderedCandidates = Array.from(candidateIds);
+    let matchedProd: ListingLookupRow | null = null;
+
+    if (orderedCandidates.length > 0) {
+      let prodQuery = supabase
+        .from('products')
+        .select('id, cluster_id, merchant_id, platform, platform_item_id')
+        .in('platform_item_id', orderedCandidates);
+      if (parsedUrl.platform && parsedUrl.platform !== 'rate') {
+        prodQuery = prodQuery.eq('platform', parsedUrl.platform);
+      }
+      const { data: prodData, error: prodErr } = await prodQuery.limit(10);
+
+      if (prodErr) {
+        throw new RateDataUnavailableError(
+          'URL product listing lookup',
+          prodErr
+        );
+      }
+
+      const rawProdRows: ListingLookupRow[] = Array.isArray(prodData)
+        ? (prodData as ListingLookupRow[])
+        : prodData
+          ? [prodData as ListingLookupRow]
+          : [];
+      const scopedProdRows = rawProdRows
+        .filter(
+          (r) =>
+            !parsedUrl.platform ||
+            parsedUrl.platform === 'rate' ||
+            !r.platform ||
+            r.platform === parsedUrl.platform
+        )
+        .sort((a, b) => {
+          const ai = orderedCandidates.indexOf(a.platform_item_id);
+          const bi = orderedCandidates.indexOf(b.platform_item_id);
+          return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+        });
+      matchedProd =
+        scopedProdRows.find((r) => Boolean(r.cluster_id)) ??
+        scopedProdRows[0] ??
+        null;
+    }
 
     if (matchedProd?.cluster_id) {
       // A draft master has no product page (DOS/Rate#769). The listing is

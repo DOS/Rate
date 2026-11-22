@@ -3,9 +3,9 @@ import { expect, test } from '@playwright/test';
 // /deals reads in plain words in every locale: no "radar", "audit" or
 // "kèo thơm" labels, and sentence-case headings (DOS/Rate#659).
 const TITLES = {
-  vi: 'Deal đáng tiền nhất, đã lọc khuyến mãi ảo trên 10 sàn',
-  en: 'Best-value deals with fake sales filtered out (10 stores)',
-  cs: 'Nejvýhodnější nabídky bez falešných slev (10 obchodů)',
+  vi: 'Deal đáng tiền nhất, đã lọc khuyến mãi ảo trên 22 sàn',
+  en: 'Best-value deals with fake sales filtered out (22 stores)',
+  cs: 'Nejvýhodnější nabídky bez falešných slev (22 obchodů)',
 };
 
 for (const [locale, title] of Object.entries(TITLES)) {

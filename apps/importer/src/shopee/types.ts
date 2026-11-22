@@ -39,7 +39,19 @@ export type SupportedEcommercePlatform =
   | 'fptshop'
   | 'hoangha'
   | 'didongviet'
-  | 'phongvu';
+  | 'phongvu'
+  | 'dienmayxanh'
+  | 'topzone'
+  | 'gearvn'
+  | 'nguyenkim'
+  | 'shopdunk'
+  | 'hacom'
+  | 'clickbuy'
+  | 'viettelstore'
+  | 'pico'
+  | 'mediamart'
+  | 'memoryzone'
+  | 'anphatpc';
 
 /**
  * Reviewer metadata scraped alongside a review. What each platform exposes differs

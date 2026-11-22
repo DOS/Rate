@@ -88,6 +88,7 @@ const VIETNAMESE_WORDS = new Set([
   'c\u00f3',
   'b\u00e1n',
   'n\u00f3ng',
+  'ph\u00e1t',
   'nhanh',
   'nghe',
 ]);

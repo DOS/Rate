@@ -3,7 +3,7 @@
     "message": "Rate.vn - Price Comparison, Price History & AI Fake Review Filter"
   },
   "extDescription": {
-    "message": "Check 90-day price history, spot fake discounts, find cheaper sellers and filter fake reviews with AI on 10 Vietnamese stores."
+    "message": "Check 90-day price history, spot fake discounts, find cheaper sellers and filter fake reviews with AI on 22 Vietnamese stores."
   },
   "actionTitle": {
     "message": "Open the Rate.vn price and trust panel"
@@ -276,7 +276,7 @@
     "message": "Still collecting price history points."
   },
   "radarDealsTitle": {
-    "message": "Genuine deals below the median (10 stores)"
+    "message": "Genuine deals below the median (22 stores)"
   },
   "radarSavings": {
     "message": "Save $AMOUNT$ (-$PCT$%)",
@@ -335,7 +335,7 @@
     "message": "not enough data"
   },
   "merchantDirTitle": {
-    "message": "Seller trust across 10 stores ($COUNT$)",
+    "message": "Seller trust across 22 stores ($COUNT$)",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -398,10 +398,10 @@
     }
   },
   "noProductStores": {
-    "message": "Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile, Di Động Việt"
+    "message": "Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, Điện Máy Xanh, TopZone, FPT Shop, Hoàng Hà Mobile, Di Động Việt, Phong Vũ, GearVN, Nguyễn Kim, ShopDunk, HACOM, Clickbuy, Viettel Store, Pico, MediaMart, MemoryZone"
   },
   "noProductLastStore": {
-    "message": "Phong Vũ"
+    "message": "An Phát Computer"
   },
   "variantPickerTitle": {
     "message": "Choose the Storage Variant You Are Viewing"
@@ -514,7 +514,7 @@
     }
   },
   "radarPillSpread": {
-    "message": "10-store gap $PCT$%",
+    "message": "Cross-store gap $PCT$%",
     "placeholders": {
       "pct": {
         "content": "$1"
@@ -673,7 +673,7 @@
     "message": "Rate.vn is ready"
   },
   "onboardingLookup": {
-    "message": "On product pages of the 10 supported stores, the extension sends Rate.vn the store, the URL without parameters, the title, the item and shop ids, the variant, the price and the original price to look up price history. No account needed."
+    "message": "On product pages of the 22 supported stores, the extension sends Rate.vn the store, the URL without parameters, the title, the item and shop ids, the variant, the price and the original price to look up price history. No account needed."
   },
   "onboardingQuestion": {
     "message": "Would you like to contribute the listings you view?"

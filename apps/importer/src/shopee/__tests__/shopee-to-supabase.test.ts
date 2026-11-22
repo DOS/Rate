@@ -1092,6 +1092,135 @@ async function runTests() {
   console.log(
     '  ✅ [8/8] DOS/Rate#879 platformReviewIdFor, review videos/profileUrl & spec group bounds passed'
   );
+
+  // 9. DOS/Rate#1850: All 12 Wave 1-3 retail platforms ingest cleanly with canonical shopId and itemId prefixes
+  const wave1To3Fixtures = [
+    {
+      platform: 'dienmayxanh' as const,
+      shopId: 'dmx-mwg-vn',
+      shopName: 'Điện Máy Xanh',
+      itemId: 'dmx-iphone-16-pro-max-256gb',
+      url: 'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max-256gb',
+      title: 'Điện thoại iPhone 16 Pro Max 256GB Chính hãng VN/A',
+    },
+    {
+      platform: 'topzone' as const,
+      shopId: 'tz-mwg-vn',
+      shopName: 'TopZone',
+      itemId: 'tz-iphone-16-pro-max-256gb',
+      url: 'https://www.topzone.vn/iphone/iphone-16-pro-max-256gb',
+      title: 'iPhone 16 Pro Max 256GB Chính hãng VN/A',
+    },
+    {
+      platform: 'gearvn' as const,
+      shopId: 'gearvn-retail-vn',
+      shopName: 'GearVN',
+      itemId: 'gearvn-laptop-apple-macbook-air-m3-13-inch-256gb',
+      url: 'https://gearvn.com/products/laptop-apple-macbook-air-m3-13-inch-256gb',
+      title: 'Laptop Apple MacBook Air M3 13 inch 16GB 256GB Chính hãng',
+    },
+    {
+      platform: 'nguyenkim' as const,
+      shopId: 'nguyenkim-vn',
+      shopName: 'Nguyễn Kim',
+      itemId: 'nk-dien-thoai-iphone-16-pro-max-256gb',
+      url: 'https://www.nguyenkim.com/dien-thoai-iphone-16-pro-max-256gb.html',
+      title: 'Điện thoại iPhone 16 Pro Max 256GB Chính hãng',
+    },
+    {
+      platform: 'shopdunk' as const,
+      shopId: 'shopdunk-vn',
+      shopName: 'ShopDunk',
+      itemId: 'shopdunk-iphone-16-pro-max-256gb',
+      url: 'https://shopdunk.com/iphone-16-pro-max-256gb',
+      title: 'iPhone 16 Pro Max 256GB Chính hãng VN/A',
+    },
+    {
+      platform: 'hacom' as const,
+      shopId: 'hacom-vn',
+      shopName: 'HACOM',
+      itemId: 'hacom-laptop-apple-macbook-air-m3-256gb',
+      url: 'https://hacom.vn/laptop-apple-macbook-air-m3-256gb',
+      title: 'Laptop Apple MacBook Air M3 13 inch 16GB 256GB',
+    },
+    {
+      platform: 'clickbuy' as const,
+      shopId: 'cb-retail-vn',
+      shopName: 'Clickbuy',
+      itemId: 'cb-iphone-16-pro-max-256gb',
+      url: 'https://clickbuy.com.vn/iphone-16-pro-max-256gb',
+      title: 'iPhone 16 Pro Max 256GB Chính hãng VN/A',
+    },
+    {
+      platform: 'viettelstore' as const,
+      shopId: 'vts-retail-vn',
+      shopName: 'Viettel Store',
+      itemId: 'vts-iphone-16-pro-max-256gb-pid341920',
+      url: 'https://viettelstore.vn/dien-thoai/iphone-16-pro-max-256gb-pid341920.html',
+      title: 'iPhone 16 Pro Max 256GB Chính hãng',
+    },
+    {
+      platform: 'pico' as const,
+      shopId: 'pico-vn',
+      shopName: 'Pico',
+      itemId: 'pico-iphone-16-pro-max-256gb',
+      url: 'https://pico.vn/iphone-16-pro-max-256gb.html',
+      title: 'Điện thoại Apple iPhone 16 Pro Max 256GB',
+    },
+    {
+      platform: 'mediamart' as const,
+      shopId: 'mediamart-vn',
+      shopName: 'MediaMart',
+      itemId: 'mm-dien-thoai-apple-iphone-16-pro-max-256gb',
+      url: 'https://mediamart.vn/smartphones/dien-thoai-apple-iphone-16-pro-max-256gb',
+      title: 'Điện thoại Apple iPhone 16 Pro Max 256GB',
+    },
+    {
+      platform: 'memoryzone' as const,
+      shopId: 'memoryzone-vn',
+      shopName: 'MemoryZone',
+      itemId: 'mz-laptop-apple-macbook-air-m3-256gb',
+      url: 'https://memoryzone.com.vn/products/laptop-apple-macbook-air-m3-256gb',
+      title: 'Laptop Apple MacBook Air M3 13 inch 16GB 256GB',
+    },
+    {
+      platform: 'anphatpc' as const,
+      shopId: 'anphatpc-vn',
+      shopName: 'An Phát Computer',
+      itemId: 'ap-laptop-apple-macbook-air-m3-256gb_5fid49201',
+      url: 'https://www.anphatpc.com.vn/laptop-apple-macbook-air-m3-256gb_id49201.html',
+      title: 'Laptop Apple MacBook Air M3 13 inch 16GB 256GB',
+    },
+  ];
+  for (const fx of wave1To3Fixtures) {
+    const { stub: waveStub, events: waveEvents } = createPipelineStubSupabase({
+      hintRow: { id: 'master-wave-1850' },
+    });
+    const wavePipeline = new ShopeeIngestionPipeline({
+      supabaseClient: waveStub,
+      apiKey: '',
+    });
+    const waveRes = await wavePipeline.ingestProduct(
+      createBaseProduct({
+        platform: fx.platform,
+        itemId: fx.itemId,
+        shopId: fx.shopId,
+        url: fx.url,
+        title: fx.title,
+        shop: {
+          shopId: fx.shopId,
+          name: fx.shopName,
+          isMall: true,
+        },
+      }),
+      undefined,
+      { masterIdHint: 'master-wave-1850' }
+    );
+    assert.equal(waveRes.platform, fx.platform);
+    assert.equal(waveEvents.productUpserts[0]?.platform, fx.platform);
+    assert.equal(waveEvents.productUpserts[0]?.platform_item_id, fx.itemId);
+  }
+  console.log('  ✅ [9/9] DOS/Rate#1850 Wave 1-3 12 retail platforms ingestion passed');
   console.log('\n🎉 ALL SHOPEE INGESTION PIPELINE TESTS PASSED!');
 }
 

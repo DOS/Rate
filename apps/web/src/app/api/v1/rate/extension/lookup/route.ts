@@ -41,7 +41,7 @@ export async function OPTIONS() {
  * GET /api/v1/rate/extension/lookup
  * Fast-Path Read-Only Lookup for Rate Browser Extension MV3 (Two-Speed Hybrid Architecture v2).
  * Query parameters:
- * - platform: shopee | lazada | tiki | tiktok | cellphones | tgdd | fptshop | hoangha | didongviet | phongvu
+ * - platform: shopee | lazada | tiki | tiktok | cellphones | tgdd | fptshop | hoangha | didongviet | phongvu | dienmayxanh | topzone | gearvn | nguyenkim | shopdunk | hacom | clickbuy | viettelstore | pico | mediamart | memoryzone | anphatpc
  * - externalId: platform item ID or shopId_itemId
  * - shopId: platform shop ID
  * - url: product URL (automatically canonicalized, stripping tracking params)
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     const sp = request.nextUrl.searchParams;
     const platform = parseBoundedStringParam(sp.get('platform'), 32);
-    const externalId = parseBoundedStringParam(sp.get('externalId'), 120);
+    const externalId = parseBoundedStringParam(sp.get('externalId'), 128);
     const shopId = parseBoundedStringParam(sp.get('shopId'), 120);
     const url = parseBoundedStringParam(sp.get('url'), 1024);
     const title = parseBoundedStringParam(sp.get('title'), 320);

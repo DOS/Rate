@@ -312,7 +312,7 @@ function testMasterProductAndScrapedProductSchemas(): void {
   assert.deepEqual(master.images, []);
   assert.deepEqual(master.metadata, {});
 
-  for (const platform of [
+  const all22Platforms = [
     'shopee',
     'lazada',
     'tiki',
@@ -323,16 +323,32 @@ function testMasterProductAndScrapedProductSchemas(): void {
     'hoangha',
     'didongviet',
     'phongvu',
-  ]) {
+    'dienmayxanh',
+    'topzone',
+    'gearvn',
+    'nguyenkim',
+    'shopdunk',
+    'hacom',
+    'clickbuy',
+    'viettelstore',
+    'pico',
+    'mediamart',
+    'memoryzone',
+    'anphatpc',
+  ];
+  assert.deepEqual(SupportedEcommercePlatformSchema.options, all22Platforms);
+  for (const platform of all22Platforms) {
     assert.equal(
       SupportedEcommercePlatformSchema.safeParse(platform).success,
       true
     );
   }
-  assert.equal(
-    SupportedEcommercePlatformSchema.safeParse('amazon').success,
-    false
-  );
+  for (const unsupported of ['amazon', 'ebay', 'GEARVN', 'anphat', '']) {
+    assert.equal(
+      SupportedEcommercePlatformSchema.safeParse(unsupported).success,
+      false
+    );
+  }
 
   const scraped = ScrapedProductSchema.parse({
     platform: 'shopee',
@@ -2926,10 +2942,6 @@ function testExtensionObservation(): void {
   for (const tgddUrl of [
     'https://thegioididong.com/dtdd/iphone-16-pro-max',
     'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
-    'https://topzone.vn/iphone/iphone-16-pro-max',
-    'https://www.topzone.vn/iphone/iphone-16-pro-max',
-    'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
-    'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
   ]) {
     assert.ok(
       parse({
@@ -2940,14 +2952,28 @@ function testExtensionObservation(): void {
       tgddUrl
     );
   }
+  for (const separatedSisterUrl of [
+    'https://topzone.vn/iphone/iphone-16-pro-max',
+    'https://www.topzone.vn/iphone/iphone-16-pro-max',
+    'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
+    'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
+  ]) {
+    const res = parse({
+      ...valid,
+      marketplace: 'tgdd',
+      listing_url: separatedSisterUrl,
+    });
+    assert.equal(res.ok, false, separatedSisterUrl);
+    if (!res.ok) assert.equal(res.field, 'listing_url');
+  }
   // Every marketplace accepts its own hosts and refuses another's.
   assert.ok(rules.isExtensionMarketplaceHost('lazada', 'www.lazada.vn'));
   assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'thegioididong.com'));
   assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.thegioididong.com'));
-  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'topzone.vn'));
-  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.topzone.vn'));
-  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'dienmayxanh.com'));
-  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.dienmayxanh.com'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'topzone.vn'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'www.topzone.vn'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'dienmayxanh.com'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'www.dienmayxanh.com'));
   assert.ok(rules.isExtensionMarketplaceHost('tiktok', 'shop.tiktok.com'));
   assert.ok(!rules.isExtensionMarketplaceHost('tiktok', 'm.tiktok.com'));
   assert.ok(!rules.isExtensionMarketplaceHost('lazada', 'notlazada.vn'));
