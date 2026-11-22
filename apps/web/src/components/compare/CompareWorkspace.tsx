@@ -1,12 +1,14 @@
 'use client';
 
 import React, {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { IconType } from 'react-icons';
 import {
@@ -35,8 +37,28 @@ import {
   getCategorySpecTemplate,
   specFieldApplies,
   type CategorySpecTemplate,
+  type RatingCriterionKey,
   type SpecGroupKey,
+  type UseCasePresetId,
 } from '@repo/shared-data/rules';
+import {
+  availableCategoryUseCasePresets,
+  computeCustomWeightedScore5,
+  defaultCategoryWeights,
+  extractCategoryCriteriaScores,
+  isDefaultCategoryWeights,
+  mergeUseCaseQueryIntoSearch,
+  normalizeCategoryWeights,
+  parseUseCaseWeightsFromParams,
+  resolveCategoryPreset,
+  resolveLocalizedPresetName,
+  sanitizeSliderWeight,
+  scoredCategoryCriteriaForProducts,
+  type ActiveWeightMode,
+  type CategoryCriterionWeights,
+  type CustomWeightedScoreResult,
+} from '@/lib/use-case-weights';
+import UseCaseWeightBar from './UseCaseWeightBar';
 import {
   type CanonicalCategorySlug,
   MAX_VALID_VND_PRICE,
@@ -110,6 +132,7 @@ import {
   displayedScore5,
   formatRatingValue,
   formatScoreFixed,
+  roundScore,
 } from '@/lib/rating-display';
 
 interface CompareWorkspaceProps {
@@ -125,6 +148,9 @@ interface CompareWorkspaceProps {
    * first and the second summary is left out (DOS/Rate#1473).
    */
   layout?: 'compare' | 'versus';
+  initialWeightMode?: ActiveWeightMode;
+  initialCategoryWeights?: CategoryCriterionWeights;
+  initialShowWeightSliders?: boolean;
 }
 
 type CompareTranslator = ReturnType<typeof useTranslations<'compare'>>;
@@ -1847,6 +1873,31 @@ export function filterSpecGroupsForCategory(
     .filter((group) => group.rows.length > 0);
 }
 
+function CompareUrlWeightsSync({
+  categorySlug,
+  onSync,
+}: {
+  readonly categorySlug: string;
+  readonly onSync: (
+    cat: string,
+    rawPreset: string | null,
+    rawWeights: string | null
+  ) => void;
+}) {
+  const searchParams = useSearchParams();
+  const rawPreset = searchParams.get('preset');
+  const rawWeights = searchParams.get('weights');
+  const categorySlugRef = useRef(categorySlug);
+  useEffect(() => {
+    categorySlugRef.current = categorySlug;
+  }, [categorySlug]);
+  useEffect(
+    () => onSync(categorySlugRef.current, rawPreset, rawWeights),
+    [rawPreset, rawWeights, onSync]
+  );
+  return null;
+}
+
 export default function CompareWorkspace({
   initialProducts,
   catalogCandidates,
@@ -1855,6 +1906,9 @@ export default function CompareWorkspace({
   locale = 'vi',
   itemSlugBySlug,
   layout = 'compare',
+  initialWeightMode = 'default',
+  initialCategoryWeights,
+  initialShowWeightSliders = false,
 }: CompareWorkspaceProps) {
   const t = useTranslations('compare');
   const router = useRouter();
@@ -1894,6 +1948,29 @@ export default function CompareWorkspace({
   const [showDiffOnly, setShowDiffOnly] = useState(false);
   const [highlightWinners, setHighlightWinners] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [weightMode, setWeightMode] =
+    useState<ActiveWeightMode>(initialWeightMode);
+  const [categoryWeights, setCategoryWeights] =
+    useState<CategoryCriterionWeights>(() => {
+      const cat =
+        initialProducts.length > 0
+          ? getMasterProductCategorySlug(initialProducts[0]!)
+          : initialCategory;
+      if (initialCategoryWeights) {
+        return normalizeCategoryWeights(cat, initialCategoryWeights)
+          .sliderWeights;
+      }
+      if (initialWeightMode !== 'default' && initialWeightMode !== 'custom') {
+        return normalizeCategoryWeights(
+          cat,
+          resolveCategoryPreset(cat, initialWeightMode).weights
+        ).sliderWeights;
+      }
+      return defaultCategoryWeights(cat);
+    });
+  const [showWeightSliders, setShowWeightSliders] = useState(
+    initialShowWeightSliders
+  );
   const radarIndex = useDealRadarIndex();
   // Every row, verdict and export reads the category's view of a product,
   // like the product page (DOS/Rate#1166).
@@ -1902,6 +1979,168 @@ export default function CompareWorkspace({
       storedProducts.map((p) => applyCategorySpecTemplate(activeCategory, p)),
     [storedProducts, activeCategory]
   );
+  const scoredCompareCriteria = useMemo(
+    () =>
+      scoredCategoryCriteriaForProducts(
+        activeCategory,
+        products.map((p) => ({ product: p }))
+      ),
+    [activeCategory, products]
+  );
+  const availableComparePresets = useMemo(
+    () =>
+      availableCategoryUseCasePresets(activeCategory, scoredCompareCriteria),
+    [activeCategory, scoredCompareCriteria]
+  );
+  const canWeighCompare =
+    layout === 'compare' &&
+    products.length >= 2 &&
+    availableComparePresets.length > 0;
+
+  const replaceCompareWeightQuery = useCallback(
+    (
+      cat: CanonicalCategorySlug,
+      nextMode: ActiveWeightMode,
+      nextWeights: CategoryCriterionWeights,
+      available: readonly RatingCriterionKey[]
+    ) => {
+      if (typeof window === 'undefined' || layout !== 'compare') return;
+      const merged =
+        available.length > 0
+          ? mergeUseCaseQueryIntoSearch(
+              window.location.search,
+              cat,
+              nextMode,
+              nextWeights,
+              available
+            )
+          : mergeUseCaseQueryIntoSearch(
+              window.location.search,
+              cat,
+              'default',
+              defaultCategoryWeights(cat),
+              []
+            );
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}${merged}`
+      );
+    },
+    [layout]
+  );
+
+  const handleCompareUrlWeightsSync = useCallback(
+    (cat: string, rawPreset: string | null, rawWeights: string | null) => {
+      const parsed = parseUseCaseWeightsFromParams(cat, {
+        preset: rawPreset ?? undefined,
+        weights: rawWeights ?? undefined,
+      });
+      setWeightMode(parsed.mode);
+      setCategoryWeights(parsed.weights);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (layout !== 'compare') return;
+    if (!canWeighCompare) {
+      if (weightMode !== 'default' || showWeightSliders) {
+        const defaults = defaultCategoryWeights(activeCategory);
+        setWeightMode('default');
+        setShowWeightSliders(false);
+        setCategoryWeights(defaults);
+        replaceCompareWeightQuery(activeCategory, 'default', defaults, []);
+      }
+      return;
+    }
+    if (
+      weightMode !== 'default' &&
+      (isDefaultCategoryWeights(
+        activeCategory,
+        weightMode,
+        categoryWeights,
+        scoredCompareCriteria
+      ) ||
+        (weightMode !== 'custom' &&
+          !availableComparePresets.some((p) => p.id === weightMode)))
+    ) {
+      const defaults = defaultCategoryWeights(activeCategory);
+      setWeightMode('default');
+      setCategoryWeights(defaults);
+      replaceCompareWeightQuery(
+        activeCategory,
+        'default',
+        defaults,
+        scoredCompareCriteria
+      );
+    }
+  }, [
+    layout,
+    canWeighCompare,
+    weightMode,
+    categoryWeights,
+    showWeightSliders,
+    activeCategory,
+    availableComparePresets,
+    scoredCompareCriteria,
+    replaceCompareWeightQuery,
+  ]);
+
+  const handleSelectComparePreset = (presetId: UseCasePresetId) => {
+    const preset = resolveCategoryPreset(activeCategory, presetId);
+    const norm = normalizeCategoryWeights(
+      activeCategory,
+      preset.weights,
+      scoredCompareCriteria
+    );
+    setWeightMode(preset.id);
+    setCategoryWeights(norm.sliderWeights);
+    replaceCompareWeightQuery(
+      activeCategory,
+      preset.id,
+      norm.sliderWeights,
+      scoredCompareCriteria
+    );
+  };
+
+  const handleUpdateCompareWeight = (key: RatingCriterionKey, val: number) => {
+    const candidate: CategoryCriterionWeights = {
+      ...categoryWeights,
+      [key]: sanitizeSliderWeight(val, categoryWeights[key] ?? 0),
+    };
+    const normalized = normalizeCategoryWeights(
+      activeCategory,
+      candidate,
+      scoredCompareCriteria
+    );
+    const collapsesToDefault =
+      normalized.wasAllZeroReset ||
+      isDefaultCategoryWeights(
+        activeCategory,
+        'custom',
+        normalized.sliderWeights,
+        scoredCompareCriteria
+      );
+    const nextMode: ActiveWeightMode = collapsesToDefault
+      ? 'default'
+      : 'custom';
+    const nextWeights = collapsesToDefault
+      ? defaultCategoryWeights(activeCategory)
+      : normalized.sliderWeights;
+    setWeightMode(nextMode);
+    setCategoryWeights(nextWeights);
+    replaceCompareWeightQuery(
+      activeCategory,
+      nextMode,
+      nextWeights,
+      scoredCompareCriteria
+    );
+  };
+
+  const handleResetCompareWeights = () => {
+    handleSelectComparePreset('default');
+  };
   // RATE_ITEM_MODEL on (the page passed a map): products the client added,
   // restored from the tray, or surfaced in Popular 1v1 Battles are read as
   // Items too, so 1v1 and product links name Canonical Items without a 308
@@ -2204,7 +2443,26 @@ export default function CompareWorkspace({
       if (restored) {
         setActiveCategory(restored.activeCategory);
         setProducts(restored.products);
-        router.replace(`/compare?slugs=${restored.slugsCsv}`, {
+        let restoredQuery = `?slugs=${restored.slugsCsv}`;
+        if (
+          typeof window !== 'undefined' &&
+          layout === 'compare' &&
+          restored.products.length >= 2
+        ) {
+          const parsedRestored = parseUseCaseWeightsFromParams(
+            restored.activeCategory,
+            window.location.search
+          );
+          setWeightMode(parsedRestored.mode);
+          setCategoryWeights(parsedRestored.weights);
+          restoredQuery = mergeUseCaseQueryIntoSearch(
+            restoredQuery,
+            restored.activeCategory,
+            parsedRestored.mode,
+            parsedRestored.weights
+          );
+        }
+        router.replace(`/compare${restoredQuery}`, {
           scroll: false,
         });
         return;
@@ -2214,7 +2472,7 @@ export default function CompareWorkspace({
     // Otherwise only show the page's defaults or a shared ?slugs= list: the
     // tray changes on the visitor's own edits (syncSelection), never on load,
     // so it does not follow them site-wide or lose what they saved (#714).
-  }, [hasExplicitSlugs, catalogCandidates, itemSlugBySlug, router]);
+  }, [hasExplicitSlugs, catalogCandidates, itemSlugBySlug, layout, router]);
 
   // Sync URL and localStorage tray whenever compared products change (always locked to 1 category)
   const syncSelection = (
@@ -2244,10 +2502,24 @@ export default function CompareWorkspace({
       }))
     );
     const slugsCsv = sameCategoryProducts.map((p) => p.slug).join(',');
-    const nextUrl = slugsCsv
-      ? `/compare?slugs=${slugsCsv}`
-      : `/compare?category=${targetCat}`;
-    router.replace(nextUrl, { scroll: false });
+    const baseQuery = slugsCsv
+      ? `?slugs=${slugsCsv}`
+      : `?category=${targetCat}`;
+    let finalQuery = baseQuery;
+    if (targetCat !== activeCategory || sameCategoryProducts.length < 2) {
+      const nextDefaults = defaultCategoryWeights(targetCat);
+      setWeightMode('default');
+      setCategoryWeights(nextDefaults);
+      setShowWeightSliders(false);
+    } else if (layout === 'compare') {
+      finalQuery = mergeUseCaseQueryIntoSearch(
+        baseQuery,
+        targetCat,
+        weightMode,
+        categoryWeights
+      );
+    }
+    router.replace(`/compare${finalQuery}`, { scroll: false });
   };
 
   const handleSwitchCategoryTab = (nextCat: CanonicalCategorySlug) => {
@@ -2716,6 +2988,83 @@ export default function CompareWorkspace({
     activeReplaceIndex,
   });
 
+  const hasActiveCompareWeights =
+    canWeighCompare &&
+    !isDefaultCategoryWeights(
+      activeCategory,
+      weightMode,
+      categoryWeights,
+      scoredCompareCriteria
+    );
+
+  const customCompareScoresById = useMemo(() => {
+    const map = new Map<string, CustomWeightedScoreResult>();
+    if (!hasActiveCompareWeights) return map;
+    for (const p of products) {
+      const critScores = extractCategoryCriteriaScores(p, activeCategory);
+      const res = computeCustomWeightedScore5(
+        activeCategory,
+        critScores,
+        categoryWeights,
+        {
+          onlyCriteria: scoredCompareCriteria,
+          officialScore5: getEffectiveRating(p),
+          product: p,
+        }
+      );
+      map.set(p.id, res);
+    }
+    return map;
+  }, [
+    hasActiveCompareWeights,
+    products,
+    activeCategory,
+    categoryWeights,
+    scoredCompareCriteria,
+  ]);
+
+  const customCompareWinner = useMemo(() => {
+    if (!hasActiveCompareWeights) return null;
+    const scoredItems = products
+      .map((p) => ({
+        product: p,
+        score5: customCompareScoresById.get(p.id)?.customScore5 ?? null,
+      }))
+      .filter(
+        (entry): entry is { product: MasterProduct; score5: number } =>
+          entry.score5 !== null
+      )
+      .sort((a, b) => b.score5 - a.score5);
+    if (scoredItems.length === 0) return null;
+    const top = scoredItems[0]!;
+    const runnerUp = scoredItems[1] ?? null;
+    const delta5 = runnerUp
+      ? roundScore(Math.max(0, top.score5 - runnerUp.score5), 2)
+      : null;
+    const isTie = runnerUp !== null && top.score5 === runnerUp.score5;
+    const winnerIds = new Set<string>(
+      scoredItems
+        .filter((entry) => entry.score5 === top.score5)
+        .map((entry) => entry.product.id)
+    );
+    return {
+      leadProduct: top.product,
+      leadScore5: top.score5,
+      delta5,
+      isTie,
+      scoredCount: scoredItems.length,
+      winnerIds,
+    };
+  }, [hasActiveCompareWeights, products, customCompareScoresById]);
+
+  const activeComparePresetTitle = resolveLocalizedPresetName(
+    activeCategory,
+    weightMode,
+    locale,
+    undefined,
+    t('customWeightsActive')
+  );
+
   const controlsBlock = (
     <>
       {/* 5-Category Lock Switcher Bar */}
@@ -3160,6 +3509,88 @@ export default function CompareWorkspace({
           </div>
         )}
       </div>
+
+      {/* RTINGS-style Use-Case Presets & Custom Weight Sliders (#1864) */}
+      {canWeighCompare && (
+        <div
+          className="rate-card p-md-4 mb-4 p-3"
+          data-testid="compare-use-case-card"
+        >
+          <UseCaseWeightBar
+            variant="light"
+            categorySlug={activeCategory}
+            availableCriteria={scoredCompareCriteria}
+            mode={weightMode}
+            weights={categoryWeights}
+            showSliders={showWeightSliders}
+            onToggleSliders={() => setShowWeightSliders((v) => !v)}
+            onSelectPreset={handleSelectComparePreset}
+            onUpdateWeight={handleUpdateCompareWeight}
+            onReset={handleResetCompareWeights}
+            locale={locale}
+            testIdPrefix="compare-weights"
+            copy={{
+              groupLabel: t('useCaseLabel'),
+              customizeBtn: t('customWeightsBtn'),
+              customActiveBadge: t('customWeightsActive'),
+              resetBtn: t('resetWeightsBtn'),
+              normalizedSummaryPrefix: t('normalizedWeightsPrefix'),
+              officialKeepNote: t('officialScoreKeepNote'),
+            }}
+          />
+
+          <div role="status" aria-live="polite">
+            {hasActiveCompareWeights && customCompareWinner && (
+              <div
+                data-testid="compare-custom-winner-banner"
+                className="rounded-3 bg-light d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2 border p-3"
+              >
+                <div>
+                  <span className="badge bg-dark rounded-pill fw-semibold me-2 text-white">
+                    {t('yourCustomScoreLabel')}
+                  </span>
+                  <span className="small text-dark fw-medium">
+                    {customCompareWinner.isTie
+                      ? t('customWinnerTie', {
+                          preset: activeComparePresetTitle,
+                          score: formatRatingValue(
+                            customCompareWinner.leadScore5,
+                            locale,
+                            2
+                          ),
+                        })
+                      : customCompareWinner.delta5 !== null &&
+                          customCompareWinner.scoredCount >= 2
+                        ? t('customWinnerSummary', {
+                            preset: activeComparePresetTitle,
+                            winner: customCompareWinner.leadProduct.name,
+                            score: formatRatingValue(
+                              customCompareWinner.leadScore5,
+                              locale,
+                              2
+                            ),
+                            delta: formatRatingValue(
+                              customCompareWinner.delta5,
+                              locale,
+                              2
+                            ),
+                          })
+                        : t('customWinnerSingle', {
+                            preset: activeComparePresetTitle,
+                            winner: customCompareWinner.leadProduct.name,
+                            score: formatRatingValue(
+                              customCompareWinner.leadScore5,
+                              locale,
+                              2
+                            ),
+                          })}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 
@@ -3628,7 +4059,12 @@ export default function CompareWorkspace({
                           </Link>
 
                           {/* Core Rating Badges First (Per DESIGN.md v3.0) */}
-                          <div className="d-flex justify-content-center mb-2 flex-wrap gap-1">
+                          <div className="d-flex justify-content-center align-items-center mb-2 flex-wrap gap-1">
+                            {hasActiveCompareWeights && (
+                              <span className="small text-secondary fw-semibold w-100">
+                                {t('officialRateScoreLabel')}
+                              </span>
+                            )}
                             <StarRating
                               value={userRating}
                               count={reviewCount}
@@ -3641,6 +4077,44 @@ export default function CompareWorkspace({
                               </span>
                             )}
                           </div>
+
+                          {hasActiveCompareWeights &&
+                            (() => {
+                              const customEntry = customCompareScoresById.get(
+                                p.id
+                              );
+                              const customVal =
+                                customEntry?.customScore5 ?? null;
+                              const isCustomWinner =
+                                highlightWinners &&
+                                customVal !== null &&
+                                customCompareWinner !== null &&
+                                !customCompareWinner.isTie &&
+                                customCompareWinner.scoredCount >= 2 &&
+                                customCompareWinner.winnerIds.has(p.id);
+                              return (
+                                <div
+                                  data-testid="compare-col-custom-score"
+                                  className={`rounded-pill rate-tabular small fw-semibold mb-2 border px-2 py-1 ${
+                                    isCustomWinner
+                                      ? 'bg-success bg-opacity-10 border-success text-success'
+                                      : 'bg-light text-dark'
+                                  }`}
+                                >
+                                  {customVal !== null
+                                    ? `${t('yourCustomScoreLabel')}: ★ ${formatRatingValue(customVal, locale, 2)}/5`
+                                    : `${t('yourCustomScoreLabel')}: ${t('criterionNoData')}`}
+                                  {isCustomWinner && (
+                                    <span
+                                      className="badge bg-success rounded-pill ms-1 text-white"
+                                      style={{ fontSize: '0.8125rem' }}
+                                    >
+                                      {t('bestBadge')}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
 
                           {/* Neutral Reference Price */}
                           <div className="text-secondary small fw-semibold rate-tabular mb-2">
@@ -3739,6 +4213,54 @@ export default function CompareWorkspace({
               </thead>
 
               <tbody>
+                {hasActiveCompareWeights && (
+                  <tr data-testid="compare-custom-score-row">
+                    <td className="text-dark small fw-semibold bg-light text-start">
+                      <div>{t('yourCustomScoreLabel')}</div>
+                      <div className="text-muted fw-normal">
+                        {activeComparePresetTitle}
+                      </div>
+                    </td>
+                    {products.map((p) => {
+                      const customVal =
+                        customCompareScoresById.get(p.id)?.customScore5 ?? null;
+                      const isCustomWinner =
+                        highlightWinners &&
+                        customVal !== null &&
+                        customCompareWinner !== null &&
+                        !customCompareWinner.isTie &&
+                        customCompareWinner.scoredCount >= 2 &&
+                        customCompareWinner.winnerIds.has(p.id);
+                      return (
+                        <td
+                          key={`custom-score-${p.id}`}
+                          className={`small rate-tabular ${
+                            isCustomWinner
+                              ? 'bg-success bg-opacity-10 fw-bold text-success'
+                              : customVal !== null
+                                ? 'fw-semibold text-dark'
+                                : 'text-secondary'
+                          }`}
+                        >
+                          {customVal !== null
+                            ? `★ ${formatRatingValue(customVal, locale, 2)} / 5`
+                            : t('criterionNoData')}
+                          {isCustomWinner && (
+                            <span
+                              className="badge bg-success rounded-pill ms-1 text-white"
+                              style={{ fontSize: '0.8125rem' }}
+                            >
+                              {t('bestBadge')}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    {products.length < MAX_COMPARE_ITEMS && (
+                      <td className="bg-light text-muted small">-</td>
+                    )}
+                  </tr>
+                )}
                 <tr data-testid="compare-radar-row">
                   <td className="text-muted small fw-semibold bg-light text-start">
                     {t('radarRowMatrixTitle')}
@@ -3919,6 +4441,12 @@ export default function CompareWorkspace({
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <CompareUrlWeightsSync
+          categorySlug={activeCategory}
+          onSync={handleCompareUrlWeightsSync}
+        />
+      </Suspense>
       {controlsBlock}
       {popularBlock}
       {summaryBlock}
