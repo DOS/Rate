@@ -132,6 +132,7 @@ import {
   displayedScore5,
   formatRatingValue,
   formatScoreFixed,
+  roundScore,
 } from '@/lib/rating-display';
 
 interface CompareWorkspaceProps {
@@ -1886,9 +1887,13 @@ function CompareUrlWeightsSync({
   const searchParams = useSearchParams();
   const rawPreset = searchParams.get('preset');
   const rawWeights = searchParams.get('weights');
+  const categorySlugRef = useRef(categorySlug);
+  useEffect(() => {
+    categorySlugRef.current = categorySlug;
+  }, [categorySlug]);
   useEffect(
-    () => onSync(categorySlug, rawPreset, rawWeights),
-    [categorySlug, rawPreset, rawWeights, onSync]
+    () => onSync(categorySlugRef.current, rawPreset, rawWeights),
+    [rawPreset, rawWeights, onSync]
   );
   return null;
 }
@@ -2051,8 +2056,14 @@ export default function CompareWorkspace({
     }
     if (
       weightMode !== 'default' &&
-      weightMode !== 'custom' &&
-      !availableComparePresets.some((p) => p.id === weightMode)
+      (isDefaultCategoryWeights(
+        activeCategory,
+        weightMode,
+        categoryWeights,
+        scoredCompareCriteria
+      ) ||
+        (weightMode !== 'custom' &&
+          !availableComparePresets.some((p) => p.id === weightMode)))
     ) {
       const defaults = defaultCategoryWeights(activeCategory);
       setWeightMode('default');
@@ -2068,6 +2079,7 @@ export default function CompareWorkspace({
     layout,
     canWeighCompare,
     weightMode,
+    categoryWeights,
     showWeightSliders,
     activeCategory,
     availableComparePresets,
@@ -2102,15 +2114,26 @@ export default function CompareWorkspace({
       candidate,
       scoredCompareCriteria
     );
-    const nextMode: ActiveWeightMode = normalized.wasAllZeroReset
+    const collapsesToDefault =
+      normalized.wasAllZeroReset ||
+      isDefaultCategoryWeights(
+        activeCategory,
+        'custom',
+        normalized.sliderWeights,
+        scoredCompareCriteria
+      );
+    const nextMode: ActiveWeightMode = collapsesToDefault
       ? 'default'
       : 'custom';
+    const nextWeights = collapsesToDefault
+      ? defaultCategoryWeights(activeCategory)
+      : normalized.sliderWeights;
     setWeightMode(nextMode);
-    setCategoryWeights(normalized.sliderWeights);
+    setCategoryWeights(nextWeights);
     replaceCompareWeightQuery(
       activeCategory,
       nextMode,
-      normalized.sliderWeights,
+      nextWeights,
       scoredCompareCriteria
     );
   };
@@ -2421,11 +2444,17 @@ export default function CompareWorkspace({
         setActiveCategory(restored.activeCategory);
         setProducts(restored.products);
         let restoredQuery = `?slugs=${restored.slugsCsv}`;
-        if (typeof window !== 'undefined' && layout === 'compare') {
+        if (
+          typeof window !== 'undefined' &&
+          layout === 'compare' &&
+          restored.products.length >= 2
+        ) {
           const parsedRestored = parseUseCaseWeightsFromParams(
             restored.activeCategory,
             window.location.search
           );
+          setWeightMode(parsedRestored.mode);
+          setCategoryWeights(parsedRestored.weights);
           restoredQuery = mergeUseCaseQueryIntoSearch(
             restoredQuery,
             restored.activeCategory,
@@ -2477,7 +2506,7 @@ export default function CompareWorkspace({
       ? `?slugs=${slugsCsv}`
       : `?category=${targetCat}`;
     let finalQuery = baseQuery;
-    if (targetCat !== activeCategory) {
+    if (targetCat !== activeCategory || sameCategoryProducts.length < 2) {
       const nextDefaults = defaultCategoryWeights(targetCat);
       setWeightMode('default');
       setCategoryWeights(nextDefaults);
@@ -2959,41 +2988,6 @@ export default function CompareWorkspace({
     activeReplaceIndex,
   });
 
-  const comparePresetLabels: Record<UseCasePresetId, string> = {
-    default: t('preset_default'),
-    gaming: t('preset_gaming'),
-    camera: t('preset_camera'),
-    endurance: t('preset_endurance'),
-    value: t('preset_value'),
-    media: t('preset_media'),
-    study_work: t('preset_study_work'),
-    office: t('preset_office'),
-    creator: t('preset_creator'),
-    fitness: t('preset_fitness'),
-    smart_daily: t('preset_smart_daily'),
-    audiophile: t('preset_audiophile'),
-    commute_anc: t('preset_commute_anc'),
-    calls_work: t('preset_calls_work'),
-  };
-
-  const compareCriterionLabels: Partial<Record<RatingCriterionKey, string>> = {
-    performance: t('weightCrit_performance'),
-    camera: t('weightCrit_camera'),
-    battery: t('weightCrit_battery'),
-    display: t('weightCrit_display'),
-    design: t('weightCrit_design'),
-    value: t('weightCrit_value'),
-    sound: t('weightCrit_sound'),
-    software: t('weightCrit_software'),
-    keyboard: t('weightCrit_keyboard'),
-    thermals: t('weightCrit_thermals'),
-    health: t('weightCrit_health'),
-    apps: t('weightCrit_apps'),
-    anc: t('weightCrit_anc'),
-    comfort: t('weightCrit_comfort'),
-    calls: t('weightCrit_calls'),
-  };
-
   const hasActiveCompareWeights =
     canWeighCompare &&
     !isDefaultCategoryWeights(
@@ -3044,11 +3038,13 @@ export default function CompareWorkspace({
     if (scoredItems.length === 0) return null;
     const top = scoredItems[0]!;
     const runnerUp = scoredItems[1] ?? null;
-    const delta5 = runnerUp ? Math.max(0, top.score5 - runnerUp.score5) : null;
-    const isTie = runnerUp !== null && delta5 !== null && delta5 < 0.01;
+    const delta5 = runnerUp
+      ? roundScore(Math.max(0, top.score5 - runnerUp.score5), 2)
+      : null;
+    const isTie = runnerUp !== null && top.score5 === runnerUp.score5;
     const winnerIds = new Set<string>(
       scoredItems
-        .filter((entry) => Math.abs(entry.score5 - top.score5) < 0.01)
+        .filter((entry) => entry.score5 === top.score5)
         .map((entry) => entry.product.id)
     );
     return {
@@ -3065,7 +3061,7 @@ export default function CompareWorkspace({
     activeCategory,
     weightMode,
     locale,
-    comparePresetLabels,
+    undefined,
     t('customWeightsActive')
   );
 
@@ -3540,59 +3536,59 @@ export default function CompareWorkspace({
               resetBtn: t('resetWeightsBtn'),
               normalizedSummaryPrefix: t('normalizedWeightsPrefix'),
               officialKeepNote: t('officialScoreKeepNote'),
-              presetLabels: comparePresetLabels,
-              criterionLabels: compareCriterionLabels,
             }}
           />
 
-          {hasActiveCompareWeights && customCompareWinner && (
-            <div
-              data-testid="compare-custom-winner-banner"
-              className="rounded-3 bg-light d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2 border p-3"
-            >
-              <div>
-                <span className="badge bg-dark rounded-pill fw-semibold me-2 text-white">
-                  {t('yourCustomScoreLabel')}
-                </span>
-                <span className="small text-dark fw-medium">
-                  {customCompareWinner.isTie
-                    ? t('customWinnerTie', {
-                        preset: activeComparePresetTitle,
-                        score: formatRatingValue(
-                          customCompareWinner.leadScore5,
-                          locale,
-                          2
-                        ),
-                      })
-                    : customCompareWinner.delta5 !== null &&
-                        customCompareWinner.scoredCount >= 2
-                      ? t('customWinnerSummary', {
+          <div role="status" aria-live="polite">
+            {hasActiveCompareWeights && customCompareWinner && (
+              <div
+                data-testid="compare-custom-winner-banner"
+                className="rounded-3 bg-light d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2 border p-3"
+              >
+                <div>
+                  <span className="badge bg-dark rounded-pill fw-semibold me-2 text-white">
+                    {t('yourCustomScoreLabel')}
+                  </span>
+                  <span className="small text-dark fw-medium">
+                    {customCompareWinner.isTie
+                      ? t('customWinnerTie', {
                           preset: activeComparePresetTitle,
-                          winner: customCompareWinner.leadProduct.name,
                           score: formatRatingValue(
                             customCompareWinner.leadScore5,
-                            locale,
-                            2
-                          ),
-                          delta: formatDecimal(
-                            customCompareWinner.delta5,
                             locale,
                             2
                           ),
                         })
-                      : t('customWinnerSingle', {
-                          preset: activeComparePresetTitle,
-                          winner: customCompareWinner.leadProduct.name,
-                          score: formatRatingValue(
-                            customCompareWinner.leadScore5,
-                            locale,
-                            2
-                          ),
-                        })}
-                </span>
+                      : customCompareWinner.delta5 !== null &&
+                          customCompareWinner.scoredCount >= 2
+                        ? t('customWinnerSummary', {
+                            preset: activeComparePresetTitle,
+                            winner: customCompareWinner.leadProduct.name,
+                            score: formatRatingValue(
+                              customCompareWinner.leadScore5,
+                              locale,
+                              2
+                            ),
+                            delta: formatRatingValue(
+                              customCompareWinner.delta5,
+                              locale,
+                              2
+                            ),
+                          })
+                        : t('customWinnerSingle', {
+                            preset: activeComparePresetTitle,
+                            winner: customCompareWinner.leadProduct.name,
+                            score: formatRatingValue(
+                              customCompareWinner.leadScore5,
+                              locale,
+                              2
+                            ),
+                          })}
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </>
@@ -4090,6 +4086,7 @@ export default function CompareWorkspace({
                               const customVal =
                                 customEntry?.customScore5 ?? null;
                               const isCustomWinner =
+                                highlightWinners &&
                                 customVal !== null &&
                                 customCompareWinner !== null &&
                                 !customCompareWinner.isTie &&
@@ -4110,7 +4107,7 @@ export default function CompareWorkspace({
                                   {isCustomWinner && (
                                     <span
                                       className="badge bg-success rounded-pill ms-1 text-white"
-                                      style={{ fontSize: '0.75rem' }}
+                                      style={{ fontSize: '0.8125rem' }}
                                     >
                                       {t('bestBadge')}
                                     </span>

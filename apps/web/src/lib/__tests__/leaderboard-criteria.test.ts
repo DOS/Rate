@@ -3243,18 +3243,68 @@ test('RTINGS-style UseCaseWeightBar SSR, Official vs Custom Score parity & WCAG 
     prefetch: () => {},
   };
 
-  const stripHtmlTags = (html: string): string =>
-    html
+  const HTML_ENTITY_MAP: Readonly<Record<string, string>> = {
+    amp: '&',
+    quot: '"',
+    '#x27': "'",
+    '#39': "'",
+    lt: '<',
+    gt: '>',
+  };
+
+  const extractMarkupText = (
+    fragment: string,
+    skipAriaHidden = false
+  ): string => {
+    const out: string[] = [];
+    let hiddenDepth = 0;
+    let i = 0;
+    while (i < fragment.length) {
+      if (fragment[i] === '<') {
+        let end = i + 1;
+        let quote: string | null = null;
+        while (end < fragment.length) {
+          const ch = fragment[end]!;
+          if (quote) {
+            if (ch === quote) quote = null;
+          } else if (ch === '"' || ch === "'") {
+            quote = ch;
+          } else if (ch === '>') {
+            break;
+          }
+          end += 1;
+        }
+        const tagInner = fragment.slice(i + 1, end).trim();
+        const isClosing = tagInner.startsWith('/');
+        const isSelfClosing = tagInner.endsWith('/');
+        if (isClosing) {
+          if (hiddenDepth > 0) hiddenDepth -= 1;
+        } else if (hiddenDepth > 0) {
+          if (!isSelfClosing) hiddenDepth += 1;
+        } else if (
+          skipAriaHidden &&
+          /\baria-hidden\s*=\s*(?:"true"|'true')/i.test(tagInner)
+        ) {
+          if (!isSelfClosing) hiddenDepth = 1;
+        }
+        if (hiddenDepth === 0) out.push(' ');
+        i = end + 1;
+        continue;
+      }
+      if (hiddenDepth === 0) {
+        out.push(fragment[i]!);
+      }
+      i += 1;
+    }
+    return out
+      .join('')
       .replace(
-        /<span[^>]*class="[^"]*visually-hidden[^"]*"[^>]*>[\s\S]*?<\/span>/gi,
-        (m) => m.replace(/<[^>]+>/g, '')
+        /&(amp|quot|#x27|#39|lt|gt);/g,
+        (full, key: string) => HTML_ENTITY_MAP[key] ?? full
       )
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#x27;/g, "'")
       .replace(/\s+/g, ' ')
       .trim();
+  };
 
   const assertAccessibleControls = (html: string, context: string) => {
     assert.doesNotMatch(
@@ -3279,23 +3329,21 @@ test('RTINGS-style UseCaseWeightBar SSR, Official vs Custom Score parity & WCAG 
       );
       const labelMatch = labelRe.exec(html);
       assert.ok(
-        labelMatch && stripHtmlTags(labelMatch[1] ?? '').length > 0,
+        labelMatch && extractMarkupText(labelMatch[1] ?? '').length > 0,
         `${context}: range input #${idMatch[1]} must have a non-empty <label htmlFor>`
       );
     }
 
     // WCAG 2.5.3 / axe label-content-name-mismatch: any button carrying BOTH
-    // visible text (excluding single-glyph ×/+ symbols) and aria-label must
-    // include its visible text inside aria-label.
+    // visible text (excluding aria-hidden icons) and aria-label must include
+    // its visible text inside aria-label.
     const buttons = [
       ...html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g),
     ];
     for (const [, attrs = '', inner = ''] of buttons) {
       const ariaMatch = /\baria-label="([^"]+)"/.exec(attrs);
       if (!ariaMatch) continue;
-      const visible = stripHtmlTags(
-        inner.replace(/<[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/[^>]+>/g, '')
-      );
+      const visible = extractMarkupText(inner, true);
       if (!visible) continue;
       assert.ok(
         ariaMatch[1]!.toLowerCase().includes(visible.toLowerCase()),
@@ -3647,6 +3695,16 @@ test('RTINGS-style UseCaseWeightBar SSR, Official vs Custom Score parity & WCAG 
     assertAccessibleControls(versusHtml, `VersusScoreboard(${locale})`);
     assert.match(versusHtml, /data-testid="versus-weights-bar"/);
     assert.match(versusHtml, /data-testid="versus-custom-score-banner"/);
+    assert.doesNotMatch(
+      versusHtml,
+      /data-testid="versus-persona-lead"/,
+      'VersusScoreboard suppresses duplicate legacy persona-lead line when custom-score banner is active'
+    );
+    assert.doesNotMatch(
+      versusHtml,
+      /font-size:0\.75rem/i,
+      'Zero 12px (0.75rem) inline text below DESIGN.md 13px floor'
+    );
     assert.ok(
       versusHtml.includes(compareCopy.officialRateScoreLabel!),
       `VersusScoreboard(${locale}) keeps official Rate.vn score label visible`
@@ -3654,6 +3712,108 @@ test('RTINGS-style UseCaseWeightBar SSR, Official vs Custom Score parity & WCAG 
     assert.ok(
       versusHtml.includes(compareCopy.yourCustomScoreLabel!),
       `VersusScoreboard(${locale}) renders Your Custom Score label`
+    );
+
+    // 4. Category-specific preset label check on Laptops ("Gaming & thermals", not phone "Gaming & battery")
+    // and IEEE-754 4.31 vs 4.30 non-tie check (#1864 Round-1 review)
+    const laptopA: ItemCatalogRow = {
+      id: 'lap-a',
+      slug: 'acme-probook-14',
+      name: 'Acme ProBook 14',
+      brand: 'Acme',
+      model: 'ProBook 14',
+      rating_score: 4.4,
+      user_rating_weighted: 4.4,
+      authentic_review_count: 14,
+      total_reviews: 14,
+      min_price: 29_990_000,
+      merchant_count: 3,
+      metadata: { category_slug: 'laptops' },
+      specifications: {
+        display: { size_inch: 14, refresh_rate_hz: 120 },
+        hardware: { ram_gb: 16, storage_gb: 512 },
+        battery: { capacity_mah: 5000 },
+      },
+      criteria_scores: {
+        performance: { score: 4.31, writers: 12 },
+        thermals: { score: 4.31, writers: 12 },
+        display: { score: 4.31, writers: 12 },
+        battery: { score: 4.31, writers: 12 },
+        keyboard: { score: 4.31, writers: 12 },
+        design: { score: 4.31, writers: 12 },
+        value: { score: 4.31, writers: 12 },
+      },
+    } as unknown as ItemCatalogRow;
+    const laptopB: ItemCatalogRow = {
+      ...laptopA,
+      id: 'lap-b',
+      slug: 'zenith-thinkbook-16',
+      name: 'Zenith ThinkBook 16',
+      brand: 'Zenith',
+      model: 'ThinkBook 16',
+      criteria_scores: {
+        performance: { score: 4.3, writers: 12 },
+        thermals: { score: 4.3, writers: 12 },
+        display: { score: 4.3, writers: 12 },
+        battery: { score: 4.3, writers: 12 },
+        keyboard: { score: 4.3, writers: 12 },
+        design: { score: 4.3, writers: 12 },
+        value: { score: 4.3, writers: 12 },
+      },
+    } as unknown as ItemCatalogRow;
+
+    const compareLaptopsHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: stubRouter },
+        React.createElement(
+          IntlProvider,
+          {
+            locale,
+            messages: pickClientMessages(messages, 'compare'),
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(CompareWorkspace, {
+            initialProducts: [
+              laptopA as unknown as MasterProduct,
+              laptopB as unknown as MasterProduct,
+            ],
+            catalogCandidates: [
+              laptopA as unknown as MasterProduct,
+              laptopB as unknown as MasterProduct,
+            ],
+            initialCategory: 'laptops',
+            hasExplicitSlugs: true,
+            locale,
+            initialWeightMode: 'gaming',
+          })
+        )
+      )
+    );
+    const expectedLaptopGamingLabel =
+      locale === 'vi'
+        ? 'Gaming &amp; tản nhiệt'
+        : locale === 'cs'
+          ? 'Hraní her a chlazení'
+          : 'Gaming &amp; thermals';
+    assert.ok(
+      compareLaptopsHtml.includes(expectedLaptopGamingLabel),
+      `CompareWorkspace(${locale}) renders laptop-specific gaming preset label`
+    );
+    const laptopBannerMatch =
+      /data-testid="compare-custom-winner-banner"[\s\S]*?<\/div>\s*<\/div>/.exec(
+        compareLaptopsHtml
+      );
+    assert.ok(
+      laptopBannerMatch &&
+        laptopBannerMatch[0].includes('Acme ProBook 14') &&
+        /\+0[.,]01/.test(laptopBannerMatch[0]),
+      `CompareWorkspace(${locale}) treats 4.31 vs 4.30 as a +0.01 lead, never an IEEE-754 tie`
+    );
+    assert.doesNotMatch(
+      compareLaptopsHtml,
+      /font-size:0\.75rem/i,
+      'Zero 12px (0.75rem) inline text in CompareWorkspace'
     );
   }
 });

@@ -517,6 +517,7 @@
     "weightCrit_anc": "Noise cancelling",
     "weightCrit_comfort": "Comfort",
     "weightCrit_calls": "Microphone and calls",
+    "customWeightsBtn": "Custom weights",
     "resetWeightsBtn": "Reset to default",
     "normalizedWeightsPrefix": "Normalized weights (100%):",
     "officialRateScoreLabel": "Rate.vn score",

@@ -819,6 +819,7 @@ export default function LeaderboardExplorer({
       chooseCriterion: t('chooseCriterion'),
       personaTitle: t('personaTitle'),
       customizeWeightsBtn: t('customizeWeightsBtn'),
+      customWeightsBtn: t('customWeightsBtn'),
       personaLabels: {
         none: t('personaNone'),
         photography: t('personaPhotography'),
@@ -980,16 +981,27 @@ export default function LeaderboardExplorer({
       nextCandidate,
       scoredCategoryCriteria
     );
-    const nextMode: ActiveWeightMode = normalized.wasAllZeroReset
+    const collapsesToDefault =
+      normalized.wasAllZeroReset ||
+      isDefaultCategoryWeights(
+        activeCategory,
+        'custom',
+        normalized.sliderWeights,
+        scoredCategoryCriteria
+      );
+    const nextMode: ActiveWeightMode = collapsesToDefault
       ? 'default'
       : 'custom';
+    const nextWeights = collapsesToDefault
+      ? defaultCategoryWeights(activeCategory)
+      : normalized.sliderWeights;
     setWeightMode(nextMode);
-    setCustomWeights(normalized.sliderWeights);
+    setCustomWeights(nextWeights);
     replaceTabUrl(
       activeCategory,
       activeCriterion,
       nextMode,
-      normalized.sliderWeights,
+      nextWeights,
       scoredCategoryCriteria
     );
   };
@@ -1011,7 +1023,7 @@ export default function LeaderboardExplorer({
         activeCategory,
         weightMode,
         locale,
-        copy.presetLabels,
+        undefined,
         copy.personaLabels.custom
       )
     : resolveLeaderboardActiveScoreLabel('none', activeCriterion, copy, 0);
@@ -1439,11 +1451,17 @@ export default function LeaderboardExplorer({
     }
     if (
       weightMode !== 'default' &&
-      weightMode !== 'custom' &&
-      !availableCategoryUseCasePresets(
+      (isDefaultCategoryWeights(
         activeCategory,
+        weightMode,
+        customWeights,
         scoredCategoryCriteria
-      ).some((p) => p.id === weightMode)
+      ) ||
+        (weightMode !== 'custom' &&
+          !availableCategoryUseCasePresets(
+            activeCategory,
+            scoredCategoryCriteria
+          ).some((p) => p.id === weightMode)))
     ) {
       const defaults = defaultCategoryWeights(activeCategory);
       setWeightMode('default');
@@ -1459,6 +1477,7 @@ export default function LeaderboardExplorer({
   }, [
     hasScoredCriteria,
     weightMode,
+    customWeights,
     showWeightSliders,
     activeCategory,
     activeCriterion,
@@ -1681,13 +1700,11 @@ export default function LeaderboardExplorer({
               testIdPrefix="leaderboard-weights"
               copy={{
                 groupLabel: copy.personaTitle,
-                customizeBtn: copy.customizeWeightsBtn,
+                customizeBtn: copy.customWeightsBtn,
                 customActiveBadge: copy.personaLabels.custom,
                 resetBtn: copy.resetWeightsBtn,
                 normalizedSummaryPrefix: copy.normalizedWeightsPrefix,
                 officialKeepNote: copy.officialScoreKeepNote,
-                presetLabels: copy.presetLabels,
-                criterionLabels: copy.weightCriterionLabels,
               }}
             />
           </div>
@@ -1949,7 +1966,7 @@ export default function LeaderboardExplorer({
                           {hasActivePersonaWeights && (
                             <div
                               className="text-warning fw-semibold mb-1"
-                              style={{ fontSize: '0.75rem' }}
+                              style={{ fontSize: '0.8125rem' }}
                               data-testid="leaderboard-podium-custom-label"
                             >
                               {copy.yourCustomScoreLabel}
@@ -1998,7 +2015,7 @@ export default function LeaderboardExplorer({
                             {hasActivePersonaWeights && (
                               <span
                                 className="text-white-50 fw-semibold me-1"
-                                style={{ fontSize: '0.75rem' }}
+                                style={{ fontSize: '0.8125rem' }}
                                 data-testid="leaderboard-podium-official-label"
                               >
                                 {copy.officialRateScoreLabel}:

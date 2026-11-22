@@ -490,6 +490,113 @@ assert.equal(compareCategoryParam({ category: '', cat: 'earbuds' }), 'earbuds');
   assert.equal(toLegacyVersusPersona('gaming'), 'gaming');
   assert.equal(toLegacyVersusPersona('commute_anc'), 'photography');
   assert.equal(toLegacyVersusPersona('custom'), 'custom');
+
+  // 6. Round-1 review regressions: duplicate query keys, foreign availableCriteria,
+  // explicit empty / outside-onlyCriteria null score, and URL round-trip parity
+  assert.equal(parseWeightsParam('smartphones', 'camera:50,camera:0'), null);
+  assert.equal(parseWeightsParam('smartphones', 'screen:50,display:0'), null);
+  assert.deepEqual(
+    defaultCategoryWeights('  LAPTOPS\u0000 '),
+    defaultCategoryWeights('laptops')
+  );
+  assert.equal(
+    availableCategoryUseCasePresets('smartphones', ['anc']).length,
+    0,
+    'Foreign-only availableCriteria returns zero presets'
+  );
+  assert.equal(
+    computeCustomWeightedScore5(
+      'smartphones',
+      scoresCamPro,
+      { camera: 80, display: 20 },
+      { onlyCriteria: [] }
+    ).customScore5,
+    null,
+    'Explicit empty onlyCriteria returns null instead of scoring all criteria'
+  );
+  assert.equal(
+    computeCustomWeightedScore5(
+      'smartphones',
+      scoresCamPro,
+      { camera: 80, display: 20, performance: 0, battery: 0 },
+      { onlyCriteria: ['performance', 'battery'] }
+    ).customScore5,
+    null,
+    'Weights placed solely outside onlyCriteria return null instead of Balanced Default'
+  );
+
+  // Live vs serialized ?weights= round-trip parity (10/10/10 -> 34%/33%/33%)
+  const rawEqualThree = {
+    performance: 10,
+    camera: 10,
+    battery: 10,
+    display: 0,
+    design: 0,
+    value: 0,
+  };
+  const roundTripScores = {
+    performance: 5.0,
+    camera: 4.0,
+    battery: 4.0,
+    display: 4.0,
+    design: 4.0,
+    value: 4.0,
+  };
+  const liveThreeRes = computeCustomWeightedScore5(
+    'smartphones',
+    roundTripScores,
+    rawEqualThree
+  );
+  const encodedThree = serializeWeightsParam('smartphones', rawEqualThree);
+  assert.equal(encodedThree, 'performance:10,camera:10,battery:10');
+  assert.equal(liveThreeRes.customScore5, 4.33);
+  const reloadedThreeRes = computeCustomWeightedScore5(
+    'smartphones',
+    roundTripScores,
+    parseWeightsParam('smartphones', encodedThree)
+  );
+  assert.equal(
+    liveThreeRes.customScore5,
+    reloadedThreeRes.customScore5,
+    'Live custom score matches shared/reloaded ?weights= URL score exactly'
+  );
+
+  // Small positive slider weight (camera:1 alongside five 100s) is preserved in URL
+  const tinyCameraEncoded = serializeWeightsParam('smartphones', {
+    performance: 100,
+    camera: 1,
+    battery: 100,
+    display: 100,
+    design: 100,
+    value: 100,
+  });
+  assert.match(tinyCameraEncoded, /\bcamera:1\b/);
+
+  // Exact proportion comparison in isDefaultCategoryWeights
+  assert.equal(
+    isDefaultCategoryWeights('smartphones', 'custom', {
+      performance: 40,
+      camera: 40,
+      battery: 40,
+      display: 30,
+      design: 20,
+      value: 30,
+    }),
+    true,
+    'Exact 2x multiple of smartphone default weights collapses cleanly to default'
+  );
+  assert.equal(
+    isDefaultCategoryWeights('smartphones', 'custom', {
+      performance: 100,
+      camera: 99,
+      battery: 100,
+      display: 75,
+      design: 50,
+      value: 75,
+    }),
+    false,
+    'Near-default weights with distinct exact proportions retain custom URL state'
+  );
 }
 
 console.log('✅ compare params & RTINGS use-case weights');

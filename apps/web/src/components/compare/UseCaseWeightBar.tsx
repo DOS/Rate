@@ -78,17 +78,16 @@ export default function UseCaseWeightBar({
     categorySlug,
     availableCriteria
   );
-  if (presets.length === 0) {
+  const criteria = getRatingCriteria(categorySlug);
+  const availableSet = new Set<RatingCriterionKey>(availableCriteria);
+  const sliderCriteria = criteria.filter((c) => availableSet.has(c.key));
+  if (presets.length === 0 || sliderCriteria.length === 0) {
     return trailingActions ? (
       <div className="d-flex justify-content-end align-items-center flex-wrap gap-2">
         {trailingActions}
       </div>
     ) : null;
   }
-
-  const criteria = getRatingCriteria(categorySlug);
-  const availableSet = new Set<RatingCriterionKey>(availableCriteria);
-  const sliderCriteria = criteria.filter((c) => availableSet.has(c.key));
 
   const normalized = normalizeCategoryWeights(
     categorySlug,
@@ -160,11 +159,11 @@ export default function UseCaseWeightBar({
             const isSelected = mode === preset.id;
             const btnClass = isDark
               ? isSelected
-                ? 'btn-danger fw-bold text-white'
-                : 'btn-outline-light text-white-50'
+                ? 'btn-primary fw-bold text-white'
+                : 'btn-outline-light'
               : isSelected
-                ? 'btn-danger fw-semibold text-white shadow-sm'
-                : 'btn-outline-dark bg-light';
+                ? 'btn-primary fw-semibold text-white shadow-sm'
+                : 'btn-outline-dark';
             return (
               <button
                 key={preset.id}
@@ -284,8 +283,9 @@ export default function UseCaseWeightBar({
                     type="range"
                     min={0}
                     max={100}
-                    step={5}
+                    step={1}
                     value={rawVal}
+                    aria-valuetext={`${rawVal} (${formatPercent(normPct, locale)})`}
                     onChange={(e) =>
                       onUpdateWeight(criterion.key, Number(e.target.value))
                     }

@@ -147,6 +147,19 @@ function parseStrictQueryWeight(raw: string): number | null {
   return Math.round(num);
 }
 
+function normalizeCategorySlugInput(
+  categorySlug: string | null | undefined
+): string {
+  if (typeof categorySlug !== 'string' || categorySlug.length > 64) {
+    return 'smartphones';
+  }
+  const cleaned = categorySlug
+    .replace(CONTROL_CHARS_RE, '')
+    .trim()
+    .toLowerCase();
+  return cleaned || 'smartphones';
+}
+
 /**
  * Returns the category's Balanced Default weights from `@repo/shared-data/rules`
  * (`sum === 100`).
@@ -154,8 +167,9 @@ function parseStrictQueryWeight(raw: string): number | null {
 export function defaultCategoryWeights(
   categorySlug: string | null | undefined
 ): Record<RatingCriterionKey, number> {
+  const cat = normalizeCategorySlugInput(categorySlug);
   const out = {} as Record<RatingCriterionKey, number>;
-  for (const criterion of getRatingCriteria(categorySlug)) {
+  for (const criterion of getRatingCriteria(cat)) {
     setSafeKey(out, criterion.key, criterion.weight);
   }
   return out;
@@ -222,7 +236,8 @@ export function normalizeCategoryWeights(
   rawWeights: unknown,
   availableCriteria?: readonly RatingCriterionKey[]
 ): NormalizedCategoryWeights {
-  const criteria = getRatingCriteria(categorySlug);
+  const cat = normalizeCategorySlugInput(categorySlug);
+  const criteria = getRatingCriteria(cat);
   const allKeys = criteria.map((c) => c.key);
   const activeSet =
     availableCriteria && availableCriteria.length > 0
@@ -235,7 +250,7 @@ export function normalizeCategoryWeights(
       ? allKeys.filter((k) => activeSet.has(k))
       : allKeys;
 
-  const defaults = defaultCategoryWeights(categorySlug);
+  const defaults = defaultCategoryWeights(cat);
   const record = isPlainObject(rawWeights) ? rawWeights : null;
 
   const sliderWeights = {} as Record<RatingCriterionKey, number>;
@@ -328,9 +343,12 @@ export function resolveCategoryPreset(
   categorySlug: string | null | undefined,
   presetInput: unknown
 ): RatingUseCasePreset {
-  const presets = getRatingUseCasePresets(categorySlug);
+  const cat = normalizeCategorySlugInput(categorySlug);
+  const presets = getRatingUseCasePresets(cat);
   const defaultPreset = presets[0]!;
-  if (typeof presetInput !== 'string') return defaultPreset;
+  if (typeof presetInput !== 'string' || presetInput.length > 64) {
+    return defaultPreset;
+  }
   const cleaned = presetInput
     .replace(CONTROL_CHARS_RE, '')
     .trim()
@@ -342,23 +360,25 @@ export function resolveCategoryPreset(
   ) {
     return defaultPreset;
   }
-  const targetId = mapCategoryPresetAlias(categorySlug, cleaned);
+  const targetId = mapCategoryPresetAlias(cat, cleaned);
   const matched = presets.find((p) => p.id === targetId);
   return matched ?? defaultPreset;
 }
 
 /**
  * Returns presets worth offering when only `availableCriteria` have real scores
- * (`#1553` / `#1556`). Empty when `availableCriteria` is empty.
+ * (`#1553` / `#1556`). Empty when `availableCriteria` has zero valid category keys.
  */
 export function availableCategoryUseCasePresets(
   categorySlug: string | null | undefined,
   availableCriteria: readonly RatingCriterionKey[]
 ): RatingUseCasePreset[] {
   if (!availableCriteria || availableCriteria.length === 0) return [];
+  const cat = normalizeCategorySlugInput(categorySlug);
   const availableSet = new Set<RatingCriterionKey>(availableCriteria);
-  const presets = getRatingUseCasePresets(categorySlug);
-  const criteria = getRatingCriteria(categorySlug);
+  const presets = getRatingUseCasePresets(cat);
+  const criteria = getRatingCriteria(cat);
+  if (!criteria.some((c) => availableSet.has(c.key))) return [];
   return presets.filter((preset) => {
     if (preset.id === 'default') return true;
     let leadKey: RatingCriterionKey | null = null;
@@ -381,22 +401,35 @@ export function isDefaultCategoryWeights(
   availableCriteria?: readonly RatingCriterionKey[]
 ): boolean {
   if (mode === 'default') return true;
-  const normalized = normalizeCategoryWeights(
-    categorySlug,
-    weights,
-    availableCriteria
-  );
+  const cat = normalizeCategorySlugInput(categorySlug);
+  const criteria = getRatingCriteria(cat);
+  const allKeys = criteria.map((c) => c.key);
+  const activeSet =
+    availableCriteria && availableCriteria.length > 0
+      ? new Set<RatingCriterionKey>(
+          availableCriteria.filter((k) => allKeys.includes(k))
+        )
+      : null;
+  const activeKeys =
+    activeSet && activeSet.size > 0
+      ? allKeys.filter((k) => activeSet.has(k))
+      : allKeys;
+
+  const normalized = normalizeCategoryWeights(cat, weights, availableCriteria);
   if (normalized.wasAllZeroReset) return true;
-  const defaultNormalized = normalizeCategoryWeights(
-    categorySlug,
-    defaultCategoryWeights(categorySlug),
-    availableCriteria
-  );
-  for (const c of getRatingCriteria(categorySlug)) {
-    if (
-      (normalized.normalizedPercent[c.key] ?? 0) !==
-      (defaultNormalized.normalizedPercent[c.key] ?? 0)
-    ) {
+  const defaults = defaultCategoryWeights(cat);
+
+  let sliderSum = 0;
+  let defaultSum = 0;
+  for (const key of activeKeys) {
+    sliderSum += normalized.sliderWeights[key] ?? 0;
+    defaultSum += defaults[key] ?? 0;
+  }
+  if (sliderSum <= 0 || defaultSum <= 0) return true;
+  for (const key of activeKeys) {
+    const w = normalized.sliderWeights[key] ?? 0;
+    const d = defaults[key] ?? 0;
+    if (w * defaultSum !== d * sliderSum) {
       return false;
     }
   }
@@ -404,25 +437,38 @@ export function isDefaultCategoryWeights(
 }
 
 /**
- * Encodes custom weights compactly as `key:weight,key:weight` in canonical
- * category criterion order (omitting zero weights).
+ * Encodes custom slider weights compactly as `key:weight,key:weight` in canonical
+ * category criterion order (omitting zero weights while keeping integer percentages
+ * for display).
  */
 export function serializeWeightsParam(
   categorySlug: string | null | undefined,
   rawWeights: unknown,
   availableCriteria?: readonly RatingCriterionKey[]
 ): string {
+  const cat = normalizeCategorySlugInput(categorySlug);
+  const criteria = getRatingCriteria(cat);
+  const allKeys = criteria.map((c) => c.key);
+  const activeSet =
+    availableCriteria && availableCriteria.length > 0
+      ? new Set<RatingCriterionKey>(
+          availableCriteria.filter((k) => allKeys.includes(k))
+        )
+      : null;
   const normalized = normalizeCategoryWeights(
-    categorySlug,
+    cat,
     rawWeights,
     availableCriteria
   );
   if (normalized.wasAllZeroReset) return '';
   const parts: string[] = [];
-  for (const criterion of getRatingCriteria(categorySlug)) {
-    const pct = normalized.normalizedPercent[criterion.key] ?? 0;
-    if (pct > 0) {
-      parts.push(`${criterion.key}:${pct}`);
+  for (const criterion of criteria) {
+    if (activeSet && activeSet.size > 0 && !activeSet.has(criterion.key)) {
+      continue;
+    }
+    const weight = normalized.sliderWeights[criterion.key] ?? 0;
+    if (weight > 0) {
+      parts.push(`${criterion.key}:${weight}`);
     }
   }
   return parts.join(',');
@@ -430,22 +476,24 @@ export function serializeWeightsParam(
 
 /**
  * Parses a `?weights=...` query value strictly for `categorySlug`.
- * Rejects prototype keys, foreign criteria, negative/NaN/huge numbers, and
- * oversized query strings. Returns `null` when invalid or all-zero.
+ * Rejects prototype keys, duplicate keys, foreign criteria, negative/NaN/huge
+ * numbers, and oversized query strings. Returns `null` when invalid or all-zero.
  */
 export function parseWeightsParam(
   categorySlug: string | null | undefined,
   rawParam: unknown
 ): Record<RatingCriterionKey, number> | null {
-  if (typeof rawParam !== 'string') return null;
+  if (typeof rawParam !== 'string' || rawParam.length > MAX_QUERY_PARAM_LEN) {
+    return null;
+  }
   if (/\p{Cc}/u.test(rawParam)) return null;
   const trimmed = rawParam.trim();
   if (!trimmed || trimmed.length > MAX_QUERY_PARAM_LEN) return null;
 
-  const criteria = getRatingCriteria(categorySlug);
+  const cat = normalizeCategorySlugInput(categorySlug);
+  const criteria = getRatingCriteria(cat);
   const validKeys = new Set<RatingCriterionKey>(criteria.map((c) => c.key));
   const legacyKeyToCanonical = (key: string): RatingCriterionKey | null => {
-    const cat = (categorySlug ?? 'smartphones').toLowerCase().trim();
     if (key === 'screen') {
       return cat === 'earbuds'
         ? 'sound'
@@ -464,9 +512,7 @@ export function parseWeightsParam(
 
   const parsed = {} as Record<RatingCriterionKey, number>;
   for (const c of criteria) setSafeKey(parsed, c.key, 0);
-
-  let validPairCount = 0;
-  let positiveSum = 0;
+  const seenKeys = new Set<RatingCriterionKey>();
 
   for (const rawToken of tokens) {
     const token = rawToken.trim();
@@ -481,19 +527,22 @@ export function parseWeightsParam(
       return null;
     }
     const canonicalKey = legacyKeyToCanonical(rawKey);
-    if (!canonicalKey) {
+    if (!canonicalKey || seenKeys.has(canonicalKey)) {
       return null;
     }
     const weight = parseStrictQueryWeight(rawVal);
     if (weight === null) {
       return null;
     }
+    seenKeys.add(canonicalKey);
     setSafeKey(parsed, canonicalKey, weight);
-    validPairCount += 1;
-    positiveSum += weight;
   }
 
-  if (validPairCount === 0 || positiveSum <= 0) {
+  let finalPositiveSum = 0;
+  for (const c of criteria) {
+    finalPositiveSum += parsed[c.key] ?? 0;
+  }
+  if (seenKeys.size === 0 || finalPositiveSum <= 0) {
     return null;
   }
   return parsed;
@@ -720,7 +769,7 @@ function legacyBreakdownFallback(
     candidate = breakdown.value;
   }
   const n = toSafePositiveNumber(candidate);
-  return n > 0 && n <= 5 ? roundScore(n, 2) : null;
+  return n > 0 && n <= 5 ? n : null;
 }
 
 /**
@@ -735,13 +784,16 @@ export function extractCategoryCriteriaScores(
   fallbackBreakdown?: LeaderboardCriteriaBreakdown | null
 ): Record<RatingCriterionKey, number | null> {
   const safeProduct = isPlainObject(product) ? product : {};
-  const resolvedCat = (
-    categorySlug?.trim() ||
-    getMasterProductCategorySlug(safeProduct as MasterProduct) ||
-    'smartphones'
-  )
-    .toLowerCase()
-    .trim();
+  const effectiveMinWriters = Math.max(
+    1,
+    Number.isFinite(minWriters) ? minWriters : CRITERION_RANK_WRITERS
+  );
+  const resolvedCat =
+    typeof categorySlug === 'string' && categorySlug.trim()
+      ? normalizeCategorySlugInput(categorySlug)
+      : normalizeCategorySlugInput(
+          getMasterProductCategorySlug(safeProduct as MasterProduct)
+        );
   const community = isPlainObject(safeProduct.criteria_scores)
     ? safeProduct.criteria_scores
     : {};
@@ -754,8 +806,8 @@ export function extractCategoryCriteriaScores(
     if (!isPlainObject(entry)) return null;
     const writers = toSafePositiveNumber(ownValue(entry, 'writers'));
     const score = toSafePositiveNumber(ownValue(entry, 'score'));
-    return writers >= minWriters && score > 0 && score <= 5
-      ? roundScore(score, 3)
+    return writers >= effectiveMinWriters && score > 0 && score <= 5
+      ? score
       : null;
   };
 
@@ -814,13 +866,14 @@ export function scoredCategoryCriteriaForProducts(
   }>,
   minWriters: number = CRITERION_RANK_WRITERS
 ): RatingCriterionKey[] {
-  const criteria = getRatingCriteria(categorySlug);
+  const cat = normalizeCategorySlugInput(categorySlug);
+  const criteria = getRatingCriteria(cat);
   const scored = new Set<RatingCriterionKey>();
   for (const entry of items) {
     if (!entry) continue;
     const map = extractCategoryCriteriaScores(
       entry.product,
-      categorySlug,
+      cat,
       minWriters,
       entry.rankCriteria
     );
@@ -844,7 +897,7 @@ export function sharedCategoryCriteriaForPair(
   scoresA: CategoryCriteriaScores,
   scoresB: CategoryCriteriaScores
 ): RatingCriterionKey[] {
-  return getRatingCriteria(categorySlug)
+  return getRatingCriteria(normalizeCategorySlugInput(categorySlug))
     .map((c) => c.key)
     .filter((k) => (scoresA?.[k] ?? 0) > 0 && (scoresB?.[k] ?? 0) > 0);
 }
@@ -868,20 +921,56 @@ export function computeCustomWeightedScore5(
     readonly product?: Partial<MasterProduct> | null;
   }
 ): CustomWeightedScoreResult {
-  const criteria = getRatingCriteria(categorySlug);
+  const cat = normalizeCategorySlugInput(categorySlug);
+  const criteria = getRatingCriteria(cat);
   const allowedSet =
-    options?.onlyCriteria && options.onlyCriteria.length > 0
+    options?.onlyCriteria !== undefined
       ? new Set<RatingCriterionKey>(options.onlyCriteria)
       : null;
   const candidateCriteria: readonly RatingCriterion[] = allowedSet
     ? criteria.filter((c) => allowedSet.has(c.key))
     : criteria;
 
-  const normalized = normalizeCategoryWeights(
-    categorySlug,
-    rawWeights,
-    options?.onlyCriteria
-  );
+  const rawOfficial =
+    options?.officialScore5 !== undefined
+      ? options.officialScore5
+      : options?.product
+        ? resolveCompareEffectiveUserRating(options.product as MasterProduct)
+        : 0;
+  const officialScore5 =
+    typeof rawOfficial === 'number' &&
+    Number.isFinite(rawOfficial) &&
+    rawOfficial > 0
+      ? Math.min(5, rawOfficial)
+      : 0;
+  const displayedOfficialScore5 = displayedScore5(officialScore5);
+
+  if (candidateCriteria.length === 0 || !isPlainObject(rawWeights)) {
+    return {
+      customScore5: null,
+      displayedCustomScore5: null,
+      officialScore5,
+      displayedOfficialScore5,
+      ratedCriteriaCount: 0,
+      totalCriteriaCount: candidateCriteria.length,
+      effectiveSharesPercent: {},
+    };
+  }
+
+  const candidateKeys = candidateCriteria.map((c) => c.key);
+  const normalized = normalizeCategoryWeights(cat, rawWeights, candidateKeys);
+  if (normalized.wasAllZeroReset) {
+    return {
+      customScore5: null,
+      displayedCustomScore5: null,
+      officialScore5,
+      displayedOfficialScore5,
+      ratedCriteriaCount: 0,
+      totalCriteriaCount: candidateCriteria.length,
+      effectiveSharesPercent: {},
+    };
+  }
+
   const safeScores = isPlainObject(criteriaScores) ? criteriaScores : {};
 
   let weightedSum = 0;
@@ -906,20 +995,6 @@ export function computeCustomWeightedScore5(
     contributingKeys.push(criterion.key);
     contributingWeights[criterion.key] = weight;
   }
-
-  const rawOfficial =
-    options?.officialScore5 !== undefined
-      ? options.officialScore5
-      : options?.product
-        ? resolveCompareEffectiveUserRating(options.product as MasterProduct)
-        : 0;
-  const officialScore5 =
-    typeof rawOfficial === 'number' &&
-    Number.isFinite(rawOfficial) &&
-    rawOfficial > 0
-      ? Math.min(5, rawOfficial)
-      : 0;
-  const displayedOfficialScore5 = displayedScore5(officialScore5);
 
   if (weightSum <= 0) {
     return {
@@ -962,12 +1037,13 @@ export function formatNormalizedWeightSummary(
   criterionLabels?: Readonly<Partial<Record<RatingCriterionKey, string>>>,
   availableCriteria?: readonly RatingCriterionKey[]
 ): string {
+  const cat = normalizeCategorySlugInput(categorySlug);
   const allowed =
     availableCriteria && availableCriteria.length > 0
       ? new Set<RatingCriterionKey>(availableCriteria)
       : null;
   const parts: string[] = [];
-  for (const criterion of getRatingCriteria(categorySlug)) {
+  for (const criterion of getRatingCriteria(cat)) {
     if (allowed && !allowed.has(criterion.key)) continue;
     const pct = normalizedPercent[criterion.key] ?? 0;
     if (pct <= 0) continue;
@@ -1007,10 +1083,15 @@ export function resolveLocalizedPresetName(
  */
 export function toLegacyCriteriaWeights(
   categorySlug: string | null | undefined,
-  rawWeights: unknown
+  rawWeights: unknown,
+  availableCriteria?: readonly RatingCriterionKey[]
 ): LeaderboardCriteriaWeights {
-  const cat = (categorySlug ?? 'smartphones').toLowerCase().trim();
-  const norm = normalizeCategoryWeights(cat, rawWeights).normalizedPercent;
+  const cat = normalizeCategorySlugInput(categorySlug);
+  const norm = normalizeCategoryWeights(
+    cat,
+    rawWeights,
+    availableCriteria
+  ).normalizedPercent;
   if (cat === 'earbuds') {
     return {
       screen: 0,
