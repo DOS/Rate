@@ -135,10 +135,20 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (pathname === '/rest/v1/rpc/search_master_products') {
     searchArgs = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+    const wantedBrands = Array.isArray(searchArgs.p_brands)
+      ? (searchArgs.p_brands as unknown[]).map((b) => String(b).toLowerCase())
+      : null;
+    const filtered = wantedBrands
+      ? catalog.filter((r) =>
+          wantedBrands.includes(
+            String((r as { brand?: unknown }).brand ?? '').toLowerCase()
+          )
+        )
+      : catalog;
     const from = Number(searchArgs.p_offset ?? 0);
     return jsonResponse(
       200,
-      catalog.slice(from, from + Number(searchArgs.p_limit ?? 200))
+      filtered.slice(from, from + Number(searchArgs.p_limit ?? 200))
     );
   }
   if (pathname === '/rest/v1/items') {
@@ -1254,9 +1264,41 @@ async function testSpecMatchesBodies() {
     productParams.some((p) => p.name === 'brand'),
     '/products keeps brand alias'
   );
+  const SAMSUNG_PHONE = {
+    ...phoneShaped(
+      '99999991-9999-4999-8999-999999991830',
+      'samsung-galaxy-s25-256gb',
+      'smartphones'
+    ),
+    brand: 'Samsung',
+  };
+  const XIAOMI_PHONE = {
+    ...phoneShaped(
+      '99999992-9999-4999-8999-999999991830',
+      'xiaomi-15-256gb',
+      'smartphones'
+    ),
+    brand: 'Xiaomi',
+  };
+  catalog = [PHONE, SAMSUNG_PHONE, XIAOMI_PHONE];
   const allBrandsList = await listProducts('category=all&brands=Apple,Samsung');
   assert.equal(allBrandsList.status, 200);
   assert.equal(allBrandsList.body.category, 'all');
+  assert.equal(searchArgs.p_category_id, undefined);
+  assert.deepEqual(searchArgs.p_brands, ['Apple', 'Samsung']);
+  assert.deepEqual(
+    allBrandsList.body.data.map((p: { brand: string }) => p.brand),
+    ['Apple', 'Samsung']
+  );
+  const aliasBrandList = await listProducts(
+    'category=all&brands=&brand=Samsung'
+  );
+  assert.equal(aliasBrandList.status, 200);
+  assert.deepEqual(searchArgs.p_brands, ['Samsung']);
+  assert.deepEqual(
+    aliasBrandList.body.data.map((p: { brand: string }) => p.brand),
+    ['Samsung']
+  );
 
   // GET /reviews documents optional `v` variant size slug under RATE_ITEM_MODEL (#1830).
   const prevItemModelFlag = process.env.RATE_ITEM_MODEL;
