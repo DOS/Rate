@@ -1127,6 +1127,8 @@ async function testHardening1853() {
     mkBatch({ cost_usd: 'NaN', reserved_usd: 0.01 }),
     mkBatch({ cost_usd: Number.NaN, reserved_usd: 0.01 }),
     mkBatch({ cost_usd: null, reserved_usd: 'NaN' }),
+    mkBatch({ cost_usd: null, reserved_usd: null as unknown as number }),
+    mkBatch({ cost_usd: null, reserved_usd: -1 }),
     mkBatch({ cost_usd: Number.POSITIVE_INFINITY, reserved_usd: 0.01 }),
     mkBatch({ cost_usd: 'Infinity', reserved_usd: 0.01 }),
     mkBatch({ cost_usd: '-Infinity', reserved_usd: 0.01 }),
@@ -1172,15 +1174,16 @@ async function testHardening1853() {
   );
   assert.equal(
     monthSpendUsd(
-      [mkBatch({ submitted_at: '2026-11-01T00:00:00+00:00', cost_usd: 2.25 })],
+      [mkBatch({ model: 'dos ', submitted_at: '2026-11-01T00:00:00+00:00', cost_usd: 2.25 })],
       'dos',
       now
     ),
     2.25,
-    'PostgREST +00:00 timestamp at month start is included'
+    'PostgREST +00:00 timestamp at month start and padded model are included'
   );
 
-  // 2) batchCostUsd rejects Infinity / -Infinity / NaN / negative token counts.
+  // 2) batchCostUsd rejects Infinity / -Infinity / NaN / negative token counts, prototype model
+  // keys, and does not overflow to Infinity or $0 on huge finite token counts.
   assert.equal(
     batchCostUsd('dos', {
       input_tokens: Number.POSITIVE_INFINITY,
@@ -1190,6 +1193,26 @@ async function testHardening1853() {
     }),
     0
   );
+  assert.equal(batchCostUsd('toString' as never, { input_tokens: 1000 }), 0);
+  const maxValCost = batchCostUsd('qwen3.8-max', { output_tokens: Number.MAX_VALUE });
+  assert.ok(Number.isFinite(maxValCost) && maxValCost > 0);
+  const hugeCollected = collectBatch(
+    {
+      id: 'batch_huge',
+      model: 'dos',
+      prompt_version: REVIEW_AI_PROMPT_VERSION,
+      manifest: [
+        { custom_id: 'r1', category: 'smartphones', criteria_version: 1, reviews: [] },
+        { custom_id: 'r2', category: 'smartphones', criteria_version: 1, reviews: [] },
+      ],
+    },
+    [
+      { custom_id: 'r1', ...answer([], 'end_turn', { input_tokens: 1e308, output_tokens: 1e308 }) },
+      { custom_id: 'r2', ...answer([], 'end_turn', { input_tokens: 1e308, output_tokens: 1e308 }) },
+    ],
+    new Map()
+  );
+  assert.ok(Number.isFinite(hugeCollected.costUsd) && hugeCollected.costUsd > 0);
   assert.equal(
     batchCostUsd('dos', {
       input_tokens: 1_000_000,
@@ -1324,6 +1347,10 @@ async function testHardening1853() {
     '/files/file_%EF%BF%BD_out/content',
     '/batches/batch_%EF%BF%BD_bad/cancel',
   ]);
+  for (const badId of ['', '   ', '.', '..', 'a/b', 'a?b', 'a#b', 'a\\b', 'a\u0000b']) {
+    await assert.rejects(surrogateClient.batchStatus(badId), /Invalid dos\.ai resource identifier/);
+    await assert.rejects(surrogateClient.cancelBatch(badId), /Invalid dos\.ai resource identifier/);
+  }
 
   const cutPair = sanitizeAiGeneratedText('abcd😀', 5);
   assert.equal(cutPair, 'abcd');
@@ -1338,7 +1365,8 @@ async function testHardening1853() {
   assert.equal(cutSpacePair, 'abcd');
   assert.ok((cutSpacePair as string & { isWellFormed(): boolean }).isWellFormed());
 
-  const cutBoundedBoundary = sanitizeAiGeneratedText(`${'a'.repeat(4095)}😀`, 5000);
+  const cutBoundedBoundary = sanitizeAiGeneratedText(`a${' '.repeat(4094)}😀`, 400);
+  assert.equal(cutBoundedBoundary, 'a');
   assert.ok((cutBoundedBoundary as string & { isWellFormed(): boolean }).isWellFormed());
   assert.equal(cutBoundedBoundary.includes('\uFFFD'), false);
 

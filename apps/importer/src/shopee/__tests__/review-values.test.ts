@@ -286,6 +286,7 @@ async function run() {
       review(44, 'l2', { rating_exact: Number.POSITIVE_INFINITY, rating_star: 5 }),
       review(45, 'l2', { helpfulness_weight: Number.POSITIVE_INFINITY, rating_star: 5 }),
       review(46, 'l2', { helpfulness_weight: 'NaN', rating_star: 5 }),
+      review(47, 'l2', { helpfulness_weight: Number.MAX_VALUE, rating_star: 5 }),
     ],
     listings,
     values: new Map(),
@@ -297,7 +298,11 @@ async function run() {
   assert.equal(Object.hasOwn(m2Malformed.criteria_scores, 'prototype'), false);
   assert.deepEqual(Object.keys(m2Malformed.criteria_scores), ['battery']);
   assert.equal(m2Malformed.criteria_scores.battery!.writers, 3);
-  assert.equal(m2Malformed.rating_weight_sum, 2, 'only finite 1..5 star reviews count in rating');
+  assert.equal(
+    m2Malformed.rating_weight_sum,
+    5,
+    'only finite 1..5 star reviews count and huge finite weight clamps cleanly to 3'
+  );
   assert.ok(
     !masterRatingMatches(
       {

@@ -383,7 +383,7 @@ export function expectedMasterRatings(input: {
     const exact = review.rating_exact == null ? null : Number(review.rating_exact);
     const list = byMaster.get(masterId) ?? [];
     const factor = completenessWeightFactor(input.values.get(review.id)?.weightCompleteness);
-    const w = toUnits(weight, 100n) * toUnits(factor, V_UNIT);
+    const w = toUnits(Math.min(weight, 3), 100n) * toUnits(factor, V_UNIT);
     list.push({
       // LEAST(3, helpfulness_weight x factor), as reviewRatingWeight, in millionths.
       w: w < 3n * W_UNIT ? w : 3n * W_UNIT,

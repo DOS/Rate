@@ -301,8 +301,21 @@ export function dosAiReviewAiClient(
   };
   const json = async <T>(path: string, init?: RequestInit, retry?: 'all' | 'throttled') =>
     JSON.parse((await call(path, init, retry)).text) as T;
-  const encodePathId = (value: string): string =>
-    encodeURIComponent((String(value) as string & { toWellFormed(): string }).toWellFormed());
+  const normalizePathId = (value: unknown): string => {
+    if (typeof value !== 'string') throw new Error('Invalid dos.ai resource identifier.');
+    const wellFormed = (value as string & { toWellFormed(): string }).toWellFormed().trim();
+    if (
+      !wellFormed ||
+      wellFormed === '.' ||
+      wellFormed === '..' ||
+      wellFormed.length > 256 ||
+      /[\s/?#\\\p{Cc}]/u.test(wellFormed)
+    ) {
+      throw new Error('Invalid dos.ai resource identifier.');
+    }
+    return wellFormed;
+  };
+  const encodePathId = (value: unknown): string => encodeURIComponent(normalizePathId(value));
   return {
     async createBatch(requests) {
       const form = new FormData();
@@ -315,20 +328,21 @@ export function dosAiReviewAiClient(
         'review-ai-points.jsonl'
       );
       const file = await json<{ id: string }>('/files', { method: 'POST', body: form });
+      const fileId = normalizePathId(file?.id);
       const batch = await json<{ id: string }>(
         '/batches',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            input_file_id: file.id,
+            input_file_id: fileId,
             endpoint: '/v1/chat/completions',
             completion_window: '24h',
           }),
         },
         'throttled'
       );
-      return { id: batch.id };
+      return { id: normalizePathId(batch?.id) };
     },
     async batchStatus(id) {
       const batch = await json<{ status: string }>(`/batches/${encodePathId(id)}`);
@@ -702,7 +716,12 @@ export function collectBatch(
       const message = result.result.message;
       for (const key of Object.keys(usage) as (keyof typeof usage)[]) {
         const n = Number(message.usage?.[key] ?? 0);
-        usage[key] += Number.isFinite(n) && n > 0 ? n : 0;
+        if (Number.isFinite(n) && n > 0) {
+          const next = usage[key] + n;
+          usage[key] = Number.isFinite(next)
+            ? Math.min(next, Number.MAX_SAFE_INTEGER)
+            : Number.MAX_SAFE_INTEGER;
+        }
       }
       if (message.stop_reason === 'end_turn') {
         const parsed = parseOutput(message) as { reviews?: unknown } | null;
@@ -837,10 +856,13 @@ function parseBatchUsd(raw: unknown): number | null {
 /** This month's spend of a model: reported cost, or the reserved ceiling while open. */
 export function monthSpendUsd(batches: readonly AiBatchRow[], model: string, now: Date): number {
   const startMs = monthStartMs(now);
-  if (!Number.isFinite(startMs)) return Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(startMs) || typeof model !== 'string') return Number.POSITIVE_INFINITY;
+  const targetModel = model.trim();
   let total = 0;
   for (const b of batches) {
-    if (b.model !== model) continue;
+    if (!b || typeof b !== 'object') return Number.POSITIVE_INFINITY;
+    const rowModel = typeof b.model === 'string' ? b.model.trim() : '';
+    if (rowModel !== targetModel) continue;
     const submittedMs =
       typeof b.submitted_at === 'string' ? Date.parse(b.submitted_at) : Number.NaN;
     if (!Number.isFinite(submittedMs)) return Number.POSITIVE_INFINITY;
@@ -850,9 +872,17 @@ export function monthSpendUsd(batches: readonly AiBatchRow[], model: string, now
     if (cost === Number.POSITIVE_INFINITY || reserved === Number.POSITIVE_INFINITY) {
       return Number.POSITIVE_INFINITY;
     }
-    const safeReserved = reserved !== null && reserved > 0 ? reserved : 0;
-    const rowUsd = cost !== null ? (cost >= 0 ? cost : safeReserved) : safeReserved;
-    total += rowUsd;
+    if (cost === null) {
+      if (reserved === null || reserved < 0) return Number.POSITIVE_INFINITY;
+      total += reserved;
+      continue;
+    }
+    if (cost < 0) {
+      if (reserved === null || reserved < 0) return Number.POSITIVE_INFINITY;
+      total += reserved;
+      continue;
+    }
+    total += cost;
   }
   return total;
 }
