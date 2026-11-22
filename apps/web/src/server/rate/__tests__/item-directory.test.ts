@@ -11,10 +11,14 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
 
 const ITEM = '11111111-1111-4111-8111-111111111155';
 const DRAFT_ITEM = '11111111-1111-4111-8111-111111111156';
+const LAPTOP_ITEM = '11111111-1111-4111-8111-111111111157';
 const V128 = '22222222-2222-4222-8222-222222222128';
 const V256 = '22222222-2222-4222-8222-222222222256';
+const LAPTOP_V256 = '22222222-2222-4222-8222-222222222777';
+const LAPTOP_RETIRED = '22222222-2222-4222-8222-222222222778';
 const LONE = '22222222-2222-4222-8222-222222222999';
 const CATEGORY = '55555555-5555-4555-8555-555555555555';
+const LAPTOP_CATEGORY = '55555555-5555-4555-8555-555555555556';
 
 const itemRow = {
   id: ITEM,
@@ -33,6 +37,23 @@ const itemRow = {
   unknown_variant_listing_count: 1,
   updated_at: '2026-10-29T00:00:00Z',
 };
+const laptopItemRow = {
+  id: LAPTOP_ITEM,
+  item_key: 'apple:macbook-air-m4',
+  slug: 'apple-macbook-air-m4',
+  name: 'Apple MacBook Air M4',
+  brand: 'Apple',
+  model: 'MacBook Air M4',
+  category_id: LAPTOP_CATEGORY,
+  default_variant_id: LAPTOP_V256,
+  min_price: 26990000,
+  max_price: 28990000,
+  price_variant_count: 1,
+  merchant_count: 3,
+  listing_count: 3,
+  unknown_variant_listing_count: 0,
+  updated_at: '2026-10-29T00:00:00Z',
+};
 const variantRow = (id: string, gb: number) => ({
   id,
   item_id: ITEM,
@@ -46,10 +67,130 @@ const variantRow = (id: string, gb: number) => ({
   max_price: gb === 128 ? 23990000 : 25990000,
   merchant_count: 2,
 });
+const laptopVariantRow = {
+  id: LAPTOP_V256,
+  item_id: LAPTOP_ITEM,
+  slug: 'apple-macbook-air-m4-256gb',
+  name: 'Apple MacBook Air M4 256GB',
+  variant_key: '256gb',
+  variant_name: '256GB',
+  sort_order: null,
+  storage_gb: 256,
+  min_price: 26990000,
+  max_price: 28990000,
+  merchant_count: 3,
+};
+const watchlistMasterRow = (params: {
+  id: string;
+  item_id: string | null;
+  slug: string;
+  name: string;
+  brand: string;
+  category_id: string;
+  category_slug: string;
+  variant_key: string | null;
+  storage_gb: number | null;
+  status: 'published' | 'archived';
+  min_price: number;
+  max_price: number;
+}) => ({
+  id: params.id,
+  item_id: params.item_id,
+  slug: params.slug,
+  name: params.name,
+  brand: params.brand,
+  model: params.name,
+  category_id: params.category_id,
+  status: params.status,
+  variant_key: params.variant_key,
+  variant_name: params.storage_gb ? `${params.storage_gb}GB` : null,
+  sort_order: null,
+  storage_gb: params.storage_gb,
+  min_price: params.min_price,
+  max_price: params.max_price,
+  merchant_count: 2,
+  metadata: { category_slug: params.category_slug },
+  specifications: { category_slug: params.category_slug },
+  key_specs: {},
+});
+const WATCHLIST_MASTERS = [
+  watchlistMasterRow({
+    id: V128,
+    item_id: ITEM,
+    slug: 'apple-iphone-16-128gb',
+    name: 'Apple iPhone 16 128GB',
+    brand: 'Apple',
+    category_id: CATEGORY,
+    category_slug: 'smartphones',
+    variant_key: '128gb',
+    storage_gb: 128,
+    status: 'published',
+    min_price: 21990000,
+    max_price: 23990000,
+  }),
+  watchlistMasterRow({
+    id: V256,
+    item_id: ITEM,
+    slug: 'apple-iphone-16-256gb',
+    name: 'Apple iPhone 16 256GB',
+    brand: 'Apple',
+    category_id: CATEGORY,
+    category_slug: 'smartphones',
+    variant_key: '256gb',
+    storage_gb: 256,
+    status: 'published',
+    min_price: 24990000,
+    max_price: 25990000,
+  }),
+  watchlistMasterRow({
+    id: LAPTOP_V256,
+    item_id: LAPTOP_ITEM,
+    slug: 'apple-macbook-air-m4-256gb',
+    name: 'Apple MacBook Air M4 256GB',
+    brand: 'Apple',
+    category_id: LAPTOP_CATEGORY,
+    category_slug: 'laptops',
+    variant_key: '256gb',
+    storage_gb: 256,
+    status: 'published',
+    min_price: 26990000,
+    max_price: 28990000,
+  }),
+  watchlistMasterRow({
+    id: LAPTOP_RETIRED,
+    item_id: LAPTOP_ITEM,
+    slug: 'apple-macbook-air-m4-unknown',
+    name: 'Apple MacBook Air M4',
+    brand: 'Apple',
+    category_id: LAPTOP_CATEGORY,
+    category_slug: 'laptops',
+    variant_key: 'unknown',
+    storage_gb: null,
+    status: 'archived',
+    min_price: 26990000,
+    max_price: 28990000,
+  }),
+  watchlistMasterRow({
+    id: LONE,
+    item_id: null,
+    slug: 'samsung-galaxy-s24',
+    name: 'Samsung Galaxy S24',
+    brand: 'Samsung',
+    category_id: CATEGORY,
+    category_slug: 'smartphones',
+    variant_key: null,
+    storage_gb: 256,
+    status: 'published',
+    min_price: 19000000,
+    max_price: 20000000,
+  }),
+];
 
 let calls: string[] = [];
 let schemaMissing = false;
 let itemsDown = false;
+let watchlistRouteTest = false;
+let searchRpcBodies: unknown[] = [];
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(
     typeof input === 'string'
@@ -86,14 +227,66 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     );
   }
   switch (url.pathname) {
+    case '/rest/v1/categories':
+      return json([
+        { id: CATEGORY, slug: 'smartphones' },
+        { id: LAPTOP_CATEGORY, slug: 'laptops' },
+      ]);
+    case '/rest/v1/rpc/search_master_products': {
+      let body: unknown = null;
+      if (typeof init?.body === 'string') {
+        try {
+          body = JSON.parse(init.body);
+        } catch {
+          body = init.body;
+        }
+      }
+      searchRpcBodies.push(body);
+      return json(WATCHLIST_MASTERS.filter((m) => m.status === 'published'));
+    }
     case '/rest/v1/items':
       if (init?.method === 'HEAD') return json([], { 'content-range': '*/3' });
+      if (watchlistRouteTest) {
+        if (
+          /slug=eq\.apple-iphone-16(&|$)/.test(q) ||
+          q.includes(`id=eq.${ITEM}`)
+        ) {
+          return json([itemRow]);
+        }
+        if (
+          /slug=eq\.apple-macbook-air-m4(&|$)/.test(q) ||
+          q.includes(`id=eq.${LAPTOP_ITEM}`)
+        ) {
+          return json([laptopItemRow]);
+        }
+        return json([]);
+      }
       if (q.includes('select=id,slug')) {
         return json([{ id: ITEM, slug: 'apple-iphone-16' }]);
       }
       if (q.includes('select=id&')) return json([{ id: ITEM }]);
       return json([itemRow]);
     case '/rest/v1/master_products':
+      if (watchlistRouteTest) {
+        if (q.includes(`item_id=eq.${LAPTOP_ITEM}`)) {
+          return json([laptopVariantRow]);
+        }
+        if (q.includes('item_id=in.') || q.includes(`item_id=eq.${ITEM}`)) {
+          return json([variantRow(V256, 256), variantRow(V128, 128)]);
+        }
+        const slugFilter = url.searchParams.get('slug');
+        if (slugFilter?.startsWith('eq.')) {
+          const wantedSlug = slugFilter.slice(3);
+          const onlyPublished =
+            url.searchParams.get('status') === 'eq.published';
+          const hit = WATCHLIST_MASTERS.find(
+            (m) =>
+              m.slug === wantedSlug &&
+              (!onlyPublished || m.status === 'published')
+          );
+          return json(hit ? [hit] : []);
+        }
+      }
       if (q.includes('select=id,item_id&')) {
         return json([
           { id: V128, item_id: ITEM },
@@ -292,12 +485,14 @@ async function main() {
   );
   assert.deepEqual(await cmp.resolveWatchlistSlug('apple-iphone-16'), {
     variantSlug: 'apple-iphone-16-128gb',
+    itemSlug: 'apple-iphone-16',
     sizeRequired: true,
   });
   // An Item sharing its slug with one of its sizes watches that size
   // (review round 1): the stub answers every Item slug with the Item.
   assert.deepEqual(await cmp.resolveWatchlistSlug('apple-iphone-16-128gb'), {
     variantSlug: 'apple-iphone-16-128gb',
+    itemSlug: 'apple-iphone-16',
     sizeRequired: false,
   });
   itemsDown = true;
@@ -308,6 +503,201 @@ async function main() {
   );
   itemsDown = false;
   delete process.env.RATE_ITEM_MODEL;
+
+  // Watchlist API canonical Item product_href & /watchlist cached catalog read (DOS/Rate#1829).
+  const { NextRequest } = await import('next/server');
+  const watchlistRoute =
+    await import('../../../app/api/v1/rate/watchlist/route');
+  const {
+    RATE_CACHE_TAGS,
+    canonicalizeCacheParams,
+    getCachedMasterProducts,
+    resolveRevalidationTargets,
+  } = await import('../index');
+  const { loadWatchlistCatalogProducts } =
+    await import('../../../app/[locale]/watchlist/page');
+  watchlistRouteTest = true;
+  try {
+    // 1. Flag off: no Item read; variant and unlinked slugs emit their own master href.
+    delete process.env.RATE_ITEM_MODEL;
+    calls = [];
+    const offWatchRes = await watchlistRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/watchlist?slugs=apple-iphone-16,apple-iphone-16-256gb,apple-macbook-air-m4-256gb,samsung-galaxy-s24'
+      )
+    );
+    assert.equal(offWatchRes.status, 200);
+    assert.ok(
+      !calls.some((c) => c.startsWith('/rest/v1/items')),
+      'flag off watchlist GET must not query rate.items'
+    );
+    const offWatchBody = await offWatchRes.json();
+    assert.equal(offWatchBody.ok, true);
+    assert.equal(offWatchBody.count, 3);
+    assert.equal('apple-iphone-16' in offWatchBody.items, false);
+    assert.equal(
+      offWatchBody.items['apple-iphone-16-256gb']?.product_href,
+      '/smartphones/apple-iphone-16-256gb'
+    );
+    assert.equal(
+      offWatchBody.items['apple-macbook-air-m4-256gb']?.product_href,
+      '/laptops/apple-macbook-air-m4-256gb'
+    );
+    assert.equal(
+      offWatchBody.items['samsung-galaxy-s24']?.product_href,
+      '/smartphones/samsung-galaxy-s24'
+    );
+
+    // 2. Flag on (`item` and `nullable_variant`): resolveWatchlistSlug exposes itemSlug,
+    // and GET /api/v1/rate/watchlist emits canonical `/<category>/<item-slug>` with no `?v=`.
+    for (const mode of ['item', 'nullable_variant'] as const) {
+      process.env.RATE_ITEM_MODEL = mode;
+
+      assert.deepEqual(
+        await cmp.resolveWatchlistSlug('apple-macbook-air-m4-256gb'),
+        {
+          variantSlug: 'apple-macbook-air-m4-256gb',
+          itemSlug: 'apple-macbook-air-m4',
+          sizeRequired: false,
+        }
+      );
+      assert.deepEqual(
+        await cmp.resolveWatchlistSlug('APPLE-MACBOOK-AIR-M4-256GB'),
+        {
+          variantSlug: 'apple-macbook-air-m4-256gb',
+          itemSlug: 'apple-macbook-air-m4',
+          sizeRequired: false,
+        }
+      );
+      assert.deepEqual(
+        await cmp.resolveWatchlistSlug('apple-macbook-air-m4-unknown'),
+        {
+          variantSlug: 'apple-macbook-air-m4-256gb',
+          itemSlug: 'apple-macbook-air-m4',
+          sizeRequired: true,
+        }
+      );
+      assert.equal(await cmp.resolveWatchlistSlug('samsung-galaxy-s24'), null);
+
+      const onWatchRes = await watchlistRoute.GET(
+        new NextRequest(
+          'http://localhost/api/v1/rate/watchlist?slugs=apple-iphone-16,apple-iphone-16-256gb,apple-macbook-air-m4-256gb,samsung-galaxy-s24'
+        )
+      );
+      assert.equal(onWatchRes.status, 200);
+      const onWatchBody = await onWatchRes.json();
+      assert.equal(onWatchBody.ok, true);
+      assert.equal(onWatchBody.count, 4);
+
+      const iphoneItemEntry = onWatchBody.items['apple-iphone-16'];
+      assert.equal(iphoneItemEntry?.slug, 'apple-iphone-16-128gb');
+      assert.equal(
+        iphoneItemEntry?.product_href,
+        '/smartphones/apple-iphone-16'
+      );
+      assert.equal(iphoneItemEntry?.size_required, true);
+
+      const iphoneVariantEntry = onWatchBody.items['apple-iphone-16-256gb'];
+      assert.equal(iphoneVariantEntry?.slug, 'apple-iphone-16-256gb');
+      assert.equal(
+        iphoneVariantEntry?.product_href,
+        '/smartphones/apple-iphone-16'
+      );
+      assert.equal('size_required' in iphoneVariantEntry, false);
+
+      const laptopVariantEntry =
+        onWatchBody.items['apple-macbook-air-m4-256gb'];
+      assert.equal(laptopVariantEntry?.slug, 'apple-macbook-air-m4-256gb');
+      assert.equal(
+        laptopVariantEntry?.product_href,
+        '/laptops/apple-macbook-air-m4'
+      );
+      assert.equal('size_required' in laptopVariantEntry, false);
+
+      const unlinkedEntry = onWatchBody.items['samsung-galaxy-s24'];
+      assert.equal(unlinkedEntry?.slug, 'samsung-galaxy-s24');
+      assert.equal(
+        unlinkedEntry?.product_href,
+        '/smartphones/samsung-galaxy-s24'
+      );
+      assert.equal('size_required' in unlinkedEntry, false);
+
+      for (const entry of Object.values(onWatchBody.items) as Array<{
+        product_href: string;
+      }>) {
+        assert.match(entry.product_href, /^\/[a-z]+\/[^/?#\s]+$/);
+        assert.equal(entry.product_href.includes('?v='), false);
+      }
+    }
+
+    // 3. Flag on, Item schema missing or failing: falls back cleanly to variant hrefs.
+    process.env.RATE_ITEM_MODEL = 'item';
+    schemaMissing = true;
+    const missingWatchRes = await watchlistRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/watchlist?slugs=apple-iphone-16-256gb'
+      )
+    );
+    assert.equal(missingWatchRes.status, 200);
+    assert.equal(
+      (await missingWatchRes.json()).items['apple-iphone-16-256gb']
+        ?.product_href,
+      '/smartphones/apple-iphone-16-256gb'
+    );
+    schemaMissing = false;
+
+    itemsDown = true;
+    const downWatchRes = await watchlistRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/watchlist?slugs=apple-iphone-16-256gb'
+      )
+    );
+    assert.equal(downWatchRes.status, 200);
+    assert.equal(
+      (await downWatchRes.json()).items['apple-iphone-16-256gb']?.product_href,
+      '/smartphones/apple-iphone-16-256gb'
+    );
+    itemsDown = false;
+
+    // 4. /watchlist catalog loading uses getCachedMasterProducts({ categorySlug: 'all', limit: 100 }).
+    const capturedWatchlistArgs: unknown[] = [];
+    await loadWatchlistCatalogProducts(async (params) => {
+      capturedWatchlistArgs.push(params);
+      return [];
+    });
+    assert.deepEqual(capturedWatchlistArgs, [
+      { categorySlug: 'all', limit: 100 },
+    ]);
+
+    searchRpcBodies = [];
+    const watchlistCatalogRows = await loadWatchlistCatalogProducts();
+    const directCachedRows = await getCachedMasterProducts({
+      categorySlug: 'all',
+      limit: 100,
+    });
+    assert.equal(searchRpcBodies.length, 2);
+    assert.deepEqual(searchRpcBodies[0], {
+      p_sort: 'default',
+      p_limit: 100,
+      p_offset: 0,
+    });
+    assert.deepEqual(searchRpcBodies[0], searchRpcBodies[1]);
+    assert.deepEqual(watchlistCatalogRows, directCachedRows);
+    assert.equal(
+      canonicalizeCacheParams({ categorySlug: 'all', limit: 100 }),
+      '{"categorySlug":"all","limit":100}'
+    );
+    assert.ok(
+      resolveRevalidationTargets({
+        slugs: ['apple-iphone-16-128gb'],
+      }).tags.includes(RATE_CACHE_TAGS.PRODUCTS)
+    );
+  } finally {
+    watchlistRouteTest = false;
+    schemaMissing = false;
+    itemsDown = false;
+    delete process.env.RATE_ITEM_MODEL;
+  }
 
   // The cached pages this touches keep their cache mode: the leaderboard
   // stays ISR, and nothing here reads request-time APIs.
@@ -337,11 +727,16 @@ async function main() {
     );
   const home = appPage('page.tsx');
   assert.match(home, /export const revalidate = 300;/);
+  const watchlistPage = appPage('watchlist/page.tsx');
+  assert.match(watchlistPage, /export const revalidate = 300;/);
+  assert.match(watchlistPage, /getCachedMasterProducts/);
+  assert.doesNotMatch(watchlistPage, /\bgetMasterProducts\b/);
   const layout = appPage('layout.tsx');
   assert.match(layout, /export const revalidate = 86400;/);
   assert.match(layout, /export function generateStaticParams\(/);
   for (const [name, src] of [
     ['home', home],
+    ['watchlist', watchlistPage],
     ['layout', layout],
   ] as const) {
     assert.doesNotMatch(

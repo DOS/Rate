@@ -27,7 +27,10 @@ import {
   type RpcRejection,
 } from '@/server/rate/request-auth';
 import { createLogger, serializeError } from '@/lib/logger';
-import { getMasterProductHref } from '@/lib/rate-domain-core';
+import {
+  getMasterProductCategorySlug,
+  getMasterProductHref,
+} from '@/lib/rate-domain-core';
 
 const log = createLogger('api.watchlist');
 
@@ -130,7 +133,7 @@ export async function GET(request: NextRequest) {
     // size until one is chosen (`size_required`, DOS/Rate#1156); off: null.
     const itemTargets = new Map<
       string,
-      { variantSlug: string; sizeRequired: boolean }
+      { variantSlug: string; itemSlug: string; sizeRequired: boolean }
     >();
     const masterEntries = await Promise.all(
       slugs.map(async (slug) => {
@@ -151,6 +154,7 @@ export async function GET(request: NextRequest) {
     );
 
     const entries = validMasterEntries.map(([slug, master]) => {
+      const target = itemTargets.get(slug);
       const offers = offersByMaster.get(master.id) ?? [];
       const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
       const plausibleOfferCount = countPlausibleInStockOffers(offers);
@@ -163,6 +167,27 @@ export async function GET(request: NextRequest) {
           bestOffer?.price,
           MAX_VALID_VND_PRICE
         );
+      // RATE_ITEM_MODEL on: point straight to the canonical Item page
+      // (`/<category>/<item-slug>`) with no `?v=` query parameter and zero 308
+      // redirect hops (DOS/Rate#1829); off or unlinked: the master's own href.
+      const candidateItemHref = target?.itemSlug
+        ? getMasterProductHref({
+            ...master,
+            slug: target.itemSlug,
+            metadata: {
+              ...(master.metadata &&
+              typeof master.metadata === 'object' &&
+              !Array.isArray(master.metadata)
+                ? master.metadata
+                : {}),
+              category_slug: getMasterProductCategorySlug(master),
+            },
+          })
+        : null;
+      const productHref =
+        candidateItemHref && /^\/[a-z]+\/[^/?#\s]+$/.test(candidateItemHref)
+          ? candidateItemHref
+          : getMasterProductHref(master);
 
       return [
         slug,
@@ -171,7 +196,7 @@ export async function GET(request: NextRequest) {
           slug: master.slug,
           // The product page in its own category, so a saved item whose
           // stored path names another category links straight there (#1380).
-          product_href: getMasterProductHref(master),
+          product_href: productHref,
           name: master.name,
           brand: master.brand,
           current_min_price: currentMinPrice,
@@ -186,9 +211,7 @@ export async function GET(request: NextRequest) {
           best_offer: bestOffer,
           deal_radar: radarExportFields(radarSignal),
           radar_signal: radarSignal,
-          ...(itemTargets.get(slug)?.sizeRequired
-            ? { size_required: true as const }
-            : {}),
+          ...(target?.sizeRequired ? { size_required: true as const } : {}),
         },
       ] as const;
     });

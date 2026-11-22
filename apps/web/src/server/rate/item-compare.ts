@@ -124,21 +124,31 @@ export function resolveVersusPlan(
  * size for the price shown meanwhile). Null while the Item model is off or
  * the slug is no Item.
  */
-export function resolveWatchlistSlug(
-  slug: string
-): Promise<{ variantSlug: string; sizeRequired: boolean } | null> {
+export function resolveWatchlistSlug(slug: string): Promise<{
+  variantSlug: string;
+  itemSlug: string;
+  sizeRequired: boolean;
+} | null> {
   return whenItemModel('watchlist slug', async () => {
-    const resolution = await resolveSlug(slug);
+    const { slug: matchedSlug, resolution } = await resolveSlugAnyCase(slug);
     if (!resolution || resolution.kind === 'unlinked') return null;
     if (resolution.kind === 'variant' && !resolution.retired) {
-      return { variantSlug: resolution.variant.slug, sizeRequired: false };
+      return {
+        variantSlug: resolution.variant.slug,
+        itemSlug: resolution.item.slug,
+        sizeRequired: false,
+      };
     }
     const { item, variants } = resolution;
     // An Item may share its slug with one of its sizes (design doc 5.1):
     // that size is the one watched, as before the Item model.
-    const sameSlug = variants.find((v) => v.slug === slug);
+    const sameSlug = variants.find((v) => v.slug === matchedSlug);
     if (resolution.kind === 'item' && sameSlug) {
-      return { variantSlug: sameSlug.slug, sizeRequired: false };
+      return {
+        variantSlug: sameSlug.slug,
+        itemSlug: item.slug,
+        sizeRequired: false,
+      };
     }
     const shown = pickItemVariant(item, variants, null);
     // A retired size is never swapped for another one silently: the alert
@@ -147,6 +157,7 @@ export function resolveWatchlistSlug(
     return shown
       ? {
           variantSlug: shown.slug,
+          itemSlug: item.slug,
           sizeRequired: retired || variants.length > 1,
         }
       : null;
