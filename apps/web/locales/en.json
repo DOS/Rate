@@ -1293,6 +1293,8 @@
     "shareAuditCopyLinkTitle": "Copy product URL",
     "shareAuditCopiedLinkBtn": "✓ Copied link!",
     "shareAuditCopyLinkBtn": "Copy link",
+    "shareAuditDownloadPngTitle": "Download a 4:5 truth card PNG to share on forums or chat",
+    "shareAuditDownloadPngBtn": "Download truth card (PNG)",
     "specsToolbarCopiedMd": "Copied 10-group specs!",
     "specsToolbarCopyMd": "Copy 10-group specs MD",
     "specsToolbarExportCsv": "Export specs CSV",

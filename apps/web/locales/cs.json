@@ -1293,6 +1293,8 @@
     "shareAuditCopyLinkTitle": "Zkopírovat odkaz na produkt",
     "shareAuditCopiedLinkBtn": "✓ Odkaz zkopírován!",
     "shareAuditCopyLinkBtn": "Kopírovat odkaz",
+    "shareAuditDownloadPngTitle": "Stáhnout obrázek karty pravdy (PNG 4:5) pro sítě a chat",
+    "shareAuditDownloadPngBtn": "Stáhnout kartu (PNG 4:5)",
     "specsToolbarCopiedMd": "10 skupin parametrů zkopírováno!",
     "specsToolbarCopyMd": "Kopírovat 10 skupin parametrů MD",
     "specsToolbarExportCsv": "Exportovat parametry CSV",
