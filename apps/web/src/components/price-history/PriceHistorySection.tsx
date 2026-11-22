@@ -19,6 +19,7 @@ import {
   evaluateOmnibusPriceAudit,
   formatOmnibusAuditCopy,
   resolveOmnibusReferenceAnchorMs,
+  sanitizeOmnibusPriceVnd,
   type OmnibusPriceAuditResult,
   type OmnibusReferenceOfferInput,
   type OmnibusVerdictTranslator,
@@ -26,15 +27,17 @@ import {
 import {
   minimumListingPriceVnd,
   normalizeOfferId,
+  plausibleOffers,
 } from '@repo/shared-data/rules';
 import {
   isOfferUnavailable,
-  type OfferAvailability,
+  toOfferAvailability,
 } from '@/lib/product-market-stats';
 import {
   MAX_VALID_VND_PRICE,
   type DiscountVerdictType,
   type MasterProductPriceHistorySummary,
+  type OfferAvailability,
   type OfferDiscountAnalysis,
   type PriceHistoryPoint,
 } from '@/lib/rate-domain';
@@ -679,34 +682,112 @@ export default function PriceHistorySection({
     return Math.round(raw);
   }, [history.currentMinPrice]);
 
+  const safeOffersInput = useMemo<OmnibusReferenceOfferInput[]>(
+    () =>
+      Array.isArray(offers)
+        ? offers.filter((off): off is OmnibusReferenceOfferInput =>
+            Boolean(off && typeof off === 'object' && !Array.isArray(off))
+          )
+        : [],
+    [offers]
+  );
+
   // Identify unavailable (sold-out / discontinued) offers from explicit `offers`,
-  // optional `availability` on `offerAnalyses`, prices strictly below the
-  // verified in-stock minimum (DOS/Rate#1141), or `rate-api`'s unavailable
-  // suppression signature (`normal_price` despite qualifying for `genuine_deal`).
+  // explicit `availability` on `offerAnalyses`, or fallback heuristics when
+  // availability is unknown (prices strictly below the verified in-stock minimum,
+  // DOS/Rate#1141, or `rate-api`'s unavailable `normal_price` suppression).
   const unavailableOfferIds = useMemo<Set<string>>(() => {
     const ids = new Set<string>();
     const addId = (rawId: string | null | undefined) => {
-      if (!rawId) return;
+      if (typeof rawId !== 'string') return;
+      const trimmed = rawId.trim();
+      if (!trimmed) return;
       ids.add(rawId);
-      const canon = normalizeOfferId(rawId);
+      ids.add(trimmed);
+      const canon = normalizeOfferId(trimmed);
       if (canon) ids.add(canon);
     };
 
-    if (Array.isArray(offers)) {
-      for (const off of offers) {
-        if (off && isOfferUnavailable(off)) {
-          addId(off.id);
+    const setAvailInMap = (
+      map: Map<string, OfferAvailability>,
+      rawId: string | null | undefined,
+      avail: OfferAvailability
+    ) => {
+      if (typeof rawId !== 'string') return;
+      const trimmed = rawId.trim();
+      if (!trimmed) return;
+      const canon = normalizeOfferId(trimmed);
+      for (const key of [rawId, trimmed, canon]) {
+        if (!key) continue;
+        const prev = map.get(key);
+        if (!prev || isOfferUnavailable({ availability: avail })) {
+          map.set(key, avail);
         }
+      }
+    };
+
+    const explicitAvailFromAnalyses = new Map<string, OfferAvailability>();
+    for (const oa of offerAnalyses) {
+      const avail = toOfferAvailability(oa.availability);
+      if (avail) {
+        setAvailInMap(explicitAvailFromAnalyses, oa.product_id, avail);
+      }
+    }
+
+    const explicitAvailFromOffers = new Map<string, OfferAvailability>();
+    for (const off of safeOffersInput) {
+      const rawId =
+        typeof off.id === 'string' && off.id.trim()
+          ? off.id
+          : typeof off.product_id === 'string' && off.product_id.trim()
+            ? off.product_id
+            : null;
+      const avail = toOfferAvailability(off.availability);
+      if (avail) {
+        setAvailInMap(explicitAvailFromOffers, rawId, avail);
+        if (isOfferUnavailable({ availability: avail })) {
+          addId(rawId);
+        }
+        continue;
+      }
+      if (!rawId) continue;
+      const trimmed = rawId.trim();
+      const canon = normalizeOfferId(trimmed);
+      const oaAvail =
+        explicitAvailFromAnalyses.get(rawId) ??
+        explicitAvailFromAnalyses.get(trimmed) ??
+        (canon ? explicitAvailFromAnalyses.get(canon) : undefined);
+      if (oaAvail) {
+        if (isOfferUnavailable({ availability: oaAvail })) {
+          addId(rawId);
+        }
+        continue;
+      }
+      const p = Number(off.price_current);
+      if (
+        safeCurrentMinPrice != null &&
+        Number.isFinite(p) &&
+        p > 0 &&
+        Math.round(p) < safeCurrentMinPrice
+      ) {
+        addId(rawId);
       }
     }
 
     for (const oa of offerAnalyses) {
-      const maybeAvail = (oa as { availability?: OfferAvailability | null })
-        .availability;
-      if (maybeAvail && isOfferUnavailable({ availability: maybeAvail })) {
-        addId(oa.product_id);
+      const canonOaId = normalizeOfferId(oa.product_id);
+      const explicitAvail =
+        explicitAvailFromOffers.get(oa.product_id) ??
+        explicitAvailFromOffers.get(oa.product_id.trim()) ??
+        (canonOaId ? explicitAvailFromOffers.get(canonOaId) : undefined) ??
+        toOfferAvailability(oa.availability);
+      if (explicitAvail) {
+        if (isOfferUnavailable({ availability: explicitAvail })) {
+          addId(oa.product_id);
+        }
         continue;
       }
+
       const p = Number(oa.price_current);
       if (
         safeCurrentMinPrice != null &&
@@ -741,28 +822,79 @@ export default function PriceHistorySection({
       }
     }
     return ids;
-  }, [offerAnalyses, offers, safeCurrentMinPrice]);
+  }, [offerAnalyses, safeCurrentMinPrice, safeOffersInput]);
 
   const isUnavailId = useCallback(
     (id: string) =>
       unavailableOfferIds.has(id) ||
+      unavailableOfferIds.has(id.trim()) ||
       unavailableOfferIds.has(normalizeOfferId(id)),
     [unavailableOfferIds]
   );
 
-  const effectiveReferenceOffers = useMemo<OmnibusReferenceOfferInput[]>(
-    () =>
-      Array.isArray(offers) && offers.length > 0
-        ? [...offers]
-        : offerAnalyses.map((oa) => ({
-            id: oa.product_id,
-            price_current: oa.price_current,
-            availability: isUnavailId(oa.product_id)
-              ? ('out_of_stock' as const)
-              : ('in_stock' as const),
-          })),
-    [isUnavailId, offerAnalyses, offers]
-  );
+  const effectiveReferenceOffers = useMemo<OmnibusReferenceOfferInput[]>(() => {
+    if (safeOffersInput.length > 0) {
+      return safeOffersInput.map((off) => {
+        const rawId =
+          typeof off.id === 'string' && off.id.trim()
+            ? off.id
+            : typeof off.product_id === 'string' && off.product_id.trim()
+              ? off.product_id
+              : undefined;
+        const explicit = toOfferAvailability(off.availability);
+        const explicitUnavailable =
+          explicit != null && isOfferUnavailable({ availability: explicit });
+        const unavailable =
+          explicitUnavailable || Boolean(rawId && isUnavailId(rawId));
+        return {
+          id: rawId,
+          price_current: off.price_current,
+          availability: unavailable
+            ? explicitUnavailable
+              ? explicit
+              : ('out_of_stock' as const)
+            : ('in_stock' as const),
+          implausiblyLow: off.implausiblyLow,
+        };
+      });
+    }
+    return offerAnalyses.map((oa) => {
+      const explicit = toOfferAvailability(oa.availability);
+      const explicitUnavailable =
+        explicit != null && isOfferUnavailable({ availability: explicit });
+      const unavailable = explicitUnavailable || isUnavailId(oa.product_id);
+      return {
+        id: oa.product_id,
+        price_current: oa.price_current,
+        availability: unavailable
+          ? explicitUnavailable
+            ? explicit
+            : ('out_of_stock' as const)
+          : ('in_stock' as const),
+      };
+    });
+  }, [isUnavailId, offerAnalyses, safeOffersInput]);
+
+  const allKnownOffersUnavailable = useMemo<boolean>(() => {
+    if (effectiveReferenceOffers.length === 0) return false;
+    const inStockSized: { id: string; price_current: number }[] = [];
+    effectiveReferenceOffers.forEach((off, idx) => {
+      if (isOfferUnavailable(off) || off.implausiblyLow === true) return;
+      const price = sanitizeOmnibusPriceVnd(
+        off.price_current,
+        minValidPriceVnd
+      );
+      if (price == null) return;
+      inStockSized.push({
+        id:
+          typeof off.id === 'string' && off.id.trim()
+            ? off.id.trim()
+            : `__idx_${idx}`,
+        price_current: price,
+      });
+    });
+    return plausibleOffers(inStockSized).length === 0;
+  }, [effectiveReferenceOffers, minValidPriceVnd]);
 
   // Historical anchor uses the exact same evidence-eligibility rules as the
   // Omnibus evaluator so rows below `minValidPriceVnd`, `live_listing` rows,
@@ -881,12 +1013,18 @@ export default function PriceHistorySection({
     return evaluateOmnibusPriceAudit({
       ...omnibusSharedOpts,
       points: validPoints,
-      currentPriceVnd: safeCurrentMinPrice,
-      claimedOriginalPriceVnd: bestClaimedOrig,
-      currentInStockPriceVnd: safeCurrentMinPrice,
+      currentPriceVnd: allKnownOffersUnavailable ? null : safeCurrentMinPrice,
+      claimedOriginalPriceVnd: allKnownOffersUnavailable
+        ? null
+        : bestClaimedOrig,
+      currentInStockPriceVnd: allKnownOffersUnavailable
+        ? null
+        : safeCurrentMinPrice,
+      currentOfferUnavailable: allKnownOffersUnavailable,
       mode: 'market',
     });
   }, [
+    allKnownOffersUnavailable,
     isUnavailId,
     offerAnalyses,
     omnibusByOffer,

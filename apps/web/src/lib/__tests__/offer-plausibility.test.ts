@@ -235,8 +235,18 @@ async function main() {
       history.byOffer['sold-out-cheap-real']?.verdict,
       'normal_price'
     );
+    assert.equal(
+      history.byOffer['sold-out-cheap-real']?.availability,
+      'out_of_stock'
+    );
+    assert.equal(
+      history.byOffer['sold-out-high']?.availability,
+      'discontinued'
+    );
     assert.equal(history.byOffer['in-stock-3']?.verdict, 'normal_price');
+    assert.equal(history.byOffer['in-stock-3']?.availability, 'in_stock');
     assert.equal(history.byOffer['in-stock-1']?.verdict, 'genuine_deal');
+    assert.equal(history.byOffer['in-stock-1']?.availability, 'in_stock');
     assert.equal(history.genuineDealCount, 1);
 
     // Zero in-stock offers: safe fallback drops sold-out 500k bait among sold-out peers.

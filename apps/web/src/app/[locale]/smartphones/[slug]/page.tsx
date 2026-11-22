@@ -761,6 +761,7 @@ export async function ProductDetailView({
   // renders them for its own master, an Item page once per size (#1154).
   const renderPriceHistory = (v: {
     product: { name: string };
+    offers: typeof offers;
     priceHistory: typeof priceHistory;
     minPrice: number;
     radarSignal: typeof radarSignal;
@@ -773,6 +774,7 @@ export async function ProductDetailView({
         currentMinPrice: v.minPrice > 0 ? v.minPrice : null,
       }}
       radarSignal={v.radarSignal}
+      offers={v.offers}
     />
   );
   const renderOffersBody = (v: {
@@ -1631,6 +1633,7 @@ export async function ProductDetailView({
                 )
               : renderPriceHistory({
                   product,
+                  offers,
                   priceHistory,
                   minPrice: currentMinPrice,
                   radarSignal,

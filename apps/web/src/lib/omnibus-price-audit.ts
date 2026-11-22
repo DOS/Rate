@@ -81,6 +81,7 @@ export interface OmnibusAuditPointInput {
 
 export interface OmnibusReferenceOfferInput {
   readonly id?: string | null;
+  readonly product_id?: string | null;
   readonly price_current: number;
   readonly availability?: OfferAvailability | null;
   readonly implausiblyLow?: boolean | null;
@@ -309,7 +310,13 @@ function buildOfferExclusionSets(params: {
   const inStockSized: { id: string; price_current: number }[] = [];
   const pricedAll: { rawId: string; id: string; price_current: number }[] = [];
   for (const off of safeRefOffers) {
-    const rawId = typeof off.id === 'string' ? off.id.trim() : '';
+    const rawIdCandidate =
+      typeof off.id === 'string' && off.id.trim()
+        ? off.id
+        : typeof off.product_id === 'string'
+          ? off.product_id
+          : '';
+    const rawId = rawIdCandidate.trim();
     const id = normalizeOfferId(rawId) || rawId;
     const price = sanitizeOmnibusPriceVnd(
       off.price_current,

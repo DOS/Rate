@@ -196,6 +196,7 @@ function renderSize(
         currentMinPrice: data.stats.minPrice > 0 ? data.stats.minPrice : null,
       }}
       radarSignal={data.radarSignal}
+      offers={data.offers}
     />
   );
 }

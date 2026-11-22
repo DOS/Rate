@@ -20,6 +20,7 @@ import type { RadarSignal } from '@/lib/deal-radar';
 import {
   isOfferUnavailable,
   productMarketStats,
+  toOfferAvailability,
 } from '@/lib/product-market-stats';
 import type { ProductSpecifications } from '@repo/shared-data';
 import type { ItemSizePanelData } from '@/lib/item-size-panel';
@@ -109,7 +110,8 @@ const _getCachedUnknownByOffer = cache(
           .update(
             offers
               .map(
-                (o) => `${o.id}:${o.price_current}:${o.price_original ?? ''}`
+                (o) =>
+                  `${o.id}:${o.price_current}:${o.price_original ?? ''}:${toOfferAvailability(o.availability) ?? ''}`
               )
               .join('|')
           )
