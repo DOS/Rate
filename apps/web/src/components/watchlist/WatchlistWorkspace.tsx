@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import ContentText from '@/components/elementary/ContentText';
 import { BsBell, BsCheckCircle, BsExclamationTriangle } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
@@ -39,7 +39,10 @@ import {
   authorizedJsonHeaders,
   jsonWriteHeaders,
 } from '@/lib/auth/access-token';
-import { productImageUrl } from '@/lib/rate-domain-core';
+import {
+  isCanonicalCategorySlug,
+  productImageUrl,
+} from '@/lib/rate-domain-core';
 import { formatStorageLabel } from '@/lib/category-filters';
 import {
   isSizeRequiredAnswer,
@@ -47,19 +50,29 @@ import {
   type WatchlistSizeChoice,
 } from '@/lib/watchlist-sizes';
 import {
+  collapseWhitespace,
   formatDate,
+  formatDecimal,
   formatNumber,
+  formatPercent,
   formatPlainNumber,
   formatPriceVnd,
+  toFormatLocale,
 } from '@/lib/locale-format';
 import StarRating from '@/components/elementary/StarRating';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
   locale?: string;
+  /** SSR/unit-test fixture override (#1693). */
+  initialItems?: WatchlistItem[];
+  /** SSR/unit-test fixture override (#1693). */
+  initialEditingSlug?: string | null;
+  /** SSR/unit-test fixture override (#1693). */
+  initialLiveDeals?: Record<string, LiveWatchlistDeal>;
 }
 
-interface LiveWatchlistDeal {
+export interface LiveWatchlistDeal {
   /** The product page in its own category (#1380). */
   product_href?: string;
   slug: string;
@@ -117,12 +130,15 @@ export function sanitizeWatchlistBestOfferUrl(rawUrl: unknown): string | null {
   }
 }
 
-export function sanitizeWatchlistMarkdownCell(value: unknown): string {
+export function sanitizeWatchlistMarkdownCell(
+  value: unknown,
+  locale?: string | null
+): string {
   if (typeof value !== 'string') return '-';
-  const cleaned = value
-    .replace(/\p{Cc}+/gu, ' ')
-    .replace(/\|/g, '-')
-    .replace(/\s+/g, ' ')
+  const cleaned = collapseWhitespace(
+    value.replace(/\p{Cc}+/gu, ' ').replace(/\|/g, '-'),
+    locale
+  )
     .trim()
     .slice(0, 180);
   return cleaned || '-';
@@ -132,6 +148,223 @@ export function sanitizeWatchlistCount(value: unknown): number {
   const num = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(num) || num <= 0) return 0;
   return Math.min(100_000, Math.round(num));
+}
+
+export function formatWatchlistTargetControlAriaLabel(
+  visibleLabel: string,
+  itemName: unknown
+): string {
+  const label = visibleLabel
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\p{Cc}+/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const name =
+    typeof itemName === 'string'
+      ? itemName
+          .replace(/[\r\n\t]+/g, ' ')
+          .replace(/\p{Cc}+/gu, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+      : '';
+  if (!name) return label;
+  if (!label) return name;
+  return `${label}: ${name}`;
+}
+
+export function handleWatchlistInlineTargetKeyDown(
+  event: {
+    key: string;
+    keyCode?: number;
+    isComposing?: boolean;
+    nativeEvent?: {
+      isComposing?: boolean;
+      keyCode?: number;
+    };
+    defaultPrevented?: boolean;
+    preventDefault: () => void;
+  },
+  actions: {
+    saveTarget: () => void;
+    cancelEdit: () => void;
+    focusEditTrigger: () => void;
+  }
+): 'saved' | 'cancelled' | null {
+  if (event.defaultPrevented) return null;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    actions.cancelEdit();
+    actions.focusEditTrigger();
+    return 'cancelled';
+  }
+  if (event.key === 'Enter') {
+    if (
+      event.isComposing ||
+      event.nativeEvent?.isComposing ||
+      event.keyCode === 229 ||
+      event.nativeEvent?.keyCode === 229
+    ) {
+      return null;
+    }
+    event.preventDefault();
+    actions.saveTarget();
+    actions.focusEditTrigger();
+    return 'saved';
+  }
+  return null;
+}
+
+const VALID_WATCHLIST_PRODUCT_HREF_RE =
+  /^\/([a-z]+)\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,255})$/;
+const UNSAFE_WATCHLIST_HREF_SLUG_RE =
+  /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i;
+
+export function resolveWatchlistDetailHref(
+  item: Pick<WatchlistItem, 'slug' | 'categoryPath'>,
+  dealInfo?: Pick<LiveWatchlistDeal, 'product_href'> | null,
+  live?: MasterProduct | null
+): string {
+  if (typeof dealInfo?.product_href === 'string') {
+    const match = VALID_WATCHLIST_PRODUCT_HREF_RE.exec(dealInfo.product_href);
+    const categorySlug = match?.[1];
+    const itemSlug = match?.[2];
+    if (
+      categorySlug &&
+      itemSlug &&
+      isCanonicalCategorySlug(categorySlug) &&
+      !itemSlug.endsWith('.') &&
+      !itemSlug.includes('..') &&
+      !UNSAFE_WATCHLIST_HREF_SLUG_RE.test(itemSlug)
+    ) {
+      return dealInfo.product_href;
+    }
+  }
+  if (live) {
+    return getMasterProductHref(live);
+  }
+  const rawCat =
+    typeof item.categoryPath === 'string'
+      ? item.categoryPath.replace(/^\/+/, '').trim().toLowerCase()
+      : '';
+  const catSlug = isCanonicalCategorySlug(rawCat) ? rawCat : 'smartphones';
+  return getMasterProductHref({
+    slug: item.slug,
+    metadata: { category_slug: catSlug },
+  });
+}
+
+export type WatchlistPortfolioMarkdownKey =
+  | 'mdHeader'
+  | 'mdTotalMin'
+  | 'mdTotalTarget'
+  | 'mdTotalSpread'
+  | 'mdAvgRating'
+  | 'mdNoRating'
+  | 'mdTableHead'
+  | 'mdSourcesCount'
+  | 'mdStatusReached'
+  | 'mdStatusWatching';
+
+export type WatchlistPortfolioMarkdownTranslator = (
+  key: WatchlistPortfolioMarkdownKey,
+  values?: Record<string, string | number>
+) => string;
+
+function sanitizePortfolioTotalVnd(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.round(num);
+}
+
+export function buildWatchlistPortfolioMarkdown(params: {
+  items: readonly WatchlistItem[];
+  productBySlug: ReadonlyMap<string, MasterProduct>;
+  liveDeals: Readonly<Record<string, LiveWatchlistDeal>>;
+  radarIndex?: Parameters<typeof getRadarSignal>[0];
+  portfolioStats: {
+    totalMinVnd: number;
+    totalTargetVnd: number;
+    totalSpreadSavingsVnd: number;
+  };
+  avgPortfolioRating2d: string | null;
+  t: WatchlistPortfolioMarkdownTranslator;
+  locale?: string | null;
+}): string {
+  const {
+    items,
+    productBySlug,
+    liveDeals,
+    radarIndex,
+    portfolioStats,
+    avgPortfolioRating2d,
+    t,
+  } = params;
+  const locale = toFormatLocale(params.locale);
+  const lines = [
+    t('mdHeader', { count: items.length }),
+    t('mdTotalMin', {
+      price: formatNumber(
+        sanitizePortfolioTotalVnd(portfolioStats.totalMinVnd),
+        locale
+      ),
+    }),
+    t('mdTotalTarget', {
+      price: formatNumber(
+        sanitizePortfolioTotalVnd(portfolioStats.totalTargetVnd),
+        locale
+      ),
+    }),
+    t('mdTotalSpread', {
+      price: formatNumber(
+        sanitizePortfolioTotalVnd(portfolioStats.totalSpreadSavingsVnd),
+        locale
+      ),
+    }),
+    t('mdAvgRating', {
+      rating: avgPortfolioRating2d
+        ? `${formatPlainNumber(avgPortfolioRating2d, locale)}/${formatDecimal(5, locale, 1)}`
+        : t('mdNoRating'),
+    }),
+    ``,
+    t('mdTableHead'),
+    `| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |`,
+    ...items.map((item) => {
+      const liveProd = productBySlug.get(item.slug);
+      const liveDeal = liveDeals[item.slug];
+      const rSig =
+        liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
+      const { currentMin: curMin, currentMax: curMax } =
+        resolveWatchlistItemCurrentPrices(item, liveDeal, liveProd);
+      const fallbackSpreadVnd = Math.max(0, curMax - curMin);
+      const rawSpreadPct = Number(rSig?.priceSpread?.spreadPct);
+      const safeSpreadPct =
+        Number.isFinite(rawSpreadPct) && rawSpreadPct > 0
+          ? Math.min(10_000, rawSpreadPct)
+          : 0;
+      const safeSpreadVnd = sanitizeWatchlistPrice(
+        rSig?.priceSpread?.spreadVnd
+      );
+      const spreadStr = rSig?.priceSpread
+        ? `+${formatPercent(safeSpreadPct, locale)} (${formatPriceVnd(safeSpreadVnd, locale)})`
+        : fallbackSpreadVnd > 0
+          ? formatPriceVnd(fallbackSpreadVnd, locale)
+          : formatPriceVnd(0, locale);
+      const safeTarget = sanitizeWatchlistPrice(item.targetPrice);
+      const hit = curMin > 0 && curMin <= safeTarget;
+      const bestOfferStr = liveDeal?.best_offer
+        ? `${sanitizeWatchlistMarkdownCell(liveDeal.best_offer.merchant_name, locale)} (${sanitizeWatchlistMarkdownCell(String(liveDeal.best_offer.platform ?? '').toUpperCase(), locale)})`
+        : sanitizeWatchlistMarkdownCell(
+            t('mdSourcesCount', {
+              count: sanitizeWatchlistCount(
+                liveDeal?.merchant_count || liveProd?.merchant_count
+              ),
+            }),
+            locale
+          );
+      return `| ${sanitizeWatchlistMarkdownCell(item.name, locale)} | ${sanitizeWatchlistMarkdownCell(item.brand, locale)} | ${formatPriceVnd(curMin, locale)} | ${formatPriceVnd(safeTarget, locale)} | ${spreadStr} | ${radarMarkdownCell(rSig, locale)} | ${hit ? t('mdStatusReached') : t('mdStatusWatching')} | ${bestOfferStr} |`;
+    }),
+  ];
+  return lines.join('\n');
 }
 
 export function formatWatchlistPortfolioAverageRating(
@@ -159,16 +392,35 @@ export function formatWatchlistPortfolioAverageRating(
 
 export default function WatchlistWorkspace({
   catalogProducts,
-  locale,
+  locale: localeProp,
+  initialItems,
+  initialEditingSlug,
+  initialLiveDeals,
 }: WatchlistWorkspaceProps) {
   const t = useTranslations('watchlist');
-  const [items, setItems] = useState<WatchlistItem[]>([]);
+  const contextLocale = useLocale();
+  const locale = localeProp ?? contextLocale;
+  const workspaceId = useId();
+  const editBtnRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [items, setItems] = useState<WatchlistItem[]>(initialItems ?? []);
   const [liveDeals, setLiveDeals] = useState<Record<string, LiveWatchlistDeal>>(
-    {}
+    initialLiveDeals ?? {}
   );
   const radarIndex = useDealRadarIndex();
-  const [editingSlug, setEditingSlug] = useState<string | null>(null);
-  const [editTarget, setEditTarget] = useState<number>(0);
+  const initialEditItem = initialEditingSlug
+    ? (initialItems ?? []).find((x) => x.slug === initialEditingSlug)
+    : undefined;
+  const [editingSlug, setEditingSlug] = useState<string | null>(
+    initialEditingSlug ?? null
+  );
+  const [editTarget, setEditTarget] = useState<number>(
+    initialEditItem
+      ? sanitizeWatchlistTargetPrice(
+          initialEditItem.targetPrice,
+          initialEditItem.priceWhenAdded
+        )
+      : 0
+  );
   const [cloudSyncStatus, setCloudSyncStatus] = useState<{
     ok: boolean;
     message: string;
@@ -341,6 +593,7 @@ export default function WatchlistWorkspace({
       targetPrice: cleanTarget,
     });
     setEditingSlug(null);
+    editBtnRefs.current.get(item.slug)?.focus();
     // Cloud alerts need a signed-in account; signed-out users keep the local watchlist.
     const headers = await authorizedJsonHeaders();
     if (!headers) return;
@@ -492,52 +745,17 @@ export default function WatchlistWorkspace({
   const handleCopyPortfolioMarkdown = async () => {
     if (typeof window === 'undefined' || items.length === 0) return;
     try {
-      const lines = [
-        t('mdHeader', { count: items.length }),
-        t('mdTotalMin', {
-          price: portfolioStats.totalMinVnd.toLocaleString('vi-VN'),
-        }),
-        t('mdTotalTarget', {
-          price: portfolioStats.totalTargetVnd.toLocaleString('vi-VN'),
-        }),
-        t('mdTotalSpread', {
-          price: portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN'),
-        }),
-        t('mdAvgRating', {
-          rating: avgPortfolioRating2d
-            ? `${avgPortfolioRating2d}/5.0`
-            : t('mdNoRating'),
-        }),
-        ``,
-        t('mdTableHead'),
-        `| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |`,
-        ...items.map((item) => {
-          const liveProd = productBySlug.get(item.slug);
-          const liveDeal = liveDeals[item.slug];
-          const rSig =
-            liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
-          const { currentMin: curMin, currentMax: curMax } =
-            resolveWatchlistItemCurrentPrices(item, liveDeal, liveProd);
-          const fallbackSpreadVnd = Math.max(0, curMax - curMin);
-          const spreadStr = rSig?.priceSpread
-            ? `+${rSig.priceSpread.spreadPct}% (${rSig.priceSpread.spreadVnd.toLocaleString('vi-VN')} ₫)`
-            : fallbackSpreadVnd > 0
-              ? `${fallbackSpreadVnd.toLocaleString('vi-VN')} ₫`
-              : '0 ₫';
-          const hit = curMin > 0 && curMin <= item.targetPrice;
-          const bestOfferStr = liveDeal?.best_offer
-            ? `${sanitizeWatchlistMarkdownCell(liveDeal.best_offer.merchant_name)} (${sanitizeWatchlistMarkdownCell(liveDeal.best_offer.platform.toUpperCase())})`
-            : sanitizeWatchlistMarkdownCell(
-                t('mdSourcesCount', {
-                  count: sanitizeWatchlistCount(
-                    liveDeal?.merchant_count || liveProd?.merchant_count
-                  ),
-                })
-              );
-          return `| ${sanitizeWatchlistMarkdownCell(item.name)} | ${sanitizeWatchlistMarkdownCell(item.brand)} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${spreadStr} | ${radarMarkdownCell(rSig)} | ${hit ? t('mdStatusReached') : t('mdStatusWatching')} | ${bestOfferStr} |`;
-        }),
-      ];
-      await navigator.clipboard.writeText(lines.join('\n'));
+      const md = buildWatchlistPortfolioMarkdown({
+        items,
+        productBySlug,
+        liveDeals,
+        radarIndex,
+        portfolioStats,
+        avgPortfolioRating2d,
+        t: (key, values) => t(key, values),
+        locale,
+      });
+      await navigator.clipboard.writeText(md);
       setCopiedPortfolioMd(true);
       setTimeout(() => setCopiedPortfolioMd(false), 2200);
     } catch {
@@ -927,7 +1145,7 @@ export default function WatchlistWorkspace({
         </div>
       ) : (
         <div className="row g-4">
-          {items.map((item) => {
+          {items.map((item, itemIndex) => {
             const live = productBySlug.get(item.slug);
             const dealInfo = liveDeals[item.slug];
             const { currentMin, currentMax } =
@@ -939,14 +1157,12 @@ export default function WatchlistWorkspace({
             const diffFromTarget = currentMin - item.targetPrice;
             const targetReached =
               currentMin > 0 && currentMin <= item.targetPrice;
-            // The live read names the product's own category; the stored
-            // path is the last resort (#1380).
-            const detailHref = live
-              ? getMasterProductHref(live)
-              : typeof dealInfo?.product_href === 'string' &&
-                  /^\/[a-z]+\/[^/?#\s]+$/.test(dealInfo.product_href)
-                ? dealInfo.product_href
-                : `${item.categoryPath || '/smartphones'}/${item.slug}`;
+            // Canonical Item product_href from /api/v1/rate/watchlist (#1836)
+            // takes precedence when valid; catalog master href and stored
+            // categoryPath remain the SSR/offline fallbacks (#1380).
+            const detailHref = resolveWatchlistDetailHref(item, dealInfo, live);
+            const isEditing = editingSlug === item.slug;
+            const inlineEditorId = `${workspaceId}-target-editor-${itemIndex}`;
             const bestOffer = dealInfo?.best_offer || null;
             const bestOfferSafeUrl = bestOffer
               ? sanitizeWatchlistBestOfferUrl(bestOffer.url)
@@ -1094,6 +1310,7 @@ export default function WatchlistWorkspace({
                         slug: item.slug,
                         name: item.name,
                         brand: item.brand,
+                        categoryPath: item.categoryPath,
                         thumbnail: item.thumbnail,
                         min_price: currentMin,
                       }}
@@ -1170,11 +1387,26 @@ export default function WatchlistWorkspace({
                           ≤ {formatPriceVnd(item.targetPrice, locale)}
                         </div>
                         <button
+                          ref={(el) => {
+                            if (el) {
+                              editBtnRefs.current.set(item.slug, el);
+                            } else {
+                              editBtnRefs.current.delete(item.slug);
+                            }
+                          }}
                           type="button"
+                          aria-expanded={isEditing}
+                          aria-controls={inlineEditorId}
+                          aria-label={formatWatchlistTargetControlAriaLabel(
+                            t('editTargetBtn'),
+                            item.name
+                          )}
                           onClick={() => {
-                            setEditingSlug(
-                              editingSlug === item.slug ? null : item.slug
-                            );
+                            if (isEditing) {
+                              setEditingSlug(null);
+                              return;
+                            }
+                            setEditingSlug(item.slug);
                             setEditTarget(
                               sanitizeWatchlistTargetPrice(
                                 item.targetPrice,
@@ -1289,10 +1521,17 @@ export default function WatchlistWorkspace({
                     </div>
                   )}
 
-                  {editingSlug === item.slug && (
-                    <div className="rounded-3 bg-light d-flex align-items-center mb-3 gap-2 border p-3">
+                  {isEditing && (
+                    <div
+                      id={inlineEditorId}
+                      className="rounded-3 bg-light d-flex align-items-center mb-3 gap-2 border p-3"
+                    >
                       <input
                         type="number"
+                        aria-label={formatWatchlistTargetControlAriaLabel(
+                          t('targetInputLabel'),
+                          item.name
+                        )}
                         step={
                           currentMin > 0 && currentMin < 2_000_000
                             ? 10000
@@ -1303,18 +1542,45 @@ export default function WatchlistWorkspace({
                         onChange={(e) =>
                           setEditTarget(Number(e.target.value || 0))
                         }
+                        onKeyDown={(e) => {
+                          handleWatchlistInlineTargetKeyDown(e, {
+                            saveTarget: () => {
+                              void handleUpdateTarget(item);
+                            },
+                            cancelEdit: () => setEditingSlug(null),
+                            focusEditTrigger: () =>
+                              editBtnRefs.current.get(item.slug)?.focus(),
+                          });
+                        }}
                         className="form-control form-control-sm fw-semibold"
                       />
                       <button
                         type="button"
-                        onClick={() => handleUpdateTarget(item)}
+                        onClick={() => void handleUpdateTarget(item)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape' && !e.defaultPrevented) {
+                            e.preventDefault();
+                            setEditingSlug(null);
+                            editBtnRefs.current.get(item.slug)?.focus();
+                          }
+                        }}
                         className="btn btn-sm btn-primary rounded-pill px-3"
                       >
                         {t('saveBtn')}
                       </button>
                       <button
                         type="button"
-                        onClick={() => setEditingSlug(null)}
+                        onClick={() => {
+                          setEditingSlug(null);
+                          editBtnRefs.current.get(item.slug)?.focus();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape' && !e.defaultPrevented) {
+                            e.preventDefault();
+                            setEditingSlug(null);
+                            editBtnRefs.current.get(item.slug)?.focus();
+                          }
+                        }}
                         className="btn btn-sm btn-outline-secondary rounded-pill px-2"
                       >
                         {t('cancelBtn')}
