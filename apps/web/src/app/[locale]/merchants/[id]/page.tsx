@@ -158,16 +158,16 @@ function normalizeMerchantTrustScore(value: unknown): number | null {
 }
 
 export function resolveMerchantDosafeRiskScore(merchant: {
-  dosafe_risk_score?: unknown;
+  dosafe_risk_score?: number | string | null;
   dosafe_risk_known?: boolean;
 }): number | null {
-  if (merchant.dosafe_risk_known === false) return null;
-  const parsed = parseFiniteNumber(merchant.dosafe_risk_score);
-  if (parsed == null) return null;
-  const known = knownDosafeRiskScore({
-    dosafe_risk_score: parsed,
-    dosafe_risk_known: merchant.dosafe_risk_known,
-  });
+  if (
+    merchant.dosafe_risk_known === false ||
+    parseFiniteNumber(merchant.dosafe_risk_score) == null
+  ) {
+    return null;
+  }
+  const known = knownDosafeRiskScore(merchant);
   if (known == null) return null;
   const clamped = Math.min(100, Math.max(0, Math.round(known)));
   return clamped === 0 ? 0 : clamped;

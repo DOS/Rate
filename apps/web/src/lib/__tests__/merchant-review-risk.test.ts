@@ -2185,7 +2185,7 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
     );
     assert.equal(
       resolveMerchantDosafeRiskScore({
-        dosafe_risk_score: invalid,
+        dosafe_risk_score: invalid as never,
         dosafe_risk_known: true,
       }),
       null,
@@ -2761,8 +2761,11 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
   );
   assert.ok(
     merchantsDirectoryPageSrc.includes('withPublicReviewRisk') &&
-      merchantsDirectoryPageSrc.includes('toPublicMerchantDirectoryPage('),
-    'merchants/page.tsx must strip initialPage.items through withPublicReviewRisk'
+      merchantsDirectoryPageSrc.includes('toPublicMerchantDirectoryPage(') &&
+      !/import\s+MerchantDirectoryExplorer\s*,\s*\{[\s\S]*?\bmerchantDirectory/.test(
+        merchantsDirectoryPageSrc
+      ),
+    'merchants/page.tsx must strip initialPage.items through withPublicReviewRisk without calling use-client helpers on the server'
   );
 }
 
