@@ -44,8 +44,11 @@ import {
 } from './panel-view.js';
 import { verdictTexts } from '../verdict-display.js';
 
-function formatVnd(val: number | null | undefined): string {
-  return formatSafeExtensionVnd(val);
+function formatVnd(
+  val: number | null | undefined,
+  locale = t('langCode')
+): string {
+  return formatSafeExtensionVnd(val, t('notAvailable'), locale);
 }
 
 function cleanUrlSegment(raw: unknown, maxCodePoints: number): string {
@@ -137,6 +140,7 @@ async function fetchAndRenderDealRadar(
     if (deals.length === 0 && traps.length === 0 && spreads.length === 0)
       return;
 
+    const uiLocale = t('langCode');
     const sections: string[] = [];
     if (deals.length > 0) {
       sections.push(`
@@ -153,11 +157,11 @@ async function fetchAndRenderDealRadar(
                   </a>
                 </div>
                 <div class="offer-meta">
-                  ${escapeHtml(String(d.platform ?? '').toUpperCase())} (${contentTextHtml(stripLoneSurrogates(String(d.merchantName ?? '')))}) - ${escapeHtml(t('radarSavings', [formatVnd(d.savingsVsMedianVnd), formatSafeNumber(d.savingsVsMedianPct, { min: 0, max: 100 })]))}
+                  ${escapeHtml(String(d.platform ?? '').toUpperCase())} (${contentTextHtml(stripLoneSurrogates(String(d.merchantName ?? '')))}) - ${escapeHtml(t('radarSavings', [formatVnd(d.savingsVsMedianVnd, uiLocale), formatSafeNumber(d.savingsVsMedianPct, { min: 0, max: 100 }, uiLocale)]))}
                 </div>
               </div>
               <a href="${escapeSafeExternalHref(d.offerUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#34d399;">
-                ${formatVnd(d.priceCurrent)}
+                ${formatVnd(d.priceCurrent, uiLocale)}
               </a>
             </div>
           `
@@ -176,11 +180,11 @@ async function fetchAndRenderDealRadar(
               <div>
                 <div class="offer-shop">${contentTextHtml(stripLoneSurrogates(String(s.productName ?? '')))}</div>
                 <div class="offer-meta" style="color:#93c5fd;">
-                  ${escapeHtml(t('radarSpreadVersus', [String(s.cheapestPlatform ?? '').toUpperCase(), formatVnd(s.minPrice), String(s.priciestPlatform ?? '').toUpperCase(), formatVnd(s.maxPrice)]))}
+                  ${escapeHtml(t('radarSpreadVersus', [String(s.cheapestPlatform ?? '').toUpperCase(), formatVnd(s.minPrice, uiLocale), String(s.priciestPlatform ?? '').toUpperCase(), formatVnd(s.maxPrice, uiLocale)]))}
                 </div>
               </div>
               <a href="${escapeSafeExternalHref(s.cheapestOfferUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#60a5fa;">
-                ${escapeHtml(t('radarSpreadAmount', [formatVnd(s.spreadVnd)]))}
+                ${escapeHtml(t('radarSpreadAmount', [formatVnd(s.spreadVnd, uiLocale)]))}
               </a>
             </div>
           `
@@ -199,10 +203,10 @@ async function fetchAndRenderDealRadar(
               <div>
                 <div class="offer-shop">${contentTextHtml(stripLoneSurrogates(String(trap.productName ?? '')))}</div>
                 <div class="offer-meta" style="color:#fca5a5;">
-                  ${escapeHtml(String(trap.platform ?? '').toUpperCase())} - ${escapeHtml(t('radarTrapMarkup', [formatSafeNumber(trap.fakeMarkupPct, { min: 0, max: 10000 }), formatVnd(trap.priceOriginal)]))}
+                  ${escapeHtml(String(trap.platform ?? '').toUpperCase())} - ${escapeHtml(t('radarTrapMarkup', [formatSafeNumber(trap.fakeMarkupPct, { min: 0, max: 10000 }, uiLocale), formatVnd(trap.priceOriginal, uiLocale)]))}
                 </div>
               </div>
-              <span class="offer-price" style="color:#f87171;">${formatVnd(trap.priceCurrent)}</span>
+              <span class="offer-price" style="color:#f87171;">${formatVnd(trap.priceCurrent, uiLocale)}</span>
             </div>
           `
           )
@@ -287,9 +291,10 @@ async function fetchAndRenderMerchantTrustDirectory(
       );
     });
 
+    const uiLocale = t('langCode');
     slot.innerHTML = `
       <div class="card">
-        <div class="card-title"><span aria-hidden="true">🛡️ </span>${escapeHtml(t('merchantDirTitle', [formatSafeNumber(allMerchants.length, { min: 0 })]))}</div>
+        <div class="card-title"><span aria-hidden="true">🛡️ </span>${escapeHtml(t('merchantDirTitle', [formatSafeNumber(allMerchants.length, { min: 0 }, uiLocale)]))}</div>
         ${sorted
           .slice(0, 5)
           .map((m) => {
@@ -316,7 +321,7 @@ async function fetchAndRenderMerchantTrustDirectory(
                     ${m.is_official ? officialBadgeHtml() : ''}
                   </div>
                   <div class="offer-meta">
-                    ${escapeHtml(String(m.platform ?? '').toUpperCase())} (${escapeHtml(t('merchantProductCount', [formatSafeNumber(m.product_count, { min: 0 })]))}) - ${escapeHtml(t('merchantScamRisk', [riskScoreText(m.dosafe_risk_score)]))} | ${escapeHtml(t('merchantReviewRisk', [riskScoreText(m.review_risk_score)]))}
+                    ${escapeHtml(String(m.platform ?? '').toUpperCase())} (${escapeHtml(t('merchantProductCount', [formatSafeNumber(m.product_count, { min: 0 }, uiLocale)]))}) - ${escapeHtml(t('merchantScamRisk', [riskScoreText(m.dosafe_risk_score)]))} | ${escapeHtml(t('merchantReviewRisk', [riskScoreText(m.review_risk_score)]))}
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
@@ -380,6 +385,7 @@ function renderPanelContent(
     return;
   }
 
+  const uiLocale = t('langCode');
   const assessment = lookup.priceAssessment;
   // The verdict in the extension's language (DOS/Rate#1326).
   const verdict = verdictTexts(assessment);
@@ -387,7 +393,7 @@ function renderPanelContent(
   const reviews = lookup.reviewSummary;
   const merchant = lookup.merchantProfile;
 
-  const variantButtonsHtml = renderVariantPickerHtml(lookup);
+  const variantButtonsHtml = renderVariantPickerHtml(lookup, uiLocale);
 
   const keySpecs = master?.key_specs;
   const keySpecsHtml =
@@ -425,9 +431,9 @@ function renderPanelContent(
   const offersList =
     lookup.allOffers.length > 0 ? lookup.allOffers : lookup.topCheaperOffers;
 
-  const offersHtml = renderOffersCardHtml(offersList);
+  const offersHtml = renderOffersCardHtml(offersList, uiLocale);
 
-  const reviewHtml = renderReviewCardHtml(reviews, master);
+  const reviewHtml = renderReviewCardHtml(reviews, master, uiLocale);
 
   const merchantNoTrust =
     !merchant ||
@@ -440,7 +446,7 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantTrustScore'))}</div>
-            <div class="stat-val" style="color: ${merchantNoTrust ? '#9ca3af' : merchantTrustColor(merchant)};">${escapeHtml(merchantNoTrust ? t('noDataYet') : `${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100`)}</div>
+            <div class="stat-val" style="color: ${merchantNoTrust ? '#9ca3af' : merchantTrustColor(merchant)};">${escapeHtml(merchantNoTrust ? t('noDataYet') : `${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 }, uiLocale)}/100`)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantRiskPair'))}</div>
@@ -459,11 +465,11 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('historyLow'))}</div>
-            <div class="stat-val" style="color: #34d399;">${formatVnd(lookup.priceHistory.lowestEverPrice)}</div>
+            <div class="stat-val" style="color: #34d399;">${formatVnd(lookup.priceHistory.lowestEverPrice, uiLocale)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('historyHigh'))}</div>
-            <div class="stat-val">${formatVnd(lookup.priceHistory.highestEverPrice)}</div>
+            <div class="stat-val">${formatVnd(lookup.priceHistory.highestEverPrice, uiLocale)}</div>
           </div>
         </div>
       </div>
@@ -512,11 +518,11 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('leaderboardRank'))}</div>
-            <div class="stat-val" style="color: #ff6b6b;">#${formatSafeNumber(overallBadge.rank, { min: 1 })} / ${formatSafeNumber(overallBadge.totalInCategory, { min: 1 })}</div>
+            <div class="stat-val" style="color: #ff6b6b;">#${formatSafeNumber(overallBadge.rank, { min: 1 }, uiLocale)} / ${formatSafeNumber(overallBadge.totalInCategory, { min: 1 }, uiLocale)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('leaderboardScore'))}</div>
-            <div class="stat-val" style="color: #34d399;">${formatSafeNumber(overallBadge.score10, { min: 0, max: 10, decimals: 1 })} / 10</div>
+            <div class="stat-val" style="color: #34d399;">${formatSafeNumber(overallBadge.score10, { min: 0, max: 10, decimals: 1 }, uiLocale)} / 10</div>
           </div>
         </div>
         ${
@@ -525,7 +531,7 @@ function renderPanelContent(
                 ${subBadges
                   .map(
                     (sr) =>
-                      `<span style="font-size: 13px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;"><span aria-hidden="true">🏆 </span>#${formatSafeNumber(sr.rank, { min: 1 })} ${escapeHtml(focusLabel(sr.criterion))} (${formatSafeNumber(sr.score10, { min: 0, max: 10, decimals: 1 })})</span>`
+                      `<span style="font-size: 13px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;"><span aria-hidden="true">🏆 </span>#${formatSafeNumber(sr.rank, { min: 1 }, uiLocale)} ${escapeHtml(focusLabel(sr.criterion))} (${formatSafeNumber(sr.score10, { min: 0, max: 10, decimals: 1 }, uiLocale)})</span>`
                   )
                   .join('')}
               </div>`
@@ -588,12 +594,12 @@ function renderPanelContent(
       ? // Only a 3+ offer floor is the multi-platform floor; fewer offers are
         // just below the median (DOS/Rate#1145).
         radarSig.genuineDeal?.verdict === 'genuine_all_time_low'
-        ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;"><span aria-hidden="true">🔥 </span>${escapeHtml(t('radarPillDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
-        : `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;"><span aria-hidden="true">✅ </span>${escapeHtml(t('radarPillBelowMedian', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
+        ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;"><span aria-hidden="true">🔥 </span>${escapeHtml(t('radarPillDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 }, uiLocale)]))}</span>`
+        : `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;"><span aria-hidden="true">✅ </span>${escapeHtml(t('radarPillBelowMedian', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 }, uiLocale)]))}</span>`
       : radarSig.verdict === 'fake_sale_trap'
-        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;"><span aria-hidden="true">🚨 </span>${escapeHtml(t('radarPillTrap', [formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })]))}</span>`
+        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;"><span aria-hidden="true">🚨 </span>${escapeHtml(t('radarPillTrap', [formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 }, uiLocale)]))}</span>`
         : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
-          ? `<span class="verdict-pill" style="margin-left:6px;background:#1e293b;color:#38bdf8;border:1px solid #0284c7;"><span aria-hidden="true">📊 </span>${escapeHtml(t('radarPillSpread', [formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 })]))}</span>`
+          ? `<span class="verdict-pill" style="margin-left:6px;background:#1e293b;color:#38bdf8;border:1px solid #0284c7;"><span aria-hidden="true">📊 </span>${escapeHtml(t('radarPillSpread', [formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 }, uiLocale)]))}</span>`
           : ''
     : '';
 
@@ -626,11 +632,11 @@ function renderPanelContent(
       <div class="stats-grid">
         <div class="stat-box">
           <div class="stat-label">${escapeHtml(t('observedPrice'))}</div>
-          <div class="stat-val">${formatVnd(assessment.observedPrice ?? signal.price)}</div>
+          <div class="stat-val">${formatVnd(assessment.observedPrice ?? signal.price, uiLocale)}</div>
         </div>
         <div class="stat-box">
           <div class="stat-label">${escapeHtml(t('marketMedian'))}</div>
-          <div class="stat-val">${formatVnd(assessment.marketMedianPrice)}</div>
+          <div class="stat-val">${formatVnd(assessment.marketMedianPrice, uiLocale)}</div>
         </div>
       </div>
       ${renderActionRowsHtml(actionLinks)}
