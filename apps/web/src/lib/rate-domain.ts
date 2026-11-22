@@ -49,6 +49,7 @@ export type {
   MerchantProfileDetail,
   MerchantRiskBreakdown,
   MerchantSummary,
+  OfferAvailability,
   OfferDiscountAnalysis,
   ParsedEcommerceUrl,
   PriceHistoryPoint,

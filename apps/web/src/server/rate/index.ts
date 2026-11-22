@@ -475,7 +475,13 @@ export const getCachedMasterProductPriceHistory = cache(
               o.price_original > 0
                 ? Math.round(o.price_original)
                 : '';
-            return `${sanitizeCachedEntityId(o.id)}:${safeCur}:${safeOrig}`;
+            const safeAvail =
+              o.availability === 'in_stock' ||
+              o.availability === 'out_of_stock' ||
+              o.availability === 'discontinued'
+                ? o.availability
+                : '';
+            return `${sanitizeCachedEntityId(o.id)}:${safeCur}:${safeOrig}:${safeAvail}`;
           })
           .join('|')}`
       : 'offers:auto';

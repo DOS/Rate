@@ -109,7 +109,8 @@ const _getCachedUnknownByOffer = cache(
           .update(
             offers
               .map(
-                (o) => `${o.id}:${o.price_current}:${o.price_original ?? ''}`
+                (o) =>
+                  `${o.id}:${o.price_current}:${o.price_original ?? ''}:${o.availability ?? ''}`
               )
               .join('|')
           )

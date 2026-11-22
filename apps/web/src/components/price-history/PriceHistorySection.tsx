@@ -29,12 +29,13 @@ import {
 } from '@repo/shared-data/rules';
 import {
   isOfferUnavailable,
-  type OfferAvailability,
+  toOfferAvailability,
 } from '@/lib/product-market-stats';
 import {
   MAX_VALID_VND_PRICE,
   type DiscountVerdictType,
   type MasterProductPriceHistorySummary,
+  type OfferAvailability,
   type OfferDiscountAnalysis,
   type PriceHistoryPoint,
 } from '@/lib/rate-domain';
@@ -680,33 +681,72 @@ export default function PriceHistorySection({
   }, [history.currentMinPrice]);
 
   // Identify unavailable (sold-out / discontinued) offers from explicit `offers`,
-  // optional `availability` on `offerAnalyses`, prices strictly below the
-  // verified in-stock minimum (DOS/Rate#1141), or `rate-api`'s unavailable
-  // suppression signature (`normal_price` despite qualifying for `genuine_deal`).
+  // explicit `availability` on `offerAnalyses`, or fallback heuristics when
+  // availability is unknown (prices strictly below the verified in-stock minimum,
+  // DOS/Rate#1141, or `rate-api`'s unavailable `normal_price` suppression).
   const unavailableOfferIds = useMemo<Set<string>>(() => {
     const ids = new Set<string>();
     const addId = (rawId: string | null | undefined) => {
-      if (!rawId) return;
+      if (typeof rawId !== 'string') return;
+      const trimmed = rawId.trim();
+      if (!trimmed) return;
       ids.add(rawId);
-      const canon = normalizeOfferId(rawId);
+      ids.add(trimmed);
+      const canon = normalizeOfferId(trimmed);
       if (canon) ids.add(canon);
+    };
+
+    const explicitAvailFromOffers = new Map<string, OfferAvailability>();
+    const setOfferAvail = (
+      rawId: string | null | undefined,
+      avail: OfferAvailability
+    ) => {
+      if (typeof rawId !== 'string') return;
+      const trimmed = rawId.trim();
+      if (!trimmed) return;
+      const canon = normalizeOfferId(trimmed);
+      for (const key of [rawId, trimmed, canon]) {
+        if (!key) continue;
+        const prev = explicitAvailFromOffers.get(key);
+        if (!prev || isOfferUnavailable({ availability: avail })) {
+          explicitAvailFromOffers.set(key, avail);
+        }
+      }
     };
 
     if (Array.isArray(offers)) {
       for (const off of offers) {
-        if (off && isOfferUnavailable(off)) {
-          addId(off.id);
+        if (!off || typeof off !== 'object') continue;
+        const rawId =
+          typeof off.id === 'string' && off.id.trim()
+            ? off.id
+            : typeof off.product_id === 'string'
+              ? off.product_id
+              : null;
+        const avail = toOfferAvailability(off.availability);
+        if (avail) {
+          setOfferAvail(rawId, avail);
+          if (isOfferUnavailable({ availability: avail })) {
+            addId(rawId);
+          }
         }
       }
     }
 
     for (const oa of offerAnalyses) {
-      const maybeAvail = (oa as { availability?: OfferAvailability | null })
-        .availability;
-      if (maybeAvail && isOfferUnavailable({ availability: maybeAvail })) {
-        addId(oa.product_id);
+      const canonOaId = normalizeOfferId(oa.product_id);
+      const explicitAvail =
+        explicitAvailFromOffers.get(oa.product_id) ??
+        explicitAvailFromOffers.get(oa.product_id.trim()) ??
+        (canonOaId ? explicitAvailFromOffers.get(canonOaId) : undefined) ??
+        toOfferAvailability(oa.availability);
+      if (explicitAvail) {
+        if (isOfferUnavailable({ availability: explicitAvail })) {
+          addId(oa.product_id);
+        }
         continue;
       }
+
       const p = Number(oa.price_current);
       if (
         safeCurrentMinPrice != null &&
@@ -746,23 +786,56 @@ export default function PriceHistorySection({
   const isUnavailId = useCallback(
     (id: string) =>
       unavailableOfferIds.has(id) ||
+      unavailableOfferIds.has(id.trim()) ||
       unavailableOfferIds.has(normalizeOfferId(id)),
     [unavailableOfferIds]
   );
 
-  const effectiveReferenceOffers = useMemo<OmnibusReferenceOfferInput[]>(
-    () =>
-      Array.isArray(offers) && offers.length > 0
-        ? [...offers]
-        : offerAnalyses.map((oa) => ({
-            id: oa.product_id,
-            price_current: oa.price_current,
-            availability: isUnavailId(oa.product_id)
-              ? ('out_of_stock' as const)
+  const effectiveReferenceOffers = useMemo<OmnibusReferenceOfferInput[]>(() => {
+    if (Array.isArray(offers) && offers.length > 0) {
+      return offers
+        .filter((off): off is OmnibusReferenceOfferInput =>
+          Boolean(off && typeof off === 'object' && !Array.isArray(off))
+        )
+        .map((off) => {
+          const rawId =
+            typeof off.id === 'string' && off.id.trim()
+              ? off.id
+              : typeof off.product_id === 'string'
+                ? off.product_id
+                : undefined;
+          const explicit = toOfferAvailability(off.availability);
+          const unavailable = Boolean(rawId && isUnavailId(rawId));
+          return {
+            id: rawId,
+            price_current: off.price_current,
+            availability: unavailable
+              ? explicit && isOfferUnavailable({ availability: explicit })
+                ? explicit
+                : ('out_of_stock' as const)
               : ('in_stock' as const),
-          })),
-    [isUnavailId, offerAnalyses, offers]
-  );
+            implausiblyLow: off.implausiblyLow,
+          };
+        });
+    }
+    return offerAnalyses.map((oa) => {
+      const explicit = toOfferAvailability(oa.availability);
+      return {
+        id: oa.product_id,
+        price_current: oa.price_current,
+        availability: isUnavailId(oa.product_id)
+          ? explicit && isOfferUnavailable({ availability: explicit })
+            ? explicit
+            : ('out_of_stock' as const)
+          : ('in_stock' as const),
+      };
+    });
+  }, [isUnavailId, offerAnalyses, offers]);
+
+  const allKnownOffersUnavailable = useMemo<boolean>(() => {
+    if (effectiveReferenceOffers.length === 0) return false;
+    return effectiveReferenceOffers.every((off) => isOfferUnavailable(off));
+  }, [effectiveReferenceOffers]);
 
   // Historical anchor uses the exact same evidence-eligibility rules as the
   // Omnibus evaluator so rows below `minValidPriceVnd`, `live_listing` rows,
@@ -881,12 +954,18 @@ export default function PriceHistorySection({
     return evaluateOmnibusPriceAudit({
       ...omnibusSharedOpts,
       points: validPoints,
-      currentPriceVnd: safeCurrentMinPrice,
-      claimedOriginalPriceVnd: bestClaimedOrig,
-      currentInStockPriceVnd: safeCurrentMinPrice,
+      currentPriceVnd: allKnownOffersUnavailable ? null : safeCurrentMinPrice,
+      claimedOriginalPriceVnd: allKnownOffersUnavailable
+        ? null
+        : bestClaimedOrig,
+      currentInStockPriceVnd: allKnownOffersUnavailable
+        ? null
+        : safeCurrentMinPrice,
+      currentOfferUnavailable: allKnownOffersUnavailable,
       mode: 'market',
     });
   }, [
+    allKnownOffersUnavailable,
     isUnavailId,
     offerAnalyses,
     omnibusByOffer,

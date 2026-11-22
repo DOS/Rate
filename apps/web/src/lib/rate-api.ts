@@ -49,6 +49,7 @@ import {
   type OfferAvailability,
   toOfferAvailability,
 } from './product-market-stats';
+export type { OfferAvailability } from './product-market-stats';
 export {
   computeWilsonLowerBound,
   evaluateReviewTrustAssessment,
@@ -2162,6 +2163,7 @@ export interface OfferDiscountAnalysis {
   verdict: DiscountVerdictType;
   badge_label: string;
   explanation: string;
+  availability?: OfferAvailability;
 }
 
 export interface MasterProductPriceHistorySummary {
@@ -2490,6 +2492,7 @@ export async function getMasterProductPriceHistory(
     let badgeLabel = 'Giá ổn định';
     let explanation = `Giá bán hiện tại (${priceCurrent.toLocaleString('vi-VN')} ₫) khớp với mức trung vị lịch sử (${histMedian.toLocaleString('vi-VN')} ₫).`;
 
+    const offerAvailability = toOfferAvailability(off.availability);
     const offerUnavailable = isOfferUnavailable(off);
     if (priceOriginal && claimedDiscountPct >= 5) {
       // Case 1: Shop claims >= 8% discount, but current price is at or above historical median
@@ -2545,6 +2548,7 @@ export async function getMasterProductPriceHistory(
       verdict,
       badge_label: badgeLabel,
       explanation,
+      ...(offerAvailability ? { availability: offerAvailability } : {}),
     };
   }
 
