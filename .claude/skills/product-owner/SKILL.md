@@ -57,11 +57,11 @@ like this:
 - **Authorized promoters.** Normally the Claude Code PO runs `promote.mjs` and
   the `verify-live.mjs` check after it; on Claude Code quota failover or JOY's
   assignment, the Antigravity PO runs them instead (DOS/Rate#1849). The Qwen PO
-  (and the Antigravity PO when not on failover) asks the active promoting PO
-  (or JOY, if it cannot reach it) when merged work needs a promotion.
-  `promote.mjs` refuses to run when the session's claimant (resolved as
-  `board.mjs` does) is not `claude:` or `antigravity:`, or cannot be resolved:
-  a guard against mistakes, not access control.
+  (and the Antigravity PO when neither on quota failover nor assigned by JOY)
+  asks the active promoting PO (or JOY, if it cannot reach it) when merged work
+  needs a promotion. `promote.mjs` refuses to run when the session's claimant
+  (resolved as `board.mjs` does) is not `claude:` or `antigravity:`, or cannot
+  be resolved: a guard against mistakes, not access control.
 - The claim lock (see "Claims") keeps their sub-sessions off each other's
   issues even when two take the same issue at the same moment.
 
