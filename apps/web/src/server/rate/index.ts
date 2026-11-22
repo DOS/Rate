@@ -460,30 +460,33 @@ export const getCachedMasterProductPriceHistory = cache(
       ? existingOffers.filter((o) => Boolean(o && typeof o === 'object'))
       : undefined;
     const offersKey = safeOffers
-      ? `offers:${safeOffers.length}:${safeOffers
-          .slice(0, 20)
-          .map((o) => {
-            const safeCur =
-              typeof o.price_current === 'number' &&
-              Number.isFinite(o.price_current) &&
-              o.price_current > 0
-                ? Math.round(o.price_current)
-                : 0;
-            const safeOrig =
-              typeof o.price_original === 'number' &&
-              Number.isFinite(o.price_original) &&
-              o.price_original > 0
-                ? Math.round(o.price_original)
-                : '';
-            const safeAvail =
-              o.availability === 'in_stock' ||
-              o.availability === 'out_of_stock' ||
-              o.availability === 'discontinued'
-                ? o.availability
-                : '';
-            return `${sanitizeCachedEntityId(o.id)}:${safeCur}:${safeOrig}:${safeAvail}`;
-          })
-          .join('|')}`
+      ? `offers:${safeOffers.length}:${createHash('sha256')
+          .update(
+            safeOffers
+              .map((o) => {
+                const safeCur =
+                  typeof o.price_current === 'number' &&
+                  Number.isFinite(o.price_current) &&
+                  o.price_current > 0
+                    ? Math.round(o.price_current)
+                    : 0;
+                const safeOrig =
+                  typeof o.price_original === 'number' &&
+                  Number.isFinite(o.price_original) &&
+                  o.price_original > 0
+                    ? Math.round(o.price_original)
+                    : '';
+                const safeAvail =
+                  o.availability === 'in_stock' ||
+                  o.availability === 'out_of_stock' ||
+                  o.availability === 'discontinued'
+                    ? o.availability
+                    : '';
+                return `${sanitizeCachedEntityId(o.id)}:${safeCur}:${safeOrig}:${safeAvail}`;
+              })
+              .join('|')
+          )
+          .digest('hex')}`
       : 'offers:auto';
     return withRateDataCache(
       async (id: string) => {

@@ -1259,6 +1259,139 @@ async function main() {
       fwdCardHtml.includes(formatPriceVnd(28_500_000, locale)),
       `${locale}: Forwarded offers keeps explicitly in_stock 27.0M offer history even when stored minPrice is 27.5M`
     );
+
+    // All real offers sold out (including missing-ID sold-out entry) alongside
+    // an in-stock sub-floor accessory/bait listing suppresses phantom Omnibus card
+    // even when cached currentMinPrice is still non-null.
+    const allSoldOutPlusBaitHtml = renderToStaticMarkup(
+      React.createElement(
+        IntlProvider,
+        {
+          locale,
+          messages: pickClientMessages(rawCatalog, 'productDetail'),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(PriceHistorySection, {
+          productName: 'iPhone 16 Pro Max',
+          history: history1871,
+          offers: [
+            {
+              id: '',
+              product_id: '   ',
+              price_current: 28_000_000,
+              availability: 'out_of_stock',
+            },
+            {
+              id: 'offer-in-stock-1871',
+              price_current: 27_000_000,
+              availability: 'discontinued',
+            },
+            {
+              id: 'offer-subfloor-bait',
+              price_current: 500_000,
+              availability: 'in_stock',
+            },
+          ],
+        })
+      )
+    );
+    assert.equal(
+      allSoldOutPlusBaitHtml.includes('data-testid="omnibus-price-audit-card"'),
+      false,
+      `${locale}: Suppresses Omnibus card when only sold-out offers and sub-floor bait remain`
+    );
+  }
+
+  // Malformed non-empty `offers` array falls back cleanly to `byOffer` analyses,
+  // and `offers` entries with `availability: null` absent from `byOffer` but
+  // priced strictly below `currentMinPrice` are excluded from Omnibus floor.
+  {
+    const rawViCatalog = JSON.parse(
+      readFileSync(new URL('../../../locales/vi.json', import.meta.url), 'utf8')
+    ) as Record<string, unknown>;
+    const malformedOffersHtml = renderToStaticMarkup(
+      React.createElement(
+        IntlProvider,
+        {
+          locale: 'vi',
+          messages: pickClientMessages(rawViCatalog, 'productDetail'),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(PriceHistorySection, {
+          productName: 'iPhone 16 Pro Max',
+          history: history1871,
+          offers: [null as never],
+        })
+      )
+    );
+    const malCardStart = malformedOffersHtml.indexOf(
+      'data-testid="omnibus-price-audit-card"'
+    );
+    const malCardStop = malformedOffersHtml.indexOf(
+      'role="group"',
+      malCardStart
+    );
+    const malOmnibusCardHtml = malformedOffersHtml.slice(
+      malCardStart,
+      malCardStop
+    );
+    assert.ok(
+      malCardStart >= 0 &&
+        malOmnibusCardHtml.includes(formatPriceVnd(28_500_000, 'vi'))
+    );
+    assert.equal(
+      malOmnibusCardHtml.includes(formatPriceVnd(21_500_000, 'vi')),
+      false
+    );
+
+    const unknownExtraOfferHtml = renderToStaticMarkup(
+      React.createElement(
+        IntlProvider,
+        {
+          locale: 'vi',
+          messages: pickClientMessages(rawViCatalog, 'productDetail'),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(PriceHistorySection, {
+          productName: 'iPhone 16 Pro Max',
+          history: {
+            ...history1871,
+            points: [
+              ...history1871.points,
+              ...[35, 21, 7].map((d, idx) => ({
+                id: 900 + idx,
+                product_id: 'offer-untracked-below-min',
+                merchant_name: 'Untracked Shop',
+                platform: 'shopee',
+                is_official: false,
+                price: 22_000_000,
+                price_original: null,
+                recorded_at: isoDaysAgo(d),
+                source: 'crawler',
+              })),
+            ],
+          },
+          offers: [
+            ...offers1871,
+            {
+              id: 'offer-untracked-below-min',
+              price_current: 22_000_000,
+              availability: null,
+            },
+          ],
+        })
+      )
+    );
+    const cardStart = unknownExtraOfferHtml.indexOf(
+      'data-testid="omnibus-price-audit-card"'
+    );
+    const cardStop = unknownExtraOfferHtml.indexOf('role="group"', cardStart);
+    assert.equal(
+      unknownExtraOfferHtml
+        .slice(cardStart, cardStop)
+        .includes(formatPriceVnd(22_000_000, 'vi')),
+      false
+    );
   }
 
   // Verify product detail route and ItemLazySizePanel forward `offers` to PriceHistorySection.
