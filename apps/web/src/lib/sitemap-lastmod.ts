@@ -30,14 +30,15 @@ export interface SitemapLastModified {
   bySlug: Map<string, Date>;
 }
 
-interface SitemapSlugLookupIndex {
-  bySlugSize: number;
+interface SitemapSlugLookupCache {
+  fallbackByLower: Map<string, Date>;
+  snapshot: Array<[string, Date]>;
   byLowerSlug: Map<string, Date>;
 }
 
-const SLUG_LOOKUP_INDEX = new WeakMap<
+const SLUG_LOOKUP_CACHE = new WeakMap<
   SitemapLastModified,
-  SitemapSlugLookupIndex
+  SitemapSlugLookupCache
 >();
 
 const MIN_SITEMAP_TIMESTAMP_MS = Date.UTC(2020, 0, 1);
@@ -55,12 +56,11 @@ const RESERVED_SITEMAP_KEYS = new Set([
 
 function cleanSitemapSlug(raw: unknown, maxLen: number): string {
   if (typeof raw !== 'string') return '';
-  const cleaned = raw
-    .replace(/\p{Cc}+/gu, '')
-    .trim()
-    .slice(0, maxLen);
+  if (raw.length > maxLen + 64) return '';
+  const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
   if (
     !cleaned ||
+    cleaned.length > maxLen ||
     RESERVED_SITEMAP_KEYS.has(cleaned.toLowerCase()) ||
     !/^[a-zA-Z0-9._-]+$/.test(cleaned) ||
     !/[a-zA-Z0-9]/.test(cleaned) ||
@@ -98,10 +98,15 @@ export function buildSitemapLastModified(
   let latest: Date | undefined;
   const byCategory = new Map<string, Date>();
   const bySlug = new Map<string, Date>();
+  const fallbackByLower = new Map<string, Date>();
   const byLowerSlug = new Map<string, Date>();
   if (!Array.isArray(rows)) {
     const empty: SitemapLastModified = { latest, byCategory, bySlug };
-    SLUG_LOOKUP_INDEX.set(empty, { bySlugSize: 0, byLowerSlug });
+    SLUG_LOOKUP_CACHE.set(empty, {
+      fallbackByLower,
+      snapshot: [],
+      byLowerSlug,
+    });
     return empty;
   }
   for (const row of rows.slice(0, 10_000)) {
@@ -124,8 +129,13 @@ export function buildSitemapLastModified(
       lowerEffective,
       newer(byLowerSlug.get(lowerEffective), date)!
     );
-    for (const fallbackSlug of fallbackSlugs) {
+    const extraFallbacks = primarySlug ? fallbackSlugs : fallbackSlugs.slice(1);
+    for (const fallbackSlug of extraFallbacks) {
       const lowerFallback = fallbackSlug.toLowerCase();
+      fallbackByLower.set(
+        lowerFallback,
+        newer(fallbackByLower.get(lowerFallback), date)!
+      );
       byLowerSlug.set(
         lowerFallback,
         newer(byLowerSlug.get(lowerFallback), date)!
@@ -136,19 +146,32 @@ export function buildSitemapLastModified(
     byCategory.set(categorySlug, newer(current, date)!);
   }
   const result: SitemapLastModified = { latest, byCategory, bySlug };
-  SLUG_LOOKUP_INDEX.set(result, {
-    bySlugSize: bySlug.size,
+  SLUG_LOOKUP_CACHE.set(result, {
+    fallbackByLower,
+    snapshot: [...bySlug.entries()],
     byLowerSlug,
   });
   return result;
 }
 
+function isBySlugSnapshotFresh(
+  bySlug: Map<string, Date>,
+  snapshot: ReadonlyArray<[string, Date]>
+): boolean {
+  if (bySlug.size !== snapshot.length) return false;
+  for (const [key, date] of snapshot) {
+    if (bySlug.get(key) !== date) return false;
+  }
+  return true;
+}
+
 function getLowerSlugIndex(dates: SitemapLastModified): Map<string, Date> {
-  const cached = SLUG_LOOKUP_INDEX.get(dates);
-  if (cached && cached.bySlugSize === dates.bySlug.size) {
+  const cached = SLUG_LOOKUP_CACHE.get(dates);
+  if (cached && isBySlugSnapshotFresh(dates.bySlug, cached.snapshot)) {
     return cached.byLowerSlug;
   }
-  const rebuilt = new Map<string, Date>(cached?.byLowerSlug);
+  const fallbackByLower = cached?.fallbackByLower ?? new Map<string, Date>();
+  const rebuilt = new Map<string, Date>(fallbackByLower);
   for (const [rawSlug, date] of dates.bySlug) {
     const clean = cleanSitemapSlug(rawSlug, 256);
     if (!clean || !(date instanceof Date) || !Number.isFinite(date.getTime())) {
@@ -157,8 +180,9 @@ function getLowerSlugIndex(dates: SitemapLastModified): Map<string, Date> {
     const lower = clean.toLowerCase();
     rebuilt.set(lower, newer(rebuilt.get(lower), date)!);
   }
-  SLUG_LOOKUP_INDEX.set(dates, {
-    bySlugSize: dates.bySlug.size,
+  SLUG_LOOKUP_CACHE.set(dates, {
+    fallbackByLower,
+    snapshot: [...dates.bySlug.entries()],
     byLowerSlug: rebuilt,
   });
   return rebuilt;

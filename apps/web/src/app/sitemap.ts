@@ -12,6 +12,7 @@ import {
   getCachedSitemapRows,
   getMasterProductCategorySlug,
   getMasterProductHref,
+  sanitizeCachedProductSlug,
 } from '@/server/rate';
 import {
   buildPopular1v1BattlesForCategory,
@@ -152,6 +153,14 @@ function isSafeVersusSlug(slug: string): boolean {
   );
 }
 
+function isValidMasterCatalogSlug(slug: string): boolean {
+  return slug.length > 0 && sanitizeCachedProductSlug(slug) === slug;
+}
+
+function isValidMasterVersusSlug(slug: string): boolean {
+  return isValidMasterCatalogSlug(slug) && isSafeVersusSlug(slug);
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     // Product and merchant URLs come from the whole catalogue; the curated
@@ -166,7 +175,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const catSlugById = rows.categorySlugById;
 
     const variantsByItemSlug = new Map<string, string[]>();
-    const itemSlugByLowerVariant = new Map<string, string>();
     const itemSlugBySlug: Record<string, string> | null = itemSlugs
       ? (Object.create(null) as Record<string, string>)
       : null;
@@ -176,7 +184,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         if (variantSlug !== '__proto__') {
           itemSlugBySlug[variantSlug] = itemSlug;
         }
-        itemSlugByLowerVariant.set(variantSlug.toLowerCase(), itemSlug);
         const list = variantsByItemSlug.get(itemSlug);
         if (list) list.push(variantSlug);
         else variantsByItemSlug.set(itemSlug, [variantSlug]);
@@ -242,9 +249,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           const variantSlug = entry.slug;
           if (!variantSlug) continue;
           const mappedItemSlug = itemSlugs
-            ? (itemSlugs.get(variantSlug) ??
-              itemSlugs.get(entry.product.slug) ??
-              itemSlugByLowerVariant.get(variantSlug.toLowerCase()))
+            ? (itemSlugs.get(entry.product.slug) ?? itemSlugs.get(variantSlug))
             : undefined;
           // An Item whose stored slug holds "-vs-" has no versus route (#1275),
           // even when versusHref would fall back to the variant slug.
@@ -254,15 +259,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           ) {
             continue;
           }
-          const effectiveSide = mappedItemSlug
-            ? itemSlugFromProductAnswer(
-                { ok: true, data: { item: { slug: mappedItemSlug } } },
-                variantSlug
-              )
-            : variantSlug;
-          if (!isSafeVersusSlug(effectiveSide)) {
+          const hasSafeItemSlug =
+            typeof mappedItemSlug === 'string' &&
+            isSafeVersusSlug(mappedItemSlug);
+          if (hasSafeItemSlug) {
+            // Canonical Item URLs may preserve mixed case (#1383), provided the
+            // variant row itself has a valid lowercase master slug for
+            // getCachedCompareMasterProducts on /compare/[versus].
+            if (!isValidMasterCatalogSlug(variantSlug)) {
+              continue;
+            }
+          } else if (!isValidMasterVersusSlug(variantSlug)) {
+            // Variant mode, unlinked rows, and fallback variant URLs must be
+            // exact lowercase master slugs without "-vs-" so /compare/[versus]
+            // neither 308s nor 404s.
             continue;
           }
+          const effectiveSide = hasSafeItemSlug ? mappedItemSlug : variantSlug;
           const itemKey = mappedItemSlug ? mappedItemSlug.toLowerCase() : null;
           const sideKey = effectiveSide.toLowerCase();
           if (
