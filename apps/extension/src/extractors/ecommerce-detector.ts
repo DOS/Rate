@@ -342,7 +342,7 @@ const MEDIAMART_ALLOWED_CATEGORY_PREFIXES = new Set([
 ]);
 
 const HACOM_CATEGORY_BRAND_SLUG_REGEX =
-  /^(?:laptop-(?:asus|dell|acer|lenovo|hp|msi|apple|lg|gigabyte)|may-tinh-nguyen-bo-theo-hang|may-tinh-mini-da-dung)$/i;
+  /^(?:laptop-(?:asus(?:-(?:vivobook|zenbook|tuf|rog|expertbook|proart))?|dell(?:-(?:inspiron|vostro|xps|latitude|alienware|precision))?|acer(?:-(?:aspire|nitro|swift|predator|travelmate))?|lenovo(?:-(?:thinkpad|thinkbook|ideapad|legion|loq|yoga))?|hp(?:-(?:pavilion|victus|omen|envy|probook|elitebook|omnibook))?|msi(?:-(?:modern|katana|cyborg|prestige|stealth|raider|thin|sword))?|apple(?:-(?:macbook|macbook-air|macbook-pro))?|lg(?:-gram)?|gigabyte(?:-(?:aorus|aero|gaming))?)|may-tinh-nguyen-bo-theo-hang|may-tinh-mini-da-dung)$/i;
 
 const CLICKBUY_NON_PRODUCT_SLUG_REGEX =
   /^(?:dien-thoai-(?:iphone|samsung|xiaomi|oppo|vivo|realme|nokia|honor|asus|tcl|google|sony|tecno|infinix|masstel|itel)|(?:iphone|samsung|dien-thoai|ipad|macbook|apple-watch)-cu|thay-pin|ep-kinh|google-pixel|trang)$/i;
@@ -414,6 +414,23 @@ const ANPHAT_EXTRA_NON_PRODUCT_FIRST_SEGMENTS = new Set([
 
 const ANPHAT_INFO_SUFFIX_REGEX =
   /(?:^|-)(?:he-thong-showroom|tin-khuyen-mai|tin-tuc|khuyen-mai|bao-hanh|chinh-sach|huong-dan|lien-he|tuyen-dung|gioi-thieu|pc-an-phat)$/i;
+
+const ANPHAT_ACTIVE_DEVICE_SLUG_CUE_REGEX =
+  /(?:^|[-/_])(?:laptop|may-tinh-xach-tay|macbook|ipad|may-tinh-bang|tablet|galaxy-tab|redmi-pad|xiaomi-pad|matepad|lenovo-tab|apple-watch|galaxy-watch|dong-ho|smartwatch|garmin|amazfit|tai-nghe|airpods|earbuds|galaxy-buds|redmi-buds|headphone|headset)(?:[-/_]|$)/i;
+
+const ANPHAT_SMARTPHONE_SLUG_REGEX =
+  /(?:^(?:dien-thoai|iphone|smartphone)(?:-|_|$)|(?:^|[-/_])(?:iphone-\d+|galaxy-(?:s\d+|z-(?:fold|flip)|a\d+|m\d+)|redmi-(?:note|\d+)|poco-[xfmc]\d+|oppo-(?:reno|find)|vivo-[vxyt]\d+|realme-(?:c\d+|gt|\d+)|xiaomi-\d+|google-pixel-\d+)(?:[-/_]|$))/i;
+
+function isExcludedAnPhatPhoneSlug(slugLower: string): boolean {
+  if (ANPHAT_DESK_PHONE_SLUG_REGEX.test(slugLower)) return true;
+  if (/^(?:dien-thoai|iphone|smartphone)(?:-|_|$)/i.test(slugLower)) {
+    return true;
+  }
+  return (
+    ANPHAT_SMARTPHONE_SLUG_REGEX.test(slugLower) &&
+    !ANPHAT_ACTIVE_DEVICE_SLUG_CUE_REGEX.test(slugLower)
+  );
+}
 
 function sha1Hex10(input: string): string {
   const bytes = new TextEncoder().encode(input);
@@ -628,7 +645,7 @@ function extractValidRetailItemSlug(
         rawKey.length < 3 ||
         rawKey.length > 512 ||
         rawKeyLower.includes('..') ||
-        ANPHAT_DESK_PHONE_SLUG_REGEX.test(rawKeyLower) ||
+        isExcludedAnPhatPhoneSlug(rawKeyLower) ||
         RETAIL_AUTH_OR_NON_PRODUCT_SLUG_REGEX.test(rawKeyLower) ||
         ANPHAT_INFO_SUFFIX_REGEX.test(lastClean.toLowerCase())
       ) {
@@ -673,7 +690,7 @@ function extractValidRetailItemSlug(
       (VIETTELSTORE_NON_PRODUCT_PREFIXES.has(lastSegLower) ||
         VIETTELSTORE_CATEGORY_SLUG_REGEX.test(lastSegLower))) ||
     (retailPlatform === 'anphatpc' &&
-      (ANPHAT_DESK_PHONE_SLUG_REGEX.test(lastSegLower) ||
+      (isExcludedAnPhatPhoneSlug(lastSegLower) ||
         ANPHAT_INFO_SUFFIX_REGEX.test(lastSegLower)))
   ) {
     return null;
@@ -1262,7 +1279,7 @@ export function cleanExtractedProductTitle(rawTitle: string): string {
   if (!normalizedTitle) return '';
   const withoutPlatformSuffix = normalizedTitle
     .replace(
-      / ?(?:\||[-\u2013\u2014]) ?(?:Shopee(?:\s*Việt\s*Nam|\s*VN)?|Lazada(?:\s*Việt\s*Nam|\s*VN)?|Tiki(?:\.vn)?|TikTok\s*Shop|CellphoneS(?:\.com\.vn)?|Thế\s*Giới\s*Di\s*Động|Thegioididong(?:\.com)?|TopZone(?:\.vn)?|Điện\s*Máy\s*Xanh|Dienmayxanh(?:\.com)?|FPT\s*Shop|Fptshop(?:\.com\.vn)?|Hoàng\s*Hà\s*Mobile|HoangHaMobile(?:\.com)?|Di\s*Động\s*Việt|Didongviet(?:\.vn)?|Phong\s*Vũ|Phongvu(?:\.vn)?|GearVN(?:\.com)?|Nguy\u1ec5n\s*Kim|Nguyenkim(?:\.com)?|ShopDunk(?:\.com)?|HACOM(?:\.vn)?|Hanoicomputer(?:\.vn)?|Clickbuy(?:\.com\.vn)?|Viettel\s*Store|Viettelstore(?:\.vn)?|Si\u00eau\s*th\u1ecb\s*\u0111i\u1ec7n\s*m\u00e1y\s*Pico|Pico(?:\.vn)?|Media\s*Mart|Mediamart(?:\.vn)?|MemoryZone(?:\.com\.vn)?|An\s*Ph\u00e1t(?:\s*Computer|\s*PC)?|Anphatpc(?:\.com\.vn)?).*$/i,
+      / ?(?:\||[-\u2013\u2014]) ?(?:Shopee(?:\s*Việt\s*Nam|\s*VN)?|Lazada(?:\s*Việt\s*Nam|\s*VN)?|Tiki(?:\.vn)?|TikTok\s*Shop|CellphoneS(?:\.com\.vn)?|Thế\s*Giới\s*Di\s*Động|Thegioididong(?:\.com)?|TopZone(?:\.vn)?|Điện\s*Máy\s*Xanh|Dienmayxanh(?:\.com)?|FPT\s*Shop|Fptshop(?:\.com\.vn)?|Hoàng\s*Hà\s*Mobile|HoangHaMobile(?:\.com)?|Di\s*Động\s*Việt|Didongviet(?:\.vn)?|Phong\s*Vũ|Phongvu(?:\.vn)?|GearVN(?:\.com)?|Nguy\u1ec5n\s*Kim|Nguyenkim(?:\.com)?|ShopDunk(?:\.com)?|HACOM(?:\.vn)?|Hanoicomputer(?:\.vn)?|Clickbuy(?:\.com\.vn)?|Viettel\s*Store|Viettelstore(?:\.vn)?|Si\u00eau\s*th\u1ecb\s*\u0111i\u1ec7n\s*m\u00e1y\s*Pico|Pico(?:\.vn)?|Media\s*Mart|Mediamart(?:\.vn)?|MemoryZone(?:\.com\.vn)?|An\s*Ph\u00e1t(?:\s*Computer|\s*PC)?|Anphatpc(?:\.com\.vn)?)(?: ?(?:\||[-\u2013\u2014(:]).*)?$/i,
       ''
     )
     .replace(/\s+/g, ' ')
@@ -1441,6 +1458,71 @@ export function extractSelectedVariantFromDom(doc: Document): string | null {
   return null;
 }
 
+const NON_PDP_PRICE_ANCESTOR_SELECTOR =
+  '[hidden], [aria-hidden="true"], .hidden, .d-none, .related-products, .product-related, .similar-products, .viewed-products, .cross-sell, .upsell, .product-list, .product-grid, .product-item, .product-card, .product-box, .p-item, .item-product, .owl-item, .swiper-slide, header, footer, nav, aside';
+
+function isExcludedDomPriceNode(el: Element | null | undefined): boolean {
+  if (!el) return true;
+  if (typeof el.hasAttribute === 'function' && el.hasAttribute('hidden')) {
+    return true;
+  }
+  if ((el as unknown as { hidden?: boolean }).hidden === true) {
+    return true;
+  }
+  if (
+    typeof el.closest === 'function' &&
+    el.closest(NON_PDP_PRICE_ANCESTOR_SELECTOR)
+  ) {
+    return true;
+  }
+  let ancestor = (
+    el as unknown as {
+      parentElement?: {
+        hidden?: boolean;
+        hasAttribute?: (name: string) => boolean;
+        parentElement?: unknown;
+      } | null;
+    }
+  ).parentElement;
+  let depth = 0;
+  while (ancestor && depth < 16) {
+    if (
+      ancestor.hidden === true ||
+      (typeof ancestor.hasAttribute === 'function' &&
+        ancestor.hasAttribute('hidden'))
+    ) {
+      return true;
+    }
+    ancestor = ancestor.parentElement as typeof ancestor;
+    depth++;
+  }
+  return false;
+}
+
+function queryFirstActivePdpPriceNode(
+  doc: Document,
+  selector: string
+): Element | null {
+  if (typeof doc.querySelectorAll === 'function') {
+    const nodes = Array.from(doc.querySelectorAll(selector));
+    if (nodes.length > 0) {
+      for (const node of nodes) {
+        if (!isExcludedDomPriceNode(node)) {
+          return node;
+        }
+      }
+      return null;
+    }
+  }
+  if (typeof doc.querySelector === 'function') {
+    const single = doc.querySelector(selector);
+    if (single && !isExcludedDomPriceNode(single)) {
+      return single;
+    }
+  }
+  return null;
+}
+
 /**
  * Extract product signal from the current DOM + JSON-LD structured data without blocking the main thread.
  */
@@ -1538,11 +1620,13 @@ export function extractProductSignalFromDom(
     '[data-testid="pdp-product-price"]',
     '.pdp-price_type_normal',
     '.product-price__current-price',
+    '.product-detail .product-price .pro-price',
     '.product-price .pro-price',
     '.product_info_price_value-final',
     '.overview .prices .actual-price',
     '.pdp-price-online',
     '.product-detail-price .price-sale',
+    '.cb-pbox:not([hidden]) .cb-pbox__now:not([hidden])',
     '.cb-pbox__now:not([hidden])',
     '.wrap-price .new-price',
     '.special-price .price:not(.related-products *):not(.product-item *):not(.product-card *):not(.product-box *):not(header *):not(footer *)',
@@ -1551,7 +1635,7 @@ export function extractProductSignalFromDom(
   ];
   if (!price) {
     for (const sel of priceSelectors) {
-      const el = doc.querySelector(sel);
+      const el = queryFirstActivePdpPriceNode(doc, sel);
       const parsed = parseVndPriceText(el?.textContent);
       if (parsed) {
         price = parsed;
@@ -1565,11 +1649,13 @@ export function extractProductSignalFromDom(
     '.ZA5sW5',
     '.pdp-price_type_deleted',
     '.product-price__original-price',
+    '.product-detail .product-price .pro-price-del',
     '.product-price .pro-price-del',
     '.product_info_price_value-real',
     '.overview .old-product-price',
     '.pdp-price-old',
     '.product-detail-price .price-old',
+    '.cb-pbox:not([hidden]) .cb-pbox__old:not([hidden])',
     '.cb-pbox__old:not([hidden])',
     '.wrap-price .old-price',
     '.product-price-regular:not(.related-products *):not(.product-item *):not(.product-card *):not(.product-box *):not(header *):not(footer *)',
@@ -1578,13 +1664,15 @@ export function extractProductSignalFromDom(
     '.box-price-old',
     'del',
   ];
-  for (const sel of originalPriceSelectors) {
-    const el = doc.querySelector(sel);
-    const parsed = parseVndPriceText(el?.textContent);
-    if (parsed && (!price || parsed > price)) {
-      originalPrice = parsed;
-      originalFromDom = true;
-      break;
+  if (!originalPrice) {
+    for (const sel of originalPriceSelectors) {
+      const el = queryFirstActivePdpPriceNode(doc, sel);
+      const parsed = parseVndPriceText(el?.textContent);
+      if (parsed && (!price || parsed > price)) {
+        originalPrice = parsed;
+        originalFromDom = true;
+        break;
+      }
     }
   }
 

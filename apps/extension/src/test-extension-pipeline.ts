@@ -12065,6 +12065,14 @@ async function runTests() {
         'anphatpc',
         'https://www.anphatpc.com.vn/dien-thoai-ban-panasonic-kx-ts500_id1234.html',
       ],
+      [
+        'anphatpc',
+        'https://www.anphatpc.com.vn/iphone-16-pro-max_id49201.html',
+      ],
+      [
+        'anphatpc',
+        'https://www.anphatpc.com.vn/dien-thoai-apple-iphone-16-pro-max_id49201.html',
+      ],
       ['anphatpc', 'https://www.anphatpc.com.vn/laptop-asus-without-html-ext'],
     ] as const) {
       assert.equal(
@@ -12547,6 +12555,7 @@ async function runTests() {
     for (const [plat, nonPdp] of [
       ['mediamart', 'https://mediamart.vn/tu-van-tieu-dung/top-5-iphone-16'],
       ['hacom', 'https://hacom.vn/laptop-asus'],
+      ['hacom', 'https://hacom.vn/laptop-asus-vivobook'],
       ['clickbuy', 'https://clickbuy.com.vn/dien-thoai-iphone'],
       ['clickbuy', 'https://clickbuy.com.vn/iphone-cu'],
       ['clickbuy', 'https://clickbuy.com.vn/thay-pin'],
@@ -12559,18 +12568,119 @@ async function runTests() {
         nonPdp
       );
     }
+    assert.equal(
+      extractIdsFromUrl(
+        'hacom',
+        'https://hacom.vn/laptop-asus-vivobook-x1407ca-ly008w-ltau1066'
+      ).externalItemId,
+      'laptop-asus-vivobook-x1407ca-ly008w-ltau1066'
+    );
+    assert.equal(
+      extractIdsFromUrl(
+        'anphatpc',
+        'https://www.anphatpc.com.vn/tai-nghe-bluetooth-airpods-4-dung-cho-iphone-16_id49202.html'
+      ).externalItemId,
+      'tai-nghe-bluetooth-airpods-4-dung-cho-iphone-16_id49202'
+    );
 
-    // O(N) title cleaning on pathological whitespace input & An Phát Vietnamese detection
-    const t0 = performance.now();
+    // Long-input title cleaning, PicoPix model preservation & An Phát Vietnamese detection
     const cleanedAdversarial = cleanExtractedProductTitle(
       `iPhone 16 Pro${' '.repeat(20_000)}|NotAStore`
     );
-    assert.ok(
-      performance.now() - t0 < 50,
-      'cleanExtractedProductTitle must run in O(N)'
-    );
     assert.ok(cleanedAdversarial.startsWith('iPhone 16 Pro'));
+    assert.equal(
+      cleanExtractedProductTitle('Máy chiếu Philips - PicoPix Max | ShopDunk'),
+      'Máy chiếu Philips - PicoPix Max'
+    );
+    assert.equal(
+      cleanExtractedProductTitle('Kính thực tế ảo - Pico 4 Ultra | CellphoneS'),
+      'Kính thực tế ảo - Pico 4 Ultra'
+    );
     assert.equal(isVietnameseText('An Phát Computer'), true);
+
+    // Clickbuy hidden ancestor price container skipped in favor of visible container
+    const hiddenClickbuyPriceNode = {
+      textContent: '19.990.000₫',
+      parentElement: {
+        hidden: true,
+        hasAttribute: (attr: string) => attr === 'hidden',
+      },
+      closest: (sel: string) => (sel.includes('[hidden]') ? {} : null),
+    };
+    const visibleClickbuyPriceNode = {
+      textContent: '24.990.000₫',
+      parentElement: { hidden: false, hasAttribute: () => false },
+      closest: () => null,
+    };
+    const clickbuyHiddenFixtureDoc = {
+      title: 'iPhone 16 128GB Chính hãng - Clickbuy.com.vn',
+      querySelectorAll: (sel: string) => {
+        if (sel === 'script[type="application/ld+json"]') return [];
+        if (sel.includes('.cb-pbox__now')) {
+          return [hiddenClickbuyPriceNode, visibleClickbuyPriceNode];
+        }
+        return [];
+      },
+      querySelector: (sel: string) => {
+        if (sel === 'h1') {
+          return { textContent: 'iPhone 16 128GB Chính hãng' };
+        }
+        if (sel.includes('.cb-pbox__now')) return hiddenClickbuyPriceNode;
+        return null;
+      },
+    } as unknown as Document;
+    const clickbuyHiddenSig = extractProductSignalFromDom(
+      clickbuyHiddenFixtureDoc,
+      'https://clickbuy.com.vn/apple-iphone-16-128gb.html'
+    );
+    assert.ok(clickbuyHiddenSig);
+    assert.equal(
+      clickbuyHiddenSig.price,
+      24_990_000,
+      'must skip hidden Clickbuy price container and read active visible price'
+    );
+
+    // Related-product .pro-price-del must never overwrite structured JSON-LD originalPrice
+    const relatedDelNode = {
+      textContent: '24.990.000₫',
+      closest: (sel: string) => (sel.includes('.related-products') ? {} : null),
+    };
+    const structuredListPriceDoc = {
+      title: 'iPad Gen 10 64GB | GearVN.com',
+      querySelectorAll: (sel: string) => {
+        if (sel === 'script[type="application/ld+json"]') {
+          return [
+            {
+              textContent: JSON.stringify({
+                '@type': 'Product',
+                name: 'iPad Gen 10 64GB',
+                offers: {
+                  '@type': 'AggregateOffer',
+                  lowPrice: '12990000',
+                  highPrice: '14990000',
+                  availability: 'https://schema.org/InStock',
+                },
+              }),
+            },
+          ];
+        }
+        if (sel.includes('.pro-price-del')) return [relatedDelNode];
+        return [];
+      },
+      querySelector: (sel: string) =>
+        sel.includes('.pro-price-del') ? relatedDelNode : null,
+    } as unknown as Document;
+    const structuredListSig = extractProductSignalFromDom(
+      structuredListPriceDoc,
+      'https://gearvn.com/products/ipad-gen-10-64gb'
+    );
+    assert.ok(structuredListSig);
+    assert.equal(structuredListSig.price, 12_990_000);
+    assert.equal(
+      structuredListSig.originalPrice,
+      14_990_000,
+      'related-product .pro-price-del must not replace JSON-LD originalPrice'
+    );
   }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }

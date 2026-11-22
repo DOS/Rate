@@ -514,7 +514,7 @@
     }
   },
   "radarPillSpread": {
-    "message": "Rozdíl ve 22 obchodech $PCT$ %",
+    "message": "Rozdíl mezi obchody $PCT$ %",
     "placeholders": {
       "pct": {
         "content": "$1"

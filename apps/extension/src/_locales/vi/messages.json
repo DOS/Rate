@@ -514,7 +514,7 @@
     }
   },
   "radarPillSpread": {
-    "message": "Lệch 22 sàn $PCT$%",
+    "message": "Lệch đa sàn $PCT$%",
     "placeholders": {
       "pct": {
         "content": "$1"

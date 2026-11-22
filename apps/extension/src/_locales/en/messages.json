@@ -514,7 +514,7 @@
     }
   },
   "radarPillSpread": {
-    "message": "22-store gap $PCT$%",
+    "message": "Cross-store gap $PCT$%",
     "placeholders": {
       "pct": {
         "content": "$1"

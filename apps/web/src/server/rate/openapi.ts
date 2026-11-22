@@ -15,6 +15,7 @@ export interface OpenApiParameter {
     format?: string;
     enum?: string[];
     default?: string | number | boolean;
+    maxLength?: number;
   };
 }
 
@@ -1172,7 +1173,7 @@ function buildBaseRateOpenApiSpec(
               name: 'externalId',
               in: 'query',
               description: 'Platform item ID or shopId_itemId',
-              schema: { type: 'string' },
+              schema: { type: 'string', maxLength: 128 },
             },
             {
               name: 'shopId',
@@ -2146,7 +2147,7 @@ function buildBaseRateOpenApiSpec(
             externalItemId: {
               type: 'string',
               minLength: 1,
-              maxLength: 120,
+              maxLength: 128,
               example: '29512841920',
               description: 'Optional; derived from `url` when omitted.',
             },

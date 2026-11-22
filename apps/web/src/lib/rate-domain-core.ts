@@ -1866,7 +1866,7 @@ const MEDIAMART_ALLOWED_CATEGORY_PREFIXES = new Set([
 ]);
 
 const HACOM_CATEGORY_BRAND_SLUG_REGEX =
-  /^(?:laptop-(?:asus|dell|acer|lenovo|hp|msi|apple|lg|gigabyte)|may-tinh-nguyen-bo-theo-hang|may-tinh-mini-da-dung)$/i;
+  /^(?:laptop-(?:asus(?:-(?:vivobook|zenbook|tuf|rog|expertbook|proart))?|dell(?:-(?:inspiron|vostro|xps|latitude|alienware|precision))?|acer(?:-(?:aspire|nitro|swift|predator|travelmate))?|lenovo(?:-(?:thinkpad|thinkbook|ideapad|legion|loq|yoga))?|hp(?:-(?:pavilion|victus|omen|envy|probook|elitebook|omnibook))?|msi(?:-(?:modern|katana|cyborg|prestige|stealth|raider|thin|sword))?|apple(?:-(?:macbook|macbook-air|macbook-pro))?|lg(?:-gram)?|gigabyte(?:-(?:aorus|aero|gaming))?)|may-tinh-nguyen-bo-theo-hang|may-tinh-mini-da-dung)$/i;
 
 const CLICKBUY_NON_PRODUCT_SLUG_REGEX =
   /^(?:dien-thoai-(?:iphone|samsung|xiaomi|oppo|vivo|realme|nokia|honor|asus|tcl|google|sony|tecno|infinix|masstel|itel)|(?:iphone|samsung|dien-thoai|ipad|macbook|apple-watch)-cu|thay-pin|ep-kinh|google-pixel|trang)$/i;
@@ -1938,6 +1938,23 @@ const ANPHAT_EXTRA_NON_PRODUCT_FIRST_SEGMENTS = new Set([
 
 const ANPHAT_INFO_SUFFIX_REGEX =
   /(?:^|-)(?:he-thong-showroom|tin-khuyen-mai|tin-tuc|khuyen-mai|bao-hanh|chinh-sach|huong-dan|lien-he|tuyen-dung|gioi-thieu|pc-an-phat)$/i;
+
+const ANPHAT_ACTIVE_DEVICE_SLUG_CUE_REGEX =
+  /(?:^|[-/_])(?:laptop|may-tinh-xach-tay|macbook|ipad|may-tinh-bang|tablet|galaxy-tab|redmi-pad|xiaomi-pad|matepad|lenovo-tab|apple-watch|galaxy-watch|dong-ho|smartwatch|garmin|amazfit|tai-nghe|airpods|earbuds|galaxy-buds|redmi-buds|headphone|headset)(?:[-/_]|$)/i;
+
+const ANPHAT_SMARTPHONE_SLUG_REGEX =
+  /(?:^(?:dien-thoai|iphone|smartphone)(?:-|_|$)|(?:^|[-/_])(?:iphone-\d+|galaxy-(?:s\d+|z-(?:fold|flip)|a\d+|m\d+)|redmi-(?:note|\d+)|poco-[xfmc]\d+|oppo-(?:reno|find)|vivo-[vxyt]\d+|realme-(?:c\d+|gt|\d+)|xiaomi-\d+|google-pixel-\d+)(?:[-/_]|$))/i;
+
+function isExcludedAnPhatPhoneSlug(slugLower: string): boolean {
+  if (ANPHAT_DESK_PHONE_SLUG_REGEX.test(slugLower)) return true;
+  if (/^(?:dien-thoai|iphone|smartphone)(?:-|_|$)/i.test(slugLower)) {
+    return true;
+  }
+  return (
+    ANPHAT_SMARTPHONE_SLUG_REGEX.test(slugLower) &&
+    !ANPHAT_ACTIVE_DEVICE_SLUG_CUE_REGEX.test(slugLower)
+  );
+}
 
 function sha1Hex10(input: string): string {
   const bytes = new TextEncoder().encode(input);
@@ -2155,7 +2172,7 @@ function extractValidRetailItemSlug(
         rawKey.length < 3 ||
         rawKey.length > 512 ||
         rawKeyLower.includes('..') ||
-        ANPHAT_DESK_PHONE_SLUG_REGEX.test(rawKeyLower) ||
+        isExcludedAnPhatPhoneSlug(rawKeyLower) ||
         RETAIL_AUTH_OR_NON_PRODUCT_SLUG_REGEX.test(rawKeyLower) ||
         ANPHAT_INFO_SUFFIX_REGEX.test(lastClean.toLowerCase())
       ) {
@@ -2200,7 +2217,7 @@ function extractValidRetailItemSlug(
       (VIETTELSTORE_NON_PRODUCT_PREFIXES.has(lastSegLower) ||
         VIETTELSTORE_CATEGORY_SLUG_REGEX.test(lastSegLower))) ||
     (retailPlatform === 'anphatpc' &&
-      (ANPHAT_DESK_PHONE_SLUG_REGEX.test(lastSegLower) ||
+      (isExcludedAnPhatPhoneSlug(lastSegLower) ||
         ANPHAT_INFO_SUFFIX_REGEX.test(lastSegLower)))
   ) {
     return null;
@@ -2210,7 +2227,7 @@ function extractValidRetailItemSlug(
     return sanitizeAnPhatItemId(lastSeg) || null;
   }
 
-  return lastSeg;
+  return lastSeg.length <= 120 ? lastSeg : null;
 }
 
 export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
@@ -2608,6 +2625,9 @@ export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
       rawSegments.length === 4 &&
       firstSegLower === 'collections' &&
       rawSegments[2]?.toLowerCase() === 'products';
+    const rawLeaf = rawSegments[rawSegments.length - 1] || '';
+    const vtsLeafLower = rawLeaf.toLowerCase().replace(/\.html?$/i, '');
+    const vtsLeafHasPid = /(?:^|-)pid[1-9]\d{1,14}$/i.test(vtsLeafLower);
     if (
       (!isCollectionProductPath &&
         RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower)) ||
@@ -2618,15 +2638,20 @@ export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
         (rawSegments.length !== 2 ||
           !MEDIAMART_ALLOWED_CATEGORY_PREFIXES.has(firstSegLower))) ||
       (isDomainOrSubdomain(parsedHostLower, 'viettelstore.vn') &&
-        rawSegments.length === 2 &&
-        VIETTELSTORE_NON_PRODUCT_PREFIXES.has(firstSegLower)) ||
+        (rawSegments.length > 2 ||
+          (rawSegments.length === 2 &&
+            (VIETTELSTORE_NON_PRODUCT_PREFIXES.has(firstSegLower) ||
+              (!VIETTELSTORE_PRODUCT_CATEGORY_SEGMENTS.has(firstSegLower) &&
+                !vtsLeafHasPid))) ||
+          (!vtsLeafHasPid &&
+            (VIETTELSTORE_NON_PRODUCT_PREFIXES.has(vtsLeafLower) ||
+              VIETTELSTORE_CATEGORY_SLUG_REGEX.test(vtsLeafLower))))) ||
       (isDomainOrSubdomain(parsedHostLower, 'anphatpc.com.vn') &&
         (ANPHAT_EXTRA_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) ||
           rawSegments.some((s) => /_dm\d+(?:\.html?)?$/i.test(s))))
     ) {
       return '';
     }
-    const rawLeaf = rawSegments[rawSegments.length - 1] || '';
     if (
       RETAIL_STATIC_ASSET_EXT_REGEX.test(rawLeaf) ||
       /\.(?:c|b)$/i.test(rawLeaf) ||
@@ -2678,6 +2703,8 @@ export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
       HACOM_CATEGORY_BRAND_SLUG_REGEX.test(lastSegLower) ||
       CLICKBUY_NON_PRODUCT_SLUG_REGEX.test(lastSegLower) ||
       ANPHAT_DESK_PHONE_SLUG_REGEX.test(lastSegLower) ||
+      (isDomainOrSubdomain(parsedHostLower, 'anphatpc.com.vn') &&
+        isExcludedAnPhatPhoneSlug(lastSegLower)) ||
       /^(?:search|tim-kiem|result|product|products|view)$/.test(lastSegLower)
     ) {
       return '';

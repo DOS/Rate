@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     const sp = request.nextUrl.searchParams;
     const platform = parseBoundedStringParam(sp.get('platform'), 32);
-    const externalId = parseBoundedStringParam(sp.get('externalId'), 120);
+    const externalId = parseBoundedStringParam(sp.get('externalId'), 128);
     const shopId = parseBoundedStringParam(sp.get('shopId'), 120);
     const url = parseBoundedStringParam(sp.get('url'), 1024);
     const title = parseBoundedStringParam(sp.get('title'), 320);

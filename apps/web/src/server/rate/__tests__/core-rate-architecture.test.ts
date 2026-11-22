@@ -15232,6 +15232,199 @@ async function runCoreArchitectureSuite() {
       ).platformItemId,
       null
     );
+    assert.equal(
+      extractProductKeywordFromUrl(
+        'https://viettelstore.vn/dtdd/apple/iphone-16'
+      ),
+      ''
+    );
+    assert.ok(
+      extractProductKeywordFromUrl(
+        'https://viettelstore.vn/dien-thoai/iphone-16-256gb-pid339615.html'
+      ).includes('iphone 16')
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery('https://hacom.vn/laptop-asus-vivobook')
+        .platformItemId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery(
+        'https://hacom.vn/laptop-asus-vivobook-x1407ca-ly008w-ltau1066'
+      ).platformItemId,
+      'laptop-asus-vivobook-x1407ca-ly008w-ltau1066'
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery(
+        'https://www.anphatpc.com.vn/iphone-16-pro-max_id49201.html'
+      ).platformItemId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery(`https://hacom.vn/${'a'.repeat(121)}`)
+        .platformItemId,
+      null,
+      'web HACOM slug bound must match extension 120-char bound'
+    );
+
+    // Legacy tgdd- input on topzone/dienmayxanh generates canonical tz-/dmx- first
+    const tzFromLegacy = buildCandidateExternalItemIds({
+      externalId: 'tgdd-iphone-16-pro-max',
+      platform: 'topzone',
+    });
+    assert.ok(
+      tzFromLegacy.includes('tz-iphone-16-pro-max') &&
+        tzFromLegacy.indexOf('tz-iphone-16-pro-max') <
+          tzFromLegacy.indexOf('tgdd-iphone-16-pro-max'),
+      'canonical tz- candidate must precede legacy tgdd- fallback'
+    );
+
+    // Cross-platform guard: a TGDD row (`platform = tgdd`, `tgdd-iphone-16-pro-max`)
+    // must NEVER match a TopZone URL, and canonical `tz-` beats same-platform `tgdd-`
+    const { inspectProductOrShopUrl, lookupExtensionProduct: lookupExt1850 } =
+      await import('../index');
+    const origFetch1850 = globalThis.fetch;
+    try {
+      const tzMaster = {
+        id: 'master-tz-1850',
+        slug: 'apple-iphone-16-pro-max-256gb-tz',
+        brand: 'Apple',
+        name: 'Apple iPhone 16 Pro Max 256GB',
+        model: 'iPhone 16 Pro Max',
+        status: 'published',
+        min_price: 29_990_000,
+        max_price: 30_990_000,
+        merchant_count: 1,
+        criteria_scores: {},
+        key_specs: {},
+        specifications: {},
+        spec_provenance: {},
+      };
+      const tgddWrongMaster = {
+        ...tzMaster,
+        id: 'master-tgdd-wrong-1850',
+        slug: 'wrong-tgdd-cluster-1850',
+        name: 'Wrong TGDD Cluster',
+      };
+      let scenario: 'cross_platform_only' | 'both_same_platform' =
+        'cross_platform_only';
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const reqUrl = decodeURIComponent(
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        );
+        const json1850 = (body: unknown) =>
+          new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        if (
+          reqUrl.includes('/rest/v1/products') &&
+          reqUrl.includes('platform_item_id=in.')
+        ) {
+          const allRows =
+            scenario === 'cross_platform_only'
+              ? [
+                  {
+                    id: 'prod-tgdd-only',
+                    cluster_id: tgddWrongMaster.id,
+                    merchant_id: 'merch-tgdd',
+                    platform: 'tgdd',
+                    platform_item_id: 'tgdd-iphone-16-pro-max',
+                  },
+                ]
+              : [
+                  {
+                    id: 'prod-tz-legacy',
+                    cluster_id: tgddWrongMaster.id,
+                    merchant_id: 'merch-tz',
+                    platform: 'topzone',
+                    platform_item_id: 'tgdd-iphone-16-pro-max',
+                  },
+                  {
+                    id: 'prod-tz-canonical',
+                    cluster_id: tzMaster.id,
+                    merchant_id: 'merch-tz',
+                    platform: 'topzone',
+                    platform_item_id: 'tz-iphone-16-pro-max',
+                  },
+                ];
+          const filtered = reqUrl.includes('platform=eq.topzone')
+            ? allRows.filter((r) => r.platform === 'topzone')
+            : allRows;
+          return json1850(filtered);
+        }
+        if (reqUrl.includes(`/rest/v1/master_products`)) {
+          if (reqUrl.includes(`id=eq.${tzMaster.id}`))
+            return json1850(tzMaster);
+          if (reqUrl.includes(`id=eq.${tgddWrongMaster.id}`)) {
+            return json1850(tgddWrongMaster);
+          }
+          return json1850([]);
+        }
+        if (reqUrl.includes('/rest/v1/merchants')) {
+          return json1850([
+            {
+              id: 'merch-tz',
+              platform: 'topzone',
+              platform_shop_id: 'tz-mwg-vn',
+              name: 'TopZone',
+              slug: 'topzone',
+              is_official: true,
+              metadata: {},
+            },
+          ]);
+        }
+        return json1850([]);
+      }) as typeof fetch;
+
+      const crossInspected = await inspectProductOrShopUrl(
+        'https://www.topzone.vn/iphone/iphone-16-pro-max'
+      );
+      assert.notEqual(
+        crossInspected.masterProduct?.id,
+        tgddWrongMaster.id,
+        'TopZone URL inspection must never match a TGDD listing row'
+      );
+      const crossExt = await lookupExt1850({
+        platform: 'topzone',
+        url: 'https://www.topzone.vn/iphone/iphone-16-pro-max',
+        title: 'Unknown Nonmatching Title',
+        mode: 'pill',
+      });
+      assert.notEqual(
+        crossExt.masterProduct?.id,
+        tgddWrongMaster.id,
+        'TopZone extension lookup must never match a TGDD listing row'
+      );
+
+      scenario = 'both_same_platform';
+      const sameInspected = await inspectProductOrShopUrl(
+        'https://www.topzone.vn/iphone/iphone-16-pro-max'
+      );
+      assert.equal(
+        sameInspected.masterProduct?.id,
+        tzMaster.id,
+        'Canonical tz- listing must take precedence over legacy tgdd- fallback on TopZone'
+      );
+      const sameExt = await lookupExt1850({
+        platform: 'topzone',
+        url: 'https://www.topzone.vn/iphone/iphone-16-pro-max',
+        title: 'Unknown Nonmatching Title',
+        mode: 'pill',
+      });
+      assert.equal(
+        sameExt.masterProduct?.id,
+        tzMaster.id,
+        'Extension lookup must prefer canonical tz- listing over legacy tgdd- fallback'
+      );
+    } finally {
+      globalThis.fetch = origFetch1850;
+    }
+
     console.log(
       '  ✅ DOS/Rate#1850 Wave 1-3 12 retail platforms web & API parity passed'
     );

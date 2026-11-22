@@ -1285,9 +1285,40 @@ export function buildCandidateExternalItemIds(params: {
     'memoryzone',
   ]);
   const prefix = params.platform ? prefixMap[params.platform] : undefined;
+  const lowerCleanExternalId = cleanExternalId.toLowerCase();
+  const isOverlongRetailSlug = (slug: string): boolean =>
+    Boolean(prefix && params.platform !== 'anphatpc' && slug.length > 120);
+  const barePrefixedExternal =
+    prefix &&
+    lowerCleanExternalId.startsWith(prefix) &&
+    cleanExternalId.length > prefix.length
+      ? cleanExternalId.slice(prefix.length)
+      : cleanExternalId;
+  if (isOverlongRetailSlug(barePrefixedExternal)) {
+    return [];
+  }
+
+  // When a legacy `tgdd-` externalId is queried on `topzone` or `dienmayxanh`,
+  // enqueue the canonical `tz-` / `dmx-` IDs first so canonical listings win.
+  if (
+    prefix &&
+    (params.platform === 'topzone' || params.platform === 'dienmayxanh') &&
+    /^tgdd-/i.test(cleanExternalId)
+  ) {
+    const bareMwg = cleanExternalId.replace(/^tgdd-/i, '');
+    if (bareMwg && bareMwg.length <= 120) {
+      for (const canonicalCandidate of [
+        `${prefix}${bareMwg}`,
+        `${prefix}${bareMwg.toLowerCase()}`,
+      ]) {
+        if (isValidExternalEntityId(canonicalCandidate)) {
+          candidateItemIds.add(canonicalCandidate);
+        }
+      }
+    }
+  }
 
   candidateItemIds.add(cleanExternalId);
-  const lowerCleanExternalId = cleanExternalId.toLowerCase();
   if (isValidExternalEntityId(lowerCleanExternalId)) {
     candidateItemIds.add(lowerCleanExternalId);
   }
@@ -1311,6 +1342,7 @@ export function buildCandidateExternalItemIds(params: {
       rawSlugs.push(cleanExternalId.slice(prefix.length));
     }
     for (const slugCandidate of rawSlugs) {
+      if (isOverlongRetailSlug(slugCandidate)) continue;
       const lowerSlug = slugCandidate.toLowerCase();
       const prefixed = `${prefix}${slugCandidate}`;
       if (isValidExternalEntityId(prefixed)) {
@@ -1340,12 +1372,14 @@ export function buildCandidateExternalItemIds(params: {
   }
   if (params.platform === 'topzone' || params.platform === 'dienmayxanh') {
     const bareMwg = cleanExternalId.replace(/^(?:tz|dmx|tgdd)-/i, '');
-    for (const mwgCandidate of [
-      `tgdd-${bareMwg}`,
-      `tgdd-${bareMwg.toLowerCase()}`,
-    ]) {
-      if (bareMwg && isValidExternalEntityId(mwgCandidate)) {
-        candidateItemIds.add(mwgCandidate);
+    if (bareMwg && bareMwg.length <= 120) {
+      for (const mwgCandidate of [
+        `tgdd-${bareMwg}`,
+        `tgdd-${bareMwg.toLowerCase()}`,
+      ]) {
+        if (isValidExternalEntityId(mwgCandidate)) {
+          candidateItemIds.add(mwgCandidate);
+        }
       }
     }
   }
@@ -1531,15 +1565,19 @@ export async function lookupExtensionProduct(
   if (!matchedMaster && candidateItemIds.size > 0) {
     const client = getRateClient();
     if (client) {
-      const { data: prodRows, error: prodErr } = await client
+      const orderedCandidates = Array.from(candidateItemIds);
+      let prodQuery = client
         .from('products')
-        .select('cluster_id, platform_item_id')
-        .in('platform_item_id', Array.from(candidateItemIds))
-        .not('cluster_id', 'is', null)
-        .limit(5);
+        .select('cluster_id, platform, platform_item_id')
+        .in('platform_item_id', orderedCandidates)
+        .not('cluster_id', 'is', null);
+      if (platform) {
+        prodQuery = prodQuery.eq('platform', platform);
+      }
+      const { data: prodRows, error: prodErr } = await prodQuery.limit(10);
       if (prodErr) {
         log.error('extension_lookup_products_failed', {
-          candidateItemIds: Array.from(candidateItemIds),
+          candidateItemIds: orderedCandidates,
           message: prodErr.message,
           code: prodErr.code,
         });
@@ -1548,9 +1586,20 @@ export async function lookupExtensionProduct(
       const matchedProd = (
         (prodRows || []) as Array<{
           cluster_id: string | null;
+          platform?: string | null;
           platform_item_id: string;
         }>
-      ).find((r) => Boolean(r.cluster_id));
+      )
+        .filter(
+          (r) =>
+            Boolean(r.cluster_id) &&
+            (!platform || !r.platform || r.platform === platform)
+        )
+        .sort((a, b) => {
+          const ai = orderedCandidates.indexOf(a.platform_item_id);
+          const bi = orderedCandidates.indexOf(b.platform_item_id);
+          return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+        })[0];
       if (matchedProd?.cluster_id) {
         // A draft master has no product page (DOS/Rate#769). The listing is
         // then known to be that model, so no catalogue guess either.
@@ -1591,7 +1640,8 @@ export async function lookupExtensionProduct(
     candidateItemIds.size > 0
   ) {
     const listingItem = await resolveListingItemContext(
-      Array.from(candidateItemIds)
+      Array.from(candidateItemIds),
+      platform
     );
     if (listingItem === 'no_variant') {
       // The listing's Item is known but has no page yet: no catalogue guess.
