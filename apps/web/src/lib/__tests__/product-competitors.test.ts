@@ -10,7 +10,9 @@ import {
 } from '../product-competitors';
 import {
   buildPeerCompareHref,
+  buildPeerCompareLink,
   buildPeerItemSlugMap,
+  isPeerItemGroupingDegraded,
   resolveCanonicalPeerSlug,
   resolvePeerCompareToken,
   resolvePeerVersusHref,
@@ -493,7 +495,7 @@ async function main() {
       return json([]);
     }) as typeof fetch;
 
-    const { groupCatalogRowsByItem } =
+    const { groupCatalogRowsByItem, groupCatalogRowsByItemWithStatus } =
       await import('../../server/rate/item-directory');
     const currentProduct = storedCategoryPeers[1]!; // apple-iphone-16-pro-256gb (28.99M)
 
@@ -822,6 +824,11 @@ async function main() {
     delete process.env.RATE_ITEM_MODEL;
     const groupedOff = await groupCatalogRowsByItem(storedCategoryPeers);
     assert.equal(groupedOff, storedCategoryPeers);
+    const statusOff =
+      await groupCatalogRowsByItemWithStatus(storedCategoryPeers);
+    assert.equal(statusOff.rows, storedCategoryPeers);
+    assert.equal(statusOff.itemModelActive, false);
+    assert.equal(statusOff.degraded, false);
     assert.equal(
       buildPeerItemSlugMap(
         { slug: currentProduct.slug, itemSlug: null },
@@ -833,9 +840,384 @@ async function main() {
       resolvePeerVersusHref(
         currentProduct.slug,
         'samsung-galaxy-s25-ultra-256gb',
-        null
+        null,
+        { degraded: statusOff.degraded }
       ),
       '/compare/apple-iphone-16-pro-256gb-vs-samsung-galaxy-s25-ultra-256gb'
+    );
+
+    // 7. DOS/Rate#1834: compareAllCount parity with emitted slugs= tokens,
+    //    leading-underscore Item slugs on detail vs 1v1/compare links, and
+    //    partial link-read fallback suppression.
+
+    // 7a. `buildPeerCompareLink` derives `count` from the exact filtered tokens
+    //     emitted in `slugs=` so a peer with a valid `item_slug` paired with an
+    //     unsafe raw master `slug` (e.g. `tostring`, `constructor`, `none`) can
+    //     never cause a button-count mismatch.
+    const peersWithUnsafeMaster = withoutCurrentItemPeers(
+      [
+        {
+          id: 'v-unsafe-tostring',
+          slug: 'tostring',
+          item_slug: 'valid-rival-tostring',
+          min_price: 28_500_000,
+        },
+        {
+          id: 'v-unsafe-ctor',
+          slug: 'constructor',
+          item_slug: 'valid-rival-ctor',
+          min_price: 28_700_000,
+        },
+        {
+          id: V_S25_256,
+          slug: 'samsung-galaxy-s25-ultra-256gb',
+          item_slug: 'samsung-galaxy-s25-ultra',
+          variant_key: '256gb',
+          min_price: 27_990_000,
+        },
+      ],
+      {
+        productId: currentProduct.id,
+        productSlug: currentProduct.slug,
+        itemSlug: 'Apple-iPhone-16-Pro',
+      }
+    );
+    assert.equal(
+      peersWithUnsafeMaster.length,
+      3,
+      'valid item_slug keeps rival rows in peer cards despite unsafe raw master slug'
+    );
+    const currentCompareRow = {
+      id: currentProduct.id,
+      slug: currentProduct.slug,
+      item_slug: 'Apple-iPhone-16-Pro',
+      variant_key: '256gb',
+    };
+    const compareLinkFiltered = buildPeerCompareLink(
+      'smartphones',
+      [currentCompareRow, ...peersWithUnsafeMaster],
+      4
+    );
+    const emittedSlugsParam =
+      new URL(`https://rate.vn${compareLinkFiltered.href}`).searchParams.get(
+        'slugs'
+      ) ?? '';
+    const emittedTokens = emittedSlugsParam.split(',').filter(Boolean);
+    assert.equal(compareLinkFiltered.count, 2);
+    assert.equal(compareLinkFiltered.count, emittedTokens.length);
+    assert.deepEqual(compareLinkFiltered.tokens, [
+      'Apple-iPhone-16-Pro@256gb',
+      'samsung-galaxy-s25-ultra@256gb',
+    ]);
+    assert.equal(
+      compareLinkFiltered.href,
+      buildPeerCompareHref(
+        'smartphones',
+        [currentCompareRow, ...peersWithUnsafeMaster],
+        4
+      )
+    );
+
+    // When every rival has an unsafe raw master slug, only the current phone is
+    // emitted (`count === 1`), so `compareAllCount >= 2` hides the button.
+    const compareLinkSingleLeft = buildPeerCompareLink(
+      'smartphones',
+      [
+        currentCompareRow,
+        {
+          id: 'v-unsafe-only',
+          slug: 'tostring',
+          item_slug: 'valid-rival-only',
+        },
+      ],
+      4
+    );
+    assert.equal(compareLinkSingleLeft.count, 1);
+    assert.deepEqual(compareLinkSingleLeft.tokens, [
+      'Apple-iPhone-16-Pro@256gb',
+    ]);
+
+    // 7b. Leading-underscore Item slugs resolve directly in
+    //     `resolveCanonicalPeerSlug` (matching `resolveCatalogSlug`) while
+    //     staying guarded in `resolvePeerVersusHref` and `/compare?slugs=`.
+    assert.equal(
+      resolveCanonicalPeerSlug({
+        slug: 'rival-256gb',
+        item_slug: '_rival',
+      }),
+      '_rival',
+      'leading-underscore Item slug resolves directly for /{category}/{slug}'
+    );
+    assert.equal(
+      resolveCanonicalPeerSlug({
+        slug: 'rival-512gb',
+        item_slug: '_Rival_Pro_2026',
+      }),
+      '_Rival_Pro_2026',
+      'mixed-case leading-underscore Item slug is preserved'
+    );
+    assert.equal(
+      resolveCanonicalPeerSlug({
+        slug: 'rival-512gb',
+        item_slug: '_Rival_Pro.2026',
+      }),
+      'rival-512gb',
+      'dotted leading-underscore Item slug falls back because proxy/rewrites require leading alphanumeric on dotted routes'
+    );
+    assert.equal(
+      resolveCanonicalPeerSlug({
+        slug: '_Rival_Pro.2026',
+      }),
+      '',
+      'dotted leading-underscore standalone slug returns empty string'
+    );
+    assert.equal(
+      resolveCanonicalPeerSlug({
+        slug: 'rival-512gb',
+        item_slug: 'Apple.iPhone.16',
+      }),
+      'Apple.iPhone.16',
+      'dotted Item slug starting with ASCII alphanumeric remains valid'
+    );
+    for (const invalidUnderscoreOrDot of [
+      '.rival',
+      '___',
+      '---',
+      '__proto__',
+    ]) {
+      assert.equal(
+        resolveCanonicalPeerSlug({
+          slug: 'rival-256gb',
+          item_slug: invalidUnderscoreOrDot,
+        }),
+        'rival-256gb',
+        `non-catalogue item_slug ${invalidUnderscoreOrDot} still falls back`
+      );
+    }
+    assert.deepEqual(
+      withoutCurrentItemPeers(
+        [
+          { id: 'u-1', slug: 'rival-128gb', item_slug: '_rival' },
+          { id: 'u-2', slug: 'rival-256gb', item_slug: '_rival' },
+        ],
+        { productSlug: currentProduct.slug }
+      ).map((p) => p.id),
+      ['u-1'],
+      'variants sharing a leading-underscore Item slug deduplicate to one rival'
+    );
+    const underscoreMap = buildPeerItemSlugMap(
+      { slug: currentProduct.slug, itemSlug: 'Apple-iPhone-16-Pro' },
+      [
+        { slug: 'rival-256gb', item_slug: '_rival' },
+        { slug: '_rival-512gb', item_slug: '_rival-only' },
+      ]
+    );
+    const vsUnderscoreSafeVariant = resolvePeerVersusHref(
+      currentProduct.slug,
+      'rival-256gb',
+      underscoreMap
+    );
+    assert.equal(
+      vsUnderscoreSafeVariant,
+      '/compare/Apple-iPhone-16-Pro-vs-rival-256gb',
+      'leading-underscore Item slug is guarded out of 1v1 URL and falls back to safe variant slug'
+    );
+    assert.deepEqual(
+      planVersusRoute(
+        { slug: 'Apple-iPhone-16-Pro', resolution: selfRes },
+        {
+          slug: 'rival-256gb',
+          resolution: {
+            kind: 'variant',
+            item: {
+              id: '11111111-1111-4111-8111-666666661834',
+              slug: '_rival',
+              default_variant_id: '22222222-2222-4222-8222-666666660256',
+            },
+            variant: {
+              id: '22222222-2222-4222-8222-666666660256',
+              slug: 'rival-256gb',
+              variant_key: '256gb',
+            },
+            variants: [
+              {
+                id: '22222222-2222-4222-8222-666666660256',
+                slug: 'rival-256gb',
+                variant_key: '256gb',
+              },
+            ],
+            retired: false,
+          },
+        }
+      ),
+      {
+        kind: 'render',
+        slugA: 'apple-iphone-16-pro-256gb',
+        slugB: 'rival-256gb',
+        canonical: '/compare/Apple-iPhone-16-Pro-vs-rival-256gb',
+      },
+      'fallback 1v1 URL for leading-underscore Item renders without 308 or 404'
+    );
+    assert.equal(
+      resolvePeerVersusHref(currentProduct.slug, '_rival-512gb', underscoreMap),
+      null,
+      'suppresses 1v1 link when both Item slug and variant slug have leading underscore'
+    );
+    assert.equal(
+      resolvePeerCompareToken({
+        id: 'u-2',
+        slug: 'rival-256gb',
+        item_slug: '_rival',
+        variant_key: '256gb',
+      }),
+      'rival-256gb',
+      'multi-item compare token uses safe variant slug when Item slug has leading underscore'
+    );
+    assert.equal(
+      resolvePeerCompareToken({
+        id: 'u-3',
+        slug: '_rival-512gb',
+        item_slug: '_rival-only',
+        variant_key: '512gb',
+      }),
+      '',
+      'drops multi-item compare token when both Item slug and variant slug fail /compare SLUG_REGEX'
+    );
+    assert.equal(
+      resolvePeerCompareToken({
+        slug: 'rival-256gb',
+        item_slug: 'infinity',
+      }),
+      'rival-256gb',
+      'sentinel Item slug infinity falls back to safe variant slug in compare token'
+    );
+    const retailPinLink = buildPeerCompareLink('smartphones', [
+      {
+        id: 'v-retail',
+        slug: '_retail-1tb',
+        item_slug: 'acme',
+        variant_key: '1024gb',
+      },
+      {
+        id: V_S25_256,
+        slug: 'samsung-galaxy-s25-ultra-256gb',
+        item_slug: 'samsung-galaxy-s25-ultra',
+        variant_key: '256gb',
+      },
+      {
+        id: 'u-3',
+        slug: '_rival-512gb',
+        item_slug: '_rival-only',
+        variant_key: '512gb',
+      },
+    ]);
+    assert.equal(retailPinLink.count, 2);
+    assert.equal(
+      retailPinLink.href,
+      '/compare?cat=smartphones&slugs=acme@1024gb,samsung-galaxy-s25-ultra@256gb&variant.acme%401024gb=_retail-1tb&variant.samsung-galaxy-s25-ultra%40256gb=samsung-galaxy-s25-ultra-256gb'
+    );
+
+    // 7c. Partial link-read fallback (`groupCatalogRowsByItemWithStatus`):
+    //     when `RATE_ITEM_MODEL` is on and the peer Item link batch read fails,
+    //     `degraded` is true and 1v1 links are suppressed rather than linking
+    //     against a raw master slug whose Item may hold `-vs-`.
+    process.env.RATE_ITEM_MODEL = 'item';
+    const healthyStatus =
+      await groupCatalogRowsByItemWithStatus(storedCategoryPeers);
+    assert.equal(healthyStatus.itemModelActive, true);
+    assert.equal(healthyStatus.degraded, false);
+
+    let linkFailureMode: 'http_500' | 'missing_schema' = 'http_500';
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify(
+          linkFailureMode === 'missing_schema'
+            ? { code: '42P01', message: 'relation "rate.items" does not exist' }
+            : { code: 'XX000', message: 'upstream connection reset' }
+        ),
+        {
+          status: linkFailureMode === 'missing_schema' ? 404 : 500,
+          headers: { 'content-type': 'application/json' },
+        }
+      )) as typeof fetch;
+
+    const degradedStatus =
+      await groupCatalogRowsByItemWithStatus(storedCategoryPeers);
+    assert.equal(degradedStatus.rows, storedCategoryPeers);
+    assert.equal(degradedStatus.itemModelActive, true);
+    assert.equal(degradedStatus.degraded, true);
+    assert.equal(
+      await groupCatalogRowsByItem(storedCategoryPeers),
+      storedCategoryPeers,
+      'groupCatalogRowsByItem keeps exact array fallback compatibility'
+    );
+
+    const degradedSlugMap = buildPeerItemSlugMap(
+      { slug: currentProduct.slug, itemSlug: 'Apple-iPhone-16-Pro' },
+      degradedStatus.rows
+    );
+    const itemRouteDegraded = isPeerItemGroupingDegraded({
+      currentItemSlug: 'Apple-iPhone-16-Pro',
+      itemModelActive: degradedStatus.itemModelActive,
+      degraded: degradedStatus.degraded,
+    });
+    assert.equal(itemRouteDegraded, true);
+    assert.equal(
+      resolvePeerVersusHref(
+        currentProduct.slug,
+        'rog-vs-edition-256gb',
+        degradedSlugMap,
+        { degraded: itemRouteDegraded }
+      ),
+      null,
+      'suppresses mixed Item-vs-fallback 1v1 link when rival may belong to a -vs- Item'
+    );
+    assert.equal(
+      resolvePeerVersusHref(
+        currentProduct.slug,
+        'samsung-galaxy-s25-ultra-256gb',
+        degradedSlugMap,
+        { degraded: itemRouteDegraded }
+      ),
+      null,
+      'suppresses 1v1 link whenever peer Item grouping degraded'
+    );
+
+    linkFailureMode = 'missing_schema';
+    const missingSchemaStatus =
+      await groupCatalogRowsByItemWithStatus(storedCategoryPeers);
+    assert.equal(missingSchemaStatus.rows, storedCategoryPeers);
+    assert.equal(missingSchemaStatus.itemModelActive, false);
+    assert.equal(missingSchemaStatus.degraded, false);
+    const mixedItemRouteSchemaFallback = isPeerItemGroupingDegraded({
+      currentItemSlug: 'Apple-iPhone-16-Pro',
+      itemModelActive: missingSchemaStatus.itemModelActive,
+      degraded: missingSchemaStatus.degraded,
+    });
+    assert.equal(
+      resolvePeerVersusHref(
+        currentProduct.slug,
+        'rog-vs-edition-256gb',
+        degradedSlugMap,
+        { degraded: mixedItemRouteSchemaFallback }
+      ),
+      null,
+      'Item route still suppresses 1v1 links if peer Item model became unavailable mid-render'
+    );
+    const variantRouteSchemaFallback = isPeerItemGroupingDegraded({
+      currentItemSlug: null,
+      itemModelActive: missingSchemaStatus.itemModelActive,
+      degraded: missingSchemaStatus.degraded,
+    });
+    assert.equal(
+      resolvePeerVersusHref(
+        currentProduct.slug,
+        'samsung-galaxy-s25-ultra-256gb',
+        null,
+        { degraded: variantRouteSchemaFallback }
+      ),
+      '/compare/apple-iphone-16-pro-256gb-vs-samsung-galaxy-s25-ultra-256gb',
+      'variant route with M1+M2 unapplied keeps legacy 1v1 links'
     );
   } finally {
     globalThis.fetch = prevFetch;
@@ -857,16 +1239,23 @@ async function main() {
     resetRateClientForTests();
   }
 
-  // Verify ProductDetailView wires groupCatalogRowsByItem, canonical Item hrefs,
-  // and guarded 1v1 links (#1819).
+  // Verify ProductDetailView wires groupCatalogRowsByItemWithStatus,
+  // buildPeerCompareLink, canonical Item hrefs, and degraded-aware 1v1 links
+  // (#1819, #1834).
   const pdvSource = readFileSync(
     join(here, '../../app/[locale]/smartphones/[slug]/page.tsx'),
     'utf8'
   );
-  assert.match(pdvSource, /groupCatalogRowsByItem\(storedCategoryPeers\)/);
+  assert.match(
+    pdvSource,
+    /groupCatalogRowsByItemWithStatus\(storedCategoryPeers\)/
+  );
+  assert.match(pdvSource, /buildPeerCompareLink\(/);
+  assert.match(pdvSource, /currentCompareCount > 0 && compareAllCount >= 2/);
   assert.match(pdvSource, /withoutCurrentItemPeers\(/);
   assert.match(pdvSource, /catalogRowSlug\(peer\)/);
   assert.match(pdvSource, /resolvePeerVersusHref\(/);
+  assert.match(pdvSource, /\{\s*degraded:\s*peerItemLinksDegraded\s*\}/);
   assert.match(pdvSource, /isParseableVersusPair\(/);
 
   console.warn('✅ Product competitors suite passed');
