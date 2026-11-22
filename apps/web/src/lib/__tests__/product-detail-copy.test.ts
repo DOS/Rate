@@ -8,6 +8,7 @@ import {
   untranslatedViWords,
 } from '../spec-localizer';
 import { computeBayesianRatingSummary } from '../rate-api';
+import { resolveShareAuditOgDownloadUrl } from '../../components/leaderboard/ProductShareAuditButton';
 
 type Messages = Record<string, Record<string, string>>;
 
@@ -260,6 +261,77 @@ function main() {
   assert.equal(
     localizeSpecValue('Wireless fast charging (0-80% in 30 min)', 'en'),
     'Wireless fast charging (0-80% in 30 min)'
+  );
+
+  // DOS/Rate#1865: 1-click Truth Card PNG download copy & URL resolver across vi/en/cs
+  for (const locale of ['vi', 'en', 'cs'] as const) {
+    const pd = readLocale(locale).productDetail!;
+    for (const k of [
+      'shareAuditDownloadPngBtn',
+      'shareAuditDownloadPngTitle',
+    ] as const) {
+      const val = pd[k];
+      assert.ok(val && val.trim().length > 0, `${locale}.productDetail.${k}`);
+      assert.ok(
+        !/[\u2013\u2014]/.test(val),
+        `${locale}.productDetail.${k} must not contain en-dash or em-dash`
+      );
+    }
+  }
+
+  assert.equal(
+    resolveShareAuditOgDownloadUrl({
+      slug: 'apple-iphone-17-pro-256gb',
+      locale: 'vi',
+    }),
+    '/api/v1/rate/og?type=product&slug=apple-iphone-17-pro-256gb&locale=vi&format=social&download=1'
+  );
+  assert.equal(
+    resolveShareAuditOgDownloadUrl({
+      pathname: '/smartphones/samsung-galaxy-s26-ultra-256gb',
+      locale: 'cs',
+    }),
+    '/api/v1/rate/og?type=product&slug=samsung-galaxy-s26-ultra-256gb&locale=cs&format=social&download=1'
+  );
+  assert.equal(
+    resolveShareAuditOgDownloadUrl({
+      pathname: '/en/laptops/macbook-pro-m4-14-inch',
+      locale: 'en',
+    }),
+    '/api/v1/rate/og?type=product&slug=macbook-pro-m4-14-inch&locale=en&format=social&download=1'
+  );
+  assert.equal(
+    resolveShareAuditOgDownloadUrl({
+      pathname: '/smartphones/apple-iphone-17-pro',
+      search: '?v=512gb',
+      locale: 'vi',
+    }),
+    '/api/v1/rate/og?type=product&slug=apple-iphone-17-pro&variant=512gb&locale=vi&format=social&download=1'
+  );
+  assert.equal(
+    resolveShareAuditOgDownloadUrl({
+      slug: '../evil',
+      pathname: '/deals',
+      locale: 'vi',
+    }),
+    null
+  );
+
+  const shareBtnSrc = readFileSync(
+    new URL(
+      '../../components/leaderboard/ProductShareAuditButton.tsx',
+      import.meta.url
+    ),
+    'utf8'
+  );
+  assert.ok(
+    shareBtnSrc.includes('data-testid="product-export-og-png-btn"') &&
+      shareBtnSrc.includes("t('shareAuditDownloadPngBtn')"),
+    'ProductShareAuditButton must render 1-click Truth Card PNG button inside ExportMenu'
+  );
+  assert.ok(
+    !/[\u2013\u2014]/.test(shareBtnSrc),
+    'ProductShareAuditButton must contain zero em-dashes or en-dashes'
   );
 
   console.warn('✅ Product detail copy suite passed');

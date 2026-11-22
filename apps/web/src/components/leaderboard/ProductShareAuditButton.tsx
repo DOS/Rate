@@ -18,8 +18,14 @@ import {
   localizeDecimalPoints,
 } from '@/lib/locale-format';
 import { formatScoreFixed, roundScore } from '@/lib/rating-display';
+import {
+  buildOgTruthCardPath,
+  isValidOgSlug,
+  isValidOgVariantKey,
+} from '@/lib/seo';
 
 interface ProductShareAuditButtonProps {
+  readonly slug?: string;
   readonly name: string;
   readonly brand: string;
   readonly modelKey: string;
@@ -30,6 +36,55 @@ interface ProductShareAuditButtonProps {
   readonly offerCount: number;
   readonly keySpecLine?: string;
   readonly radarSignal?: RadarSignal;
+}
+
+const PRODUCT_DETAIL_PATH_SLUG_RE =
+  /^\/(?:(?:vi|en|cs)\/)?(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([^/?#]+)\/?$/i;
+
+export function resolveShareAuditOgDownloadUrl(input: {
+  readonly slug?: string | null;
+  readonly pathname?: string | null;
+  readonly search?: string | null;
+  readonly locale?: string | null;
+}): string | null {
+  const explicitSlug =
+    typeof input.slug === 'string'
+      ? input.slug.replace(/\p{Cc}+/gu, '').trim()
+      : '';
+  let resolvedSlug = isValidOgSlug(explicitSlug, 120) ? explicitSlug : '';
+  let resolvedVariant: string | null = null;
+
+  if (!resolvedSlug && typeof input.pathname === 'string') {
+    const match = input.pathname.trim().match(PRODUCT_DETAIL_PATH_SLUG_RE);
+    if (match?.[1]) {
+      try {
+        const decoded = decodeURIComponent(match[1]).trim();
+        if (isValidOgSlug(decoded, 120)) {
+          resolvedSlug = decoded;
+        }
+      } catch {
+        // Ignore malformed percent-encoding in pathname.
+      }
+    }
+    if (resolvedSlug && typeof input.search === 'string' && input.search) {
+      const rawVar = new URLSearchParams(input.search).get('v');
+      const cleanVar =
+        typeof rawVar === 'string' ? rawVar.trim().toLowerCase() : '';
+      if (isValidOgVariantKey(cleanVar)) {
+        resolvedVariant = cleanVar;
+      }
+    }
+  }
+
+  if (!resolvedSlug) return null;
+  return buildOgTruthCardPath({
+    type: 'product',
+    slug: resolvedSlug,
+    variant: resolvedVariant,
+    locale: input.locale,
+    format: 'social',
+    download: true,
+  });
 }
 
 export function sanitizeShareAuditText(
@@ -205,6 +260,7 @@ export function normalizeShareAuditFields(input: {
 }
 
 export default function ProductShareAuditButton({
+  slug,
   name,
   brand,
   modelKey,
@@ -346,11 +402,40 @@ export default function ProductShareAuditButton({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadTruthCardPng = () => {
+    if (typeof window === 'undefined') return;
+    const downloadUrl = resolveShareAuditOgDownloadUrl({
+      slug,
+      pathname: window.location.pathname,
+      search: window.location.search,
+      locale,
+    });
+    if (!downloadUrl) return;
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `rate-truth-card-${safeModelKeyToken}-4x5.png`;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   return (
     <div className="d-inline-flex align-items-center flex-wrap gap-2">
       <ExportMenu label={t('exportMenu')}>
         {(close) => (
           <>
+            <button
+              type="button"
+              onClick={() => {
+                handleDownloadTruthCardPng();
+                close();
+              }}
+              title={t('shareAuditDownloadPngTitle')}
+              data-testid="product-export-og-png-btn"
+            >
+              {t('shareAuditDownloadPngBtn')}
+            </button>
             <button
               type="button"
               onClick={handleCopyMarkdown}
