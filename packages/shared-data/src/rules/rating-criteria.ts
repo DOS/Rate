@@ -12,36 +12,74 @@ import type { SpecGroupKey } from './spec-template.js';
 /** Bump whenever a list, a key or a weight changes. */
 export const RATING_CRITERIA_VERSION = 1;
 
-export type RatingCriterionKey =
-  | 'performance'
-  | 'camera'
-  | 'battery'
-  | 'display'
-  | 'design'
-  | 'value'
-  | 'sound'
-  | 'software'
-  | 'keyboard'
-  | 'thermals'
-  | 'health'
-  | 'apps'
-  | 'anc'
-  | 'comfort'
-  | 'calls'
-  | 'service_quality'
-  | 'price'
-  | 'attitude'
-  | 'speed';
+const CRITERION_KEYS = [
+  'performance',
+  'camera',
+  'battery',
+  'display',
+  'design',
+  'value',
+  'sound',
+  'software',
+  'keyboard',
+  'thermals',
+  'health',
+  'apps',
+  'anc',
+  'comfort',
+  'calls',
+  'service_quality',
+  'price',
+  'attitude',
+  'speed',
+] as const;
+
+export type RatingCriterionKey = (typeof CRITERION_KEYS)[number];
+
+export const RATING_CRITERION_KEYS: readonly RatingCriterionKey[] =
+  CRITERION_KEYS;
+
+const KNOWN_CRITERION_KEY_SET = new Set<string>(RATING_CRITERION_KEYS);
+const LOCALE_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+export function isRatingCriterionKey(key: unknown): key is RatingCriterionKey {
+  const candidate = key;
+  return (
+    typeof candidate === 'string' && KNOWN_CRITERION_KEY_SET.has(candidate)
+  );
+}
 
 export interface RatingCriterion {
   key: RatingCriterionKey;
-  label: { vi: string; en: string };
+  label: { vi: string; en: string; cs: string };
   /** Share of the review star, in percent; a category's weights sum to 100. */
   weight: number;
   /** The spec group shown beside the score, when one fits. */
   specGroup: SpecGroupKey | null;
   /** A criterion every review must rate ("Đáng tiền", D5). */
   required: boolean;
+}
+
+/**
+ * Localized label of a criterion for `vi`, `en`, or `cs` (including regional
+ * tags such as `cs-CZ`), defaulting blank/missing inputs to `vi` and falling
+ * back to English for unknown non-vi locales.
+ */
+export function getRatingCriterionLabel(
+  criterion: Pick<RatingCriterion, 'label'>,
+  locale: string | null | undefined
+): string {
+  const raw = locale;
+  const cleaned =
+    typeof raw === 'string'
+      ? raw.replace(LOCALE_CONTROL_CHARS_RE, '').trim()
+      : '';
+  const primary = cleaned
+    ? cleaned.slice(0, 32).toLowerCase().split(/[-_]/)[0]
+    : 'vi';
+  if (primary === 'vi') return criterion.label.vi;
+  if (primary === 'cs') return criterion.label.cs;
+  return criterion.label.en;
 }
 
 /** The most criteria a review may leave unrated ("Chưa dùng tới", D5). */
@@ -51,68 +89,182 @@ const c = (
   key: RatingCriterionKey,
   vi: string,
   en: string,
+  cs: string,
   weight: number,
   specGroup: SpecGroupKey | null,
   required = false
-): RatingCriterion => ({ key, label: { vi, en }, weight, specGroup, required });
+): RatingCriterion => ({
+  key,
+  label: { vi, en, cs },
+  weight,
+  specGroup,
+  required,
+});
 
-const VALUE = c('value', 'Đáng tiền', 'Value for money', 15, null, true);
+const VALUE = c(
+  'value',
+  'Đáng tiền',
+  'Value for money',
+  'Poměr cena / výkon',
+  15,
+  null,
+  true
+);
 
 const RATING_CRITERIA: Readonly<Record<string, readonly RatingCriterion[]>> = {
   smartphones: [
-    c('performance', 'Hiệu năng', 'Performance', 20, 'hardware'),
-    c('camera', 'Camera', 'Camera', 20, 'camera'),
-    c('battery', 'Pin và sạc', 'Battery and charging', 20, 'battery'),
-    c('display', 'Màn hình', 'Display', 15, 'display'),
-    c('design', 'Thiết kế và độ bền', 'Design and build', 10, 'design'),
+    c('performance', 'Hiệu năng', 'Performance', 'Výkon', 20, 'hardware'),
+    c('camera', 'Camera', 'Camera', 'Fotoaparát', 20, 'camera'),
+    c(
+      'battery',
+      'Pin và sạc',
+      'Battery and charging',
+      'Baterie a nabíjení',
+      20,
+      'battery'
+    ),
+    c('display', 'Màn hình', 'Display', 'Displej', 15, 'display'),
+    c(
+      'design',
+      'Thiết kế và độ bền',
+      'Design and build',
+      'Design a zpracování',
+      10,
+      'design'
+    ),
     VALUE,
   ],
   tablets: [
-    c('display', 'Màn hình', 'Display', 20, 'display'),
-    c('performance', 'Hiệu năng', 'Performance', 20, 'hardware'),
-    c('battery', 'Pin', 'Battery', 15, 'battery'),
-    c('sound', 'Loa và giải trí', 'Speakers and media', 10, 'multimedia'),
-    c('software', 'Phần mềm và phụ kiện', 'Software and accessories', 10, null),
-    c('design', 'Thiết kế', 'Design', 10, 'design'),
+    c('display', 'Màn hình', 'Display', 'Displej', 20, 'display'),
+    c('performance', 'Hiệu năng', 'Performance', 'Výkon', 20, 'hardware'),
+    c('battery', 'Pin', 'Battery', 'Baterie', 15, 'battery'),
+    c(
+      'sound',
+      'Loa và giải trí',
+      'Speakers and media',
+      'Reproduktory a multimédia',
+      10,
+      'multimedia'
+    ),
+    c(
+      'software',
+      'Phần mềm và phụ kiện',
+      'Software and accessories',
+      'Software a příslušenství',
+      10,
+      null
+    ),
+    c('design', 'Thiết kế', 'Design', 'Design', 10, 'design'),
     VALUE,
   ],
   laptops: [
-    c('performance', 'Hiệu năng', 'Performance', 25, 'hardware'),
-    c('display', 'Màn hình', 'Display', 15, 'display'),
-    c('battery', 'Pin', 'Battery', 15, 'battery'),
-    c('keyboard', 'Bàn phím và touchpad', 'Keyboard and touchpad', 10, null),
-    c('thermals', 'Tản nhiệt và độ ồn', 'Thermals and noise', 10, 'hardware'),
-    c('design', 'Thiết kế và độ bền', 'Design and build', 10, 'design'),
+    c('performance', 'Hiệu năng', 'Performance', 'Výkon', 25, 'hardware'),
+    c('display', 'Màn hình', 'Display', 'Displej', 15, 'display'),
+    c('battery', 'Pin', 'Battery', 'Baterie', 15, 'battery'),
+    c(
+      'keyboard',
+      'Bàn phím và touchpad',
+      'Keyboard and touchpad',
+      'Klávesnice a touchpad',
+      10,
+      null
+    ),
+    c(
+      'thermals',
+      'Tản nhiệt và độ ồn',
+      'Thermals and noise',
+      'Chlazení a hlučnost',
+      10,
+      'hardware'
+    ),
+    c(
+      'design',
+      'Thiết kế và độ bền',
+      'Design and build',
+      'Design a zpracování',
+      10,
+      'design'
+    ),
     VALUE,
   ],
   smartwatches: [
-    c('health', 'Theo dõi sức khoẻ', 'Health tracking', 25, null),
-    c('battery', 'Pin', 'Battery', 20, 'battery'),
-    c('design', 'Thiết kế và đeo', 'Design and fit', 15, 'design'),
+    c(
+      'health',
+      'Theo dõi sức khoẻ',
+      'Health tracking',
+      'Sledování zdraví',
+      25,
+      null
+    ),
+    c('battery', 'Pin', 'Battery', 'Baterie', 20, 'battery'),
+    c(
+      'design',
+      'Thiết kế và đeo',
+      'Design and fit',
+      'Design a nošení',
+      15,
+      'design'
+    ),
     c(
       'apps',
       'Ứng dụng và kết nối',
       'Apps and connectivity',
+      'Aplikace a konektivita',
       15,
       'connectivity'
     ),
-    c('display', 'Màn hình', 'Display', 10, 'display'),
+    c('display', 'Màn hình', 'Display', 'Displej', 10, 'display'),
     VALUE,
   ],
   earbuds: [
-    c('sound', 'Chất âm', 'Sound quality', 30, 'multimedia'),
-    c('anc', 'Chống ồn', 'Noise cancelling', 15, 'multimedia'),
-    c('battery', 'Pin', 'Battery', 15, 'battery'),
-    c('comfort', 'Đeo thoải mái', 'Comfort', 15, 'design'),
-    c('calls', 'Mic và gọi', 'Microphone and calls', 10, 'multimedia'),
+    c('sound', 'Chất âm', 'Sound quality', 'Kvalita zvuku', 30, 'multimedia'),
+    c(
+      'anc',
+      'Chống ồn',
+      'Noise cancelling',
+      'Potlačení hluku',
+      15,
+      'multimedia'
+    ),
+    c('battery', 'Pin', 'Battery', 'Baterie', 15, 'battery'),
+    c(
+      'comfort',
+      'Đeo thoải mái',
+      'Comfort',
+      'Pohodlí při nošení',
+      15,
+      'design'
+    ),
+    c(
+      'calls',
+      'Mic và gọi',
+      'Microphone and calls',
+      'Mikrofon a hovory',
+      10,
+      'multimedia'
+    ),
     VALUE,
   ],
   // Services (entity_type = 'service'): price is what every review must rate.
   services: [
-    c('service_quality', 'Chất lượng dịch vụ', 'Service quality', 35, null),
-    c('price', 'Giá cả', 'Price', 25, null, true),
-    c('attitude', 'Thái độ phục vụ', 'Staff attitude', 20, null),
-    c('speed', 'Tốc độ', 'Speed', 20, null),
+    c(
+      'service_quality',
+      'Chất lượng dịch vụ',
+      'Service quality',
+      'Kvalita služeb',
+      35,
+      null
+    ),
+    c('price', 'Giá cả', 'Price', 'Cena', 25, null, true),
+    c(
+      'attitude',
+      'Thái độ phục vụ',
+      'Staff attitude',
+      'Přístup personálu',
+      20,
+      null
+    ),
+    c('speed', 'Tốc độ', 'Speed', 'Rychlost', 20, null),
   ],
 };
 

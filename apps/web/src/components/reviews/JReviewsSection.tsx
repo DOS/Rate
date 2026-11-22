@@ -31,7 +31,6 @@ import {
   type ReviewAnalysisSummary,
   type ReviewItem,
 } from '@/lib/rate-domain';
-import { leaderboardCriteriaForCategory } from '@/lib/leaderboard-engine';
 import type { CanonicalCategorySlug } from '@/lib/rate-domain-core';
 import {
   RADAR_CSV_HEADERS,
@@ -59,10 +58,17 @@ import ReviewFormV2 from './ReviewFormV2';
 import { isReviewFormV2Enabled } from '@/lib/review-form-v2';
 import {
   mapLegacyPointCriterionKey,
+  pointCriterionMessageKey,
   selectProductPoints,
   type StoredProductPointRow,
 } from '@/lib/product-points-display';
-import { hasRatingCriteria } from '@repo/shared-data/rules';
+import {
+  RATING_CRITERION_KEYS,
+  getRatingCriteria,
+  getRatingCriterionLabel,
+  hasRatingCriteria,
+  type RatingCriterionKey,
+} from '@repo/shared-data/rules';
 import {
   hasSessionCookie,
   isReviewId,
@@ -89,7 +95,7 @@ type SortMode = 'weight_desc' | 'newest' | 'rating_desc' | 'rating_asc';
 export interface JReviewsSectionProps {
   masterProductId?: string;
   /** Shows only this category's criteria: no screen for earbuds. */
-  categorySlug?: CanonicalCategorySlug;
+  categorySlug?: CanonicalCategorySlug | 'services';
   /**
    * The category review form v2 rates (the product's category row, as the
    * v2 RPC reads it); null when it has none. Only read with v2 on.
@@ -113,13 +119,107 @@ export interface JReviewsSectionProps {
   defaultWriteFormOpen?: boolean;
 }
 
-const CRITERIA_KEYS = [
+const LEGACY_WRITE_CRITERIA_KEYS = [
   { key: 'screen', labelKey: 'criteriaScreen' },
   { key: 'performance', labelKey: 'criteriaPerformance' },
   { key: 'camera', labelKey: 'criteriaCamera' },
   { key: 'battery', labelKey: 'criteriaBattery' },
   { key: 'value', labelKey: 'criteriaValue' },
 ] as const;
+
+const LEGACY_V1_CRITERION_KEYS = [
+  'screen',
+  'performance',
+  'camera',
+  'battery',
+  'value',
+] as const;
+const LEGACY_V1_KEY_SET = new Set<string>(LEGACY_V1_CRITERION_KEYS);
+
+function isValidCriterionStar(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 1 &&
+    value <= 5
+  );
+}
+
+function ownCriterionValue(
+  record: Record<string, unknown>,
+  key: string
+): unknown {
+  return Object.prototype.hasOwnProperty.call(record, key)
+    ? record[key]
+    : undefined;
+}
+
+function normalizeCategorySlug(
+  value: string | null | undefined
+): string | null {
+  if (typeof value !== 'string') return null;
+  const cleaned = value
+    .replace(JREVIEWS_CONTROL_CHARS_RE, '')
+    .trim()
+    .toLowerCase();
+  return cleaned || null;
+}
+
+/**
+ * Normalizes a review's stored `criteria_ratings` for a product category:
+ * - Canonical `getRatingCriteria(categorySlug)` keys take precedence.
+ * - Legacy v1 keys (`screen`, `performance`, `camera`, `battery`, `value`) map
+ *   via `mapLegacyPointCriterionKey` only when the target canonical key is not
+ *   already rated on the same review (never double-counting) and are dropped
+ *   when the category has no counterpart (e.g. `camera` on smartwatches).
+ * - Any additional valid `RatingCriterionKey` present on the review is kept so
+ *   individual review cards can render extra rated criteria.
+ */
+export function normalizeReviewCriteriaRatings(
+  categorySlug: string | null | undefined,
+  rawRatings: unknown
+): Partial<Record<RatingCriterionKey, number>> {
+  if (
+    !rawRatings ||
+    typeof rawRatings !== 'object' ||
+    Array.isArray(rawRatings)
+  ) {
+    return {};
+  }
+  const record = rawRatings as Record<string, unknown>;
+  const cleanCategory = normalizeCategorySlug(categorySlug);
+  const categoryCriteria = getRatingCriteria(cleanCategory);
+  const canonicalKeys = new Set<string>(categoryCriteria.map((c) => c.key));
+  const out: Partial<Record<RatingCriterionKey, number>> = {};
+
+  for (const crit of categoryCriteria) {
+    const star = ownCriterionValue(record, crit.key);
+    if (isValidCriterionStar(star)) {
+      out[crit.key] = star;
+    }
+  }
+
+  for (const legacyKey of LEGACY_V1_CRITERION_KEYS) {
+    if (canonicalKeys.has(legacyKey)) continue;
+    const star = ownCriterionValue(record, legacyKey);
+    if (!isValidCriterionStar(star)) continue;
+    const mapped = mapLegacyPointCriterionKey(cleanCategory, legacyKey);
+    if (mapped && out[mapped] === undefined) {
+      out[mapped] = star;
+    }
+  }
+
+  for (const key of RATING_CRITERION_KEYS) {
+    if (canonicalKeys.has(key) || LEGACY_V1_KEY_SET.has(key)) continue;
+    if (out[key] !== undefined) continue;
+    const star = ownCriterionValue(record, key);
+    if (isValidCriterionStar(star)) {
+      out[key] = star;
+    }
+  }
+
+  return out;
+}
 
 const FLAG_STYLES: Record<ReviewBadgeKind, string> = {
   pending: 'bg-info-subtle text-info-emphasis border border-info-subtle',
@@ -232,21 +332,37 @@ export default function JReviewsSection({
   const tAnalyzer = useTranslations('analyzerCopy');
   const locale = useLocale();
 
+  const cleanCategorySlug = useMemo(
+    () => normalizeCategorySlug(categorySlug),
+    [categorySlug]
+  );
+  const cleanReviewCategorySlug = useMemo(
+    () => normalizeCategorySlug(reviewCategorySlug),
+    [reviewCategorySlug]
+  );
+  // Authoritative DB category (`reviewCategorySlug`) wins when present (e.g.
+  // `services` or `tvs` routed under `/smartphones/[slug]`), falling back to
+  // the route `categorySlug` when v2 is disabled (`reviewCategorySlug` null).
+  const effectiveCategorySlug = cleanReviewCategorySlug ?? cleanCategorySlug;
+
+  // Kept only for the legacy v1 5-slider write form when v2 is disabled.
   const criteriaMeta = useMemo(
     () =>
-      CRITERIA_KEYS.map((c) => ({
+      LEGACY_WRITE_CRITERIA_KEYS.map((c) => ({
         key: c.key,
         label: t(c.labelKey),
       })),
     [t]
   );
-  // The scores shown: the category's own criteria, like the leaderboard and
-  // versus (DOS/Rate#1553). The review form keeps all five for now.
-  const shownCriteriaMeta = useMemo(() => {
-    if (!categorySlug) return criteriaMeta;
-    const own: readonly string[] = leaderboardCriteriaForCategory(categorySlug);
-    return criteriaMeta.filter((c) => own.includes(c.key));
-  }, [criteriaMeta, categorySlug]);
+  // Category criteria from shared RATING_CRITERIA, localized for vi/en/cs.
+  const shownCriteriaMeta = useMemo(
+    () =>
+      getRatingCriteria(effectiveCategorySlug).map((c) => ({
+        key: c.key,
+        label: getRatingCriterionLabel(c, locale),
+      })),
+    [effectiveCategorySlug, locale]
+  );
 
   const flagMetaMap = useMemo<
     Record<
@@ -306,10 +422,10 @@ export default function JReviewsSection({
   const pointsOverview = useMemo(
     () =>
       selectProductPoints(productPoints, {
-        categorySlug,
+        categorySlug: effectiveCategorySlug,
         pointsReviewCount: productPointsReviewCount,
       }),
-    [productPoints, categorySlug, productPointsReviewCount]
+    [productPoints, effectiveCategorySlug, productPointsReviewCount]
   );
   const availablePointCriteria = useMemo(
     () => new Set(pointsOverview?.availableCriteria ?? []),
@@ -319,9 +435,10 @@ export default function JReviewsSection({
     !pointsOverview && (summary.pros.length > 0 || summary.cons.length > 0);
 
   // 5-Criteria Write Review Form State
+  const v2Enabled = isReviewFormV2Enabled();
   const canWriteReview =
     Boolean(masterProductId) &&
-    (!isReviewFormV2Enabled() || hasRatingCriteria(reviewCategorySlug));
+    (!v2Enabled || hasRatingCriteria(cleanReviewCategorySlug));
   const [showWriteForm, setShowWriteForm] = useState(
     Boolean(defaultWriteFormOpen) && canWriteReview
   );
@@ -450,14 +567,22 @@ export default function JReviewsSection({
     });
     const starAnomaly = detectStarDistributionAnomaly(reviews);
 
+    const normalizedUserCriteria = validUserReviews.map((r) => ({
+      weight: r.helpfulness_weight,
+      ratings: normalizeReviewCriteriaRatings(
+        effectiveCategorySlug,
+        r.criteria_ratings
+      ),
+    }));
+
     const criteriaAverages = shownCriteriaMeta.map((crit) => {
       let wSum = 0;
       let valSum = 0;
-      for (const r of validUserReviews) {
-        const cVal = r.criteria_ratings?.[crit.key];
+      for (const entry of normalizedUserCriteria) {
+        const cVal = entry.ratings[crit.key];
         if (typeof cVal === 'number' && cVal >= 1 && cVal <= 5) {
-          wSum += r.helpfulness_weight;
-          valSum += cVal * r.helpfulness_weight;
+          wSum += entry.weight;
+          valSum += cVal * entry.weight;
         }
       }
       if (wSum > 0) {
@@ -493,6 +618,7 @@ export default function JReviewsSection({
     userRatingWeighted,
     ratingScore,
     expertRating,
+    effectiveCategorySlug,
     shownCriteriaMeta,
     t,
   ]);
@@ -1020,13 +1146,13 @@ export default function JReviewsSection({
       )}
 
       {/* Review form v2 behind its flag (DOS/Rate#1544) */}
-      {canWriteReview && showWriteForm && isReviewFormV2Enabled() && (
+      {canWriteReview && showWriteForm && v2Enabled && (
         <div id={writeFormId}>
           <ReviewFormV2
             key={masterProductId ?? productSlug ?? productName}
             masterProductId={masterProductId}
             productName={productName}
-            categorySlug={reviewCategorySlug ?? undefined}
+            categorySlug={cleanReviewCategorySlug ?? undefined}
             defaultAuthorName={t('defaultAuthorName')}
             onStored={handleReviewStored}
           />
@@ -1034,7 +1160,7 @@ export default function JReviewsSection({
       )}
 
       {/* Interactive 5-Criteria Write Review Form */}
-      {canWriteReview && showWriteForm && !isReviewFormV2Enabled() && (
+      {canWriteReview && showWriteForm && !v2Enabled && (
         <form
           id={writeFormId}
           onSubmit={handleSubmitCommunityReview}
@@ -1372,15 +1498,9 @@ export default function JReviewsSection({
                     Math.max(10, Math.round((crit.score / 5) * 100))
                   )
                 : 0;
-            const mappedPointKey = mapLegacyPointCriterionKey(
-              categorySlug,
-              crit.key
-            );
-            const canFilterPoints =
-              mappedPointKey !== null &&
-              availablePointCriteria.has(mappedPointKey);
+            const canFilterPoints = availablePointCriteria.has(crit.key);
             const isCriterionSelected =
-              canFilterPoints && selectedPointCriterion === mappedPointKey;
+              canFilterPoints && selectedPointCriterion === crit.key;
             const cardInner = (
               <>
                 <span className="d-flex justify-content-between align-items-center small mb-1">
@@ -1404,16 +1524,20 @@ export default function JReviewsSection({
               </>
             );
             return (
-              <div key={crit.key} className="col-lg col-md-4 col-sm-6 col-12">
+              <div
+                key={crit.key}
+                data-criterion-card={crit.key}
+                className="col-lg col-md-4 col-sm-6 col-12"
+              >
                 {canFilterPoints ? (
                   <button
                     type="button"
                     aria-pressed={isCriterionSelected}
                     aria-describedby={`${fieldId}-points-filter-desc`}
-                    data-testid={`jreviews-criterion-${mappedPointKey}`}
+                    data-testid={`jreviews-criterion-${crit.key}`}
                     onClick={() =>
                       setSelectedPointCriterion((prev) =>
-                        prev === mappedPointKey ? null : mappedPointKey
+                        prev === crit.key ? null : crit.key
                       )
                     }
                     className="rate-crit-card-btn rounded-3 h-100 p-2 px-3"
@@ -1434,7 +1558,7 @@ export default function JReviewsSection({
       {/* 1c. Product Pros & Cons from rate.product_points (DOS/Rate#1624, design 7.1) */}
       <ProductPointsBlock
         points={productPoints}
-        categorySlug={categorySlug}
+        categorySlug={effectiveCategorySlug}
         pointsReviewCount={productPointsReviewCount}
         selectedCriterion={selectedPointCriterion}
         onSelectCriterion={setSelectedPointCriterion}
@@ -1794,9 +1918,44 @@ export default function JReviewsSection({
             const myGaps = myValue
               ? shownReviewValueGaps(
                   myValue.gaps,
-                  hasRatingCriteria(reviewCategorySlug ?? categorySlug)
+                  v2Enabled
+                    ? hasRatingCriteria(cleanReviewCategorySlug)
+                    : hasRatingCriteria(effectiveCategorySlug)
                 )
               : [];
+            const normalizedRevCriteria = normalizeReviewCriteriaRatings(
+              effectiveCategorySlug,
+              rev.criteria_ratings
+            );
+            const reviewCriterionBadges: Array<{
+              key: RatingCriterionKey;
+              label: string;
+              score: number;
+            }> = [];
+            const seenBadgeKeys = new Set<RatingCriterionKey>();
+            for (const crit of shownCriteriaMeta) {
+              const val = normalizedRevCriteria[crit.key];
+              if (val != null) {
+                reviewCriterionBadges.push({
+                  key: crit.key,
+                  label: crit.label,
+                  score: val,
+                });
+                seenBadgeKeys.add(crit.key);
+              }
+            }
+            for (const extraKey of RATING_CRITERION_KEYS) {
+              if (seenBadgeKeys.has(extraKey)) continue;
+              const val = normalizedRevCriteria[extraKey];
+              if (val != null) {
+                const msgKey = pointCriterionMessageKey(extraKey);
+                reviewCriterionBadges.push({
+                  key: extraKey,
+                  label: msgKey ? t(msgKey) : extraKey,
+                  score: val,
+                });
+              }
+            }
 
             return (
               <div key={rev.id} className="col-md-6 col-12">
@@ -1930,24 +2089,21 @@ export default function JReviewsSection({
                       </div>
                     )}
 
-                    {rev.criteria_ratings &&
-                      Object.keys(rev.criteria_ratings).length > 0 && (
-                        <div className="d-flex mb-2 flex-wrap gap-1">
-                          {shownCriteriaMeta.map((crit) => {
-                            const val = rev.criteria_ratings?.[crit.key];
-                            if (val == null) return null;
-                            return (
-                              <span
-                                key={crit.key}
-                                className="badge bg-light text-dark rounded-pill border"
-                                style={{ fontSize: '0.8125rem' }}
-                              >
-                                {crit.label.split(' ')[0]}: {val}/5 ★
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
+                    {reviewCriterionBadges.length > 0 && (
+                      <div className="d-flex mb-2 flex-wrap gap-1">
+                        {reviewCriterionBadges.map((badge) => (
+                          <span
+                            key={badge.key}
+                            data-testid={`review-criterion-badge-${badge.key}`}
+                            className="badge bg-light text-dark rounded-pill border text-wrap mw-100 text-start"
+                            style={{ fontSize: '0.8125rem' }}
+                          >
+                            {badge.label}:{' '}
+                            {`${formatRatingValue(badge.score, locale, 1)}/5`} ★
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Review Comment */}
                     <p
