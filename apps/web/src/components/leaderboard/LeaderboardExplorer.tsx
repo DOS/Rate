@@ -25,12 +25,29 @@ import {
   type LeaderboardPriceSegment,
 } from '@/lib/rate-domain';
 import {
+  CRITERION_RANK_WRITERS,
   LEADERBOARD_SCORE_CRITERIA,
   displayedScore5,
   leaderboardCriteriaForCategory,
-  weightedCriteriaScore5,
   type LeaderboardCriteriaBreakdown,
 } from '@/lib/leaderboard-engine';
+import {
+  availableCategoryUseCasePresets,
+  computeCustomWeightedScore5,
+  defaultCategoryWeights,
+  extractCategoryCriteriaScores,
+  isDefaultCategoryWeights,
+  mergeUseCaseQueryIntoSearch,
+  normalizeCategoryWeights,
+  parseUseCaseWeightsFromParams,
+  resolveCategoryPreset,
+  resolveLocalizedPresetName,
+  sanitizeSliderWeight,
+  scoredCategoryCriteriaForProducts,
+  type ActiveWeightMode,
+  type CategoryCriterionWeights,
+} from '@/lib/use-case-weights';
+import UseCaseWeightBar from '@/components/compare/UseCaseWeightBar';
 import {
   getRadarSignal,
   radarCsvCells,
@@ -45,7 +62,11 @@ import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { KeySpecs } from '@repo/shared-data';
-import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
+import {
+  applyCategorySpecTemplate,
+  type RatingCriterionKey,
+  type UseCasePresetId,
+} from '@repo/shared-data/rules';
 import {
   BsArrowLeftRight,
   BsAwardFill,
@@ -62,7 +83,6 @@ import {
   BsPhone,
   BsSearch,
   BsShieldCheck,
-  BsSliders,
   BsSmartwatch,
   BsStarFill,
   BsTablet,
@@ -71,11 +91,7 @@ import {
 } from 'react-icons/bs';
 import ContentText from '@/components/elementary/ContentText';
 import StarRating from '@/components/elementary/StarRating';
-import {
-  formatDecimal,
-  formatPercent,
-  formatPriceVnd,
-} from '@/lib/locale-format';
+import { formatDecimal, formatPriceVnd } from '@/lib/locale-format';
 import {
   displayRating,
   formatRatingValue,
@@ -587,6 +603,10 @@ interface LeaderboardExplorerProps {
   readonly filteredReviewCounts?: FilteredReviewCountsByMaster;
   /** RATE_ITEM_MODEL on: variant slug to Item slug, for versus links. */
   readonly itemSlugBySlug?: Readonly<Record<string, string>>;
+  readonly initialCategory?: CanonicalCategorySlug;
+  readonly initialWeightMode?: ActiveWeightMode;
+  readonly initialCustomWeights?: CategoryCriterionWeights;
+  readonly initialShowWeightSliders?: boolean;
 }
 
 interface RankedProductEntry {
@@ -689,9 +709,15 @@ function computeProductScores(
 function TabFromUrl({
   onCategory,
   onCriterion,
+  onWeightQuery,
 }: {
   readonly onCategory: (cat: CanonicalCategorySlug) => void;
   readonly onCriterion: (crit: LeaderboardCriterionKey) => void;
+  readonly onWeightQuery: (
+    cat: CanonicalCategorySlug,
+    rawPreset: string | null,
+    rawWeights: string | null
+  ) => void;
 }) {
   const searchParams = useSearchParams();
   // Normalized first, so the effects fire only when the effective tab
@@ -699,8 +725,14 @@ function TabFromUrl({
   // URL must not count as a category change (and reset the brand).
   const cat = normalizeLeaderboardCategory(searchParams.get('cat'));
   const crit = normalizeLeaderboardCriterion(searchParams.get('criterion'));
+  const rawPreset = searchParams.get('preset');
+  const rawWeights = searchParams.get('weights');
   useEffect(() => onCategory(cat), [cat, onCategory]);
   useEffect(() => onCriterion(crit), [crit, onCriterion]);
+  useEffect(
+    () => onWeightQuery(cat, rawPreset, rawWeights),
+    [cat, rawPreset, rawWeights, onWeightQuery]
+  );
   return null;
 }
 
@@ -710,6 +742,10 @@ export default function LeaderboardExplorer({
   locale: localeProp,
   filteredReviewCounts,
   itemSlugBySlug,
+  initialCategory = 'smartphones',
+  initialWeightMode = 'default',
+  initialCustomWeights,
+  initialShowWeightSliders = false,
 }: LeaderboardExplorerProps) {
   const t = useTranslations('leaderboard');
   const hookLocale = useLocale();
@@ -719,116 +755,62 @@ export default function LeaderboardExplorer({
   const categoryTabs = useMemo(() => buildCategoryTabs(t), [t]);
 
   const [activeCategory, setActiveCategory] =
-    useState<CanonicalCategorySlug>('smartphones');
+    useState<CanonicalCategorySlug>(initialCategory);
   const [activeCriterion, setActiveCriterion] =
     useState<LeaderboardCriterionKey>('combined');
 
-  // Keeps the tab in the URL without a server round trip; Next syncs its
-  // router with the native history API.
-  const replaceTabUrl = (
-    cat: CanonicalCategorySlug,
-    crit: LeaderboardCriterionKey
-  ) => {
-    window.history.replaceState(
-      null,
-      '',
-      `${window.location.pathname}?cat=${cat}&criterion=${crit}`
-    );
-  };
   const [priceSegment, setPriceSegment] =
     useState<LeaderboardPriceSegment>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activePersona, setActivePersona] =
-    useState<LeaderboardPersonaKey>('none');
-  const [showWeightSliders, setShowWeightSliders] = useState<boolean>(false);
-  const [customWeights, setCustomWeights] = useState<{
-    screen: number;
-    performance: number;
-    camera: number;
-    battery: number;
-    value: number;
-  }>({
-    screen: 20,
-    performance: 20,
-    camera: 20,
-    battery: 20,
-    value: 20,
-  });
+  const [weightMode, setWeightMode] =
+    useState<ActiveWeightMode>(initialWeightMode);
+  const [showWeightSliders, setShowWeightSliders] = useState<boolean>(
+    initialShowWeightSliders
+  );
+  const [customWeights, setCustomWeights] = useState<CategoryCriterionWeights>(
+    () =>
+      initialCustomWeights
+        ? normalizeCategoryWeights(initialCategory, initialCustomWeights)
+            .sliderWeights
+        : initialWeightMode !== 'default' && initialWeightMode !== 'custom'
+          ? normalizeCategoryWeights(
+              initialCategory,
+              resolveCategoryPreset(initialCategory, initialWeightMode).weights
+            ).sliderWeights
+          : defaultCategoryWeights(initialCategory)
+  );
 
-  const applyPersonaPreset = (
-    persona:
-      | 'none'
-      | 'photography'
-      | 'gaming'
-      | 'endurance'
-      | 'business'
-      | 'value_hunter'
-  ) => {
-    setActivePersona(persona);
-    if (persona === 'none') {
-      setCustomWeights({
-        screen: 20,
-        performance: 20,
-        camera: 20,
-        battery: 20,
-        value: 20,
-      });
-      return;
-    }
-    if (persona === 'photography') {
-      setCustomWeights({
-        screen: 25,
-        performance: 15,
-        camera: 45,
-        battery: 10,
-        value: 5,
-      });
-    } else if (persona === 'gaming') {
-      setCustomWeights({
-        screen: 25,
-        performance: 45,
-        camera: 5,
-        battery: 20,
-        value: 5,
-      });
-    } else if (persona === 'endurance') {
-      setCustomWeights({
-        screen: 15,
-        performance: 15,
-        camera: 10,
-        battery: 45,
-        value: 15,
-      });
-    } else if (persona === 'business') {
-      setCustomWeights({
-        screen: 30,
-        performance: 25,
-        camera: 10,
-        battery: 25,
-        value: 10,
-      });
-    } else if (persona === 'value_hunter') {
-      setCustomWeights({
-        screen: 15,
-        performance: 20,
-        camera: 10,
-        battery: 15,
-        value: 40,
-      });
-    }
-  };
-
-  const updateSingleWeight = (
-    key: 'screen' | 'performance' | 'camera' | 'battery' | 'value',
-    val: number
-  ) => {
-    setActivePersona('custom');
-    setCustomWeights((prev) => ({
-      ...prev,
-      [key]: sanitizeLeaderboardWeight(val, prev[key]),
-    }));
-  };
+  // Keeps the tab and active non-default preset/weights in the URL without a
+  // server round trip; Next syncs its router with the native history API.
+  const replaceTabUrl = useCallback(
+    (
+      cat: CanonicalCategorySlug,
+      crit: LeaderboardCriterionKey,
+      nextMode: ActiveWeightMode,
+      nextWeights: CategoryCriterionWeights,
+      available: readonly RatingCriterionKey[]
+    ) => {
+      if (typeof window === 'undefined') return;
+      const baseQuery = `?cat=${cat}&criterion=${crit}`;
+      const mergedQuery =
+        available.length > 0
+          ? mergeUseCaseQueryIntoSearch(
+              baseQuery,
+              cat,
+              nextMode,
+              nextWeights,
+              available
+            )
+          : baseQuery;
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}${mergedQuery}`
+      );
+    },
+    []
+  );
 
   const copy = useMemo(
     () => ({
@@ -837,6 +819,7 @@ export default function LeaderboardExplorer({
       chooseCriterion: t('chooseCriterion'),
       personaTitle: t('personaTitle'),
       customizeWeightsBtn: t('customizeWeightsBtn'),
+      customWeightsBtn: t('customWeightsBtn'),
       personaLabels: {
         none: t('personaNone'),
         photography: t('personaPhotography'),
@@ -846,6 +829,44 @@ export default function LeaderboardExplorer({
         value_hunter: t('personaValueHunter'),
         custom: t('personaCustom'),
       },
+      presetLabels: {
+        default: t('preset_default'),
+        gaming: t('preset_gaming'),
+        camera: t('preset_camera'),
+        endurance: t('preset_endurance'),
+        value: t('preset_value'),
+        media: t('preset_media'),
+        study_work: t('preset_study_work'),
+        office: t('preset_office'),
+        creator: t('preset_creator'),
+        fitness: t('preset_fitness'),
+        smart_daily: t('preset_smart_daily'),
+        audiophile: t('preset_audiophile'),
+        commute_anc: t('preset_commute_anc'),
+        calls_work: t('preset_calls_work'),
+      } satisfies Record<UseCasePresetId, string>,
+      weightCriterionLabels: {
+        performance: t('weightCrit_performance'),
+        camera: t('weightCrit_camera'),
+        battery: t('weightCrit_battery'),
+        display: t('weightCrit_display'),
+        design: t('weightCrit_design'),
+        value: t('weightCrit_value'),
+        sound: t('weightCrit_sound'),
+        software: t('weightCrit_software'),
+        keyboard: t('weightCrit_keyboard'),
+        thermals: t('weightCrit_thermals'),
+        health: t('weightCrit_health'),
+        apps: t('weightCrit_apps'),
+        anc: t('weightCrit_anc'),
+        comfort: t('weightCrit_comfort'),
+        calls: t('weightCrit_calls'),
+      } satisfies Partial<Record<RatingCriterionKey, string>>,
+      resetWeightsBtn: t('resetWeightsBtn'),
+      normalizedWeightsPrefix: t('normalizedWeightsPrefix'),
+      officialRateScoreLabel: t('officialRateScoreLabel'),
+      yourCustomScoreLabel: t('yourCustomScoreLabel'),
+      officialScoreKeepNote: t('officialScoreKeepNote'),
       compareTop3Btn: t('compareTop3Btn'),
       searchPlaceholder: t('searchPlaceholder'),
       allBrands: t('allBrands'),
@@ -898,46 +919,114 @@ export default function LeaderboardExplorer({
   // for. A criterion with none gets no tab, no weight and no row cell, not
   // an empty list (DOS/Rate#1553). A tab and a weight need a score past the
   // ranking threshold; a cell needs one past the display threshold (D9).
-  const { scoredCriteria, shownCriteria } = useMemo(() => {
-    const ranked = new Set<LeaderboardCriterionKey>();
-    const shown = new Set<LeaderboardCriterionKey>();
-    const own = leaderboardCriteriaForCategory(activeCategory);
-    for (const item of categoryProducts) {
-      const { criteria, rankCriteria } = computeProductScores(
-        item,
-        'combined',
-        filteredReviewCounts
-      );
-      for (const c of own) {
-        if ((criteria[c] ?? 0) > 0) shown.add(c);
-        if ((rankCriteria[c] ?? 0) > 0) ranked.add(c);
+  const { scoredCriteria, shownCriteria, scoredCategoryCriteria } =
+    useMemo(() => {
+      const ranked = new Set<LeaderboardCriterionKey>();
+      const shown = new Set<LeaderboardCriterionKey>();
+      const own = leaderboardCriteriaForCategory(activeCategory);
+      const baseEntries: Array<{
+        product: ItemCatalogRow;
+        rankCriteria: LeaderboardCriteriaBreakdown;
+      }> = [];
+      for (const item of categoryProducts) {
+        const { criteria, rankCriteria } = computeProductScores(
+          item,
+          'combined',
+          filteredReviewCounts
+        );
+        baseEntries.push({ product: item, rankCriteria });
+        for (const c of own) {
+          if ((criteria[c] ?? 0) > 0) shown.add(c);
+          if ((rankCriteria[c] ?? 0) > 0) ranked.add(c);
+        }
       }
-      if (ranked.size === own.length) break;
-    }
-    return {
-      scoredCriteria: own.filter((c) => ranked.has(c)),
-      shownCriteria: own.filter((c) => shown.has(c)),
-    };
-  }, [activeCategory, categoryProducts, filteredReviewCounts]);
-  const hasScoredCriteria = scoredCriteria.length > 0;
+      return {
+        scoredCriteria: own.filter((c) => ranked.has(c)),
+        shownCriteria: own.filter((c) => shown.has(c)),
+        scoredCategoryCriteria: scoredCategoryCriteriaForProducts(
+          activeCategory,
+          baseEntries,
+          CRITERION_RANK_WRITERS
+        ),
+      };
+    }, [activeCategory, categoryProducts, filteredReviewCounts]);
+  const hasScoredCriteria = scoredCategoryCriteria.length > 0;
   const hasShownCriteria = shownCriteria.length > 0;
-  // Only the weights of the category's own criteria count: a screen
-  // weight left over from phones does not empty the earbuds list.
-  const weightedCriteria = useMemo(
-    () => leaderboardCriteriaForCategory(activeCategory),
-    [activeCategory]
-  );
-  const totalWeight = weightedCriteria.reduce(
-    (sum, c) => sum + customWeights[c],
-    0
-  );
-  const hasActivePersonaWeights = activePersona !== 'none' && totalWeight > 0;
-  const activeScoreLabel = resolveLeaderboardActiveScoreLabel(
-    activePersona,
-    activeCriterion,
-    copy,
-    totalWeight
-  );
+
+  const applyPersonaPreset = (presetId: UseCasePresetId) => {
+    const preset = resolveCategoryPreset(activeCategory, presetId);
+    const norm = normalizeCategoryWeights(
+      activeCategory,
+      preset.weights,
+      scoredCategoryCriteria
+    );
+    setWeightMode(preset.id);
+    setCustomWeights(norm.sliderWeights);
+    replaceTabUrl(
+      activeCategory,
+      activeCriterion,
+      preset.id,
+      norm.sliderWeights,
+      scoredCategoryCriteria
+    );
+  };
+
+  const updateSingleWeight = (key: RatingCriterionKey, val: number) => {
+    const nextCandidate: CategoryCriterionWeights = {
+      ...customWeights,
+      [key]: sanitizeSliderWeight(val, customWeights[key] ?? 0),
+    };
+    const normalized = normalizeCategoryWeights(
+      activeCategory,
+      nextCandidate,
+      scoredCategoryCriteria
+    );
+    const collapsesToDefault =
+      normalized.wasAllZeroReset ||
+      isDefaultCategoryWeights(
+        activeCategory,
+        'custom',
+        normalized.sliderWeights,
+        scoredCategoryCriteria
+      );
+    const nextMode: ActiveWeightMode = collapsesToDefault
+      ? 'default'
+      : 'custom';
+    const nextWeights = collapsesToDefault
+      ? defaultCategoryWeights(activeCategory)
+      : normalized.sliderWeights;
+    setWeightMode(nextMode);
+    setCustomWeights(nextWeights);
+    replaceTabUrl(
+      activeCategory,
+      activeCriterion,
+      nextMode,
+      nextWeights,
+      scoredCategoryCriteria
+    );
+  };
+
+  const resetCustomWeights = () => {
+    applyPersonaPreset('default');
+  };
+
+  const hasActivePersonaWeights =
+    hasScoredCriteria &&
+    !isDefaultCategoryWeights(
+      activeCategory,
+      weightMode,
+      customWeights,
+      scoredCategoryCriteria
+    );
+  const activeScoreLabel = hasActivePersonaWeights
+    ? resolveLocalizedPresetName(
+        activeCategory,
+        weightMode,
+        locale,
+        undefined,
+        copy.personaLabels.custom
+      )
+    : resolveLeaderboardActiveScoreLabel('none', activeCriterion, copy, 0);
   // The one rating shows at 1 decimal (D3); a persona's own weighted score
   // keeps 2, under the persona's name.
   const ratingView =
@@ -1010,14 +1099,24 @@ export default function LeaderboardExplorer({
             ? base.combinedScore5 > 0
             : base.activeScore5 > 0)
         ) {
-          const weighted5 = weightedCriteriaScore5(
-            base.rankCriteria,
+          const catScores = extractCategoryCriteriaScores(
+            item,
+            activeCategory,
+            CRITERION_RANK_WRITERS,
+            base.rankCriteria
+          );
+          const customRes = computeCustomWeightedScore5(
+            activeCategory,
+            catScores,
             customWeights,
-            weightedCriteria
+            {
+              onlyCriteria: scoredCategoryCriteria,
+              officialScore5: base.userScore5,
+            }
           );
           return {
             ...base,
-            activeScore5: weighted5 ?? 0,
+            activeScore5: customRes.customScore5 ?? 0,
           };
         }
         return base;
@@ -1073,8 +1172,9 @@ export default function LeaderboardExplorer({
     priceSegment,
     searchQuery,
     activeCriterion,
+    activeCategory,
     hasActivePersonaWeights,
-    weightedCriteria,
+    scoredCategoryCriteria,
     customWeights,
     filteredReviewCounts,
   ]);
@@ -1241,7 +1341,7 @@ export default function LeaderboardExplorer({
       source: 'Rate.vn JReviews Leaderboard',
       category: activeCategory,
       criterion: activeCriterion,
-      persona: activePersona,
+      persona: weightMode,
       exportedAt: new Date().toISOString(),
       count: rankedEntries.length,
       items: rankedEntries.map((entry, idx) =>
@@ -1265,20 +1365,26 @@ export default function LeaderboardExplorer({
 
   const handleSelectCategory = (cat: CanonicalCategorySlug) => {
     const crit = criterionForCategory(cat, activeCriterion);
+    const nextDefaults = defaultCategoryWeights(cat);
     setActiveCategory(cat);
     setActiveCriterion(crit);
     setSelectedBrand('all');
-    replaceTabUrl(cat, crit);
+    setWeightMode('default');
+    setCustomWeights(nextDefaults);
+    replaceTabUrl(cat, crit, 'default', nextDefaults, []);
   };
 
   const handleSelectCriterion = (crit: LeaderboardCriterionKey) => {
+    const nextDefaults = defaultCategoryWeights(activeCategory);
     setActiveCriterion(crit);
-    replaceTabUrl(activeCategory, crit);
+    setWeightMode('default');
+    setCustomWeights(nextDefaults);
+    replaceTabUrl(activeCategory, crit, 'default', nextDefaults, []);
   };
 
   // The page is cached with the default tab; TabFromUrl applies the URL's
-  // ?cat= and ?criterion= on load and on every later navigation, including
-  // a same-route link to plain /leaderboard (DOS/Rate#508).
+  // ?cat=, ?criterion=, ?preset=, and ?weights= on load and on every later
+  // navigation, including a same-route link to plain /leaderboard (DOS/Rate#508).
   const applyUrlCategory = useCallback((cat: CanonicalCategorySlug) => {
     setActiveCategory(cat);
     setSelectedBrand('all');
@@ -1286,6 +1392,21 @@ export default function LeaderboardExplorer({
   const applyUrlCriterion = useCallback((crit: LeaderboardCriterionKey) => {
     setActiveCriterion(crit);
   }, []);
+  const applyUrlWeightQuery = useCallback(
+    (
+      cat: CanonicalCategorySlug,
+      rawPreset: string | null,
+      rawWeights: string | null
+    ) => {
+      const parsed = parseUseCaseWeightsFromParams(cat, {
+        preset: rawPreset ?? undefined,
+        weights: rawWeights ?? undefined,
+      });
+      setWeightMode(parsed.mode);
+      setCustomWeights(parsed.weights);
+    },
+    []
+  );
   // A URL such as ?cat=earbuds&criterion=screen opens on the combined tab.
   // So does a criterion no product has a score for yet (DOS/Rate#1553).
   // Before paint, so an empty list never flashes, and the URL follows.
@@ -1301,24 +1422,68 @@ export default function LeaderboardExplorer({
     }
     if (crit === activeCriterion) return;
     setActiveCriterion(crit);
-    window.history.replaceState(
-      null,
-      '',
-      `${window.location.pathname}?cat=${activeCategory}&criterion=${crit}`
+    replaceTabUrl(
+      activeCategory,
+      crit,
+      weightMode,
+      customWeights,
+      scoredCategoryCriteria
     );
-  }, [activeCategory, activeCriterion, scoredCriteria]);
+  }, [
+    activeCategory,
+    activeCriterion,
+    scoredCriteria,
+    weightMode,
+    customWeights,
+    scoredCategoryCriteria,
+    replaceTabUrl,
+  ]);
   useEffect(() => {
-    if (hasScoredCriteria || activePersona === 'none') return;
-    setActivePersona('none');
-    setShowWeightSliders(false);
-    setCustomWeights({
-      screen: 20,
-      performance: 20,
-      camera: 20,
-      battery: 20,
-      value: 20,
-    });
-  }, [hasScoredCriteria, activePersona]);
+    if (!hasScoredCriteria) {
+      if (weightMode !== 'default' || showWeightSliders) {
+        const defaults = defaultCategoryWeights(activeCategory);
+        setWeightMode('default');
+        setShowWeightSliders(false);
+        setCustomWeights(defaults);
+        replaceTabUrl(activeCategory, activeCriterion, 'default', defaults, []);
+      }
+      return;
+    }
+    if (
+      weightMode !== 'default' &&
+      (isDefaultCategoryWeights(
+        activeCategory,
+        weightMode,
+        customWeights,
+        scoredCategoryCriteria
+      ) ||
+        (weightMode !== 'custom' &&
+          !availableCategoryUseCasePresets(
+            activeCategory,
+            scoredCategoryCriteria
+          ).some((p) => p.id === weightMode)))
+    ) {
+      const defaults = defaultCategoryWeights(activeCategory);
+      setWeightMode('default');
+      setCustomWeights(defaults);
+      replaceTabUrl(
+        activeCategory,
+        activeCriterion,
+        'default',
+        defaults,
+        scoredCategoryCriteria
+      );
+    }
+  }, [
+    hasScoredCriteria,
+    weightMode,
+    customWeights,
+    showWeightSliders,
+    activeCategory,
+    activeCriterion,
+    scoredCategoryCriteria,
+    replaceTabUrl,
+  ]);
 
   const allCriterionOptions: Array<{
     key: LeaderboardCriterionKey;
@@ -1380,6 +1545,7 @@ export default function LeaderboardExplorer({
         <TabFromUrl
           onCategory={applyUrlCategory}
           onCriterion={applyUrlCriterion}
+          onWeightQuery={applyUrlWeightQuery}
         />
       </Suspense>
       {/* 1. Directory -> 5-Category Hierarchy & Criterion Control Panel */}
@@ -1498,7 +1664,6 @@ export default function LeaderboardExplorer({
                   type="button"
                   aria-pressed={isSelected && !hasActivePersonaWeights}
                   onClick={() => {
-                    setActivePersona('none');
                     handleSelectCriterion(opt.key);
                   }}
                   className={`btn btn-sm rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2 ${
@@ -1515,122 +1680,33 @@ export default function LeaderboardExplorer({
           </div>
         </div>
 
-        {/* 3. Smart Use-Case Persona Recommender & Custom 5-Criteria Weight Sliders (Issue #52) */}
+        {/* 3. RTINGS-Style Category Use-Case Presets & Normalized Weight Sliders (#1864) */}
         {hasScoredCriteria && (
           <div className="border-top mb-3 pt-3">
-            <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-              <div
-                id="leaderboard-persona-label"
-                className="small text-muted fw-semibold"
-              >
-                {copy.personaTitle}
-              </div>
-              <button
-                type="button"
-                aria-expanded={showWeightSliders}
-                aria-controls="leaderboard-weight-sliders"
-                onClick={() => setShowWeightSliders((v) => !v)}
-                className={`btn btn-sm rounded-pill px-3 py-1 ${
-                  showWeightSliders || activePersona === 'custom'
-                    ? 'btn-primary fw-semibold text-white'
-                    : 'btn-outline-primary'
-                }`}
-                style={{ fontSize: '0.8125rem' }}
-              >
-                <BsSliders aria-hidden="true" className="me-1" />
-                {copy.customizeWeightsBtn}
-                {/* Custom weights select no persona pill and are shown only by
-                  this button's colour, so its name says so too (#1067). */}
-                {activePersona === 'custom' && (
-                  <span className="visually-hidden">
-                    {`: ${copy.personaLabels.custom}`}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            <div
-              className="d-flex flex-wrap gap-2"
-              role="group"
-              aria-labelledby="leaderboard-persona-label"
-            >
-              {(
-                [
-                  'none',
-                  'photography',
-                  'gaming',
-                  'endurance',
-                  'business',
-                  'value_hunter',
-                ] as const
-              ).map((presetKey) => {
-                const isSelected = activePersona === presetKey;
-                return (
-                  <button
-                    key={presetKey}
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => applyPersonaPreset(presetKey)}
-                    className={`btn btn-sm rounded-pill px-3 py-1 ${
-                      isSelected
-                        ? 'btn-danger fw-semibold text-white shadow-sm'
-                        : 'btn-outline-dark bg-light'
-                    }`}
-                    style={{ fontSize: '0.8125rem' }}
-                  >
-                    {copy.personaLabels[presetKey]}
-                  </button>
-                );
-              })}
-            </div>
-
-            {showWeightSliders && (
-              <div
-                id="leaderboard-weight-sliders"
-                className="rounded-3 bg-light mt-2 border p-3"
-              >
-                <div className="row g-3">
-                  {(
-                    [
-                      { key: 'screen', label: copy.critLabels.screen },
-                      {
-                        key: 'performance',
-                        label: copy.critLabels.performance,
-                      },
-                      { key: 'camera', label: copy.critLabels.camera },
-                      { key: 'battery', label: copy.critLabels.battery },
-                      { key: 'value', label: copy.critLabels.value },
-                    ] as const
-                  )
-                    .filter((slider) => scoredCriteria.includes(slider.key))
-                    .map((slider) => (
-                      <div key={slider.key} className="col-md-4 col-sm-6">
-                        <div className="d-flex justify-content-between small fw-semibold mb-1">
-                          <span>{slider.label}</span>
-                          <span className="rate-tabular text-danger">
-                            {formatPercent(customWeights[slider.key], locale)}
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          step={5}
-                          value={customWeights[slider.key]}
-                          onChange={(e) =>
-                            updateSingleWeight(
-                              slider.key,
-                              Number(e.target.value)
-                            )
-                          }
-                          className="form-range"
-                          aria-label={slider.label}
-                        />
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
+            <UseCaseWeightBar
+              categorySlug={activeCategory}
+              availableCriteria={scoredCategoryCriteria}
+              mode={weightMode}
+              weights={customWeights}
+              showSliders={showWeightSliders}
+              onToggleSliders={() => setShowWeightSliders((v) => !v)}
+              onSelectPreset={applyPersonaPreset}
+              onUpdateWeight={updateSingleWeight}
+              onReset={resetCustomWeights}
+              locale={locale}
+              variant="light"
+              groupLabelId="leaderboard-persona-label"
+              slidersPanelId="leaderboard-weight-sliders"
+              testIdPrefix="leaderboard-weights"
+              copy={{
+                groupLabel: copy.personaTitle,
+                customizeBtn: copy.customWeightsBtn,
+                customActiveBadge: copy.personaLabels.custom,
+                resetBtn: copy.resetWeightsBtn,
+                normalizedSummaryPrefix: copy.normalizedWeightsPrefix,
+                officialKeepNote: copy.officialScoreKeepNote,
+              }}
+            />
           </div>
         )}
 
@@ -1887,6 +1963,15 @@ export default function LeaderboardExplorer({
                           {rankLabel}
                         </span>
                         <div className="text-end">
+                          {hasActivePersonaWeights && (
+                            <div
+                              className="text-warning fw-semibold mb-1"
+                              style={{ fontSize: '0.8125rem' }}
+                              data-testid="leaderboard-podium-custom-label"
+                            >
+                              {copy.yourCustomScoreLabel}
+                            </div>
+                          )}
                           <StarRating
                             value={entry.activeScore5}
                             digits={scoreDigits}
@@ -1926,7 +2011,16 @@ export default function LeaderboardExplorer({
                               {entry.product.name}
                             </Link>
                           </h3>
-                          <div className="d-flex flex-wrap gap-1">
+                          <div className="d-flex align-items-center flex-wrap gap-1">
+                            {hasActivePersonaWeights && (
+                              <span
+                                className="text-white-50 fw-semibold me-1"
+                                style={{ fontSize: '0.8125rem' }}
+                                data-testid="leaderboard-podium-official-label"
+                              >
+                                {copy.officialRateScoreLabel}:
+                              </span>
+                            )}
                             <StarRating
                               value={entry.userScore5}
                               count={entry.authenticCount}
@@ -2266,7 +2360,15 @@ export default function LeaderboardExplorer({
                 {/* 5-Criteria JReviews Breakdown */}
                 <div className="col-lg-4 col-md-7">
                   <div className="rounded-3 bg-light border p-2 px-3">
-                    <div className="d-flex mb-2 flex-wrap gap-2">
+                    <div className="d-flex align-items-center mb-2 flex-wrap gap-2">
+                      {hasActivePersonaWeights && (
+                        <span
+                          className="small text-muted fw-semibold"
+                          data-testid="leaderboard-row-official-label"
+                        >
+                          {copy.officialRateScoreLabel}:
+                        </span>
+                      )}
                       <StarRating
                         value={entry.userScore5}
                         count={entry.authenticCount}
@@ -2343,7 +2445,11 @@ export default function LeaderboardExplorer({
                 <div className="col-lg-3 col-md-5 text-md-end">
                   <div className="d-flex flex-md-column justify-content-between align-items-center align-items-md-end gap-2">
                     <div>
-                      <div className="small text-muted">{activeScoreLabel}</div>
+                      <div className="small text-muted">
+                        {hasActivePersonaWeights
+                          ? `${copy.yourCustomScoreLabel} (${activeScoreLabel})`
+                          : activeScoreLabel}
+                      </div>
                       <StarRating
                         value={entry.activeScore5}
                         digits={scoreDigits}

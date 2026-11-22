@@ -3312,6 +3312,108 @@ function testReviewValue(): void {
   assert.equal(rules.reviewRatingWeight(1.4, imported.completeness), 1.4);
 }
 
+function testRatingUseCasePresets(): void {
+  assert.deepEqual(rules.RATING_DEVICE_CATEGORIES, [
+    'smartphones',
+    'tablets',
+    'laptops',
+    'smartwatches',
+    'earbuds',
+  ]);
+  for (const id of rules.RATING_USE_CASE_PRESET_IDS) {
+    assert.equal(rules.isUseCasePresetId(id), true, id);
+  }
+  for (const bad of ['__proto__', 'constructor', 'toString', '', null, 42]) {
+    assert.equal(rules.isUseCasePresetId(bad), false, String(bad));
+  }
+
+  for (const slug of rules.RATING_DEVICE_CATEGORIES) {
+    const criteria = rules.getRatingCriteria(slug);
+    const validKeys = new Set<string>(criteria.map((c) => c.key));
+    const presets = rules.getRatingUseCasePresets(slug);
+    assert.ok(presets.length >= 5, `${slug} must define at least 5 presets`);
+    assert.equal(presets[0]?.id, 'default', `${slug} first preset is default`);
+    assert.equal(
+      new Set(presets.map((p) => p.id)).size,
+      presets.length,
+      `${slug} preset ids must be unique`
+    );
+
+    // Default preset matches getRatingCriteria weights exactly.
+    for (const c of criteria) {
+      assert.equal(
+        presets[0]!.weights[c.key],
+        c.weight,
+        `${slug}:default:${c.key} must match official criterion weight`
+      );
+    }
+
+    for (const preset of presets) {
+      for (const [loc, text] of Object.entries(preset.label)) {
+        assert.ok(text.trim(), `${slug}:${preset.id}:${loc} must be non-empty`);
+        assert.doesNotMatch(
+          text,
+          /[\u2013\u2014]/,
+          `${slug}:${preset.id}:${loc} must not contain en/em dashes`
+        );
+      }
+      const entries = Object.entries(preset.weights);
+      assert.equal(
+        entries.length,
+        criteria.length,
+        `${slug}:${preset.id} must specify weights for all category criteria`
+      );
+      let sum = 0;
+      for (const [key, w] of entries) {
+        assert.ok(
+          validKeys.has(key),
+          `${slug}:${preset.id} contains unknown criterion ${key}`
+        );
+        assert.ok(
+          typeof w === 'number' && Number.isInteger(w) && w >= 0 && w <= 100,
+          `${slug}:${preset.id}:${key} weight must be integer 0..100`
+        );
+        sum += w;
+      }
+      assert.equal(sum, 100, `${slug}:${preset.id} weights must sum to 100`);
+    }
+  }
+
+  // Prototype and unknown category guards fall back to smartphones safely.
+  for (const fallbackSlug of [
+    '__proto__',
+    'constructor',
+    'toString',
+    'unknown-cat',
+    '',
+    null,
+    undefined,
+  ]) {
+    assert.deepEqual(
+      rules.getRatingUseCasePresets(fallbackSlug),
+      rules.getRatingUseCasePresets('smartphones'),
+      `fallback for ${String(fallbackSlug)}`
+    );
+  }
+  assert.deepEqual(
+    rules.getRatingUseCasePresets('  LAPTOPS\u0000 '),
+    rules.getRatingUseCasePresets('laptops')
+  );
+  const gamingPhone = rules.getRatingUseCasePresets('smartphones')[1]!;
+  assert.equal(
+    rules.getRatingUseCasePresetLabel(gamingPhone, 'vi'),
+    'Cày game & pin trâu'
+  );
+  assert.equal(
+    rules.getRatingUseCasePresetLabel(gamingPhone, 'en-US'),
+    'Gaming & battery'
+  );
+  assert.equal(
+    rules.getRatingUseCasePresetLabel(gamingPhone, 'cs-CZ'),
+    'Hraní her a výdrž'
+  );
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
@@ -3347,6 +3449,10 @@ function main(): void {
   testRatingCriteriaAndReviewForm();
   console.log(
     '  ✅ [11/11] Rating criteria and review form rules (DOS/Rate#1542) verified'
+  );
+  testRatingUseCasePresets();
+  console.log(
+    '  ✅ [12/15] RTINGS-style category use-case presets (DOS/Rate#1864) verified'
   );
   testProductPoints();
   console.log('  ✅ [12/12] Product pros and cons (DOS/Rate#1546) verified');
