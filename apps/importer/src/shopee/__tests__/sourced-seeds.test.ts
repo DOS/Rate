@@ -211,9 +211,7 @@ for (const key of [
   assert.equal((update as Record<string, unknown>).battery_mah, 5000);
   assert.deepEqual((update as Record<string, unknown>).colors, seed.colors);
   // A seed with nothing to retract keeps its stored label.
-  const plain = FLAGSHIP_DEVICES_TO_SEED.find(
-    s => s.model_key === 'samsung:galaxy-s24-ultra:256gb'
-  )!;
+  const plain = FLAGSHIP_DEVICES_TO_SEED.find(s => s.model_key === 'apple:iphone-16e:128gb')!;
   assert.equal('variant_name' in seedMasterSpecUpdate(null, plain), false);
 }
 

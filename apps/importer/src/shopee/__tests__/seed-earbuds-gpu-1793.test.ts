@@ -119,6 +119,12 @@ const STORED_TEMPLATE_TEXT = {
       technology: 'Bluetooth 5.3 + Ultra Wideband (U1)',
       sim_type: 'Wireless Audio Accessory',
     },
+    connectivity: {
+      bluetooth: '5.4, A2DP, LE',
+    },
+    regulatory: {
+      certifications: 'CE, FCC, RoHS, QCVN',
+    },
     battery: { capacity_mah: 1 },
   },
   key_specs: {
@@ -157,6 +163,7 @@ const RETRACTED_EVERYWHERE = [
   'connectivity.nfc',
   'cellular.has_5g',
   'multimedia.headphone_jack_35mm',
+  'regulatory.certifications',
 ];
 
 // The fields only some earlier seeds set.
@@ -169,11 +176,12 @@ const RETRACTED_ALSO: Record<string, readonly string[]> = {
     'cellular.volte',
     'cellular.vowifi',
   ],
-  'apple:airpods-pro-3:standard': ['connectivity.location'],
+  'apple:airpods-pro-3:standard': ['connectivity.bluetooth', 'connectivity.location'],
   'sony:wf-1000xm5:64gb': [
     'display.ppi',
     'display.protection',
     'camera.video_recording',
+    'connectivity.bluetooth',
     'connectivity.location',
     'cellular.volte',
     'cellular.vowifi',
@@ -182,11 +190,12 @@ const RETRACTED_ALSO: Record<string, readonly string[]> = {
     'display.ppi',
     'display.protection',
     'camera.video_recording',
+    'connectivity.bluetooth',
     'connectivity.location',
     'cellular.volte',
     'cellular.vowifi',
   ],
-  'sony:wf-1000xm6:standard': [],
+  'sony:wf-1000xm6:standard': ['connectivity.bluetooth'],
 };
 
 test('the backfill removes the stored earbud template text from masters and Items', async () => {
