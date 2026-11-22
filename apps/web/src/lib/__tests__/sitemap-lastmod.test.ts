@@ -797,7 +797,13 @@ async function main() {
     ) => {
       assert.ok(urls.length > 0, `${label}: expected compare URLs`);
       for (const fullUrl of urls) {
-        const pathname = new URL(fullUrl).pathname;
+        const parsedUrl = new URL(fullUrl);
+        assert.equal(
+          parsedUrl.origin,
+          'https://rate.vn',
+          `${label}: unexpected origin in ${fullUrl}`
+        );
+        const pathname = parsedUrl.pathname;
         const versus = pathname.replace(/^\/compare\//, '');
         const parsedLower = parseVersusSlugs(versus);
         const parsedTyped = parseVersusSlugs(versus, true);
@@ -933,8 +939,12 @@ async function main() {
     for (const mode of ['item', 'nullable_variant'] as const) {
       process.env.RATE_ITEM_MODEL = mode;
       const entries = await sitemap();
-      const compareEntries = entries.filter((e) => e.url.includes('/compare/'));
+      const compareEntries = entries.filter((e) =>
+        new URL(e.url).pathname.startsWith('/compare/')
+      );
       const compareUrls = compareEntries.map((e) => e.url);
+      const comparePaths = compareEntries.map((e) => new URL(e.url).pathname);
+      const comparePathSet = new Set(comparePaths);
 
       assertEveryCompareUrlRenders200(compareUrls, true, `[${mode}]`);
 
@@ -951,8 +961,8 @@ async function main() {
       );
       const iphoneVsGalaxy = compareEntries.find(
         (e) =>
-          e.url ===
-          'https://rate.vn/compare/Apple-iPhone-16-Pro-Max-vs-samsung-galaxy-s25-ultra'
+          new URL(e.url).pathname ===
+          '/compare/Apple-iPhone-16-Pro-Max-vs-samsung-galaxy-s25-ultra'
       );
       assert.equal(
         (iphoneVsGalaxy?.lastModified as Date | undefined)?.toISOString(),
@@ -965,8 +975,8 @@ async function main() {
       // skips 'tab-case-vs-cover-256gb', and resolves lastModified (2026-10-17).
       const tabletFallback = compareEntries.find(
         (e) =>
-          e.url ===
-          'https://rate.vn/compare/ipad-pro-m4-256gb-vs-samsung-galaxy-tab-s10-ultra'
+          new URL(e.url).pathname ===
+          '/compare/ipad-pro-m4-256gb-vs-samsung-galaxy-tab-s10-ultra'
       );
       assert.ok(
         tabletFallback,
@@ -978,9 +988,9 @@ async function main() {
         `[${mode}] fallback variant versus URL must still resolve Item newest lastModified`
       );
       assert.ok(
-        !compareUrls.some(
-          (u) =>
-            u.includes('Ipad-Pro-M4-BadCase') || u.includes('ipad-pro-m4-512gb')
+        !comparePaths.some(
+          (p) =>
+            p.includes('Ipad-Pro-M4-BadCase') || p.includes('ipad-pro-m4-512gb')
         ),
         `[${mode}] invalid #1 and duplicate #3 variants of overlong-slug Item must not emit`
       );
@@ -988,38 +998,32 @@ async function main() {
       // Laptops: Alpha-Book-VS vs beta-book-vs (both ending in -vs) excluded;
       // single trailing -vs pairs emit in parseable order (zeta-ultrabook first).
       assert.ok(
-        !compareUrls.some(
-          (u) =>
-            u.toLowerCase().includes('alpha-book-vs') &&
-            u.toLowerCase().includes('beta-book-vs')
+        !comparePaths.some(
+          (p) =>
+            p.toLowerCase().includes('alpha-book-vs') &&
+            p.toLowerCase().includes('beta-book-vs')
         ),
         `[${mode}] unparseable pair of two -vs-suffixed slugs must be excluded`
       );
       assert.ok(
-        compareUrls.includes(
-          'https://rate.vn/compare/zeta-ultrabook-vs-Alpha-Book-VS'
-        ) &&
-          compareUrls.includes(
-            'https://rate.vn/compare/zeta-ultrabook-vs-beta-book-vs'
-          ),
+        comparePathSet.has('/compare/zeta-ultrabook-vs-Alpha-Book-VS') &&
+          comparePathSet.has('/compare/zeta-ultrabook-vs-beta-book-vs'),
         `[${mode}] single trailing -vs Item slug paired with normal slug emits in parseable canonical order`
       );
 
       // Smartwatches: cross-category duplicate iPhone vs Galaxy pair skipped by versusSeen;
       // valid watch pair still emits.
       assert.equal(
-        compareUrls.filter(
-          (u) =>
-            u.toLowerCase() ===
-            'https://rate.vn/compare/apple-iphone-16-pro-max-vs-samsung-galaxy-s25-ultra'
+        comparePaths.filter(
+          (p) =>
+            p.toLowerCase() ===
+            '/compare/apple-iphone-16-pro-max-vs-samsung-galaxy-s25-ultra'
         ).length,
         1,
         `[${mode}] cross-category duplicate pairKey must be emitted only once`
       );
       assert.ok(
-        compareUrls.includes(
-          'https://rate.vn/compare/apple-watch-ultra-2-vs-garmin-fenix-8'
-        ),
+        comparePathSet.has('/compare/apple-watch-ultra-2-vs-garmin-fenix-8'),
         `[${mode}] smartwatches must still emit valid watch-vs-watch URL after skipping cross-category duplicate`
       );
 
@@ -1027,25 +1031,21 @@ async function main() {
       // lowercase 'sony-wf-1000xm5' emits; unlinked 'foo-cross-case' never inherits
       // smartwatches' 'Foo-Cross-Case' Item ('unrelated-watch-foo').
       assert.ok(
-        !compareUrls.some((u) => u.includes('Sony-WF-1000XM5')) &&
-          !compareUrls.some((u) => u.includes('unrelated-watch-foo')),
+        !comparePaths.some((p) => p.includes('Sony-WF-1000XM5')) &&
+          !comparePaths.some((p) => p.includes('unrelated-watch-foo')),
         `[${mode}] unlinked mixed-case rows must be skipped and unlinked lowercase rows must never cross-link by case`
       );
       assert.ok(
-        compareUrls.includes(
-          'https://rate.vn/compare/apple-airpods-pro-2-vs-sony-wf-1000xm5'
-        ) &&
-          compareUrls.includes(
-            'https://rate.vn/compare/foo-cross-case-vs-sony-wf-1000xm5'
-          ),
+        comparePathSet.has('/compare/apple-airpods-pro-2-vs-sony-wf-1000xm5') &&
+          comparePathSet.has('/compare/foo-cross-case-vs-sony-wf-1000xm5'),
         `[${mode}] valid lowercase unlinked earbuds emit canonical 200 versus URLs`
       );
 
       assert.ok(
-        !compareUrls.some(
-          (u) =>
-            u.toLowerCase().includes('case-vs-cover') ||
-            u.toLowerCase().includes('caseco-flagship-256gb')
+        !comparePaths.some(
+          (p) =>
+            p.toLowerCase().includes('case-vs-cover') ||
+            p.toLowerCase().includes('caseco-flagship-256gb')
         ),
         `[${mode}] slugs containing -vs- (any case) and variants of -vs- Items must never appear in sitemap`
       );
@@ -1061,9 +1061,13 @@ async function main() {
     delete process.env.RATE_ITEM_MODEL;
     const offEntries = await sitemap();
     const offCompareEntries = offEntries.filter((e) =>
-      e.url.includes('/compare/')
+      new URL(e.url).pathname.startsWith('/compare/')
     );
     const offCompareUrls = offCompareEntries.map((e) => e.url);
+    const offComparePaths = offCompareEntries.map(
+      (e) => new URL(e.url).pathname
+    );
+    const offComparePathSet = new Set(offComparePaths);
 
     assertEveryCompareUrlRenders200(offCompareUrls, false, '[flag off]');
 
@@ -1080,39 +1084,35 @@ async function main() {
       '[flag off] variant mode pairs distinct variant slugs via versusHref'
     );
     assert.equal(
-      offCompareUrls.filter(
-        (u) =>
-          u ===
-          'https://rate.vn/compare/apple-iphone-16-pro-max-256gb-vs-caseco-flagship-256gb'
+      offComparePaths.filter(
+        (p) =>
+          p ===
+          '/compare/apple-iphone-16-pro-max-256gb-vs-caseco-flagship-256gb'
       ).length,
       1,
       '[flag off] cross-category duplicate variant pair must be emitted only once via versusSeen'
     );
     assert.ok(
-      !offCompareUrls.some((u) => u.toLowerCase().includes('case-vs-cover')),
+      !offComparePaths.some((p) => p.toLowerCase().includes('case-vs-cover')),
       '[flag off] variant slug containing -vs- must be excluded in variant mode too'
     );
     assert.ok(
-      !offCompareUrls.some(
-        (u) =>
-          u.toLowerCase().includes('alpha-book-vs') &&
-          u.toLowerCase().includes('beta-book-vs')
+      !offComparePaths.some(
+        (p) =>
+          p.toLowerCase().includes('alpha-book-vs') &&
+          p.toLowerCase().includes('beta-book-vs')
       ),
       '[flag off] unparseable trailing -vs pair must be excluded in variant mode too'
     );
     assert.ok(
-      offCompareUrls.includes(
-        'https://rate.vn/compare/zeta-ultrabook-vs-alpha-book-vs'
-      ) &&
-        offCompareUrls.includes(
-          'https://rate.vn/compare/zeta-ultrabook-vs-beta-book-vs'
-        ),
+      offComparePathSet.has('/compare/zeta-ultrabook-vs-alpha-book-vs') &&
+        offComparePathSet.has('/compare/zeta-ultrabook-vs-beta-book-vs'),
       '[flag off] single trailing -vs variant slug paired with normal slug emits in parseable lowercase order'
     );
     assert.ok(
-      !offCompareUrls.some((u) => u.includes('Sony-WF-1000XM5')) &&
-        offCompareUrls.includes(
-          'https://rate.vn/compare/apple-airpods-pro-2-vs-sony-wf-1000xm5'
+      !offComparePaths.some((p) => p.includes('Sony-WF-1000XM5')) &&
+        offComparePathSet.has(
+          '/compare/apple-airpods-pro-2-vs-sony-wf-1000xm5'
         ),
       '[flag off] mixed-case variant slug is skipped so valid lowercase sibling emits canonical 200 URL'
     );
