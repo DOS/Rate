@@ -3224,3 +3224,596 @@ test('an all-bare leaderboard link records the published masters it represents',
   assert.equal(query.get('variant.acme'), 'acme-retail-1tb');
   assert.equal(query.get('variant.peer'), 'peer-512gb');
 });
+
+test('RTINGS-style UseCaseWeightBar SSR, Official vs Custom Score parity & WCAG 2.1 AA a11y across vi/en/cs (#1864)', () => {
+  const IntlProvider =
+    NextIntlClientProvider as unknown as React.ComponentType<{
+      locale: string;
+      messages: Record<string, unknown>;
+      timeZone: string;
+      children?: React.ReactNode;
+    }>;
+  const stubRouter: AppRouterInstance = {
+    bfcacheId: '',
+    back: () => {},
+    forward: () => {},
+    refresh: () => {},
+    push: () => {},
+    replace: () => {},
+    prefetch: () => {},
+  };
+
+  const HTML_ENTITY_MAP: Readonly<Record<string, string>> = {
+    amp: '&',
+    quot: '"',
+    '#x27': "'",
+    '#39': "'",
+    lt: '<',
+    gt: '>',
+  };
+
+  const extractMarkupText = (
+    fragment: string,
+    skipAriaHidden = false
+  ): string => {
+    const out: string[] = [];
+    let hiddenDepth = 0;
+    let i = 0;
+    while (i < fragment.length) {
+      if (fragment[i] === '<') {
+        let end = i + 1;
+        let quote: string | null = null;
+        while (end < fragment.length) {
+          const ch = fragment[end]!;
+          if (quote) {
+            if (ch === quote) quote = null;
+          } else if (ch === '"' || ch === "'") {
+            quote = ch;
+          } else if (ch === '>') {
+            break;
+          }
+          end += 1;
+        }
+        const tagInner = fragment.slice(i + 1, end).trim();
+        const isClosing = tagInner.startsWith('/');
+        const isSelfClosing = tagInner.endsWith('/');
+        if (isClosing) {
+          if (hiddenDepth > 0) hiddenDepth -= 1;
+        } else if (hiddenDepth > 0) {
+          if (!isSelfClosing) hiddenDepth += 1;
+        } else if (
+          skipAriaHidden &&
+          /\baria-hidden\s*=\s*(?:"true"|'true')/i.test(tagInner)
+        ) {
+          if (!isSelfClosing) hiddenDepth = 1;
+        }
+        if (hiddenDepth === 0) out.push(' ');
+        i = end + 1;
+        continue;
+      }
+      if (hiddenDepth === 0) {
+        out.push(fragment[i]!);
+      }
+      i += 1;
+    }
+    return out
+      .join('')
+      .replace(
+        /&(amp|quot|#x27|#39|lt|gt);/g,
+        (full, key: string) => HTML_ENTITY_MAP[key] ?? full
+      )
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const assertAccessibleControls = (html: string, context: string) => {
+    assert.doesNotMatch(
+      html,
+      /[\u2013\u2014]|&mdash;|&ndash;/,
+      `${context}: zero em-dashes or en-dashes`
+    );
+
+    const rangeInputs = [
+      ...html.matchAll(/<input\b[^>]*type="range"[^>]*>/g),
+    ].map((m) => m[0]);
+    assert.ok(
+      rangeInputs.length >= 5,
+      `${context}: renders category criterion range sliders`
+    );
+    for (const inputTag of rangeInputs) {
+      const idMatch = /\bid="([^"]+)"/.exec(inputTag);
+      assert.ok(idMatch?.[1], `${context}: range input must carry an id`);
+      const escapedId = idMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const labelRe = new RegExp(
+        `<label\\b[^>]*\\bfor="${escapedId}"[^>]*>([\\s\\S]*?)<\\/label>`
+      );
+      const labelMatch = labelRe.exec(html);
+      assert.ok(
+        labelMatch && extractMarkupText(labelMatch[1] ?? '').length > 0,
+        `${context}: range input #${idMatch[1]} must have a non-empty <label htmlFor>`
+      );
+    }
+
+    // WCAG 2.5.3 / axe label-content-name-mismatch: any button carrying BOTH
+    // visible text (excluding aria-hidden icons) and aria-label must include
+    // its visible text inside aria-label.
+    const buttons = [
+      ...html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g),
+    ];
+    for (const [, attrs = '', inner = ''] of buttons) {
+      const ariaMatch = /\baria-label="([^"]+)"/.exec(attrs);
+      if (!ariaMatch) continue;
+      const visible = extractMarkupText(inner, true);
+      if (!visible) continue;
+      assert.ok(
+        ariaMatch[1]!.toLowerCase().includes(visible.toLowerCase()),
+        `${context}: button aria-label "${ariaMatch[1]}" must contain visible text "${visible}"`
+      );
+    }
+  };
+
+  const cameraPhone: ItemCatalogRow = {
+    id: 'prod-cam-pro',
+    slug: 'camera-pro-max',
+    name: 'Camera Pro Max',
+    brand: 'Acme',
+    model: 'Camera Pro Max',
+    rating_score: 4.5,
+    user_rating_weighted: 4.5,
+    expert_rating: 8.8,
+    authentic_review_count: 24,
+    total_reviews: 28,
+    min_price: 24_990_000,
+    max_price: 26_990_000,
+    merchant_count: 5,
+    metadata: { category_slug: 'smartphones' },
+    specifications: {
+      display: { size_inch: 6.7, refresh_rate_hz: 120 },
+      hardware: { ram_gb: 12, storage_gb: 256 },
+      battery: { capacity_mah: 5000, fast_charging_w: 45 },
+      camera: { main_camera: '50 MP OIS', second_camera: '48 MP' },
+    },
+    criteria_scores: {
+      camera: { score: 4.9, writers: 14 },
+      display: { score: 4.7, writers: 14 },
+      performance: { score: 3.6, writers: 14 },
+      battery: { score: 3.8, writers: 14 },
+      design: { score: 4.5, writers: 14 },
+      value: { score: 3.9, writers: 14 },
+    },
+    expert_criteria_scores: {
+      screen: 4.7,
+      performance: 3.6,
+      camera: 4.9,
+      battery: 3.8,
+      value: 3.9,
+    },
+  } as unknown as ItemCatalogRow;
+
+  const gamingPhone: ItemCatalogRow = {
+    id: 'prod-game-beast',
+    slug: 'gaming-beast-ultra',
+    name: 'Gaming Beast Ultra',
+    brand: 'Zenith',
+    model: 'Gaming Beast Ultra',
+    rating_score: 4.2,
+    user_rating_weighted: 4.2,
+    expert_rating: 8.4,
+    authentic_review_count: 19,
+    total_reviews: 21,
+    min_price: 18_990_000,
+    max_price: 20_490_000,
+    merchant_count: 4,
+    metadata: { category_slug: 'smartphones' },
+    specifications: {
+      display: { size_inch: 6.8, refresh_rate_hz: 144 },
+      hardware: { ram_gb: 16, storage_gb: 512 },
+      battery: { capacity_mah: 6000, fast_charging_w: 80 },
+      camera: { main_camera: '50 MP', second_camera: '8 MP' },
+    },
+    criteria_scores: {
+      camera: { score: 3.5, writers: 12 },
+      display: { score: 4.5, writers: 12 },
+      performance: { score: 4.95, writers: 12 },
+      battery: { score: 4.85, writers: 12 },
+      design: { score: 4.0, writers: 12 },
+      value: { score: 4.7, writers: 12 },
+    },
+    expert_criteria_scores: {
+      screen: 4.5,
+      performance: 4.95,
+      camera: 3.5,
+      battery: 4.85,
+      value: 4.7,
+    },
+  } as unknown as ItemCatalogRow;
+
+  const unratedPhone: ItemCatalogRow = {
+    id: 'prod-unrated-lite',
+    slug: 'unrated-phone-lite',
+    name: 'Unrated Phone Lite',
+    brand: 'Nova',
+    model: 'Unrated Phone Lite',
+    rating_score: 4.1,
+    user_rating_weighted: 4.1,
+    authentic_review_count: 6,
+    total_reviews: 6,
+    min_price: 9_990_000,
+    merchant_count: 2,
+    metadata: { category_slug: 'smartphones' },
+    specifications: {
+      display: { size_inch: 6.5, refresh_rate_hz: 90 },
+      hardware: { ram_gb: 8, storage_gb: 128 },
+      battery: { capacity_mah: 5000 },
+    },
+  } as unknown as ItemCatalogRow;
+
+  const localeBundles = [
+    {
+      locale: 'vi',
+      messages: viMessages as unknown as Record<string, unknown>,
+    },
+    {
+      locale: 'en',
+      messages: enMessages as unknown as Record<string, unknown>,
+    },
+    {
+      locale: 'cs',
+      messages: csMessages as unknown as Record<string, unknown>,
+    },
+  ] as const;
+
+  for (const { locale, messages } of localeBundles) {
+    const compareCopy = messages.compare as Record<string, string>;
+    const leaderboardCopy = messages.leaderboard as Record<string, string>;
+
+    // 1. LeaderboardExplorer SSR: Gaming preset flips leader to Gaming Beast Ultra
+    // while keeping Official Rate.vn Score alongside Your Custom Score
+    const lbGamingHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: stubRouter },
+        React.createElement(
+          IntlProvider,
+          {
+            locale,
+            messages: pickClientMessages(messages, 'leaderboard'),
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(LeaderboardExplorer, {
+            products: [cameraPhone, gamingPhone],
+            locale,
+            initialCategory: 'smartphones',
+            initialWeightMode: 'gaming',
+            initialShowWeightSliders: true,
+          })
+        )
+      )
+    );
+    assertAccessibleControls(lbGamingHtml, `Leaderboard(${locale})`);
+    assert.match(lbGamingHtml, /data-testid="leaderboard-weights-bar"/);
+    assert.match(
+      lbGamingHtml,
+      /data-testid="leaderboard-weights-preset-gaming"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*data-testid="leaderboard-weights-preset-gaming"/
+    );
+    assert.ok(
+      lbGamingHtml.includes(leaderboardCopy.officialRateScoreLabel!),
+      `Leaderboard(${locale}) keeps official Rate.vn score label visible`
+    );
+    assert.ok(
+      lbGamingHtml.includes(leaderboardCopy.yourCustomScoreLabel!),
+      `Leaderboard(${locale}) renders Your Custom Score label`
+    );
+    const weightBarSlice =
+      /data-testid="leaderboard-weights-bar"[\s\S]*?data-testid="leaderboard-weights-sliders-panel"/.exec(
+        lbGamingHtml
+      )?.[0] ?? '';
+    assert.doesNotMatch(
+      weightBarSlice,
+      /\bbtn-dark\b/,
+      'UseCaseWeightBar must never use btn-dark so leaderboard.spec.ts active criterion selector stays unique'
+    );
+    assert.ok(
+      lbGamingHtml.indexOf('Gaming Beast Ultra') <
+        lbGamingHtml.indexOf('Camera Pro Max'),
+      `Leaderboard(${locale}) ranks Gaming Beast Ultra #1 under gaming preset`
+    );
+
+    const lbCameraHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: stubRouter },
+        React.createElement(
+          IntlProvider,
+          {
+            locale,
+            messages: pickClientMessages(messages, 'leaderboard'),
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(LeaderboardExplorer, {
+            products: [cameraPhone, gamingPhone],
+            locale,
+            initialCategory: 'smartphones',
+            initialWeightMode: 'camera',
+          })
+        )
+      )
+    );
+    assert.ok(
+      lbCameraHtml.indexOf('Camera Pro Max') <
+        lbCameraHtml.indexOf('Gaming Beast Ultra'),
+      `Leaderboard(${locale}) ranks Camera Pro Max #1 under camera preset`
+    );
+
+    // Unscored seed products render zero preset controls (#1553)
+    const lbUnscoredHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: stubRouter },
+        React.createElement(
+          IntlProvider,
+          {
+            locale,
+            messages: pickClientMessages(messages, 'leaderboard'),
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(LeaderboardExplorer, {
+            products: [unratedPhone],
+            locale,
+          })
+        )
+      )
+    );
+    assert.doesNotMatch(
+      lbUnscoredHtml,
+      /data-testid="leaderboard-weights-bar"/
+    );
+
+    // 2. CompareWorkspace SSR: Camera preset + unrated product graceful handling
+    const compareHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: stubRouter },
+        React.createElement(
+          IntlProvider,
+          {
+            locale,
+            messages: pickClientMessages(messages, 'compare'),
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(CompareWorkspace, {
+            initialProducts: [
+              cameraPhone as unknown as MasterProduct,
+              gamingPhone as unknown as MasterProduct,
+              unratedPhone as unknown as MasterProduct,
+            ],
+            catalogCandidates: [
+              cameraPhone as unknown as MasterProduct,
+              gamingPhone as unknown as MasterProduct,
+              unratedPhone as unknown as MasterProduct,
+            ],
+            initialCategory: 'smartphones',
+            hasExplicitSlugs: true,
+            locale,
+            initialWeightMode: 'camera',
+            initialShowWeightSliders: true,
+          })
+        )
+      )
+    );
+    assertAccessibleControls(compareHtml, `CompareWorkspace(${locale})`);
+    assert.match(compareHtml, /data-testid="compare-use-case-card"/);
+    assert.match(compareHtml, /data-testid="compare-custom-winner-banner"/);
+    assert.match(compareHtml, /data-testid="compare-custom-score-row"/);
+    assert.equal(
+      [...compareHtml.matchAll(/data-testid="compare-col-custom-score"/g)]
+        .length,
+      3,
+      `CompareWorkspace(${locale}) renders custom score badge in all 3 product columns`
+    );
+    assert.ok(
+      compareHtml.includes(compareCopy.officialRateScoreLabel!),
+      `CompareWorkspace(${locale}) keeps official Rate.vn score label visible`
+    );
+    assert.ok(
+      compareHtml.includes(compareCopy.criterionNoData!),
+      `CompareWorkspace(${locale}) shows criterionNoData for unrated product instead of inventing a score`
+    );
+
+    // CompareWorkspace with layout="versus" does NOT duplicate UseCaseWeightBar
+    const compareInVersusLayoutHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: stubRouter },
+        React.createElement(
+          IntlProvider,
+          {
+            locale,
+            messages: pickClientMessages(messages, 'compare'),
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(CompareWorkspace, {
+            initialProducts: [
+              cameraPhone as unknown as MasterProduct,
+              gamingPhone as unknown as MasterProduct,
+            ],
+            catalogCandidates: [
+              cameraPhone as unknown as MasterProduct,
+              gamingPhone as unknown as MasterProduct,
+            ],
+            initialCategory: 'smartphones',
+            hasExplicitSlugs: true,
+            locale,
+            layout: 'versus',
+          })
+        )
+      )
+    );
+    assert.doesNotMatch(
+      compareInVersusLayoutHtml,
+      /data-testid="compare-use-case-card"/
+    );
+
+    // 3. VersusInteractiveScoreboard SSR: dark variant custom weights + sliders
+    const scoredA = scoreMasterProductForLeaderboard(
+      cameraPhone as unknown as MasterProduct,
+      'combined'
+    );
+    const scoredB = scoreMasterProductForLeaderboard(
+      gamingPhone as unknown as MasterProduct,
+      'combined'
+    );
+    const versusHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: stubRouter },
+        React.createElement(
+          IntlProvider,
+          {
+            locale,
+            messages: pickClientMessages(messages, 'compare'),
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(VersusInteractiveScoreboard, {
+            scoreA: scoredA,
+            scoreB: scoredB,
+            locale,
+            initialWeightMode: 'custom',
+            initialCategoryWeights: {
+              performance: 60,
+              battery: 40,
+              camera: 0,
+              display: 0,
+              design: 0,
+              value: 0,
+            },
+            initialShowSliders: true,
+          })
+        )
+      )
+    );
+    assertAccessibleControls(versusHtml, `VersusScoreboard(${locale})`);
+    assert.match(versusHtml, /data-testid="versus-weights-bar"/);
+    assert.match(versusHtml, /data-testid="versus-custom-score-banner"/);
+    assert.doesNotMatch(
+      versusHtml,
+      /data-testid="versus-persona-lead"/,
+      'VersusScoreboard suppresses duplicate legacy persona-lead line when custom-score banner is active'
+    );
+    assert.doesNotMatch(
+      versusHtml,
+      /font-size:0\.75rem/i,
+      'Zero 12px (0.75rem) inline text below DESIGN.md 13px floor'
+    );
+    assert.ok(
+      versusHtml.includes(compareCopy.officialRateScoreLabel!),
+      `VersusScoreboard(${locale}) keeps official Rate.vn score label visible`
+    );
+    assert.ok(
+      versusHtml.includes(compareCopy.yourCustomScoreLabel!),
+      `VersusScoreboard(${locale}) renders Your Custom Score label`
+    );
+
+    // 4. Category-specific preset label check on Laptops ("Gaming & thermals", not phone "Gaming & battery")
+    // and IEEE-754 4.31 vs 4.30 non-tie check (#1864 Round-1 review)
+    const laptopA: ItemCatalogRow = {
+      id: 'lap-a',
+      slug: 'acme-probook-14',
+      name: 'Acme ProBook 14',
+      brand: 'Acme',
+      model: 'ProBook 14',
+      rating_score: 4.4,
+      user_rating_weighted: 4.4,
+      authentic_review_count: 14,
+      total_reviews: 14,
+      min_price: 29_990_000,
+      merchant_count: 3,
+      metadata: { category_slug: 'laptops' },
+      specifications: {
+        display: { size_inch: 14, refresh_rate_hz: 120 },
+        hardware: { ram_gb: 16, storage_gb: 512 },
+        battery: { capacity_mah: 5000 },
+      },
+      criteria_scores: {
+        performance: { score: 4.31, writers: 12 },
+        thermals: { score: 4.31, writers: 12 },
+        display: { score: 4.31, writers: 12 },
+        battery: { score: 4.31, writers: 12 },
+        keyboard: { score: 4.31, writers: 12 },
+        design: { score: 4.31, writers: 12 },
+        value: { score: 4.31, writers: 12 },
+      },
+    } as unknown as ItemCatalogRow;
+    const laptopB: ItemCatalogRow = {
+      ...laptopA,
+      id: 'lap-b',
+      slug: 'zenith-thinkbook-16',
+      name: 'Zenith ThinkBook 16',
+      brand: 'Zenith',
+      model: 'ThinkBook 16',
+      criteria_scores: {
+        performance: { score: 4.3, writers: 12 },
+        thermals: { score: 4.3, writers: 12 },
+        display: { score: 4.3, writers: 12 },
+        battery: { score: 4.3, writers: 12 },
+        keyboard: { score: 4.3, writers: 12 },
+        design: { score: 4.3, writers: 12 },
+        value: { score: 4.3, writers: 12 },
+      },
+    } as unknown as ItemCatalogRow;
+
+    const compareLaptopsHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: stubRouter },
+        React.createElement(
+          IntlProvider,
+          {
+            locale,
+            messages: pickClientMessages(messages, 'compare'),
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(CompareWorkspace, {
+            initialProducts: [
+              laptopA as unknown as MasterProduct,
+              laptopB as unknown as MasterProduct,
+            ],
+            catalogCandidates: [
+              laptopA as unknown as MasterProduct,
+              laptopB as unknown as MasterProduct,
+            ],
+            initialCategory: 'laptops',
+            hasExplicitSlugs: true,
+            locale,
+            initialWeightMode: 'gaming',
+          })
+        )
+      )
+    );
+    const expectedLaptopGamingLabel =
+      locale === 'vi'
+        ? 'Gaming &amp; tản nhiệt'
+        : locale === 'cs'
+          ? 'Hraní her a chlazení'
+          : 'Gaming &amp; thermals';
+    assert.ok(
+      compareLaptopsHtml.includes(expectedLaptopGamingLabel),
+      `CompareWorkspace(${locale}) renders laptop-specific gaming preset label`
+    );
+    const laptopBannerMatch =
+      /data-testid="compare-custom-winner-banner"[\s\S]*?<\/div>\s*<\/div>/.exec(
+        compareLaptopsHtml
+      );
+    assert.ok(
+      laptopBannerMatch &&
+        laptopBannerMatch[0].includes('Acme ProBook 14') &&
+        /\+0[.,]01/.test(laptopBannerMatch[0]),
+      `CompareWorkspace(${locale}) treats 4.31 vs 4.30 as a +0.01 lead, never an IEEE-754 tie`
+    );
+    assert.doesNotMatch(
+      compareLaptopsHtml,
+      /font-size:0\.75rem/i,
+      'Zero 12px (0.75rem) inline text in CompareWorkspace'
+    );
+  }
+});

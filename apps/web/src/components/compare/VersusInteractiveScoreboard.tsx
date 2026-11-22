@@ -1,14 +1,47 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { BsSliders } from 'react-icons/bs';
+import type {
+  RatingCriterionKey,
+  UseCasePresetId,
+} from '@repo/shared-data/rules';
 import { Link } from '@/lib/navigation';
 import {
   MAX_VALID_VND_PRICE,
   comparePositiveMinPrices,
 } from '@/lib/rate-domain';
-import { sharedScoredCriteria } from '@/lib/leaderboard-engine';
+import {
+  CRITERION_RANK_WRITERS,
+  sharedScoredCriteria,
+} from '@/lib/leaderboard-engine';
+import {
+  availableCategoryUseCasePresets,
+  computeCustomWeightedScore5,
+  defaultCategoryWeights,
+  extractCategoryCriteriaScores,
+  isDefaultCategoryWeights,
+  mergeUseCaseQueryIntoSearch,
+  normalizeCategoryWeights,
+  parseUseCaseWeightsFromParams,
+  resolveCategoryPreset,
+  resolveLocalizedPresetName,
+  sanitizeSliderWeight,
+  sharedCategoryCriteriaForPair,
+  toLegacyCriteriaWeights,
+  toLegacyVersusPersona,
+  type ActiveWeightMode,
+  type CategoryCriterionWeights,
+} from '@/lib/use-case-weights';
+import UseCaseWeightBar from './UseCaseWeightBar';
 import {
   getRadarSignal,
   RADAR_CSV_HEADERS,
@@ -46,6 +79,7 @@ import {
   displayedScore5,
   formatRatingValue,
   formatScoreFixed,
+  roundScore,
 } from '@/lib/rating-display';
 
 export {
@@ -65,6 +99,9 @@ interface VersusInteractiveScoreboardProps {
   readonly scoreA: ScoredVersusItem;
   readonly scoreB: ScoredVersusItem;
   readonly locale?: string;
+  readonly initialWeightMode?: ActiveWeightMode;
+  readonly initialCategoryWeights?: CategoryCriterionWeights;
+  readonly initialShowSliders?: boolean;
 }
 
 export function sanitizeVersusExportSlug(value: unknown): string {
@@ -199,16 +236,41 @@ export function formatVersusWeightedMarkdown(
   };
 }
 
+function VersusUrlWeightsSync({
+  categorySlug,
+  onSync,
+}: {
+  readonly categorySlug: string;
+  readonly onSync: (
+    cat: string,
+    rawPreset: string | null,
+    rawWeights: string | null
+  ) => void;
+}) {
+  const searchParams = useSearchParams();
+  const rawPreset = searchParams.get('preset');
+  const rawWeights = searchParams.get('weights');
+  useEffect(
+    () => onSync(categorySlug, rawPreset, rawWeights),
+    [categorySlug, rawPreset, rawWeights, onSync]
+  );
+  return null;
+}
+
 export default function VersusInteractiveScoreboard({
   scoreA: firstScore,
   scoreB: secondScore,
   locale: localeProp,
+  initialWeightMode = 'default',
+  initialCategoryWeights,
+  initialShowSliders = false,
 }: VersusInteractiveScoreboardProps) {
   // A pair has one URL, its sides sorted (DOS/Rate#1367), so the swap button
   // swaps the two sides here instead of linking to the other order.
   const [swapped, setSwapped] = useState<boolean>(false);
   const scoreA = swapped ? secondScore : firstScore;
   const scoreB = swapped ? firstScore : secondScore;
+  const catSlug = scoreA.categorySlug || 'smartphones';
   const t = useTranslations('compare');
   const tStars = useTranslations('starRating');
   const hookLocale = useLocale();
@@ -218,26 +280,138 @@ export default function VersusInteractiveScoreboard({
     score > 0 ? formatRatingValue(score, locale) : tStars('empty');
   const useCaseLabelId = useId();
   const slidersPanelId = useId();
-  const [persona, setPersona] = useState<PersonaPresetKey>('default');
-  const [weights, setWeights] = useState<CriteriaWeights>(
-    PERSONA_WEIGHTS.default
-  );
-  const [showSliders, setShowSliders] = useState<boolean>(false);
+  const [weightMode, setWeightMode] =
+    useState<ActiveWeightMode>(initialWeightMode);
+  const [categoryWeights, setCategoryWeights] =
+    useState<CategoryCriterionWeights>(() => {
+      if (initialCategoryWeights) {
+        return normalizeCategoryWeights(catSlug, initialCategoryWeights)
+          .sliderWeights;
+      }
+      if (initialWeightMode !== 'default' && initialWeightMode !== 'custom') {
+        return normalizeCategoryWeights(
+          catSlug,
+          resolveCategoryPreset(catSlug, initialWeightMode).weights
+        ).sliderWeights;
+      }
+      return defaultCategoryWeights(catSlug);
+    });
+  const [showSliders, setShowSliders] = useState<boolean>(initialShowSliders);
   const [copiedVerdict, setCopiedVerdict] = useState<boolean>(false);
   const radarIndex = useDealRadarIndex();
 
-  const selectPersona = (next: Exclude<PersonaPresetKey, 'custom'>) => {
-    setPersona(next);
-    setWeights(PERSONA_WEIGHTS[next]);
+  const catScoresA = useMemo(
+    () =>
+      extractCategoryCriteriaScores(
+        scoreA.product,
+        catSlug,
+        CRITERION_RANK_WRITERS,
+        scoreA.rankCriteria
+      ),
+    [scoreA.product, scoreA.rankCriteria, catSlug]
+  );
+  const catScoresB = useMemo(
+    () =>
+      extractCategoryCriteriaScores(
+        scoreB.product,
+        catSlug,
+        CRITERION_RANK_WRITERS,
+        scoreB.rankCriteria
+      ),
+    [scoreB.product, scoreB.rankCriteria, catSlug]
+  );
+  const sharedCategoryCriteria = useMemo(
+    () => sharedCategoryCriteriaForPair(catSlug, catScoresA, catScoresB),
+    [catSlug, catScoresA, catScoresB]
+  );
+
+  const replaceVersusQuery = useCallback(
+    (
+      nextMode: ActiveWeightMode,
+      nextWeights: CategoryCriterionWeights,
+      available: readonly RatingCriterionKey[]
+    ) => {
+      if (typeof window === 'undefined') return;
+      const merged =
+        available.length > 0
+          ? mergeUseCaseQueryIntoSearch(
+              window.location.search,
+              catSlug,
+              nextMode,
+              nextWeights,
+              available
+            )
+          : mergeUseCaseQueryIntoSearch(
+              window.location.search,
+              catSlug,
+              'default',
+              defaultCategoryWeights(catSlug),
+              []
+            );
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}${merged}`
+      );
+    },
+    [catSlug]
+  );
+
+  const handleUrlWeightsSync = useCallback(
+    (cat: string, rawPreset: string | null, rawWeights: string | null) => {
+      const parsed = parseUseCaseWeightsFromParams(cat, {
+        preset: rawPreset ?? undefined,
+        weights: rawWeights ?? undefined,
+      });
+      setWeightMode(parsed.mode);
+      setCategoryWeights(parsed.weights);
+    },
+    []
+  );
+
+  const selectUseCasePreset = (presetId: UseCasePresetId) => {
+    const preset = resolveCategoryPreset(catSlug, presetId);
+    const norm = normalizeCategoryWeights(
+      catSlug,
+      preset.weights,
+      sharedCategoryCriteria
+    );
+    setWeightMode(preset.id);
+    setCategoryWeights(norm.sliderWeights);
+    replaceVersusQuery(preset.id, norm.sliderWeights, sharedCategoryCriteria);
   };
 
-  const updateWeight = (key: keyof CriteriaWeights, val: number) => {
-    setPersona('custom');
-    const safeVal = Number.isFinite(val) ? Math.max(0, Math.min(100, val)) : 0;
-    setWeights((prev) => ({
-      ...prev,
-      [key]: safeVal,
-    }));
+  const updateCategoryWeight = (key: RatingCriterionKey, val: number) => {
+    const candidate: CategoryCriterionWeights = {
+      ...categoryWeights,
+      [key]: sanitizeSliderWeight(val, categoryWeights[key] ?? 0),
+    };
+    const normalized = normalizeCategoryWeights(
+      catSlug,
+      candidate,
+      sharedCategoryCriteria
+    );
+    const collapsesToDefault =
+      normalized.wasAllZeroReset ||
+      isDefaultCategoryWeights(
+        catSlug,
+        'custom',
+        normalized.sliderWeights,
+        sharedCategoryCriteria
+      );
+    const nextMode: ActiveWeightMode = collapsesToDefault
+      ? 'default'
+      : 'custom';
+    const nextWeights = collapsesToDefault
+      ? defaultCategoryWeights(catSlug)
+      : normalized.sliderWeights;
+    setWeightMode(nextMode);
+    setCategoryWeights(nextWeights);
+    replaceVersusQuery(nextMode, nextWeights, sharedCategoryCriteria);
+  };
+
+  const resetVersusWeights = () => {
+    selectUseCasePreset('default');
   };
 
   const safeMinPriceA = resolveVersusScoreMinPriceVnd(scoreA);
@@ -260,7 +434,85 @@ export default function VersusInteractiveScoreboard({
     [scoreA.rankCriteria, scoreB.rankCriteria]
   );
   const availablePersonas = versusAvailablePersonas(sharedCriteria);
-  const canWeigh = availablePersonas.length > 0;
+  const availableCategoryPresets = useMemo(
+    () => availableCategoryUseCasePresets(catSlug, sharedCategoryCriteria),
+    [catSlug, sharedCategoryCriteria]
+  );
+  const canWeigh =
+    availablePersonas.length > 0 && availableCategoryPresets.length > 0;
+
+  useEffect(() => {
+    if (!canWeigh) {
+      if (weightMode !== 'default' || showSliders) {
+        const defaults = defaultCategoryWeights(catSlug);
+        setWeightMode('default');
+        setShowSliders(false);
+        setCategoryWeights(defaults);
+        replaceVersusQuery('default', defaults, []);
+      }
+      return;
+    }
+    if (
+      weightMode !== 'default' &&
+      (isDefaultCategoryWeights(
+        catSlug,
+        weightMode,
+        categoryWeights,
+        sharedCategoryCriteria
+      ) ||
+        (weightMode !== 'custom' &&
+          !availableCategoryPresets.some((p) => p.id === weightMode)))
+    ) {
+      const defaults = defaultCategoryWeights(catSlug);
+      setWeightMode('default');
+      setCategoryWeights(defaults);
+      replaceVersusQuery('default', defaults, sharedCategoryCriteria);
+    }
+  }, [
+    canWeigh,
+    weightMode,
+    categoryWeights,
+    showSliders,
+    catSlug,
+    availableCategoryPresets,
+    sharedCategoryCriteria,
+    replaceVersusQuery,
+  ]);
+
+  const hasActiveCustomWeights =
+    canWeigh &&
+    !isDefaultCategoryWeights(
+      catSlug,
+      weightMode,
+      categoryWeights,
+      sharedCategoryCriteria
+    );
+
+  const activePresetTitle = resolveLocalizedPresetName(
+    catSlug,
+    weightMode,
+    locale,
+    undefined,
+    t('customWeightsActive')
+  );
+
+  const persona: PersonaPresetKey = useMemo(
+    () =>
+      hasActiveCustomWeights ? toLegacyVersusPersona(weightMode) : 'default',
+    [hasActiveCustomWeights, weightMode]
+  );
+  const weights: CriteriaWeights = useMemo(
+    () =>
+      !hasActiveCustomWeights
+        ? PERSONA_WEIGHTS.default
+        : toLegacyCriteriaWeights(
+            catSlug,
+            categoryWeights,
+            sharedCategoryCriteria
+          ),
+    [hasActiveCustomWeights, catSlug, categoryWeights, sharedCategoryCriteria]
+  );
+
   // The same result as GET /api/v1/rate/versus (DOS/Rate#1647): the final
   // winner by the overall stars as shown, whatever weights are picked; a
   // preset or custom weights only add their own lead, shown apart.
@@ -362,9 +614,61 @@ export default function VersusInteractiveScoreboard({
     photography: t('personaPhotography'),
     gaming: t('personaGaming'),
     endurance: t('personaEndurance'),
+    business: activePresetTitle,
     value_hunter: t('personaValueHunter'),
     custom: t('customWeightsActive'),
+    ...(hasActiveCustomWeights ? { [activePersona]: activePresetTitle } : {}),
   };
+
+  const customWeightedPair = useMemo(() => {
+    if (!hasActiveCustomWeights) return null;
+    const resA = computeCustomWeightedScore5(
+      catSlug,
+      catScoresA,
+      categoryWeights,
+      {
+        onlyCriteria: sharedCategoryCriteria,
+        officialScore5: overallResult.finalA,
+      }
+    );
+    const resB = computeCustomWeightedScore5(
+      catSlug,
+      catScoresB,
+      categoryWeights,
+      {
+        onlyCriteria: sharedCategoryCriteria,
+        officialScore5: overallResult.finalB,
+      }
+    );
+    if (resA.customScore5 == null || resB.customScore5 == null) return null;
+    const isTie = resA.customScore5 === resB.customScore5;
+    const gap = roundScore(Math.abs(resA.customScore5 - resB.customScore5), 2);
+    const leadSide: 'A' | 'B' =
+      resA.customScore5 >= resB.customScore5 ? 'A' : 'B';
+    const leadItem = leadSide === 'A' ? scoreA : scoreB;
+    const leadScore = leadSide === 'A' ? resA.customScore5 : resB.customScore5;
+    return {
+      scoreA5: resA.customScore5,
+      scoreB5: resB.customScore5,
+      isTie,
+      leadSide,
+      leadSlug: leadItem.slug,
+      leadName: leadItem.name,
+      leadScore5: leadScore,
+      delta5: gap,
+    };
+  }, [
+    hasActiveCustomWeights,
+    catSlug,
+    catScoresA,
+    catScoresB,
+    categoryWeights,
+    sharedCategoryCriteria,
+    overallResult.finalA,
+    overallResult.finalB,
+    scoreA,
+    scoreB,
+  ]);
 
   const handleCopy1v1Markdown = async () => {
     if (typeof window === 'undefined') return;
@@ -391,24 +695,51 @@ export default function VersusInteractiveScoreboard({
           expertSourceTag: t('overallSourceExpertBadge'),
         }
       );
+      const customMdBullet = customWeightedPair
+        ? `- **${sanitizeVersusMarkdownCell(t('yourCustomScoreLabel'))} (${sanitizeVersusMarkdownCell(activePresetTitle)}):** ${
+            customWeightedPair.isTie
+              ? t('customWinnerTie', {
+                  preset: sanitizeVersusMarkdownCell(activePresetTitle),
+                  score: formatRatingValue(
+                    customWeightedPair.leadScore5,
+                    locale,
+                    2
+                  ),
+                })
+              : t('customWinnerSummary', {
+                  preset: sanitizeVersusMarkdownCell(activePresetTitle),
+                  winner: sanitizeVersusMarkdownCell(
+                    customWeightedPair.leadName
+                  ),
+                  score: formatRatingValue(
+                    customWeightedPair.leadScore5,
+                    locale,
+                    2
+                  ),
+                  delta: formatRatingValue(
+                    customWeightedPair.delta5,
+                    locale,
+                    2
+                  ),
+                })
+          }`
+        : personaLead
+          ? `- ${t(
+              personaLead.key,
+              personaLead.key === 'versusPersonaLead'
+                ? {
+                    ...personaLead.values,
+                    winner: sanitizeVersusMarkdownCell(
+                      personaResult?.winner.name
+                    ),
+                  }
+                : personaLead.values
+            )}`
+          : null;
       const lines = [
         `### ${t('md1v1Heading', { nameA: safeNameA, nameB: safeNameB })}`,
         summaryBullet,
-        ...(personaLead
-          ? [
-              `- ${t(
-                personaLead.key,
-                personaLead.key === 'versusPersonaLead'
-                  ? {
-                      ...personaLead.values,
-                      winner: sanitizeVersusMarkdownCell(
-                        personaResult?.winner.name
-                      ),
-                    }
-                  : personaLead.values
-              )}`,
-            ]
-          : []),
+        ...(customMdBullet ? [customMdBullet] : []),
         `- **${t('mdAuditUrl')}:** ${window.location.href}`,
         '',
         `| ${t('mdColCriterion')} | ${safeNameA} | ${safeNameB} | ${t('mdColAdvantage')} |`,
@@ -477,17 +808,29 @@ export default function VersusInteractiveScoreboard({
         '-',
       ],
       // The lead under the picked weights, apart from the overall row.
-      ...(personaResult
+      ...(customWeightedPair
         ? [
             [
-              personaLabels[activePersona] ?? personaLabels.custom,
+              `${t('yourCustomScoreLabel')} (${activePresetTitle})`,
               100,
-              formatScoreFixed(displayedScore5(personaResult.finalA), 1),
-              formatScoreFixed(displayedScore5(personaResult.finalB), 1),
-              personaResult.tie ? t('mdRowTie') : personaResult.winner.name,
+              formatScoreFixed(customWeightedPair.scoreA5, 2),
+              formatScoreFixed(customWeightedPair.scoreB5, 2),
+              customWeightedPair.isTie
+                ? t('mdRowTie')
+                : customWeightedPair.leadName,
             ],
           ]
-        : []),
+        : personaResult
+          ? [
+              [
+                personaLabels[activePersona] ?? personaLabels.custom,
+                100,
+                formatScoreFixed(displayedScore5(personaResult.finalA), 1),
+                formatScoreFixed(displayedScore5(personaResult.finalB), 1),
+                personaResult.tie ? t('mdRowTie') : personaResult.winner.name,
+              ],
+            ]
+          : []),
       ...criteriaRows.map((r) => [
         r.label,
         activeWeights[r.key],
@@ -574,6 +917,26 @@ export default function VersusInteractiveScoreboard({
       versusSlug: `${safeSlugA}-vs-${safeSlugB}`,
       persona: activePersona,
       weights: activeWeights,
+      useCaseMode: weightMode,
+      categoryWeights: normalizeCategoryWeights(
+        catSlug,
+        categoryWeights,
+        sharedCategoryCriteria
+      ).normalizedPercent,
+      customWeightedResult: customWeightedPair
+        ? {
+            tie: customWeightedPair.isTie,
+            winnerSlug: customWeightedPair.isTie
+              ? null
+              : sanitizeVersusExportSlug(customWeightedPair.leadSlug),
+            winnerName: customWeightedPair.isTie
+              ? null
+              : customWeightedPair.leadName,
+            scoreA5: customWeightedPair.scoreA5,
+            scoreB5: customWeightedPair.scoreB5,
+            delta5: customWeightedPair.delta5,
+          }
+        : null,
       exportedAt: new Date().toISOString(),
       tie: overallResult.tie,
       winner: overallResult.tie
@@ -652,8 +1015,52 @@ export default function VersusInteractiveScoreboard({
     locale
   );
 
+  const actionButtons = (
+    <>
+      <button
+        type="button"
+        onClick={handleCopy1v1Markdown}
+        className="btn btn-sm btn-outline-warning rounded-pill fw-semibold px-3"
+      >
+        {copiedVerdict ? t('copied1v1Markdown') : t('copy1v1VerdictBtn')}
+      </button>
+      <button
+        type="button"
+        onClick={handleDownloadVersusCsv}
+        data-testid="versus-export-csv-btn"
+        className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
+      >
+        CSV
+      </button>
+      <button
+        type="button"
+        onClick={handleDownloadVersusJson}
+        data-testid="versus-export-json-btn"
+        className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
+      >
+        JSON
+      </button>
+      <button
+        type="button"
+        onClick={() => setSwapped((prev) => !prev)}
+        aria-pressed={swapped}
+        data-testid="versus-swap-btn"
+        className="btn btn-sm btn-outline-light rounded-pill px-3"
+        title={t('swapDevicesTitle')}
+      >
+        ⇄ {t('swapAbBtn')}
+      </button>
+    </>
+  );
+
   return (
     <>
+      <Suspense fallback={null}>
+        <VersusUrlWeightsSync
+          categorySlug={catSlug}
+          onSync={handleUrlWeightsSync}
+        />
+      </Suspense>
       {/* The verdict names the final winner by the overall stars; the
           picked weights only add their own lead below (DOS/Rate#1647). */}
       <p
@@ -671,153 +1078,43 @@ export default function VersusInteractiveScoreboard({
           ` ${t('versusVerdictWeights', { weights: verdict.weightsLabel })}`}
         {verdictExpertNames.length > 0 &&
           ` ${t('versusVerdictExpertSource', { name: verdictExpertNames.join(', ') })}`}
-        {personaLead && (
+        {personaLead && !customWeightedPair && (
           <span className="d-block mt-1" data-testid="versus-persona-lead">
             {t(personaLead.key, personaLead.values)}
           </span>
         )}
       </p>
       <div className="rate-scoreboard-dark rounded-4 p-4">
-        {/* Top Action & Persona Filter Strip */}
-        <div className="d-flex justify-content-between align-items-center border-bottom border-secondary border-opacity-25 mb-3 flex-wrap gap-2 pb-3">
-          {/* Presets expose the pressed one, not only its colour (DOS/Rate#1069). */}
-          {canWeigh ? (
-            <div
-              className="d-flex align-items-center flex-wrap gap-1"
-              role="group"
-              aria-labelledby={useCaseLabelId}
-            >
-              <span
-                id={useCaseLabelId}
-                className="small text-white-50 fw-semibold me-1"
-              >
-                {t('useCaseLabel')}
-              </span>
-              {(
-                [
-                  { key: 'default', label: t('personaDefault') },
-                  { key: 'photography', label: t('personaPhotography') },
-                  { key: 'gaming', label: t('personaGaming') },
-                  { key: 'endurance', label: t('personaEndurance') },
-                  { key: 'value_hunter', label: t('personaValueHunter') },
-                ] as const
-              )
-                .filter((item) => availablePersonas.includes(item.key))
-                .map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    aria-pressed={activePersona === item.key}
-                    onClick={() => selectPersona(item.key)}
-                    className={`btn btn-sm rounded-pill px-3 py-1 ${
-                      activePersona === item.key
-                        ? 'btn-danger fw-bold text-white'
-                        : 'btn-outline-light text-white-50'
-                    }`}
-                    style={{ fontSize: '0.8125rem' }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              <button
-                type="button"
-                aria-expanded={showSliders}
-                aria-controls={slidersPanelId}
-                onClick={() => setShowSliders((prev) => !prev)}
-                className={`btn btn-sm rounded-pill px-3 py-1 ${
-                  showSliders || activePersona === 'custom'
-                    ? 'btn-warning text-dark fw-bold'
-                    : 'btn-outline-secondary text-light'
-                }`}
-                style={{ fontSize: '0.8125rem' }}
-              >
-                <BsSliders aria-hidden="true" className="me-1" />
-                {t('customWeightsBtn')}
-                {/* Custom weights select no preset and are shown only by this
-                button's colour, so its name says so too (DOS/Rate#1069). */}
-                {activePersona === 'custom' && (
-                  <span className="visually-hidden">{`: ${t('customWeightsActive')}`}</span>
-                )}
-              </button>
-            </div>
-          ) : (
-            <span />
-          )}
-
-          <div className="d-flex align-items-center flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleCopy1v1Markdown}
-              className="btn btn-sm btn-outline-warning rounded-pill fw-semibold px-3"
-            >
-              {copiedVerdict ? t('copied1v1Markdown') : t('copy1v1VerdictBtn')}
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadVersusCsv}
-              data-testid="versus-export-csv-btn"
-              className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
-            >
-              CSV
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadVersusJson}
-              data-testid="versus-export-json-btn"
-              className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
-            >
-              JSON
-            </button>
-            <button
-              type="button"
-              onClick={() => setSwapped((prev) => !prev)}
-              aria-pressed={swapped}
-              data-testid="versus-swap-btn"
-              className="btn btn-sm btn-outline-light rounded-pill px-3"
-              title={t('swapDevicesTitle')}
-            >
-              ⇄ {t('swapAbBtn')}
-            </button>
-          </div>
+        {/* Top Action & RTINGS-Style Category Use-Case Filter Strip (#1864) */}
+        <div className="border-bottom border-secondary border-opacity-25 mb-3 pb-3">
+          <UseCaseWeightBar
+            categorySlug={catSlug}
+            availableCriteria={canWeigh ? sharedCategoryCriteria : []}
+            mode={weightMode}
+            weights={categoryWeights}
+            showSliders={showSliders}
+            onToggleSliders={() => setShowSliders((prev) => !prev)}
+            onSelectPreset={selectUseCasePreset}
+            onUpdateWeight={updateCategoryWeight}
+            onReset={resetVersusWeights}
+            locale={locale}
+            variant="dark"
+            groupLabelId={useCaseLabelId}
+            slidersPanelId={slidersPanelId}
+            trailingActions={actionButtons}
+            testIdPrefix="versus-weights"
+            copy={{
+              groupLabel: t('useCaseLabel'),
+              customizeBtn: t('customWeightsBtn'),
+              customActiveBadge: t('customWeightsActive'),
+              resetBtn: t('resetWeightsBtn'),
+              normalizedSummaryPrefix: t('normalizedWeightsPrefix'),
+              officialKeepNote: t('officialScoreKeepNote'),
+            }}
+          />
         </div>
 
-        {/* Interactive 5-Criteria Weight Sliders */}
-        {showSliders && canWeigh && (
-          <div
-            id={slidersPanelId}
-            className="rounded-3 border-secondary border-opacity-25 mb-3 border p-3"
-            style={{ background: 'rgba(255,255,255,0.04)' }}
-          >
-            <div className="row g-3">
-              {criteriaRows
-                .filter((c) => sharedCriteria.includes(c.key))
-                .map((c) => (
-                  <div key={c.key} className="col-md col-6">
-                    <div className="d-flex justify-content-between small mb-1 text-white">
-                      <span>{c.label}</span>
-                      <strong className="text-warning rate-tabular">
-                        {formatPercent(activeWeights[c.key], locale)}
-                      </strong>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={5}
-                      value={activeWeights[c.key]}
-                      onChange={(e) =>
-                        updateWeight(c.key, Number(e.target.value))
-                      }
-                      className="form-range"
-                      aria-label={c.label}
-                    />
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {/* Dynamic 1v1 Winner Banner */}
+        {/* Dynamic 1v1 Official Winner Banner (#1531 D3) */}
         <div
           className="rounded-3 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 p-3"
           style={{
@@ -830,6 +1127,14 @@ export default function VersusInteractiveScoreboard({
             <span className="badge bg-success rounded-pill me-2 text-white">
               {overallResult.tie ? t('tie1v1Badge') : t('leading1v1Badge')}
             </span>
+            {hasActiveCustomWeights && (
+              <span
+                className="text-white-50 small fw-semibold me-2"
+                data-testid="versus-official-score-label"
+              >
+                {t('officialRateScoreLabel')}:
+              </span>
+            )}
             {overallResult.tie ? (
               <span className="text-white-50 small">
                 {overallResult.bothScored
@@ -861,6 +1166,57 @@ export default function VersusInteractiveScoreboard({
             {summaryScore(overallResult.finalB)}
             {sourceSuffix(overallResult.sourceB)}
           </div>
+        </div>
+
+        {/* Personalized Custom-Weight Score Callout (#1864, #1531 D3/D9) */}
+        <div role="status" aria-live="polite">
+          {customWeightedPair && (
+            <div
+              data-testid="versus-custom-score-banner"
+              className="rounded-3 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 p-3"
+              style={{
+                background: 'rgba(245, 158, 11, 0.10)',
+                border: '1px solid rgba(245, 158, 11, 0.45)',
+              }}
+            >
+              <div>
+                <span className="badge bg-warning text-dark rounded-pill fw-bold me-2">
+                  {t('yourCustomScoreLabel')}
+                </span>
+                <span className="small text-white">
+                  {customWeightedPair.isTie
+                    ? t('customWinnerTie', {
+                        preset: activePresetTitle,
+                        score: formatRatingValue(
+                          customWeightedPair.leadScore5,
+                          locale,
+                          2
+                        ),
+                      })
+                    : t('customWinnerSummary', {
+                        preset: activePresetTitle,
+                        winner: customWeightedPair.leadName,
+                        score: formatRatingValue(
+                          customWeightedPair.leadScore5,
+                          locale,
+                          2
+                        ),
+                        delta: formatRatingValue(
+                          customWeightedPair.delta5,
+                          locale,
+                          2
+                        ),
+                      })}
+                </span>
+              </div>
+              <div className="rate-tabular small text-warning fw-bold">
+                {scoreA.name}:{' '}
+                {formatRatingValue(customWeightedPair.scoreA5, locale, 2)}/5 •{' '}
+                {scoreB.name}:{' '}
+                {formatRatingValue(customWeightedPair.scoreB5, locale, 2)}/5
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Product Headers */}

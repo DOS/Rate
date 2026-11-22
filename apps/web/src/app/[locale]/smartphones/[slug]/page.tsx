@@ -72,9 +72,10 @@ import { startRenderTiming } from '@/lib/render-timing';
 import { bayesianTierKey, radarExplanation } from '@/lib/product-detail-copy';
 import {
   absoluteUrl,
+  buildOgTruthCardImage,
   defaultOpenGraph,
+  defaultTwitterCard,
   fitTitle,
-  SHARE_IMAGE,
   fitDescription,
 } from '@/lib/seo';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
@@ -246,9 +247,15 @@ export async function generateCategoryProductMetadata(
   const hasPrice = marketStats.minPrice > 0;
   const name = (isItemGroup ? itemMeta?.name : null) || product.name;
   const minPrice = formatNumber(marketStats.minPrice, locale);
-  const canonicalUrl = `https://rate.vn${categoryBasePath}/${
-    itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
-  }`;
+  const canonicalSlug =
+    itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug;
+  const canonicalUrl = `https://rate.vn${categoryBasePath}/${canonicalSlug}`;
+  const ogImage = buildOgTruthCardImage({
+    type: 'product',
+    slug: canonicalSlug,
+    locale: lang,
+    alt: name,
+  });
 
   return {
     // The product name first; the site name, then the price give way to fit
@@ -285,16 +292,10 @@ export async function generateCategoryProductMetadata(
       title: t('ogTitle', { name }),
       description: hasPrice ? t('ogDesc', { minPrice }) : t('ogDescNoStock'),
       url: canonicalUrl,
-      // A credited photo carries its notice only on the page, so a share
-      // preview uses the site image instead (DOS/Rate#1756).
-      images: [shareImage(firstImageUrl(product.images))],
+      images: [ogImage],
     },
+    twitter: defaultTwitterCard(ogImage),
   };
-}
-
-/** The Open Graph image: the product photo, unless it needs a credit. */
-function shareImage(src: string | null): string | typeof SHARE_IMAGE {
-  return src && !deviceImageCredit(src) ? src : SHARE_IMAGE;
 }
 
 export async function generateMetadata({
@@ -760,6 +761,7 @@ export async function ProductDetailView({
   // renders them for its own master, an Item page once per size (#1154).
   const renderPriceHistory = (v: {
     product: { name: string };
+    offers: typeof offers;
     priceHistory: typeof priceHistory;
     minPrice: number;
     radarSignal: typeof radarSignal;
@@ -772,6 +774,7 @@ export async function ProductDetailView({
         currentMinPrice: v.minPrice > 0 ? v.minPrice : null,
       }}
       radarSignal={v.radarSignal}
+      offers={v.offers}
     />
   );
   const renderOffersBody = (v: {
@@ -881,6 +884,7 @@ export async function ProductDetailView({
             {t('auditPriceBtn', { count: v.offers.length })}
           </a>
           <ProductShareAuditButton
+            slug={v.product.slug}
             name={v.product.name}
             brand={v.product.brand}
             modelKey={v.product.model_key}
@@ -1629,6 +1633,7 @@ export async function ProductDetailView({
                 )
               : renderPriceHistory({
                   product,
+                  offers,
                   priceHistory,
                   minPrice: currentMinPrice,
                   radarSignal,

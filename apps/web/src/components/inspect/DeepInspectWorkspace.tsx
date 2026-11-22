@@ -12,12 +12,21 @@ import {
   discountVerdictCopy,
   type VerdictTranslator,
 } from '@/lib/discount-verdict-copy';
+import {
+  evaluateOmnibusPriceAudit,
+  formatOmnibusAuditCopy,
+  resolveOmnibusReferenceAnchorMs,
+  sanitizeOmnibusPriceVnd,
+  type OmnibusPriceAuditResult,
+  type OmnibusVerdictTranslator,
+} from '@/lib/omnibus-price-audit';
 import { formatScoreFixed, roundScore } from '@/lib/rating-display';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { Link, useRouter } from '@/lib/navigation';
 import {
   MAX_VALID_VND_PRICE,
+  getMasterProductCategorySlug,
   getMasterProductHref,
   resolveCompareBatteryMah,
   resolveCompareEffectiveUserRating,
@@ -69,6 +78,7 @@ import {
   implausiblyLowIndexes,
   isImplausiblyLowPrice,
   isOfferImplausiblyLowAgainstInStock,
+  minimumListingPriceVnd,
   normalizeOfferId,
   plausibleMinPrice,
   plausibleOffers,
@@ -1318,6 +1328,166 @@ export default function DeepInspectWorkspace({
     ? resolveCompareExpertRating10(master)
     : null;
 
+  const explicitMatchedOffer = result?.matchedOffer ?? null;
+
+  const inspectOmnibusState = useMemo<{
+    audit: OmnibusPriceAuditResult;
+    listingScoped: boolean;
+  } | null>(() => {
+    if (
+      offerImplausiblyLow ||
+      matchedOfferUnavailable ||
+      verdictPrices.currentPriceVnd <= 0 ||
+      !priceHistory ||
+      !Array.isArray(priceHistory.points) ||
+      priceHistory.points.length === 0
+    ) {
+      return null;
+    }
+
+    const minValidPriceVnd =
+      master && getMasterProductCategorySlug(master) === 'earbuds'
+        ? MINIMUM_EARBUDS_PRICE_FLOOR_VND
+        : minimumListingPriceVnd([
+            master?.name ?? '',
+            explicitMatchedOffer?.title ?? matchedOffer?.title ?? '',
+            result?.query ?? '',
+          ]);
+
+    const anchorMs = resolveOmnibusReferenceAnchorMs({
+      points: priceHistory.points,
+      referenceOffers: result?.allOffers,
+      implausibleOfferIds,
+      minValidPriceVnd,
+    });
+
+    if (explicitMatchedOffer?.id) {
+      if (
+        isOfferUnavailable(explicitMatchedOffer) ||
+        isInspectOfferBait(
+          explicitMatchedOffer,
+          implausibleOfferIds,
+          plausibilityOffers
+        )
+      ) {
+        return null;
+      }
+      const listingCurrentVnd = sanitizeOmnibusPriceVnd(
+        explicitMatchedOffer.price_current,
+        minValidPriceVnd
+      );
+      if (listingCurrentVnd == null) {
+        return null;
+      }
+      const rawListingOrig = sanitizeInspectOriginalPriceVnd(
+        explicitMatchedOffer.price_original,
+        listingCurrentVnd
+      );
+      const listingOrigVnd = rawListingOrig > 0 ? rawListingOrig : null;
+
+      const targetCanon = normalizeOfferId(explicitMatchedOffer.id);
+      const offerPts = priceHistory.points.filter((pt) => {
+        if (pt.source === 'live_listing') return false;
+        if (pt.product_id === explicitMatchedOffer.id) return true;
+        return Boolean(
+          targetCanon && normalizeOfferId(pt.product_id) === targetCanon
+        );
+      });
+      const marketCycleForListing = evaluateOmnibusPriceAudit({
+        points: priceHistory.points,
+        currentPriceVnd: listingCurrentVnd,
+        claimedOriginalPriceVnd: listingOrigVnd,
+        currentInStockPriceVnd: listingCurrentVnd,
+        mode: 'market',
+        referenceOffers: result?.allOffers,
+        implausibleOfferIds,
+        minValidPriceVnd,
+        referenceTimestampMs: anchorMs,
+      });
+      const offerAudit = evaluateOmnibusPriceAudit({
+        points: offerPts,
+        currentPriceVnd: listingCurrentVnd,
+        claimedOriginalPriceVnd: listingOrigVnd,
+        currentInStockPriceVnd: listingCurrentVnd,
+        mode: 'offer',
+        referenceOffers: result?.allOffers,
+        implausibleOfferIds,
+        minValidPriceVnd,
+        referenceTimestampMs: anchorMs,
+      });
+      return {
+        audit: {
+          ...offerAudit,
+          cycle90d:
+            marketCycleForListing.cycle90d.signal !== 'insufficient_data'
+              ? marketCycleForListing.cycle90d
+              : offerAudit.cycle90d,
+        },
+        listingScoped: true,
+      };
+    }
+
+    const inStockFloorVnd =
+      safeMasterMinPriceVnd > 0
+        ? safeMasterMinPriceVnd
+        : verdictPrices.currentPriceVnd;
+    let bestInStockOrig: number | null = null;
+    for (const off of inStockOffers) {
+      if (isInspectOfferBait(off, implausibleOfferIds, plausibilityOffers)) {
+        continue;
+      }
+      if (sanitizeInspectPriceVnd(off.price_current) !== inStockFloorVnd) {
+        continue;
+      }
+      const orig = sanitizeInspectOriginalPriceVnd(
+        off.price_original,
+        inStockFloorVnd
+      );
+      if (orig > 0 && (bestInStockOrig == null || orig > bestInStockOrig)) {
+        bestInStockOrig = orig;
+      }
+    }
+
+    const marketAudit = evaluateOmnibusPriceAudit({
+      points: priceHistory.points,
+      currentPriceVnd: inStockFloorVnd,
+      claimedOriginalPriceVnd: bestInStockOrig,
+      currentInStockPriceVnd:
+        safeMasterMinPriceVnd > 0 ? safeMasterMinPriceVnd : null,
+      mode: 'market',
+      referenceOffers: result?.allOffers,
+      implausibleOfferIds,
+      minValidPriceVnd,
+      referenceTimestampMs: anchorMs,
+    });
+
+    return {
+      audit: marketAudit,
+      listingScoped: false,
+    };
+  }, [
+    explicitMatchedOffer,
+    implausibleOfferIds,
+    inStockOffers,
+    master,
+    matchedOffer?.title,
+    matchedOfferUnavailable,
+    offerImplausiblyLow,
+    plausibilityOffers,
+    priceHistory,
+    result?.allOffers,
+    result?.query,
+    safeMasterMinPriceVnd,
+    verdictPrices.currentPriceVnd,
+  ]);
+
+  const tOmnibus: OmnibusVerdictTranslator = (key, values) =>
+    tVerdict(key, values);
+  const inspectOmnibusCopy =
+    inspectOmnibusState && inspectOmnibusState.audit.currentPriceVnd != null
+      ? formatOmnibusAuditCopy(inspectOmnibusState.audit, tOmnibus, locale)
+      : null;
+
   const handleCopyAuditMarkdown = async () => {
     if (typeof window === 'undefined') return;
     try {
@@ -1752,6 +1922,157 @@ export default function DeepInspectWorkspace({
                         discountVerdictCopy(tVerdict, discount, locale)
                           .explanation
                       }
+                    </div>
+                  )}
+
+                  {/* 3-Column EU Omnibus 30-Day Floor Audit & 90-Day Cycle (#1863) */}
+                  {inspectOmnibusCopy && inspectOmnibusState && (
+                    <div
+                      className="rounded-3 bg-light mt-3 border p-3"
+                      data-testid="inspect-omnibus-audit-card"
+                    >
+                      <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <div>
+                          <h3 className="h6 fw-bold text-dark d-flex align-items-center mb-1 gap-2">
+                            <BsShieldCheck
+                              aria-hidden="true"
+                              className="text-danger"
+                            />
+                            <span>{inspectOmnibusCopy.cardTitle}</span>
+                          </h3>
+                          <div className="text-muted small">
+                            {inspectOmnibusState.listingScoped &&
+                            explicitMatchedOffer
+                              ? (() => {
+                                  const resolvedMerchantName =
+                                    explicitMatchedOffer.merchant?.name ||
+                                    merchant?.name ||
+                                    t('unknownShop');
+                                  const scopeParts = t('omnibusScopeListing', {
+                                    merchant: '\u0000',
+                                    platform:
+                                      resolveInspectOfferPlatform(
+                                        explicitMatchedOffer
+                                      ).toUpperCase(),
+                                  }).split('\u0000');
+                                  return (
+                                    <>
+                                      {scopeParts[0]}
+                                      <ContentText
+                                        text={resolvedMerchantName}
+                                        locale={locale}
+                                      />
+                                      {scopeParts[1] ?? ''}
+                                    </>
+                                  );
+                                })()
+                              : t('omnibusScopeProduct')}
+                          </div>
+                        </div>
+                        <span
+                          data-testid="inspect-omnibus-window-badge"
+                          className={`badge rounded-pill small px-3 py-2 ${
+                            inspectOmnibusCopy.statusBadgeTone === 'good'
+                              ? 'bg-success-subtle text-success border-success-subtle border'
+                              : inspectOmnibusCopy.statusBadgeTone === 'bad'
+                                ? 'bg-danger-subtle text-danger border-danger-subtle border'
+                                : inspectOmnibusCopy.statusBadgeTone === 'warn'
+                                  ? 'bg-warning text-dark'
+                                  : 'bg-secondary-subtle text-secondary border'
+                          }`}
+                        >
+                          {inspectOmnibusCopy.statusBadgeText}
+                        </span>
+                      </div>
+
+                      <div className="row g-3 mt-1">
+                        <div className="col-md-4 col-12">
+                          <div className="rounded-3 bg-white h-100 border p-3">
+                            <div className="small text-muted mb-1">
+                              {inspectOmnibusCopy.colCurrentTitle}
+                            </div>
+                            <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
+                              <span className="h6 fw-bold text-danger rate-tabular mb-0">
+                                {inspectOmnibusCopy.currentPriceText}
+                              </span>
+                              {inspectOmnibusCopy.claimedBadgeText && (
+                                <span className="badge bg-warning text-dark rounded-pill small">
+                                  {inspectOmnibusCopy.claimedBadgeText}
+                                </span>
+                              )}
+                            </div>
+                            <div
+                              className={
+                                inspectOmnibusCopy.currentSubTone === 'bad'
+                                  ? 'text-danger fw-semibold'
+                                  : inspectOmnibusCopy.currentSubTone === 'good'
+                                    ? 'text-success'
+                                    : 'text-muted'
+                              }
+                              style={{ fontSize: '0.8125rem' }}
+                            >
+                              {inspectOmnibusCopy.currentSubText}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="col-md-4 col-12">
+                          <div className="rounded-3 bg-white h-100 border p-3">
+                            <div className="small text-muted mb-1">
+                              {inspectOmnibusCopy.colFloorTitle}
+                            </div>
+                            <div className="h6 fw-bold text-dark rate-tabular mb-1">
+                              {inspectOmnibusCopy.floorPriceText}
+                            </div>
+                            <div
+                              className={
+                                inspectOmnibusCopy.floorDeltaTone === 'good'
+                                  ? 'text-success fw-semibold'
+                                  : inspectOmnibusCopy.floorDeltaTone === 'bad'
+                                    ? 'text-danger fw-semibold'
+                                    : 'text-secondary'
+                              }
+                              style={{ fontSize: '0.8125rem' }}
+                            >
+                              {inspectOmnibusCopy.floorDeltaText}
+                            </div>
+                            {inspectOmnibusCopy.floorDisclaimerText && (
+                              <div
+                                className="text-muted mt-1"
+                                style={{ fontSize: '0.8125rem' }}
+                              >
+                                {inspectOmnibusCopy.floorDisclaimerText}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="col-md-4 col-12">
+                          <div className="rounded-3 bg-white h-100 border p-3">
+                            <div className="small text-muted mb-1">
+                              {inspectOmnibusCopy.colCycleTitle}
+                            </div>
+                            <div
+                              data-testid="inspect-omnibus-cycle-signal"
+                              className={`fw-bold mb-1 ${
+                                inspectOmnibusCopy.cycleValueTone === 'good'
+                                  ? 'text-success'
+                                  : inspectOmnibusCopy.cycleValueTone === 'bad'
+                                    ? 'text-danger'
+                                    : 'text-dark'
+                              }`}
+                            >
+                              {inspectOmnibusCopy.cycleValueText}
+                            </div>
+                            <div
+                              className="text-muted"
+                              style={{ fontSize: '0.8125rem' }}
+                            >
+                              {inspectOmnibusCopy.cycleSubText}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 

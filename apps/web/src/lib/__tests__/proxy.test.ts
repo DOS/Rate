@@ -31,7 +31,12 @@ async function main() {
   };
 
   const { CSP_HEADER } = await import('../csp');
-  const { config: proxyConfig, localeProxy } = await import('../../proxy');
+  const {
+    config: proxyConfig,
+    isDirectNonLocalePath,
+    localeProxy,
+    proxy,
+  } = await import('../../proxy');
 
   const nextConfigSrc = fs.readFileSync(
     path.join(__dirname, '../../../next.config.mjs'),
@@ -176,6 +181,8 @@ async function main() {
     '/_VERCEL/insights/script.js',
     '/api/health',
     '/API/health',
+    '/api/mcp',
+    '/API/mcp',
     '/api/v1/rate/openapi.json',
     '/api/v1/rate/merchants/anker.vn',
     '/API/v1/rate/merchants/anker.vn',
@@ -302,7 +309,100 @@ async function main() {
     );
   }
 
-  console.warn('  ✅ proxy dotted-slug routing & CSP suite passed');
+  // DOS/Rate#1866: /api/mcp, /llms.txt, and /.well-known/mcp.json skip
+  // middleware, receive static CSP headers, never locale-redirect or rewrite,
+  // and are explicitly allowed in production robots.ts.
+  for (const discoveryPath of [
+    '/llms.txt',
+    '/LLMS.TXT',
+    '/.well-known/mcp.json',
+    '/.WELL-KNOWN/mcp.json',
+    '/api/mcp',
+    '/API/mcp',
+  ]) {
+    assert.equal(
+      byMiddleware(discoveryPath),
+      false,
+      `${discoveryPath} must skip compiled Next.js middleware matcher`
+    );
+    assert.equal(
+      staticCspRegex.test(discoveryPath),
+      true,
+      `${discoveryPath} must carry static CSP header`
+    );
+    assert.equal(
+      isDirectNonLocalePath(discoveryPath),
+      true,
+      `${discoveryPath} is a direct non-locale path`
+    );
+
+    const directRes = localeProxy(
+      new NextRequest(`https://rate.vn${discoveryPath}`, {
+        headers: {
+          host: 'rate.vn',
+          'x-forwarded-proto': 'https',
+          'accept-language': 'en-US,en;q=0.9',
+          cookie: 'NEXT_LOCALE=cs',
+        },
+      })
+    );
+    assert.equal(
+      directRes.status,
+      200,
+      `${discoveryPath} returns 200 pass-through`
+    );
+    assert.equal(
+      directRes.headers.get('location'),
+      null,
+      `${discoveryPath} must not redirect`
+    );
+    assert.equal(
+      directRes.headers.get('x-middleware-rewrite'),
+      null,
+      `${discoveryPath} must not rewrite to a locale prefix`
+    );
+    assert.equal(
+      directRes.cookies.get('NEXT_LOCALE'),
+      undefined,
+      `${discoveryPath} must not mutate NEXT_LOCALE cookie`
+    );
+
+    const asyncProxyRes = await proxy(
+      new NextRequest(`https://rate.vn${discoveryPath}`, {
+        headers: {
+          host: 'rate.vn',
+          'x-forwarded-proto': 'https',
+        },
+      })
+    );
+    assert.equal(asyncProxyRes.status, 200);
+    assert.equal(asyncProxyRes.headers.get('x-middleware-rewrite'), null);
+  }
+
+  for (const pagePath of ['/', '/developers', '/smartphones/nokia-8.1']) {
+    assert.equal(isDirectNonLocalePath(pagePath), false);
+  }
+
+  const { default: robots } = await import('../../app/robots');
+  const prevVercelEnv = process.env.VERCEL_ENV;
+  try {
+    process.env.VERCEL_ENV = 'production';
+    const prodRobots = robots();
+    assert.deepEqual(prodRobots.rules, {
+      userAgent: '*',
+      allow: ['/', '/llms.txt', '/.well-known/mcp.json', '/api/mcp'],
+    });
+  } finally {
+    if (prevVercelEnv === undefined) {
+      delete process.env.VERCEL_ENV;
+    } else {
+      process.env.VERCEL_ENV = prevVercelEnv;
+    }
+  }
+
+  console.warn(
+    '  ✅ proxy dotted-slug routing, AI discovery & CSP suite passed'
+  );
 }
 
 main().catch((err) => {

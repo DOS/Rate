@@ -1,18 +1,34 @@
 'use client';
 
-import csMessages from '../../locales/cs.json';
-import enMessages from '../../locales/en.json';
-import viMessages from '../../locales/vi.json';
+import type viMessages from '../../locales/vi.json';
 import { PAGE_META_CSP } from '@/lib/csp';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 
-const GLOBAL_ERROR_CATALOG: Record<
+export const GLOBAL_ERROR_CATALOG: Record<
   SupportedRateLocale,
   typeof viMessages.errors.global
 > = {
-  vi: viMessages.errors.global,
-  en: enMessages.errors.global,
-  cs: csMessages.errors.global,
+  vi: {
+    title: 'Đã xảy ra lỗi không xác định',
+    tryAgain: 'Thử lại',
+    invalidContent: 'Không thể hiển thị nội dung này',
+    somethingWentWrong: 'Đã xảy ra sự cố ngoài ý muốn',
+    goHome: 'Về trang chủ Rate.vn',
+  },
+  en: {
+    title: 'An unknown error occurred',
+    tryAgain: 'Try again',
+    invalidContent: 'This content could not be displayed',
+    somethingWentWrong: 'Something went wrong',
+    goHome: 'Rate.vn home',
+  },
+  cs: {
+    title: 'Nastala neznámá chyba',
+    tryAgain: 'Zkusit znovu',
+    invalidContent: 'Tenhle obsah se nepodařilo načíst',
+    somethingWentWrong: 'Něco se pokazilo',
+    goHome: 'Domů na Rate.vn',
+  },
 };
 
 function detectBrowserLocale(): SupportedRateLocale {
