@@ -15,6 +15,8 @@ import {
 import {
   evaluateOmnibusPriceAudit,
   formatOmnibusAuditCopy,
+  resolveOmnibusReferenceAnchorMs,
+  sanitizeOmnibusPriceVnd,
   type OmnibusPriceAuditResult,
   type OmnibusVerdictTranslator,
 } from '@/lib/omnibus-price-audit';
@@ -73,7 +75,6 @@ import { SAMPLE_AUDIT_URLS } from '@/lib/inspect-samples';
 import {
   IMPLAUSIBLY_LOW_RATIO,
   MINIMUM_EARBUDS_PRICE_FLOOR_VND,
-  hasImplausiblyLowOfferId,
   implausiblyLowIndexes,
   isImplausiblyLowPrice,
   isOfferImplausiblyLowAgainstInStock,
@@ -1327,6 +1328,8 @@ export default function DeepInspectWorkspace({
     ? resolveCompareExpertRating10(master)
     : null;
 
+  const explicitMatchedOffer = result?.matchedOffer ?? null;
+
   const inspectOmnibusState = useMemo<{
     audit: OmnibusPriceAuditResult;
     listingScoped: boolean;
@@ -1347,75 +1350,65 @@ export default function DeepInspectWorkspace({
         ? MINIMUM_EARBUDS_PRICE_FLOOR_VND
         : minimumListingPriceVnd([
             master?.name ?? '',
-            matchedOffer?.title ?? '',
-            queryInput,
+            explicitMatchedOffer?.title ?? matchedOffer?.title ?? '',
+            result?.query ?? '',
           ]);
 
-    const unavailableAnchorIds = new Set<string>();
-    if (Array.isArray(result?.allOffers)) {
-      for (const off of result.allOffers) {
-        if (off && isOfferUnavailable(off)) {
-          unavailableAnchorIds.add(off.id);
-          const cId = normalizeOfferId(off.id);
-          if (cId) unavailableAnchorIds.add(cId);
-        }
-      }
-    }
+    const anchorMs = resolveOmnibusReferenceAnchorMs({
+      points: priceHistory.points,
+      referenceOffers: result?.allOffers,
+      implausibleOfferIds,
+      minValidPriceVnd,
+    });
 
-    let latestMs = 0;
-    for (const pt of priceHistory.points) {
-      if (pt.source === 'live_listing') continue;
-      if (hasImplausiblyLowOfferId(implausibleOfferIds, pt.product_id)) {
-        continue;
-      }
+    if (explicitMatchedOffer?.id) {
       if (
-        unavailableAnchorIds.has(pt.product_id) ||
-        unavailableAnchorIds.has(normalizeOfferId(pt.product_id))
+        isOfferUnavailable(explicitMatchedOffer) ||
+        isInspectOfferBait(
+          explicitMatchedOffer,
+          implausibleOfferIds,
+          plausibilityOffers
+        )
       ) {
-        continue;
+        return null;
       }
-      const ms = new Date(pt.recorded_at).getTime();
-      if (Number.isFinite(ms) && ms > latestMs) latestMs = ms;
-    }
-    const anchorMs = latestMs > 0 ? latestMs : null;
+      const listingCurrentVnd = sanitizeOmnibusPriceVnd(
+        explicitMatchedOffer.price_current,
+        minValidPriceVnd
+      );
+      if (listingCurrentVnd == null) {
+        return null;
+      }
+      const rawListingOrig = sanitizeInspectOriginalPriceVnd(
+        explicitMatchedOffer.price_original,
+        listingCurrentVnd
+      );
+      const listingOrigVnd = rawListingOrig > 0 ? rawListingOrig : null;
 
-    if (matchedOffer?.id) {
-      const targetCanon = normalizeOfferId(matchedOffer.id);
+      const targetCanon = normalizeOfferId(explicitMatchedOffer.id);
       const offerPts = priceHistory.points.filter((pt) => {
         if (pt.source === 'live_listing') return false;
-        if (pt.product_id === matchedOffer.id) return true;
+        if (pt.product_id === explicitMatchedOffer.id) return true;
         return Boolean(
           targetCanon && normalizeOfferId(pt.product_id) === targetCanon
         );
       });
-      // Evaluate the 90-day market cycle AT the matched listing's own selling
-      // price (`verdictPrices.currentPriceVnd`) so an overpriced seller never
-      // receives a green "Buy now" badge from a cheaper competitor's floor.
       const marketCycleForListing = evaluateOmnibusPriceAudit({
         points: priceHistory.points,
-        currentPriceVnd: verdictPrices.currentPriceVnd,
-        claimedOriginalPriceVnd:
-          verdictPrices.claimedOriginalVnd > 0
-            ? verdictPrices.claimedOriginalVnd
-            : null,
-        currentInStockPriceVnd: verdictPrices.currentPriceVnd,
+        currentPriceVnd: listingCurrentVnd,
+        claimedOriginalPriceVnd: listingOrigVnd,
+        currentInStockPriceVnd: listingCurrentVnd,
         mode: 'market',
         referenceOffers: result?.allOffers,
         implausibleOfferIds,
         minValidPriceVnd,
         referenceTimestampMs: anchorMs,
       });
-      // Always evaluate the 30-day EU prior floor strictly on `matchedOffer`'s
-      // own history (`offerPts`, even if < 2 points -> `insufficient_history`),
-      // never accusing a newly tracked shop using another shop's 30-day floor.
       const offerAudit = evaluateOmnibusPriceAudit({
         points: offerPts,
-        currentPriceVnd: verdictPrices.currentPriceVnd,
-        claimedOriginalPriceVnd:
-          verdictPrices.claimedOriginalVnd > 0
-            ? verdictPrices.claimedOriginalVnd
-            : null,
-        currentInStockPriceVnd: verdictPrices.currentPriceVnd,
+        currentPriceVnd: listingCurrentVnd,
+        claimedOriginalPriceVnd: listingOrigVnd,
+        currentInStockPriceVnd: listingCurrentVnd,
         mode: 'offer',
         referenceOffers: result?.allOffers,
         implausibleOfferIds,
@@ -1473,18 +1466,18 @@ export default function DeepInspectWorkspace({
       listingScoped: false,
     };
   }, [
+    explicitMatchedOffer,
     implausibleOfferIds,
     inStockOffers,
     master,
-    matchedOffer,
+    matchedOffer?.title,
     matchedOfferUnavailable,
     offerImplausiblyLow,
     plausibilityOffers,
     priceHistory,
-    queryInput,
     result?.allOffers,
+    result?.query,
     safeMasterMinPriceVnd,
-    verdictPrices.claimedOriginalVnd,
     verdictPrices.currentPriceVnd,
   ]);
 
@@ -1948,17 +1941,18 @@ export default function DeepInspectWorkspace({
                             <span>{inspectOmnibusCopy.cardTitle}</span>
                           </h3>
                           <div className="text-muted small">
-                            {inspectOmnibusState.listingScoped && matchedOffer
+                            {inspectOmnibusState.listingScoped &&
+                            explicitMatchedOffer
                               ? (() => {
                                   const resolvedMerchantName =
-                                    matchedOffer.merchant?.name ||
+                                    explicitMatchedOffer.merchant?.name ||
                                     merchant?.name ||
                                     t('unknownShop');
                                   const scopeParts = t('omnibusScopeListing', {
                                     merchant: '\u0000',
                                     platform:
                                       resolveInspectOfferPlatform(
-                                        matchedOffer
+                                        explicitMatchedOffer
                                       ).toUpperCase(),
                                   }).split('\u0000');
                                   return (

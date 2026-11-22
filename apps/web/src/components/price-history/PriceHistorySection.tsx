@@ -18,6 +18,7 @@ import {
 import {
   evaluateOmnibusPriceAudit,
   formatOmnibusAuditCopy,
+  resolveOmnibusReferenceAnchorMs,
   type OmnibusPriceAuditResult,
   type OmnibusReferenceOfferInput,
   type OmnibusVerdictTranslator,
@@ -763,17 +764,24 @@ export default function PriceHistorySection({
     [isUnavailId, offerAnalyses, offers]
   );
 
-  // Historical anchor excludes synthetic `live_listing` rows and unavailable offers
-  // so synthetic fallback timestamps never inflate observedSpanDays (#1863).
-  const omnibusAnchorMs = useMemo<number | null>(() => {
-    let maxMs = 0;
-    for (const pt of validPoints) {
-      if (pt.source === 'live_listing' || isUnavailId(pt.product_id)) continue;
-      const ms = new Date(pt.recorded_at).getTime();
-      if (Number.isFinite(ms) && ms > maxMs) maxMs = ms;
-    }
-    return maxMs > 0 ? maxMs : null;
-  }, [isUnavailId, validPoints]);
+  // Historical anchor uses the exact same evidence-eligibility rules as the
+  // Omnibus evaluator so rows below `minValidPriceVnd`, `live_listing` rows,
+  // bait listings, and unavailable offers never advance the anchor (#1863).
+  const omnibusAnchorMs = useMemo<number | null>(
+    () =>
+      resolveOmnibusReferenceAnchorMs({
+        points: validPoints,
+        referenceOffers: effectiveReferenceOffers,
+        unavailableOfferIds,
+        minValidPriceVnd,
+      }),
+    [
+      effectiveReferenceOffers,
+      minValidPriceVnd,
+      unavailableOfferIds,
+      validPoints,
+    ]
+  );
 
   const omnibusSharedOpts = useMemo(
     () => ({

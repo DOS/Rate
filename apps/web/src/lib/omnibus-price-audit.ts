@@ -317,6 +317,8 @@ function buildOfferExclusionSets(params: {
     );
     if (price != null) pricedAll.push({ rawId, id, price_current: price });
     if (
+      (rawId && excludedIds.has(rawId)) ||
+      (id && excludedIds.has(id)) ||
       isOfferUnavailable(off) ||
       off.implausiblyLow === true ||
       price == null
@@ -343,7 +345,10 @@ function buildOfferExclusionSets(params: {
     }
   }
 
-  return { excludedIds, inStockPlausibleOffers: plausibleOffers(inStockSized) };
+  const inStockPlausibleOffers = plausibleOffers(inStockSized).sort(
+    (a, b) => a.price_current - b.price_current
+  );
+  return { excludedIds, inStockPlausibleOffers };
 }
 
 /**
@@ -357,8 +362,8 @@ function buildOfferExclusionSets(params: {
 function buildEffectiveSeries(
   points: readonly CleanHistoryPoint[],
   mode: 'offer' | 'market'
-): SeriesPoint[] {
-  if (points.length === 0) return [];
+): { series: SeriesPoint[]; nonBaitPoints: CleanHistoryPoint[] } {
+  if (points.length === 0) return { series: [], nonBaitPoints: [] };
   const sorted = [...points].sort(
     (a, b) => a.recordedMs - b.recordedMs || a.priceVnd - b.priceVnd
   );
@@ -384,7 +389,7 @@ function buildEffectiveSeries(
     autoBaitKeys.size > 0
       ? sorted.filter((pt) => !autoBaitKeys.has(pt.offerKey))
       : sorted;
-  if (filtered.length === 0) return [];
+  if (filtered.length === 0) return { series: [], nonBaitPoints: [] };
 
   if (mode === 'offer' || latestByOffer.size <= 1) {
     const out: SeriesPoint[] = [];
@@ -401,7 +406,7 @@ function buildEffectiveSeries(
         out.push({ recordedMs: pt.recordedMs, priceVnd: pt.priceVnd });
       }
     }
-    return out;
+    return { series: out, nonBaitPoints: filtered };
   }
 
   const carryLimitMs = MAX_OMNIBUS_BLACKOUT_GAP_DAYS * DAY_MS;
@@ -443,7 +448,7 @@ function buildEffectiveSeries(
       out.push({ recordedMs: tMs, priceVnd: minActive });
     }
   }
-  return out;
+  return { series: out, nonBaitPoints: filtered };
 }
 
 const EMPTY_CYCLE_90D: Cycle90dEvaluation = {
@@ -551,10 +556,10 @@ function evaluate90dCycleFromSeries(params: {
   let signal: Cycle90dSignalKind;
   if (relativeSpread < MIN_CYCLE_90D_RELATIVE_SPREAD) {
     signal = 'fair_market';
-  } else if (percentile <= CYCLE_BUY_NOW_MAX_PERCENTILE) {
+  } else if (rawPercentile <= CYCLE_BUY_NOW_MAX_PERCENTILE) {
     signal = 'buy_now_floor';
   } else if (
-    percentile <= CYCLE_FAIR_MARKET_MAX_PERCENTILE ||
+    rawPercentile <= CYCLE_FAIR_MARKET_MAX_PERCENTILE ||
     aboveFloorPct < 1
   ) {
     signal = 'fair_market';
@@ -576,10 +581,101 @@ function evaluate90dCycleFromSeries(params: {
   };
 }
 
+function extractCleanHistoryPoints(params: {
+  readonly points: readonly OmnibusAuditPointInput[] | null | undefined;
+  readonly excludedIds: ReadonlySet<string>;
+  readonly inStockPlausibleOffers: readonly {
+    id: string;
+    price_current: number;
+  }[];
+  readonly minFloorVnd: number;
+  readonly explicitAnchorMs: number | null;
+}): CleanHistoryPoint[] {
+  const rawPoints = Array.isArray(params.points) ? params.points : [];
+  const peerMedianVnd =
+    params.inStockPlausibleOffers.length >= 2
+      ? params.inStockPlausibleOffers[
+          Math.floor((params.inStockPlausibleOffers.length - 1) / 2)
+        ]!.price_current
+      : null;
+  const cleanPoints: CleanHistoryPoint[] = [];
+
+  for (const pt of rawPoints) {
+    if (!pt || typeof pt !== 'object' || Array.isArray(pt)) continue;
+    if (pt.source === 'live_listing') continue;
+    if (isOfferUnavailable(pt) || pt.implausiblyLow === true) continue;
+
+    const rawOfferId =
+      typeof pt.product_id === 'string' ? pt.product_id.trim() : '';
+    const canonOfferId = normalizeOfferId(rawOfferId);
+    if (
+      (canonOfferId && params.excludedIds.has(canonOfferId)) ||
+      (rawOfferId && params.excludedIds.has(rawOfferId))
+    ) {
+      continue;
+    }
+
+    const priceVnd = sanitizeOmnibusPriceVnd(pt.price, params.minFloorVnd);
+    if (priceVnd == null) continue;
+    if (
+      peerMedianVnd != null &&
+      priceVnd < peerMedianVnd * IMPLAUSIBLY_LOW_RATIO
+    ) {
+      continue;
+    }
+
+    const recordedMs = parseRecordedAtMs(pt.recorded_at);
+    if (recordedMs == null) continue;
+    if (
+      params.explicitAnchorMs != null &&
+      recordedMs > params.explicitAnchorMs
+    ) {
+      continue;
+    }
+
+    cleanPoints.push({
+      offerKey: canonOfferId || rawOfferId || '__default__',
+      priceVnd,
+      recordedMs,
+    });
+  }
+  return cleanPoints;
+}
+
 /**
- * Evaluates both the 30-day EU Omnibus prior price-floor audit and the 90-day
- * price-cycle Buy-Now vs Wait percentile indicator with strict window honesty.
+ * Resolves the latest eligible observation timestamp across verified, non-bait,
+ * available crawler points so callers share the exact same anchor rules as
+ * `evaluateOmnibusPriceAudit`.
  */
+export function resolveOmnibusReferenceAnchorMs(params: {
+  readonly points: readonly OmnibusAuditPointInput[] | null | undefined;
+  readonly referenceOffers?: readonly OmnibusReferenceOfferInput[] | null;
+  readonly unavailableOfferIds?: ReadonlySet<string> | null;
+  readonly implausibleOfferIds?: ReadonlySet<string> | null;
+  readonly minValidPriceVnd?: number | null;
+}): number | null {
+  const minFloorVnd =
+    typeof params.minValidPriceVnd === 'number' &&
+    Number.isFinite(params.minValidPriceVnd) &&
+    params.minValidPriceVnd > 0
+      ? Math.round(params.minValidPriceVnd)
+      : MINIMUM_EARBUDS_PRICE_FLOOR_VND;
+  const { excludedIds, inStockPlausibleOffers } = buildOfferExclusionSets({
+    referenceOffers: params.referenceOffers,
+    unavailableOfferIds: params.unavailableOfferIds,
+    implausibleOfferIds: params.implausibleOfferIds,
+    minFloorVnd,
+  });
+  const cleanPoints = extractCleanHistoryPoints({
+    points: params.points,
+    excludedIds,
+    inStockPlausibleOffers,
+    minFloorVnd,
+    explicitAnchorMs: null,
+  });
+  const { series } = buildEffectiveSeries(cleanPoints, 'market');
+  return series.length > 0 ? series[series.length - 1]!.recordedMs : null;
+}
 export function evaluateOmnibusPriceAudit(
   params: EvaluateOmnibusPriceAuditParams
 ): OmnibusPriceAuditResult {
@@ -667,52 +763,16 @@ export function evaluateOmnibusPriceAudit(
       ? Math.round(safeParams.referenceTimestampMs)
       : null;
 
-  const rawPoints = Array.isArray(safeParams.points) ? safeParams.points : [];
-  const cleanPoints: CleanHistoryPoint[] = [];
-
-  for (const pt of rawPoints) {
-    if (!pt || typeof pt !== 'object' || Array.isArray(pt)) continue;
-    // Synthetic fallback rows (`live_listing`) mirror current listing prices and
-    // are never historical observation evidence.
-    if (pt.source === 'live_listing') continue;
-    if (isOfferUnavailable(pt) || pt.implausiblyLow === true) continue;
-
-    const rawOfferId =
-      typeof pt.product_id === 'string' ? pt.product_id.trim() : '';
-    const canonOfferId = normalizeOfferId(rawOfferId);
-    if (
-      (canonOfferId && excludedIds.has(canonOfferId)) ||
-      (rawOfferId && excludedIds.has(rawOfferId))
-    ) {
-      continue;
-    }
-
-    const priceVnd = sanitizeOmnibusPriceVnd(pt.price, minFloorVnd);
-    if (priceVnd == null) continue;
-    if (
-      inStockPlausibleOffers.length >= 2 &&
-      priceVnd <
-        inStockPlausibleOffers[
-          Math.floor((inStockPlausibleOffers.length - 1) / 2)
-        ]!.price_current *
-          IMPLAUSIBLY_LOW_RATIO
-    ) {
-      continue;
-    }
-
-    const recordedMs = parseRecordedAtMs(pt.recorded_at);
-    if (recordedMs == null) continue;
-    if (explicitAnchorMs != null && recordedMs > explicitAnchorMs) continue;
-
-    cleanPoints.push({
-      offerKey: canonOfferId || rawOfferId || '__default__',
-      priceVnd,
-      recordedMs,
-    });
-  }
+  const cleanPoints = extractCleanHistoryPoints({
+    points: safeParams.points,
+    excludedIds,
+    inStockPlausibleOffers,
+    minFloorVnd,
+    explicitAnchorMs,
+  });
 
   const mode = safeParams.mode === 'market' ? 'market' : 'offer';
-  const series = buildEffectiveSeries(cleanPoints, mode);
+  const { series, nonBaitPoints } = buildEffectiveSeries(cleanPoints, mode);
 
   const unverified = (
     observedSpanDays: number,
@@ -763,6 +823,7 @@ export function evaluateOmnibusPriceAudit(
   }
 
   const windowStartMs = anchorMs - OMNIBUS_WINDOW_DAYS * DAY_MS;
+  const maxGapMs = MAX_OMNIBUS_BLACKOUT_GAP_DAYS * DAY_MS;
   const spansFull30d =
     seriesSpanMs >= OMNIBUS_WINDOW_DAYS * DAY_MS &&
     anchorSpanMs >= OMNIBUS_WINDOW_DAYS * DAY_MS;
@@ -771,13 +832,49 @@ export function evaluateOmnibusPriceAudit(
   const inWindowPoints: SeriesPoint[] = [];
   for (const pt of series) {
     if (pt.recordedMs <= windowStartMs) {
-      carryInPoint = pt;
+      if (mode === 'offer') carryInPoint = pt;
     } else if (pt.recordedMs <= anchorMs) {
       inWindowPoints.push(pt);
     }
   }
 
-  const maxGapMs = MAX_OMNIBUS_BLACKOUT_GAP_DAYS * DAY_MS;
+  // In `'market'` mode, compute carry-in at `windowStartMs` strictly from offers
+  // whose OWN latest observation at `<= windowStartMs` has not expired (`<= maxGapMs`),
+  // so an offer that expired before the 30-day window began never leaks in via
+  // another offer's aggregate timestamp.
+  if (mode === 'market' && spansFull30d) {
+    const boundaryOffers = new Map<
+      string,
+      { priceVnd: number; recordedMs: number }
+    >();
+    for (const pt of nonBaitPoints) {
+      if (pt.recordedMs > windowStartMs) break;
+      const prev = boundaryOffers.get(pt.offerKey);
+      if (
+        !prev ||
+        prev.recordedMs < pt.recordedMs ||
+        pt.priceVnd < prev.priceVnd
+      ) {
+        boundaryOffers.set(pt.offerKey, {
+          priceVnd: pt.priceVnd,
+          recordedMs: pt.recordedMs,
+        });
+      }
+    }
+    let minBoundaryVnd = Number.POSITIVE_INFINITY;
+    let latestBoundaryMs = 0;
+    for (const state of boundaryOffers.values()) {
+      if (windowStartMs - state.recordedMs > maxGapMs) continue;
+      if (state.priceVnd < minBoundaryVnd) minBoundaryVnd = state.priceVnd;
+      if (state.recordedMs > latestBoundaryMs) {
+        latestBoundaryMs = state.recordedMs;
+      }
+    }
+    if (Number.isFinite(minBoundaryVnd) && latestBoundaryMs > 0) {
+      carryInPoint = { priceVnd: minBoundaryVnd, recordedMs: latestBoundaryMs };
+    }
+  }
+
   let hasBlackoutGap = false;
   if (spansFull30d) {
     const checkTimes: number[] = [];
@@ -809,9 +906,7 @@ export function evaluateOmnibusPriceAudit(
     : [...series];
 
   const distinctWindowDays = new Set(
-    windowCandidates.map((pt) =>
-      Math.floor((anchorMs - pt.recordedMs) / DAY_MS)
-    )
+    inWindowPoints.map((pt) => Math.floor((anchorMs - pt.recordedMs) / DAY_MS))
   ).size;
 
   // Separate the current price event tail from prior observations when the price
@@ -1003,7 +1098,7 @@ export function formatOmnibusAuditCopy(
     currentSubTone = isFake || isExag ? 'bad' : 'neutral';
   } else {
     currentSubText = t('oAlign');
-    currentSubTone = cert ? 'good' : 'neutral';
+    currentSubTone = cert && origVnd <= flrVnd ? 'good' : 'neutral';
   }
 
   const colFloorTitle =

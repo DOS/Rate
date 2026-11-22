@@ -619,7 +619,7 @@ export default function DealFinderWorkspace({
       .querySelectorAll<HTMLElement>('#rate-ranked-deals > div')
       [index]?.querySelector<HTMLElement>('a[href]')
       ?.focus();
-  }, [visibleCount]);
+  }, [visibleCount, filterKey]);
 
   const categoryOptions: Array<{
     slug: CanonicalCategorySlug | 'all';

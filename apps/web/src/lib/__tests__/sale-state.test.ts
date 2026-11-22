@@ -909,14 +909,80 @@ function main() {
       `${locale}: overpriced 31.99M listing renders danger Wait signal, never green Buy-Now`
     );
     if (locale !== 'vi') {
+      const cardStart = inspectOverpricedNewShopHtml.indexOf(
+        'data-testid="inspect-omnibus-audit-card"'
+      );
+      const badgeStart = inspectOverpricedNewShopHtml.indexOf(
+        'data-testid="inspect-omnibus-window-badge"',
+        cardStart
+      );
+      const omnibusScopeHeaderHtml = inspectOverpricedNewShopHtml.slice(
+        cardStart,
+        badgeStart
+      );
       assert.ok(
-        inspectOverpricedNewShopHtml.includes(
-          '<span lang="vi">Cửa Hàng Điện Thoại Hà Nội</span>'
-        ),
-        `${locale}: Vietnamese seller name in omnibusScopeListing carries lang="vi"`
+        cardStart >= 0 &&
+          badgeStart > cardStart &&
+          omnibusScopeHeaderHtml.includes(
+            '<span lang="vi">Cửa Hàng Điện Thoại Hà Nội</span>'
+          ),
+        `${locale}: Vietnamese seller name inside omnibusScopeListing carries lang="vi"`
       );
     }
   }
+
+  // Expired carry-in offer in market mode (48.5d ago > 18d before 30d boundary)
+  // never leaks into the 30-day floor via another offer's aggregate timestamp.
+  const expiredCarryMarket = evaluateOmnibusPriceAudit({
+    points: [
+      {
+        product_id: 'offer-expired',
+        price: 20_000_000,
+        recorded_at: isoDaysAgo(48.5),
+      },
+      {
+        product_id: 'offer-active',
+        price: 30_000_000,
+        recorded_at: isoDaysAgo(31),
+      },
+      {
+        product_id: 'offer-active',
+        price: 30_000_000,
+        recorded_at: isoDaysAgo(20),
+      },
+      {
+        product_id: 'offer-active',
+        price: 30_000_000,
+        recorded_at: isoDaysAgo(10),
+      },
+      {
+        product_id: 'offer-active',
+        price: 28_000_000,
+        recorded_at: isoDaysAgo(0),
+      },
+    ],
+    currentPriceVnd: 28_000_000,
+    claimedOriginalPriceVnd: 30_000_000,
+    mode: 'market',
+    referenceTimestampMs: ANCHOR_MS,
+  });
+  assert.equal(expiredCarryMarket.priorFloorPriceVnd, 30_000_000);
+  assert.equal(expiredCarryMarket.verdict, 'verified_omnibus_reduction');
+
+  // Carry-in observation outside the 30-day window does not count toward the
+  // 3-day in-window coverage minimum.
+  const twoInWindowPlusCarry = evaluateOmnibusPriceAudit({
+    points: [
+      { product_id: 'o1', price: 25_000_000, recorded_at: isoDaysAgo(32) },
+      { product_id: 'o1', price: 26_000_000, recorded_at: isoDaysAgo(15) },
+      { product_id: 'o1', price: 25_500_000, recorded_at: isoDaysAgo(0) },
+    ],
+    currentPriceVnd: 25_500_000,
+    claimedOriginalPriceVnd: 29_000_000,
+    referenceTimestampMs: ANCHOR_MS,
+  });
+  assert.equal(twoInWindowPlusCarry.isOmnibusCertified, false);
+  assert.equal(twoInWindowPlusCarry.windowStatus, 'blackout_gap');
 
   console.warn('✅ Sale state suite passed');
 }
