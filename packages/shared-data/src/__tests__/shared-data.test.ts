@@ -1818,8 +1818,18 @@ function testRatingCriteriaAndReviewForm(): void {
   );
   assert.equal(rules.getRatingCriterionLabel(sampleCrit, 'cs'), 'Výkon');
   assert.equal(rules.getRatingCriterionLabel(sampleCrit, 'cs-CZ'), 'Výkon');
+  assert.equal(
+    rules.getRatingCriterionLabel(sampleCrit, '\u0000cs-CZ  '),
+    'Výkon'
+  );
   assert.equal(rules.getRatingCriterionLabel(sampleCrit, 'fr'), 'Performance');
   assert.equal(rules.getRatingCriterionLabel(sampleCrit, null), 'Hiệu năng');
+  assert.equal(
+    rules.getRatingCriterionLabel(sampleCrit, undefined),
+    'Hiệu năng'
+  );
+  assert.equal(rules.getRatingCriterionLabel(sampleCrit, ''), 'Hiệu năng');
+  assert.equal(rules.getRatingCriterionLabel(sampleCrit, '   '), 'Hiệu năng');
   assert.equal(rules.RATING_CRITERION_KEYS.length, 19);
   for (const key of rules.RATING_CRITERION_KEYS) {
     assert.equal(rules.isRatingCriterionKey(key), true, key);

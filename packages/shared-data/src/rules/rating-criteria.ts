@@ -40,13 +40,13 @@ export const RATING_CRITERION_KEYS: readonly RatingCriterionKey[] =
   CRITERION_KEYS;
 
 const KNOWN_CRITERION_KEY_SET = new Set<string>(RATING_CRITERION_KEYS);
-
-function checkRatingCriterionKey(key: unknown): key is RatingCriterionKey {
-  return typeof key === 'string' && KNOWN_CRITERION_KEY_SET.has(key);
-}
+const LOCALE_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
 export function isRatingCriterionKey(key: unknown): key is RatingCriterionKey {
-  return checkRatingCriterionKey(key);
+  const candidate = key;
+  return (
+    typeof candidate === 'string' && KNOWN_CRITERION_KEY_SET.has(candidate)
+  );
 }
 
 export interface RatingCriterion {
@@ -60,28 +60,26 @@ export interface RatingCriterion {
   required: boolean;
 }
 
-function selectRatingCriterionLabel(
-  criterion: Pick<RatingCriterion, 'label'>,
-  locale: string | null | undefined
-): string {
-  const primary =
-    typeof locale === 'string'
-      ? locale.trim().slice(0, 32).toLowerCase().split(/[-_]/)[0]
-      : 'vi';
-  if (primary === 'vi') return criterion.label.vi;
-  if (primary === 'cs') return criterion.label.cs;
-  return criterion.label.en;
-}
-
 /**
  * Localized label of a criterion for `vi`, `en`, or `cs` (including regional
- * tags such as `cs-CZ`), falling back to English for unknown non-vi locales.
+ * tags such as `cs-CZ`), defaulting blank/missing inputs to `vi` and falling
+ * back to English for unknown non-vi locales.
  */
 export function getRatingCriterionLabel(
   criterion: Pick<RatingCriterion, 'label'>,
   locale: string | null | undefined
 ): string {
-  return selectRatingCriterionLabel(criterion, locale);
+  const raw = locale;
+  const cleaned =
+    typeof raw === 'string'
+      ? raw.replace(LOCALE_CONTROL_CHARS_RE, '').trim()
+      : '';
+  const primary = cleaned
+    ? cleaned.slice(0, 32).toLowerCase().split(/[-_]/)[0]
+    : 'vi';
+  if (primary === 'vi') return criterion.label.vi;
+  if (primary === 'cs') return criterion.label.cs;
+  return criterion.label.en;
 }
 
 /** The most criteria a review may leave unrated ("Chưa dùng tới", D5). */

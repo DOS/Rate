@@ -95,7 +95,7 @@ type SortMode = 'weight_desc' | 'newest' | 'rating_desc' | 'rating_asc';
 export interface JReviewsSectionProps {
   masterProductId?: string;
   /** Shows only this category's criteria: no screen for earbuds. */
-  categorySlug?: CanonicalCategorySlug;
+  categorySlug?: CanonicalCategorySlug | 'services';
   /**
    * The category review form v2 rates (the product's category row, as the
    * v2 RPC reads it); null when it has none. Only read with v2 on.
@@ -154,6 +154,17 @@ function ownCriterionValue(
     : undefined;
 }
 
+function normalizeCategorySlug(
+  value: string | null | undefined
+): string | null {
+  if (typeof value !== 'string') return null;
+  const cleaned = value
+    .replace(JREVIEWS_CONTROL_CHARS_RE, '')
+    .trim()
+    .toLowerCase();
+  return cleaned || null;
+}
+
 /**
  * Normalizes a review's stored `criteria_ratings` for a product category:
  * - Canonical `getRatingCriteria(categorySlug)` keys take precedence.
@@ -176,10 +187,7 @@ export function normalizeReviewCriteriaRatings(
     return {};
   }
   const record = rawRatings as Record<string, unknown>;
-  const cleanCategory =
-    typeof categorySlug === 'string' && categorySlug.trim()
-      ? categorySlug.trim().toLowerCase()
-      : null;
+  const cleanCategory = normalizeCategorySlug(categorySlug);
   const categoryCriteria = getRatingCriteria(cleanCategory);
   const canonicalKeys = new Set<string>(categoryCriteria.map((c) => c.key));
   const out: Partial<Record<RatingCriterionKey, number>> = {};
@@ -324,13 +332,18 @@ export default function JReviewsSection({
   const tAnalyzer = useTranslations('analyzerCopy');
   const locale = useLocale();
 
-  const effectiveCategorySlug = useMemo(() => {
-    const raw =
-      (typeof categorySlug === 'string' && categorySlug.trim()) ||
-      (typeof reviewCategorySlug === 'string' && reviewCategorySlug.trim()) ||
-      '';
-    return raw ? raw.toLowerCase() : null;
-  }, [categorySlug, reviewCategorySlug]);
+  const cleanCategorySlug = useMemo(
+    () => normalizeCategorySlug(categorySlug),
+    [categorySlug]
+  );
+  const cleanReviewCategorySlug = useMemo(
+    () => normalizeCategorySlug(reviewCategorySlug),
+    [reviewCategorySlug]
+  );
+  // Authoritative DB category (`reviewCategorySlug`) wins when present (e.g.
+  // `services` or `tvs` routed under `/smartphones/[slug]`), falling back to
+  // the route `categorySlug` when v2 is disabled (`reviewCategorySlug` null).
+  const effectiveCategorySlug = cleanReviewCategorySlug ?? cleanCategorySlug;
 
   // Kept only for the legacy v1 5-slider write form when v2 is disabled.
   const criteriaMeta = useMemo(
@@ -422,9 +435,10 @@ export default function JReviewsSection({
     !pointsOverview && (summary.pros.length > 0 || summary.cons.length > 0);
 
   // 5-Criteria Write Review Form State
+  const v2Enabled = isReviewFormV2Enabled();
   const canWriteReview =
     Boolean(masterProductId) &&
-    (!isReviewFormV2Enabled() || hasRatingCriteria(reviewCategorySlug));
+    (!v2Enabled || hasRatingCriteria(cleanReviewCategorySlug));
   const [showWriteForm, setShowWriteForm] = useState(
     Boolean(defaultWriteFormOpen) && canWriteReview
   );
@@ -1132,13 +1146,13 @@ export default function JReviewsSection({
       )}
 
       {/* Review form v2 behind its flag (DOS/Rate#1544) */}
-      {canWriteReview && showWriteForm && isReviewFormV2Enabled() && (
+      {canWriteReview && showWriteForm && v2Enabled && (
         <div id={writeFormId}>
           <ReviewFormV2
             key={masterProductId ?? productSlug ?? productName}
             masterProductId={masterProductId}
             productName={productName}
-            categorySlug={reviewCategorySlug ?? undefined}
+            categorySlug={cleanReviewCategorySlug ?? undefined}
             defaultAuthorName={t('defaultAuthorName')}
             onStored={handleReviewStored}
           />
@@ -1146,7 +1160,7 @@ export default function JReviewsSection({
       )}
 
       {/* Interactive 5-Criteria Write Review Form */}
-      {canWriteReview && showWriteForm && !isReviewFormV2Enabled() && (
+      {canWriteReview && showWriteForm && !v2Enabled && (
         <form
           id={writeFormId}
           onSubmit={handleSubmitCommunityReview}
@@ -1904,7 +1918,9 @@ export default function JReviewsSection({
             const myGaps = myValue
               ? shownReviewValueGaps(
                   myValue.gaps,
-                  hasRatingCriteria(effectiveCategorySlug)
+                  v2Enabled
+                    ? hasRatingCriteria(cleanReviewCategorySlug)
+                    : hasRatingCriteria(effectiveCategorySlug)
                 )
               : [];
             const normalizedRevCriteria = normalizeReviewCriteriaRatings(
@@ -2079,7 +2095,7 @@ export default function JReviewsSection({
                           <span
                             key={badge.key}
                             data-testid={`review-criterion-badge-${badge.key}`}
-                            className="badge bg-light text-dark rounded-pill border"
+                            className="badge bg-light text-dark rounded-pill border text-wrap mw-100 text-start"
                             style={{ fontSize: '0.8125rem' }}
                           >
                             {badge.label}:{' '}

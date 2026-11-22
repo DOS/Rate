@@ -53,7 +53,10 @@ function renderReviewsSection(
   const baseProps: JReviewsSectionProps = {
     masterProductId: '22222222-2222-4222-8222-222222221727',
     categorySlug: 'smartphones',
-    reviewCategorySlug: 'smartphones',
+    reviewCategorySlug:
+      'reviewCategorySlug' in overrides
+        ? overrides.reviewCategorySlug
+        : (overrides.categorySlug ?? 'smartphones'),
     productSlug: 'iphone-16-pro-max-256gb',
     productName: 'iPhone 16 Pro Max 256GB',
     averageRating: 0,
@@ -1074,8 +1077,78 @@ function main() {
   );
   assert.match(
     csPhoneMixedHtml,
-    /data-testid="review-criterion-badge-sound"[^>]*>Kvalita zvuku: 4,5\/5 ★<\/span>/
+    /data-testid="review-criterion-badge-sound"[^>]*class="[^"]*\btext-wrap\b[^"]*\bmw-100\b[^"]*"[^>]*>Kvalita zvuku: 4,5\/5 ★<\/span>/
   );
+
+  // 4) Services & non-canonical DB categories (`reviewCategorySlug` precedence
+  //    over fallback route `categorySlug="smartphones"`).
+  const csServicesViaReviewCatHtml = renderReviewsSection('cs', {
+    categorySlug: 'smartphones',
+    reviewCategorySlug: '  SERVICES\u0000 ',
+    reviews: [
+      makeReview('svc-1', {
+        service_quality: 4.5,
+        price: 4,
+        attitude: 5,
+        speed: 3.5,
+      }),
+    ],
+  });
+  for (const key of ['service_quality', 'price', 'attitude', 'speed']) {
+    assert.match(
+      csServicesViaReviewCatHtml,
+      new RegExp(`data-criterion-card="${key}"`)
+    );
+  }
+  assert.doesNotMatch(
+    csServicesViaReviewCatHtml,
+    /data-criterion-card="camera"/
+  );
+  assert.match(
+    csServicesViaReviewCatHtml,
+    /data-testid="review-criterion-badge-service_quality"[^>]*>Kvalita služeb: 4,5\/5 ★<\/span>/
+  );
+  assert.match(
+    csServicesViaReviewCatHtml,
+    /data-testid="review-criterion-badge-attitude"[^>]*>Přístup personálu: 5,0\/5 ★<\/span>/
+  );
+
+  const enServicesDirectHtml = renderReviewsSection('en', {
+    categorySlug: 'services',
+    reviewCategorySlug: null,
+    reviews: [
+      makeReview('svc-2', {
+        service_quality: 4.5,
+        price: 5,
+      }),
+    ],
+  });
+  assert.match(
+    enServicesDirectHtml,
+    /data-testid="review-criterion-badge-service_quality"[^>]*>Service quality: 4\.5\/5 ★<\/span>/
+  );
+  assert.match(
+    enServicesDirectHtml,
+    /data-testid="review-criterion-badge-price"[^>]*>Price: 5\.0\/5 ★<\/span>/
+  );
+
+  try {
+    process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2 = '1';
+    const tvsHtml = renderReviewsSection('en', {
+      categorySlug: 'smartphones',
+      reviewCategorySlug: 'tvs',
+      defaultWriteFormOpen: true,
+    });
+    assert.doesNotMatch(
+      tvsHtml,
+      /review-form-v2/,
+      'non-criteria DB category tvs must not render v2 review form'
+    );
+  } finally {
+    if (prevV2 === undefined)
+      delete process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
+    else process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2 = prevV2;
+  }
 
   console.warn('✅ Review display suite passed');
 }
