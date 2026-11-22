@@ -9,6 +9,11 @@ import {
   type ItemCatalogRow,
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
+import {
+  buildOgTruthCardImage,
+  defaultOpenGraph,
+  defaultTwitterCard,
+} from '@/lib/seo';
 import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import DealFinderWorkspace from '@/components/deals/DealFinderWorkspace';
@@ -26,12 +31,28 @@ export async function generateMetadata({
   const { locale } = await params;
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'deals' });
+  const title = t('metaTitle');
+  const description = t('metaDescription');
+  const canonicalUrl = 'https://rate.vn/deals';
+  const ogImage = buildOgTruthCardImage({
+    type: 'deals',
+    locale: lang,
+    alt: title,
+  });
   return {
-    title: t('metaTitle'),
-    description: t('metaDescription'),
+    title,
+    description,
     alternates: {
-      canonical: 'https://rate.vn/deals',
+      canonical: canonicalUrl,
     },
+    openGraph: {
+      ...defaultOpenGraph(lang),
+      title,
+      description,
+      url: canonicalUrl,
+      images: [ogImage],
+    },
+    twitter: defaultTwitterCard(ogImage),
   };
 }
 
