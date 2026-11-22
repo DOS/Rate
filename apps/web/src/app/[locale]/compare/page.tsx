@@ -89,19 +89,26 @@ export default async function ComparePhonesPage({
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
   const {
     catalogCandidates,
+    rawCandidateSlugs,
     activeCategory,
     initialProducts,
     hasExplicitSlugs,
     resolvedSelection,
   } = await getComparePageSelection(await searchParams);
   // RATE_ITEM_MODEL on: versus links name Items (DOS/Rate#1290, DOS/Rate#1768); off: null.
-  const itemSlugBySlug = await getItemSlugsFor(
+  const baseItemSlugBySlug = await getItemSlugsFor(
     [
       ...initialProducts.map((p) => p.slug),
       ...catalogCandidates.map((p) => p.slug),
     ],
     resolvedSelection
   );
+  const rawItemSlugBySlug = baseItemSlugBySlug
+    ? await getItemSlugsFor(rawCandidateSlugs, resolvedSelection)
+    : null;
+  const itemSlugBySlug = baseItemSlugBySlug
+    ? { ...rawItemSlugBySlug, ...baseItemSlugBySlug }
+    : null;
 
   return (
     <ClientMessages scope="compare">

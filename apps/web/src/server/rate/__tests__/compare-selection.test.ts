@@ -450,6 +450,12 @@ test('tokenless /compare deduplicates multiple variants of the same Item under R
     itemDefaults.catalogCandidates.map((row) => row.slug),
     ['acme-128gb', 'peer-128gb', 'last']
   );
+  assert.deepEqual(itemDefaults.rawCandidateSlugs, [
+    'acme-256gb',
+    'acme-128gb',
+    'peer-128gb',
+    'last',
+  ]);
   const standingAcme = itemDefaults.initialProducts[0] as Record<
     string,
     unknown

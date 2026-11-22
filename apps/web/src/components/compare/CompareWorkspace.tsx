@@ -1,6 +1,12 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslations } from 'next-intl';
 import type { IconType } from 'react-icons';
 import {
@@ -63,6 +69,7 @@ import { escapeCsvCell } from '@/lib/csv-safe';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import {
+  type CompareTrayItem,
   getCompareTray,
   MAX_COMPARE_ITEMS,
   setCompareTray,
@@ -580,6 +587,68 @@ export function applyCompareCandidateSelection(
   };
 }
 
+export function resolveCompareTrayRestore(
+  trayItems: readonly CompareTrayItem[],
+  catalogCandidates: readonly MasterProduct[],
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): {
+  activeCategory: CanonicalCategorySlug;
+  products: MasterProduct[];
+  slugsCsv: string;
+} | null {
+  if (!Array.isArray(trayItems) || trayItems.length === 0) return null;
+  const bySlug = new Map(catalogCandidates.map((c) => [c.slug, c]));
+  const slugMap = buildCompareVersusSlugMap(catalogCandidates, itemSlugBySlug);
+  const matched: MasterProduct[] = [];
+  for (const trayItem of trayItems) {
+    if (!trayItem?.slug) continue;
+    const direct = bySlug.get(trayItem.slug);
+    if (direct) {
+      matched.push(direct);
+      continue;
+    }
+    // Under RATE_ITEM_MODEL, catalogCandidates collapses each Item to its
+    // standing variant. Match a saved non-standing variant back to its Item's
+    // candidate while keeping the saved variant's own slug, name, thumbnail,
+    // and price so storedProducts hydration and ?slugs= load that exact size (#1820).
+    const standingSibling = slugMap
+      ? catalogCandidates.find((c) =>
+          isSameCompareVersusItem(c.slug, trayItem.slug, slugMap)
+        )
+      : undefined;
+    if (standingSibling) {
+      matched.push({
+        ...standingSibling,
+        id: `tray-${trayItem.slug}`,
+        slug: trayItem.slug,
+        name: trayItem.name || standingSibling.name,
+        brand: trayItem.brand || standingSibling.brand,
+        thumbnail: trayItem.thumbnail ?? standingSibling.thumbnail,
+        min_price:
+          sanitizeComparePriceVnd(trayItem.min_price) ||
+          standingSibling.min_price,
+        max_price: sanitizeComparePriceVnd(trayItem.min_price),
+      });
+    }
+  }
+  if (matched.length === 0) return null;
+  const primaryCat = getMasterProductCategorySlug(matched[0]!);
+  const mergedSlugMap = buildCompareVersusSlugMap(
+    [...catalogCandidates, ...matched],
+    itemSlugBySlug
+  );
+  const sameCatMatched = dedupeCompareProductsByItem(
+    matched.filter((m) => getMasterProductCategorySlug(m) === primaryCat),
+    mergedSlugMap
+  );
+  if (sameCatMatched.length === 0) return null;
+  return {
+    activeCategory: primaryCat,
+    products: sameCatMatched,
+    slugsCsv: sameCatMatched.map((m) => m.slug).join(','),
+  };
+}
+
 export function buildCompareVersusSlugMap(
   rows: readonly MasterProduct[],
   itemSlugBySlug?: Readonly<Record<string, string>> | null,
@@ -896,6 +965,7 @@ export function resolveCompareAddSlotAriaLabel(
 }
 
 export const COMPARE_AUTOCOMPLETE_LIST_ID = 'compare-autocomplete-listbox';
+export const COMPARE_AUTOCOMPLETE_HEADING_ID = 'compare-autocomplete-heading';
 
 export function resolveCompareAutocompleteA11y(options: {
   dropdownOpen: boolean;
@@ -2126,30 +2196,18 @@ export default function CompareWorkspace({
     restoredTrayRef.current = true;
 
     if (!hasExplicitSlugs) {
-      const trayItems = getCompareTray();
-      if (trayItems.length > 0) {
-        const bySlug = new Map(catalogCandidates.map((c) => [c.slug, c]));
-        const matched = trayItems
-          .map((t) => bySlug.get(t.slug))
-          .filter((item): item is MasterProduct => Boolean(item));
-        if (matched.length > 0) {
-          const primaryCat = getMasterProductCategorySlug(matched[0]!);
-          const traySlugMap = buildCompareVersusSlugMap(
-            [...catalogCandidates, ...matched],
-            itemSlugBySlug
-          );
-          const sameCatMatched = dedupeCompareProductsByItem(
-            matched.filter(
-              (m) => getMasterProductCategorySlug(m) === primaryCat
-            ),
-            traySlugMap
-          );
-          setActiveCategory(primaryCat);
-          setProducts(sameCatMatched);
-          const traySlugsCsv = sameCatMatched.map((t) => t.slug).join(',');
-          router.replace(`/compare?slugs=${traySlugsCsv}`, { scroll: false });
-          return;
-        }
+      const restored = resolveCompareTrayRestore(
+        getCompareTray(),
+        catalogCandidates,
+        itemSlugBySlug
+      );
+      if (restored) {
+        setActiveCategory(restored.activeCategory);
+        setProducts(restored.products);
+        router.replace(`/compare?slugs=${restored.slugsCsv}`, {
+          scroll: false,
+        });
+        return;
       }
     }
 
@@ -2208,10 +2266,41 @@ export default function CompareWorkspace({
 
   const dropdownOpenRef = useRef(dropdownOpen);
   const productsCountRef = useRef(products.length);
+  const suppressNextInputFocusOpenRef = useRef(false);
   useEffect(() => {
     dropdownOpenRef.current = dropdownOpen;
     productsCountRef.current = products.length;
   }, [dropdownOpen, products.length]);
+
+  const focusSearchInputWithoutOpening = useCallback(() => {
+    const input = searchInputRef.current;
+    if (!input || input.disabled) return;
+    suppressNextInputFocusOpenRef.current = true;
+    input.focus();
+    queueMicrotask(() => {
+      suppressNextInputFocusOpenRef.current = false;
+    });
+  }, []);
+
+  const restoreFocusAfterAutocompleteClose = useCallback(
+    (previousReplaceIndex: number | null, nextProductCount: number) => {
+      if (nextProductCount >= MAX_COMPARE_ITEMS) {
+        const targetIdx =
+          previousReplaceIndex !== null
+            ? previousReplaceIndex
+            : nextProductCount - 1;
+        requestAnimationFrame(() => {
+          const triggers = document.querySelectorAll<HTMLElement>(
+            '[data-compare-slot-trigger="replace"]'
+          );
+          triggers[targetIdx]?.focus();
+        });
+        return;
+      }
+      focusSearchInputWithoutOpening();
+    },
+    [focusSearchInputWithoutOpening]
+  );
 
   const dismissAutocomplete = () => {
     cancelPendingCompareReplaceFocus(
@@ -2275,19 +2364,13 @@ export default function CompareWorkspace({
       ) {
         return;
       }
+      e.preventDefault();
       closeAndClearReplace();
       if (wasInside) {
-        if (
-          productsCountRef.current >= MAX_COMPARE_ITEMS &&
-          previousReplaceIndex !== null
-        ) {
-          const triggers = document.querySelectorAll<HTMLElement>(
-            '[data-compare-slot-trigger="replace"]'
-          );
-          triggers[previousReplaceIndex]?.focus();
-        } else {
-          searchInputRef.current?.focus();
-        }
+        restoreFocusAfterAutocompleteClose(
+          previousReplaceIndex,
+          productsCountRef.current
+        );
       }
     };
 
@@ -2300,7 +2383,7 @@ export default function CompareWorkspace({
       document.removeEventListener('keydown', handleKeyDown);
       box?.removeEventListener('focusout', handleFocusOut);
     };
-  }, []);
+  }, [restoreFocusAfterAutocompleteClose]);
 
   // Debounced remote search via Layer 1 REST API `/api/v1/rate/products` (locked to activeCategory)
   useEffect(() => {
@@ -2366,6 +2449,14 @@ export default function CompareWorkspace({
   );
 
   const handleSelectCandidate = (candidate: MasterProduct) => {
+    const previousReplaceIndex = activeReplaceIndex;
+    const activeEl =
+      typeof document !== 'undefined' ? document.activeElement : null;
+    const wasInsideSearchBox = Boolean(
+      searchBoxRef.current &&
+      activeEl &&
+      searchBoxRef.current.contains(activeEl)
+    );
     const applied = applyCompareCandidateSelection(
       products,
       candidate,
@@ -2378,6 +2469,12 @@ export default function CompareWorkspace({
     clearReplaceMode();
     setSearchQuery('');
     setDropdownOpen(false);
+    if (wasInsideSearchBox) {
+      restoreFocusAfterAutocompleteClose(
+        previousReplaceIndex,
+        applied.nextProducts.length
+      );
+    }
   };
 
   const handleRemoveProduct = (slug: string) => {
@@ -2709,12 +2806,27 @@ export default function CompareWorkspace({
                   aria-controls={autocompleteA11y.ariaControls}
                   autoComplete="off"
                   value={searchQuery}
-                  onFocus={() => setDropdownOpen(true)}
+                  onFocus={() => {
+                    if (suppressNextInputFocusOpenRef.current) {
+                      suppressNextInputFocusOpenRef.current = false;
+                      return;
+                    }
+                    setDropdownOpen(true);
+                  }}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
                     setDropdownOpen(true);
                   }}
                   onKeyDown={(e) => {
+                    if (
+                      e.key === 'ArrowDown' &&
+                      !autocompleteA11y.disabled &&
+                      !dropdownOpen
+                    ) {
+                      e.preventDefault();
+                      setDropdownOpen(true);
+                      return;
+                    }
                     if (e.key === 'Escape') {
                       e.preventDefault();
                       const previousReplaceIndex = activeReplaceIndex;
@@ -2723,10 +2835,10 @@ export default function CompareWorkspace({
                         products.length >= MAX_COMPARE_ITEMS &&
                         previousReplaceIndex !== null
                       ) {
-                        const triggers = document.querySelectorAll<HTMLElement>(
-                          '[data-compare-slot-trigger="replace"]'
+                        restoreFocusAfterAutocompleteClose(
+                          previousReplaceIndex,
+                          products.length
                         );
-                        triggers[previousReplaceIndex]?.focus();
                       }
                     }
                   }}
@@ -2744,7 +2856,12 @@ export default function CompareWorkspace({
                   <button
                     type="button"
                     onClick={() => {
+                      const previousReplaceIndex = activeReplaceIndex;
                       dismissAutocomplete();
+                      restoreFocusAfterAutocompleteClose(
+                        previousReplaceIndex,
+                        products.length
+                      );
                     }}
                     className="btn btn-outline-secondary rounded-pill btn-sm ms-2"
                   >
@@ -2756,15 +2873,13 @@ export default function CompareWorkspace({
               {/* Autocomplete Suggestions Dropdown */}
               {autocompleteA11y.ariaExpanded && (
                 <div
-                  id={COMPARE_AUTOCOMPLETE_LIST_ID}
                   className="card rounded-4 position-absolute mt-2 w-100 overflow-hidden border shadow-lg"
-                  style={{
-                    zIndex: 1050,
-                    maxHeight: '380px',
-                    overflowY: 'auto',
-                  }}
+                  style={{ zIndex: 1050 }}
                 >
-                  <div className="bg-light border-bottom d-flex justify-content-between align-items-center px-3 py-2">
+                  <div
+                    id={COMPARE_AUTOCOMPLETE_HEADING_ID}
+                    className="bg-light border-bottom d-flex justify-content-between align-items-center px-3 py-2"
+                  >
                     <span className="small fw-semibold text-muted">
                       {searchQuery.trim()
                         ? t('searchResultsFor', {
@@ -2782,16 +2897,30 @@ export default function CompareWorkspace({
                     )}
                   </div>
 
-                  {suggestions.length === 0 ? (
-                    <div className="text-muted small p-4 text-center">
-                      {t('noMatchingDevices', {
-                        unit: activeCategoryMeta.unitLabel,
-                        query: searchQuery,
-                      })}
-                    </div>
-                  ) : (
-                    <div className="list-group list-group-flush">
-                      {suggestions.map((item) => {
+                  <div
+                    id={COMPARE_AUTOCOMPLETE_LIST_ID}
+                    role="listbox"
+                    aria-labelledby={COMPARE_AUTOCOMPLETE_HEADING_ID}
+                    className="list-group list-group-flush"
+                    style={{
+                      maxHeight: '340px',
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {suggestions.length === 0 ? (
+                      <div
+                        role="option"
+                        aria-disabled="true"
+                        aria-selected="false"
+                        className="text-muted small p-4 text-center"
+                      >
+                        {t('noMatchingDevices', {
+                          unit: activeCategoryMeta.unitLabel,
+                          query: searchQuery,
+                        })}
+                      </div>
+                    ) : (
+                      suggestions.map((item) => {
                         const alreadySelected = isCompareCandidateSelected(
                           products,
                           item.slug,
@@ -2811,6 +2940,8 @@ export default function CompareWorkspace({
                           <button
                             key={item.id}
                             type="button"
+                            role="option"
+                            aria-selected={alreadySelected}
                             disabled={alreadySelected}
                             onClick={() => handleSelectCandidate(item)}
                             className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between gap-3 px-3 py-2 ${
@@ -2882,9 +3013,9 @@ export default function CompareWorkspace({
                             </span>
                           </button>
                         );
-                      })}
-                    </div>
-                  )}
+                      })
+                    )}
+                  </div>
                 </div>
               )}
             </div>

@@ -853,6 +853,7 @@ async function main() {
     require('../../components/compare/CompareWorkspace') as typeof import('../../components/compare/CompareWorkspace');
   const CompareWorkspace = CompareWorkspaceMod.default;
   const {
+    COMPARE_AUTOCOMPLETE_HEADING_ID,
     COMPARE_AUTOCOMPLETE_LIST_ID,
     applyCompareCandidateSelection,
     buildCompareAutocompleteSuggestions,
@@ -861,6 +862,7 @@ async function main() {
     isCompareCandidateSelected,
     pickCompareCategoryDefaults,
     resolveCompareAutocompleteA11y,
+    resolveCompareTrayRestore,
     shouldDismissCompareOnFocusOut,
   } = CompareWorkspaceMod;
   const VersusPageMod =
@@ -1268,6 +1270,152 @@ async function main() {
     compareWorkspaceSrc1820,
     /e\.key === 'Escape'/,
     'CompareWorkspace wires Escape dismissal on #compare-autocomplete-input'
+  );
+  assert.match(
+    compareWorkspaceSrc1820,
+    /e\.key === 'ArrowDown'/,
+    'CompareWorkspace wires ArrowDown to reopen a closed combobox'
+  );
+  assert.match(
+    compareWorkspaceSrc1820,
+    /suppressNextInputFocusOpenRef/,
+    'CompareWorkspace suppresses focus-open when returning keyboard focus to input after Escape/selection'
+  );
+  assert.match(
+    compareWorkspaceSrc1820,
+    /id=\{COMPARE_AUTOCOMPLETE_LIST_ID\}[\s\S]*?role="listbox"[\s\S]*?aria-labelledby=\{COMPARE_AUTOCOMPLETE_HEADING_ID\}/,
+    'CompareWorkspace popup exposes WAI-ARIA 1.2 role="listbox" named by COMPARE_AUTOCOMPLETE_HEADING_ID'
+  );
+  assert.equal(COMPARE_AUTOCOMPLETE_HEADING_ID, 'compare-autocomplete-heading');
+  assert.match(
+    compareWorkspaceSrc1820,
+    /role="option"\s*aria-selected=\{alreadySelected\}/,
+    'CompareWorkspace suggestion buttons expose role="option" and aria-selected'
+  );
+
+  // Unlinked siblings (slug -> slug in itemSlugBySlug) stay distinct and
+  // selectable alongside linked variants of the same brand:model: prefix (#1820).
+  const ip16Unlinked = makeCandidate(
+    'apple-iphone-16-unlinked-import',
+    'Apple iPhone 16 Unlinked Import',
+    'apple:iphone-16:unlinked'
+  );
+  const unlinkedSlugMap1820 = buildCompareVersusSlugMap(
+    [ip16v128, ip16v256, ip16Unlinked, s24v256],
+    {
+      ...ssrSlugMap1820,
+      'apple-iphone-16-unlinked-import': 'apple-iphone-16-unlinked-import',
+    }
+  );
+  assert.deepEqual(
+    pickCompareCategoryDefaults(
+      [ip16v128, ip16v256, ip16Unlinked, s24v256],
+      'smartphones',
+      unlinkedSlugMap1820,
+      3
+    ).map((p) => p.slug),
+    [
+      'apple-iphone-16-128gb',
+      'apple-iphone-16-unlinked-import',
+      'samsung-galaxy-s24-256gb',
+    ]
+  );
+  assert.deepEqual(
+    buildCompareAutocompleteSuggestions(
+      [ip16v128, ip16v256, ip16Unlinked],
+      null,
+      'smartphones',
+      'iphone 16',
+      unlinkedSlugMap1820
+    ).map((p) => p.slug),
+    ['apple-iphone-16-128gb', 'apple-iphone-16-unlinked-import']
+  );
+  assert.equal(
+    isCompareCandidateSelected(
+      [ip16v128],
+      'apple-iphone-16-unlinked-import',
+      unlinkedSlugMap1820
+    ),
+    false
+  );
+  assert.deepEqual(
+    applyCompareCandidateSelection(
+      [ip16v128],
+      ip16Unlinked,
+      'smartphones',
+      null,
+      unlinkedSlugMap1820
+    )?.nextProducts.map((p) => p.slug),
+    ['apple-iphone-16-128gb', 'apple-iphone-16-unlinked-import']
+  );
+
+  // Tray restoration on tokenless /compare preserves non-cheapest saved variants
+  // whose Item collapsed in catalogCandidates, while deduplicating legacy
+  // same-Item tray pairs (#1820).
+  const collapsedCandidates1820 = [ip16v128, s24v256, xm15v512];
+  const restoredNonCheapest = resolveCompareTrayRestore(
+    [
+      {
+        slug: 'apple-iphone-16-256gb',
+        name: 'Apple iPhone 16 256GB',
+        brand: 'Apple',
+        thumbnail: null,
+        min_price: 24_990_000,
+        categorySlug: 'smartphones',
+      },
+      {
+        slug: 'samsung-galaxy-s24-256gb',
+        name: 'Samsung Galaxy S24 256GB',
+        brand: 'Samsung',
+        thumbnail: null,
+        min_price: 20_000_000,
+        categorySlug: 'smartphones',
+      },
+    ],
+    collapsedCandidates1820,
+    ssrSlugMap1820
+  );
+  assert.equal(
+    restoredNonCheapest?.slugsCsv,
+    'apple-iphone-16-256gb,samsung-galaxy-s24-256gb',
+    'Non-cheapest saved variant restores its exact slug even when catalogCandidates collapsed to 128gb'
+  );
+  assert.equal(restoredNonCheapest?.products[0]?.min_price, 24_990_000);
+
+  const restoredLegacyDupes = resolveCompareTrayRestore(
+    [
+      {
+        slug: 'apple-iphone-16-256gb',
+        name: 'Apple iPhone 16 256GB',
+        brand: 'Apple',
+        thumbnail: null,
+        min_price: 24_990_000,
+        categorySlug: 'smartphones',
+      },
+      {
+        slug: 'apple-iphone-16-128gb',
+        name: 'Apple iPhone 16 128GB',
+        brand: 'Apple',
+        thumbnail: null,
+        min_price: 19_990_000,
+        categorySlug: 'smartphones',
+      },
+      {
+        slug: 'samsung-galaxy-s24-256gb',
+        name: 'Samsung Galaxy S24 256GB',
+        brand: 'Samsung',
+        thumbnail: null,
+        min_price: 20_000_000,
+        categorySlug: 'smartphones',
+      },
+    ],
+    collapsedCandidates1820,
+    ssrSlugMap1820
+  );
+  assert.equal(
+    restoredLegacyDupes?.slugsCsv,
+    'apple-iphone-16-256gb,samsung-galaxy-s24-256gb',
+    'Legacy tray holding two storage variants of one Item deduplicates to the first saved size'
   );
 
   // Locale passed to fitTitle and fitDescription on /compare and /compare/[versus] (#1820).

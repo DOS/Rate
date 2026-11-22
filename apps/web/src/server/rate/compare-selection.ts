@@ -242,6 +242,7 @@ export async function getComparePageSelection(params: CompareSearchParams) {
         .slice(0, 3);
   return {
     catalogCandidates,
+    rawCandidateSlugs: rawCatalogCandidates.map((row) => row.slug),
     activeCategory,
     initialProducts,
     hasExplicitSlugs,
