@@ -891,10 +891,9 @@ function main() {
     const pvDict = (rawCatalog as { priceVerdict: Record<string, string> })
       .priceVerdict;
     assert.ok(
-      inspectOverpricedNewShopHtml.includes(
-        pvDict.omnibusFloorInsufficientSub!
-      ) &&
-        !inspectOverpricedNewShopHtml.includes(pvDict.omnibusBadgeCertified!),
+      inspectOverpricedNewShopHtml.includes(pvDict.oPend!) &&
+        inspectOverpricedNewShopHtml.includes(pvDict.oNeed!) &&
+        !inspectOverpricedNewShopHtml.includes(pvDict.oOk!),
       `${locale}: 0-history matchedOffer shows insufficient history, not competitor 30d floor`
     );
     assert.ok(

@@ -144,38 +144,31 @@ export interface OmnibusPriceAuditResult {
 }
 
 export type OmnibusVerdictMessageKey =
-  | 'omnibusCardTitle'
-  | 'omnibusBadgeCertified'
-  | 'omnibusBadgePartial'
-  | 'omnibusBadgeGap'
-  | 'omnibusBadgeInsufficient'
-  | 'omnibusColCurrentTitle'
-  | 'omnibusClaimedTag'
-  | 'omnibusNoStrikethroughSub'
-  | 'omnibusClaimedInflatedSub'
-  | 'omnibusClaimedAlignedSub'
-  | 'omnibusColFloorCertifiedTitle'
-  | 'omnibusColFloorPartialTitle'
-  | 'omnibusColFloorUncertifiedTitle'
-  | 'omnibusDeltaDrop'
-  | 'omnibusDeltaFakeMarkup'
-  | 'omnibusDeltaAboveFloor'
-  | 'omnibusDeltaFlatFake'
-  | 'omnibusDeltaFlat'
-  | 'omnibusFloorInsufficientSub'
-  | 'omnibusPartialDisclaimer'
-  | 'omnibusGapDisclaimer'
-  | 'omnibusColCycleTitle'
-  | 'omnibusCycleBuyNowVal'
-  | 'omnibusCycleBuyNowSub'
-  | 'omnibusCycleFairVal'
-  | 'omnibusCycleFairSub'
-  | 'omnibusCycleWaitVal'
-  | 'omnibusCycleWaitSub'
-  | 'omnibusCycleInsufficientVal'
-  | 'omnibusCycleInsufficientSub'
-  | 'omnibusOfferFloorCertified'
-  | 'omnibusOfferFloorPartial';
+  | 'oTitle'
+  | 'oOk'
+  | 'oPart'
+  | 'oGap'
+  | 'oPend'
+  | 'oFlr'
+  | 'oCur'
+  | 'oClaim'
+  | 'oNoOrig'
+  | 'oMarkup'
+  | 'oAlign'
+  | 'oDrop'
+  | 'oFake'
+  | 'oUp'
+  | 'oFlat'
+  | 'oNeed'
+  | 'oNoteP'
+  | 'oNoteG'
+  | 'oCyc'
+  | 'oBuy'
+  | 'oFair'
+  | 'oWait'
+  | 'oRng'
+  | 'oCycP'
+  | 'oCycN';
 
 export type OmnibusVerdictTranslator = (
   key: OmnibusVerdictMessageKey,
@@ -987,23 +980,23 @@ export function formatOmnibusAuditCopy(
   let statusBadgeText: string;
   let statusBadgeTone: 'good' | 'warn' | 'bad' | 'neutral';
   if (audit.windowStatus === 'omnibus_30d_certified') {
-    statusBadgeText = t('omnibusBadgeCertified');
+    statusBadgeText = t('oOk');
     statusBadgeTone =
       audit.verdict === 'fake_strikethrough_above_floor' ? 'bad' : 'good';
   } else if (audit.windowStatus === 'partial_window') {
-    statusBadgeText = t('omnibusBadgePartial', { days: audit.windowDaysUsed });
+    statusBadgeText = t('oPart', { days: audit.windowDaysUsed });
     statusBadgeTone = 'warn';
   } else if (audit.windowStatus === 'blackout_gap') {
-    statusBadgeText = t('omnibusBadgeGap');
+    statusBadgeText = t('oGap');
     statusBadgeTone = 'warn';
   } else {
-    statusBadgeText = t('omnibusBadgeInsufficient');
+    statusBadgeText = t('oPend');
     statusBadgeTone = 'neutral';
   }
 
   const claimedBadgeText =
     audit.claimedOriginalPriceVnd != null && audit.claimedDiscountPct != null
-      ? t('omnibusClaimedTag', {
+      ? t('oClaim', {
           pct: formatPlainNumber(audit.claimedDiscountPct, locale),
           original: formatPriceVnd(audit.claimedOriginalPriceVnd, locale),
         })
@@ -1020,16 +1013,16 @@ export function formatOmnibusAuditCopy(
         Math.round(audit.priorFloorPriceVnd * 1.02));
 
   if (audit.claimedOriginalPriceVnd == null) {
-    currentSubText = t('omnibusNoStrikethroughSub');
+    currentSubText = t('oNoOrig');
   } else if (audit.priorFloorPriceVnd == null) {
-    currentSubText = t('omnibusFloorInsufficientSub');
+    currentSubText = t('oNeed');
   } else if (
     exceedsAlignedTolerance &&
     audit.claimedVsPriorFloorMarkupVnd != null &&
     audit.claimedVsPriorFloorMarkupVnd > 0 &&
     audit.claimedVsPriorFloorMarkupPct != null
   ) {
-    currentSubText = t('omnibusClaimedInflatedSub', {
+    currentSubText = t('oMarkup', {
       markup: formatPriceVnd(audit.claimedVsPriorFloorMarkupVnd, locale),
       pct: formatPlainNumber(audit.claimedVsPriorFloorMarkupPct, locale),
     });
@@ -1039,16 +1032,16 @@ export function formatOmnibusAuditCopy(
         ? 'bad'
         : 'neutral';
   } else {
-    currentSubText = t('omnibusClaimedAlignedSub');
+    currentSubText = t('oAlign');
     currentSubTone = audit.isOmnibusCertified ? 'good' : 'neutral';
   }
 
   const colFloorTitle =
     audit.windowStatus === 'omnibus_30d_certified'
-      ? t('omnibusColFloorCertifiedTitle')
+      ? t('oOk')
       : audit.windowStatus === 'partial_window'
-        ? t('omnibusColFloorPartialTitle', { days: audit.windowDaysUsed })
-        : t('omnibusColFloorUncertifiedTitle');
+        ? t('oPart', { days: audit.windowDaysUsed })
+        : t('oFlr');
 
   let floorDeltaText: string;
   let floorDeltaTone: 'good' | 'bad' | 'neutral' = 'neutral';
@@ -1057,41 +1050,44 @@ export function formatOmnibusAuditCopy(
     audit.deltaVsPriorFloorVnd == null ||
     audit.deltaVsPriorFloorPct == null
   ) {
-    floorDeltaText = t('omnibusFloorInsufficientSub');
+    floorDeltaText = t('oNeed');
   } else if (audit.deltaVsPriorFloorVnd < 0) {
     const absAmount = Math.abs(audit.deltaVsPriorFloorVnd);
     const absPct = Math.abs(audit.deltaVsPriorFloorPct);
-    floorDeltaText = t('omnibusDeltaDrop', {
+    floorDeltaText = t('oDrop', {
       pct: formatPlainNumber(absPct, locale),
       amount: formatPriceVnd(absAmount, locale),
     });
     floorDeltaTone = 'good';
   } else if (audit.deltaVsPriorFloorVnd > 0) {
     if (audit.verdict === 'fake_strikethrough_above_floor') {
-      floorDeltaText = t('omnibusDeltaFakeMarkup', {
+      floorDeltaText = t('oFake', {
         pct: formatPlainNumber(audit.deltaVsPriorFloorPct, locale),
         amount: formatPriceVnd(audit.deltaVsPriorFloorVnd, locale),
       });
     } else {
-      floorDeltaText = t('omnibusDeltaAboveFloor', {
+      floorDeltaText = t('oUp', {
         pct: formatPlainNumber(audit.deltaVsPriorFloorPct, locale),
         amount: formatPriceVnd(audit.deltaVsPriorFloorVnd, locale),
       });
     }
     floorDeltaTone = 'bad';
   } else if (audit.verdict === 'fake_strikethrough_above_floor') {
-    floorDeltaText = t('omnibusDeltaFlatFake');
+    floorDeltaText = t('oFake', {
+      pct: formatPlainNumber(0, locale),
+      amount: formatPriceVnd(0, locale),
+    });
     floorDeltaTone = 'bad';
   } else {
-    floorDeltaText = t('omnibusDeltaFlat');
+    floorDeltaText = t('oFlat');
     floorDeltaTone = 'neutral';
   }
 
   const floorDisclaimerText =
     audit.windowStatus === 'partial_window'
-      ? t('omnibusPartialDisclaimer', { days: audit.windowDaysUsed })
+      ? t('oNoteP', { days: audit.windowDaysUsed })
       : audit.windowStatus === 'blackout_gap'
-        ? t('omnibusGapDisclaimer')
+        ? t('oNoteG')
         : null;
 
   let cycleValueText: string;
@@ -1102,14 +1098,16 @@ export function formatOmnibusAuditCopy(
   if (
     c.signal === 'buy_now_floor' &&
     c.topPercentileDisplay != null &&
-    c.low90dVnd != null
+    c.low90dVnd != null &&
+    c.high90dVnd != null
   ) {
-    cycleValueText = t('omnibusCycleBuyNowVal', {
+    cycleValueText = t('oBuy', {
       pct: formatPlainNumber(c.topPercentileDisplay, locale),
     });
     cycleValueTone = 'good';
-    cycleSubText = t('omnibusCycleBuyNowSub', {
+    cycleSubText = t('oRng', {
       low: formatPriceVnd(c.low90dVnd, locale),
+      high: formatPriceVnd(c.high90dVnd, locale),
     });
   } else if (
     c.signal === 'fair_market' &&
@@ -1117,42 +1115,42 @@ export function formatOmnibusAuditCopy(
     c.low90dVnd != null &&
     c.high90dVnd != null
   ) {
-    cycleValueText = t('omnibusCycleFairVal', {
+    cycleValueText = t('oFair', {
       pct: formatPlainNumber(c.percentile, locale),
     });
     cycleValueTone = 'neutral';
-    cycleSubText = t('omnibusCycleFairSub', {
+    cycleSubText = t('oRng', {
       low: formatPriceVnd(c.low90dVnd, locale),
       high: formatPriceVnd(c.high90dVnd, locale),
     });
   } else if (
     c.signal === 'above_recent_floor' &&
     c.aboveFloorVnd != null &&
-    c.percentile != null &&
-    c.low90dVnd != null
+    c.low90dVnd != null &&
+    c.high90dVnd != null
   ) {
-    cycleValueText = t('omnibusCycleWaitVal', {
+    cycleValueText = t('oWait', {
       gap: formatPriceVnd(c.aboveFloorVnd, locale),
     });
     cycleValueTone = 'bad';
-    cycleSubText = t('omnibusCycleWaitSub', {
-      pct: formatPlainNumber(c.percentile, locale),
+    cycleSubText = t('oRng', {
       low: formatPriceVnd(c.low90dVnd, locale),
+      high: formatPriceVnd(c.high90dVnd, locale),
     });
   } else {
-    cycleValueText = t('omnibusCycleInsufficientVal');
+    cycleValueText = t('oCycP');
     cycleValueTone = 'neutral';
-    cycleSubText = t('omnibusCycleInsufficientSub', {
+    cycleSubText = t('oCycN', {
       points: c.observedPointDays,
       days: c.observedSpanDays90d,
     });
   }
 
   return {
-    cardTitle: t('omnibusCardTitle'),
+    cardTitle: t('oTitle'),
     statusBadgeText,
     statusBadgeTone,
-    colCurrentTitle: t('omnibusColCurrentTitle'),
+    colCurrentTitle: t('oCur'),
     currentPriceText: priceOrDash(audit.currentPriceVnd),
     claimedBadgeText,
     currentSubText,
@@ -1162,7 +1160,7 @@ export function formatOmnibusAuditCopy(
     floorDeltaText,
     floorDeltaTone,
     floorDisclaimerText,
-    colCycleTitle: t('omnibusColCycleTitle'),
+    colCycleTitle: t('oCyc'),
     cycleValueText,
     cycleValueTone,
     cycleSubText,

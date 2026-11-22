@@ -1663,13 +1663,12 @@ export default function PriceHistorySection({
                       return (
                         <span className="text-dark fw-medium">
                           {offerOmnibus.windowStatus === 'omnibus_30d_certified'
-                            ? tOmnibus('omnibusOfferFloorCertified', {
-                                floor: floorFormatted,
-                              })
-                            : tOmnibus('omnibusOfferFloorPartial', {
+                            ? tOmnibus('oOk')
+                            : tOmnibus('oPart', {
                                 days: offerOmnibus.windowDaysUsed,
-                                floor: floorFormatted,
                               })}
+                          {': '}
+                          <strong>{floorFormatted}</strong>
                         </span>
                       );
                     })()}

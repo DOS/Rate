@@ -342,10 +342,7 @@ function main() {
     'en'
   );
   assert.equal(brandNewCopy.currentSubTone, 'neutral');
-  assert.equal(
-    brandNewCopy.currentSubText,
-    messages.en.omnibusFloorInsufficientSub
-  );
+  assert.equal(brandNewCopy.currentSubText, messages.en.oNeed);
 
   // 8. Round-1 regressions: trailing unobserved silence (`seriesSpanMs < 30d`),
   // blackout_gap windowDaysUsed = 0, and sub-0.05% precision without -0%/+0%.
