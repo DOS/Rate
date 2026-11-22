@@ -632,42 +632,42 @@
     <table>
       <thead>
         <tr>
-          <th>Benchmark tham chiếu</th>
-          <th>Cơ chế cốt lõi giúp họ thắng</th>
+          <th>Benchmark &amp; Nguồn gốc (tra cứu 22/11/2026)</th>
+          <th>Cơ chế gốc đã kiểm chứng</th>
           <th>Nỗi đau tương ứng tại Việt Nam (2026)</th>
-          <th>Cách chuyển hóa vào Rate.vn Phase 8</th>
+          <th>Chuyển hóa đề xuất riêng cho Rate.vn Phase 8</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><strong>Hlídač shopů</strong> (CH Séc) &amp; <strong>Chỉ thị EU Omnibus Điều 6a</strong></td>
-          <td>Bắt buộc đối chiếu mọi nhãn "Giảm X%" với <strong>mức giá thấp nhất trong 30 ngày liền trước đợt sale</strong> (không cho phép nâng giá niêm yết 2 tuần trước Black Friday rồi giảm ảo).</td>
+          <td><strong>Hlídač shopů</strong> (<a href="https://www.hlidacshopu.cz/" rel="noopener noreferrer">hlidacshopu.cz</a>) &amp; <strong>Chỉ thị EU Omnibus Điều 6a</strong> (<a href="https://eur-lex.europa.eu/eli/dir/2019/2161/oj" rel="noopener noreferrer">Directive 2019/2161</a>)</td>
+          <td>Luật EU quy định giá trước giảm phải là <strong>mức giá thấp nhất nhà bán áp dụng trong tối thiểu 30 ngày liền trước</strong>; <code>Hlídač shopů</code> đối chiếu lịch sử giá thực của các e-shop Séc để vạch trần mức giảm ảo dịp Black Friday.</td>
           <td>Trước 11.11, 12.12, Black Friday và cận Tết, nhiều gian hàng đẩy "giá gạch ngang" lên bằng giá MSRP lúc mới ra mắt cách đây 1 năm để treo biển giảm 30-45%, dù giá thực bán suốt tháng trước không đổi.</td>
-          <td><strong>F1:</strong> Hiển thị trực diện con số <code>Đáy 30 ngày trước sale</code> và <code>% Giảm giá thực tế chuẩn Omnibus</code> ngay cạnh giá gạch ngang của nhà bán.</td>
+          <td><strong>Bản địa hóa F1:</strong> Hiển thị trực diện con số <code>Đáy 30 ngày trước sale</code> và <code>% Giảm giá thực tế chuẩn Omnibus</code> (chỉ khi đủ chuỗi 30 ngày) ngay cạnh giá gạch ngang của nhà bán.</td>
         </tr>
         <tr>
-          <td><strong>RTINGS.com</strong> (Mỹ / Toàn cầu)</td>
-          <td><code>Custom Ratings</code> &amp; <code>Use-Case Scoring</code>: bỏ tư duy "một điểm chung cho mọi người", cho phép kéo thanh trượt trọng số hoặc chọn kịch bản dùng (Gaming, Văn phòng, Phim ảnh) để xếp hạng lại tức thì.</td>
+          <td><strong>RTINGS.com</strong> (<a href="https://www.rtings.com/" rel="noopener noreferrer">rtings.com</a> - <em>Custom Ratings &amp; Compare</em>)</td>
+          <td>Tài liệu phương pháp chấm điểm của <code>RTINGS</code> tách điểm theo ngữ cảnh dùng (<em>Use-Case Subscores</em>) và cung cấp công cụ <code>Custom Ratings</code> cho phép người đọc tự gán trọng số từng phép đo để xếp lại bảng.</td>
           <td>Người chạy xe công nghệ cần <em>Pin + Màn sáng + Độ bền</em>, sinh viên cần <em>Đáng tiền + Hiệu năng</em>, người làm nội dung cần <em>Camera + Mic</em>. Một điểm trung bình cứng làm chìm các máy chuyên biệt rất tốt.</td>
-          <td><strong>F2:</strong> Gắn bộ Preset 1 chạm và thanh trượt <code>0% - 100%</code> trực tiếp lên bộ tiêu chí <code>getRatingCriteria</code> (<code>rating-criteria.ts</code>) của 5 ngành hàng trên <code>/leaderboard</code> và <code>/compare</code>.</td>
+          <td><strong>Bản địa hóa F2:</strong> Gắn bộ Preset 1 chạm và thanh trượt <code>0% - 100%</code> trực tiếp lên bộ tiêu chí <code>getRatingCriteria</code> (<code>rating-criteria.ts</code>) của 5 ngành hàng trên <code>/leaderboard</code> và <code>/compare</code>.</td>
         </tr>
         <tr>
-          <td><strong>Keepa</strong> &amp; <strong>Prisjakt</strong> (Bắc Âu / EU)</td>
-          <td>Đặt giá hiện tại vào phân vị lịch sử 90-180 ngày (Bottom 10% = Mua ngay; vừa nhích lên từ đáy = Nên chờ đợt sale kế tiếp) và cảnh báo tự động khi chạm ngưỡng.</td>
+          <td><strong>Keepa</strong> (<a href="https://keepa.com/" rel="noopener noreferrer">keepa.com</a>) &amp; <strong>Prisjakt</strong> (<a href="https://www.prisjakt.nu/" rel="noopener noreferrer">prisjakt.nu</a>)</td>
+          <td><code>Keepa</code> vẽ lịch sử giá dài hạn theo phân nhóm hàng mới/cũ kèm cảnh báo ngưỡng giá mục tiêu đa kênh; <code>Prisjakt</code> theo dõi biến động giá đa cửa hàng độc lập có lọc chi phí giao hàng và cảnh báo khi giảm giá / có hàng lại.</td>
           <td>Người mua điện thoại/laptop 15-40 triệu VND luôn phân vân "Mua hôm nay hay đợi ngày đôi / cận Tết rẻ hơn 1-2 triệu?", dẫn tới trì hoãn hoặc mua đúng đỉnh giá.</td>
-          <td><strong>F1 + F5:</strong> Nhãn phân vị lịch sử <code>Mua ngay / Giá bình thường / Đang neo cao</code> kèm nút nhận thông báo <code>DOS ID</code> khi chạm đáy.</td>
+          <td><strong>Bản địa hóa F1 + F5:</strong> Nhãn phân vị lịch sử 90 ngày <code>Mua ngay / Giá bình thường / Đang neo cao</code> (thuật toán đề xuất của Rate) kèm nút nhận thông báo <code>DOS ID</code> khi chạm đáy.</td>
         </tr>
         <tr>
-          <td><strong>Heureka.cz</strong> (<em>Ověřeno zákazníky</em> &amp; <em>Skutečná sleva</em>)</td>
-          <td>Huy hiệu chứng nhận chuỗi uy tín tính trên cửa sổ trượt 180 ngày từ người mua thật, cộng công cụ gom giỏ hàng tính tổng chi phí thực tế.</td>
+          <td><strong>Heureka.cz</strong> (<a href="https://sluzby.heureka.cz/napoveda/overeno-zakazniky/" rel="noopener noreferrer">Ověřeno zákazníky</a> &amp; <a href="https://www.heureka.cz/" rel="noopener noreferrer">heureka.cz</a>)</td>
+          <td>Chương trình <em>Ověřeno zákazníky</em> cấp chứng nhận uy tín cho e-shop dựa trên tỷ lệ khuyến nghị từ khảo sát người mua thật trong 90-180 ngày gần nhất, kết hợp so sánh giá đa cửa hàng và lọc khuyến mãi thật.</td>
           <td>Người mua không phân biệt được gian hàng Mall thật, đại lý ủy quyền Apple (AAR) với shop trộn phụ kiện / hàng dựng hoặc tách đơn nhiều nơi bị đội phí ship.</td>
-          <td><strong>F7 + F8:</strong> Huy hiệu chuỗi uy tín 180 ngày kết hợp <code>dosafe_risk_score</code> + Bộ tối ưu giỏ hàng 2-5 món trên 22 sàn.</td>
+          <td><strong>Bản địa hóa F7 + F8:</strong> Huy hiệu chuỗi uy tín 180 ngày tự động từ dữ liệu kiểm toán <code>dosafe_risk_score</code> + <code>review_risk_score</code> (không cần khảo sát email như Heureka) và bộ tối ưu giỏ hàng 2-5 món trên 22 sàn.</td>
         </tr>
         <tr>
-          <td><strong>Shopping MCP Servers</strong> (<code>BestPrice MCP</code>, chuẩn <code>MCP 2025-2026</code>)</td>
-          <td>Cung cấp công cụ có cấu trúc (<code>search</code>, <code>price_check</code>, <code>offer_audit</code>) để Claude, ChatGPT, Gemini, Cursor, Perplexity gọi trực tiếp thay vì đoán mò giá hoặc cào HTML lỗi.</td>
+          <td><strong>Model Context Protocol</strong> (<a href="https://modelcontextprotocol.io/" rel="noopener noreferrer">modelcontextprotocol.io</a> &amp; <a href="https://github.com/modelcontextprotocol/registry" rel="noopener noreferrer">MCP Registry</a>)</td>
+          <td>Chuẩn mở <code>MCP</code> chuẩn hóa giao tiếp JSON-RPC / Streamable HTTP để các AI host (Claude, Cursor, IDE, custom agents) gọi công cụ tra cứu dữ liệu có cấu trúc thay vì đoán giá hoặc tự cào HTML.</td>
           <td>Người dùng Việt Nam ngày càng hỏi AI "Tầm 20 triệu mua laptop nào ở đâu uy tín, không bị giá ảo?", nhưng LLM hiện trả lời bằng dữ liệu cũ hoặc thiếu kiểm chứng gian hàng.</td>
-          <td><strong>F4:</strong> Mở cổng <code>/api/mcp</code> chỉ đọc trên nền cache BFF + gói mã nguồn mở <code>@dos/rate-mcp</code>, biến mọi câu trả lời AI thành nguồn dẫn link về <code>rate.vn</code>.</td>
+          <td><strong>Bản địa hóa F4:</strong> Mở cổng <code>/api/mcp</code> chỉ đọc trên nền cache BFF + gói <code>@dos/rate-mcp</code> và đăng ký lên <code>MCP Registry</code>, biến câu trả lời AI thành nguồn dẫn link về <code>rate.vn</code>.</td>
         </tr>
       </tbody>
     </table>
@@ -827,7 +827,7 @@
       <dt>Cần xây thêm</dt>
       <dd>
         <ul>
-          <li><strong>Hộp kiểm toán chuẩn EU Omnibus ngay trên trang sản phẩm, <code>/deals</code> và <code>/inspect</code>:</strong> Tách bạch 3 con số minh bạch cho từng gian hàng đang treo khuyến mãi: (1) <em>Giá gạch ngang shop tự ghi</em>, (2) <em>Giá thấp nhất thực tế trong 30 ngày liền trước</em> (<code>prior_30d_min_price</code> tính từ <code>price_history</code> khi có tối thiểu 14 ngày dữ liệu), và (3) <em>Mức giảm/tăng thực chất chuẩn Omnibus</em>.</li>
+          <li><strong>Hộp kiểm toán chuẩn EU Omnibus ngay trên trang sản phẩm, <code>/deals</code> và <code>/inspect</code>:</strong> Tách bạch 3 con số minh bạch cho từng gian hàng đang treo khuyến mãi: (1) <em>Giá gạch ngang shop tự ghi</em>, (2) <em>Giá thấp nhất thực tế trong 30 ngày liền trước</em> (<code>prior_30d_min_price</code> chỉ được gắn nhãn <code>Chuẩn Omnibus 30 ngày</code> khi <code>price_history</code> phủ đủ trọn vẹn cửa sổ tham chiếu từ 30 ngày trở lên và mật độ điểm đo liên tục; nếu mới quan sát được <code>N &lt; 30</code> ngày thì chỉ hiện <em>"Đáy quan sát trong N ngày qua"</em> và giữ nguyên trạng thái chưa kết luận Omnibus), và (3) <em>Mức giảm/tăng thực chất</em>.</li>
           <li><strong>Chỉ báo quyết định <code>Mua Ngay hay Chờ?</code> (Percentile 90 ngày):</strong> Tính vị trí giá tốt nhất hiện tại của sản phẩm trong dải 90 ngày (khi đủ số điểm quan sát hợp lệ): vùng <code>&lt;= P15</code> hiện nhãn xanh <em>"Vùng đáy 90 ngày - Thời điểm tốt để mua"</em>; vùng <code>P15 - P70</code> hiện <em>"Giá ổn định thị trường"</em>; vùng <code>&gt; P70</code> (hoặc vừa nảy lên sau đợt sale) hiện <em>"Đang cao hơn đáy gần nhất X đ - Nên bật cảnh báo chờ sale"</em>.</li>
           <li><strong>Bộ lọc chiến dịch mùa sale trên <code>/deals</code>:</strong> Chế độ xem nhanh <em>"Top Giảm Thật Đợt Sale"</em> và <em>"Cảnh Báo Tăng Giá Đệm Trước Sale"</em> trên toàn bộ 22 chuỗi.</li>
         </ul>
@@ -837,7 +837,7 @@
       <dd><span class="rec">Tác động truyền thông &amp; báo chí rất mạnh</span> (chủ đề "bóc phốt sale ảo ngày đôi / Black Friday bằng dữ liệu thật 22 chuỗi" cực kỳ thu hút cộng đồng công nghệ VN và kiều bào Séc). Chi phí hạ tầng: <code>$0</code>, không gọi AI, nằm gọn trong luồng đọc lịch sử giá đã cache bởi <code>RATE_CACHE_TAGS.PRICE_HISTORY</code>.</dd>
 
       <dt>Rủi ro &amp; Chốt chặn</dt>
-      <dd>Trung thực tuyệt đối với dữ liệu thưa: nếu sản phẩm mới lên kệ hoặc chuỗi lịch sử chưa đủ 14 ngày / chưa đủ mật độ điểm đo, bắt buộc hiện rõ <em>"Chưa đủ lịch sử 30 ngày để kết luận"</em> (giống quy tắc <code>insufficient_history</code> hiện có), tuyệt đối không suy diễn gây oan cho nhà bán.</dd>
+      <dd>Trung thực tuyệt đối với cửa sổ quan sát: khác với ngưỡng 14 ngày của kiểm toán chênh lệch trung vị nội bộ, nhãn pháp lý/tham chiếu <strong>"Đáy 30 ngày chuẩn EU Omnibus" bắt buộc phải có lịch sử phủ đủ trọn 30 ngày liền trước</strong> (không dùng dữ liệu 14 ngày để chứng nhận đáy 30 ngày vì điểm giá thấp hơn có thể rơi vào nửa đầu chưa kịp cào). Khi lịch sử dưới 30 ngày hoặc bị đứt quãng dài, giao diện chỉ ghi đúng số ngày thực tế đã quan sát và không kết luận vi phạm Omnibus.</dd>
     </dl>
 
     <div class="ui-preview" aria-label="Minh họa giao diện kiểm toán chuẩn EU Omnibus">
@@ -896,7 +896,7 @@
       </dd>
 
       <dt>Tác động &amp; Chi phí</dt>
-      <dd><span class="rec">Tăng mạnh thời gian tương tác trên trang (Time-on-site) và tỷ lệ chuyển đổi sang nhấp chuột gian hàng</span> trên <code>/compare</code> và <code>/leaderboard</code>. Chi phí vận hành: <code>$0</code> vì toàn bộ phép nhân ma trận chạy tức thì trên trình duyệt từ dữ liệu SSR đã tải sẵn.</dd>
+      <dd><span class="rec">Tăng mạnh thời gian tương tác trên trang (Time-on-site) và tỷ lệ chuyển đổi sang nhấp chuột gian hàng</span> trên <code>/compare</code> và <code>/leaderboard</code>. Giới hạn phạm vi &amp; chi phí rõ ràng: trên <code>/compare</code> (2-4 máy đã chọn) và trên tập ứng viên mà <code>/leaderboard</code> tải sẵn qua SSR (hiện giới hạn tối đa 100 mẫu xếp cao nhất mỗi ngành hàng khi <code>RATE_ITEM_MODEL</code> tắt), phép tính lại phía trình duyệt tốn <code>$0</code> nhưng chỉ sắp xếp lại trong tập ứng viên đã tải đó; nếu muốn một mẫu nằm ngoài top 100 mặc định vẫn có thể vươn lên top đầu theo trọng số riêng (ví dụ chuyên Gaming), cần nạp đủ danh sách ứng viên hợp lệ của ngành hàng (vốn gọn nhẹ) hoặc đẩy bộ trọng số chuẩn hóa qua tham số truy vấn của <code>/api/v1/rate/leaderboard</code> có bọc cache.</dd>
 
       <dt>Rủi ro &amp; Chốt chặn</dt>
       <dd>Tuân thủ nghiêm quyết định thiết kế <code>#1531 D3/D9</code>: luôn giữ nguyên và hiển thị rõ <em>"Điểm chuẩn Rate.vn"</em> ở cột gốc để không gây nhầm lẫn một máy có hai số điểm khác nhau; điểm tùy chỉnh được gắn nhãn riêng <em>"Điểm theo trọng số bạn chọn"</em>; các tiêu chí chưa đủ số lượng đánh giá thật vẫn giữ trạng thái không bịa số.</dd>
@@ -921,6 +921,9 @@
         <div><strong>Mẫu B (Pin 6500mAh + Chip mạnh)</strong></div>
         <div class="bar-track"><div id="demo-bar-b" class="bar-fill" style="width: 88%;"></div></div>
         <div><strong id="demo-score-b">4.4 / 5</strong></div>
+      </div>
+      <div id="rtings-demo-status" role="status" aria-live="polite" class="muted" style="font-size: 12.5px; margin-top: 8px;">
+        Kết quả hiện tại: Mẫu A đạt 4.5 / 5 - Mẫu B đạt 4.4 / 5.
       </div>
     </div>
   </div>
@@ -1007,7 +1010,8 @@
       <dd>
         <ul>
           <li><strong>Endpoint Streamable HTTP MCP chỉ đọc tại <code>/api/mcp</code> (không trạng thái, không cần API key cho gói đọc cơ bản có giới hạn nhịp):</strong> Cung cấp 5 tool gọn nhẹ, định kiểu chặt bằng Zod 4: <code>search_verified_catalog</code>, <code>get_22_store_offers_and_price_truth</code>, <code>compare_devices_by_use_case</code>, <code>audit_listing_url</code>, và <code>get_genuine_deals</code>.</li>
-          <li><strong>Tệp chuẩn <code>/llms.txt</code> &amp; <code>/.well-known/mcp.json</code> + gói mỏng <code>packages/rate-mcp</code>:</strong> Giúp các trình duyệt AI, thư mục MCP quốc tế (MCP Registry) và hệ sinh thái nội bộ <code>DOS.AI</code> / <code>DOSClaw</code> tự động khám phá và kết nối chỉ bằng 1 dòng cấu hình.</li>
+          <li><strong>Tệp mô tả tự lưu trữ &amp; gói kết nối:</strong> Xuất bản riêng <code>/llms.txt</code> (phục vụ các trình đọc tài liệu LLM, Perplexity, trình duyệt AI đọc ngữ cảnh web) và <code>/.well-known/mcp.json</code> + gói mỏng <code>packages/rate-mcp</code> (phục vụ Claude Desktop, Cursor, Windsurf, VS Code và hệ sinh thái nội bộ <code>DOS.AI</code> / <code>DOSClaw</code>).</li>
+          <li><strong>Quy trình đăng ký lên <code>Official MCP Registry</code> (tách riêng với việc đặt file tĩnh):</strong> Việc xuất bản <code>/llms.txt</code> hay <code>/.well-known/mcp.json</code> không tự động đưa server vào thư mục chính thức; cần thêm bước đóng gói đặc tả <code>server.json</code>, xác thực quyền sở hữu tên miền/namespace (DNS hoặc GitHub OIDC) và phát hành qua công cụ <code>mcp-publisher</code> lên <code>registry.modelcontextprotocol.io</code>.</li>
           <li><strong>Bắt buộc đính kèm <code>canonical_citation_url</code> và nhãn thời điểm cập nhật (<code>price_observed_at</code>)</strong> trong mọi kết quả trả về để đảm bảo lưu lượng truy cập quay về <code>rate.vn</code>.</li>
         </ul>
       </dd>
@@ -1322,6 +1326,7 @@
     var scoreA = document.getElementById('demo-score-a');
     var barB = document.getElementById('demo-bar-b');
     var scoreB = document.getElementById('demo-score-b');
+    var statusRegion = document.getElementById('rtings-demo-status');
 
     for (var p = 0; p < presetBtns.length; p++) {
       presetBtns[p].addEventListener('click', function () {
@@ -1335,6 +1340,9 @@
         if (scoreA) scoreA.textContent = cfg.scoreA;
         if (barB) barB.style.width = cfg.widthB;
         if (scoreB) scoreB.textContent = cfg.scoreB;
+        if (statusRegion) {
+          statusRegion.textContent = 'Kết quả hiện tại: Mẫu A đạt ' + cfg.scoreA + ' - Mẫu B đạt ' + cfg.scoreB + '.';
+        }
       });
     }
   })();
