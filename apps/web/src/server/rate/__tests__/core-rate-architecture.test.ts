@@ -15200,6 +15200,38 @@ async function runCoreArchitectureSuite() {
         platform: 'dienmayxanh',
       }).includes('tgdd-iphone-16-pro-max')
     );
+    assert.equal(
+      parseEcommerceUrlOrQuery(
+        'https://www.anphatpc.com.vn/apple-ipad-11-inch-ipad-wi-fi-128gb-blue-md4a4za/a.html'
+      ).platformItemId,
+      'ap-apple-ipad-11-inch-ipad-wi-fi-128gb-blue-md4a4za_2fa'
+    );
+    assert.ok(
+      extractProductKeywordFromUrl(
+        'https://www.anphatpc.com.vn/apple-ipad-11-inch-ipad-wi-fi-128gb-blue-md4a4za/a.html'
+      ).includes('ipad')
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery(
+        'https://mediamart.vn/tu-van-tieu-dung/top-5-iphone-16'
+      ).platformItemId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery('https://hacom.vn/laptop-asus').platformItemId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery('https://clickbuy.com.vn/dien-thoai-iphone')
+        .platformItemId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery(
+        'https://viettelstore.vn/chuyen-muc-tin/iphone-16'
+      ).platformItemId,
+      null
+    );
     console.log(
       '  ✅ DOS/Rate#1850 Wave 1-3 12 retail platforms web & API parity passed'
     );

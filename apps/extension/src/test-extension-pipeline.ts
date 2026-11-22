@@ -838,16 +838,14 @@ async function runTests() {
       '2.1.0'
     );
     assert.ok(sample);
-    for (const tgddSisterUrl of [
-      'https://topzone.vn/iphone/iphone-16-pro-max',
-      'https://www.topzone.vn/iphone/iphone-16-pro-max',
-      'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
-      'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
+    for (const tgddUrl of [
+      'https://thegioididong.com/dtdd/iphone-16-pro-max',
+      'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
     ]) {
       const obs = buildExtensionObservationV1(
         {
           platform: 'tgdd',
-          canonicalUrl: tgddSisterUrl,
+          canonicalUrl: tgddUrl,
           externalItemId: 'iphone-16-pro-max',
           externalShopId: null,
           title: 'iPhone 16 Pro Max',
@@ -860,10 +858,17 @@ async function runTests() {
         new Date(),
         '2.1.0'
       );
-      assert.ok(obs, `tgdd observation must accept ${tgddSisterUrl}`);
-      assert.equal(obs.listing_url, tgddSisterUrl);
+      assert.ok(obs, `tgdd observation must accept ${tgddUrl}`);
+      assert.equal(obs.listing_url, tgddUrl);
     }
-    for (const lookalikeUrl of [
+    // TopZone and Dien May Xanh are standalone Wave 1A platforms (#1850), and
+    // PostgreSQL `extension_observations_listing_url_check` allows only
+    // `thegioididong.com` under `marketplace = 'tgdd'`.
+    for (const disallowedForTgddUrl of [
+      'https://topzone.vn/iphone/iphone-16-pro-max',
+      'https://www.topzone.vn/iphone/iphone-16-pro-max',
+      'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
+      'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
       'https://eviltopzone.vn/iphone/iphone-16-pro-max',
       'https://evildienmayxanh.com/dtdd/iphone-16-pro-max',
     ]) {
@@ -871,7 +876,7 @@ async function runTests() {
         buildExtensionObservationV1(
           {
             platform: 'tgdd',
-            canonicalUrl: lookalikeUrl,
+            canonicalUrl: disallowedForTgddUrl,
             externalItemId: 'iphone-16-pro-max',
             externalShopId: null,
             title: 'iPhone 16 Pro Max',
@@ -885,7 +890,7 @@ async function runTests() {
           '2.1.0'
         ),
         null,
-        `tgdd observation must reject lookalike ${lookalikeUrl}`
+        `tgdd observation must reject ${disallowedForTgddUrl}`
       );
     }
     assert.deepEqual(
@@ -12112,7 +12117,7 @@ async function runTests() {
             ]
           : [],
       querySelector: (sel: string) =>
-        sel === '.product-price-regular'
+        sel.startsWith('.product-price-regular')
           ? { textContent: '34.990.000₫' }
           : null,
     } as unknown as Document;
@@ -12468,6 +12473,104 @@ async function runTests() {
     console.log(
       '  ✅ [Wave 1-3 12 retail platforms across detector, lookup & SQL boundary (#1850)] Verified'
     );
+
+    // Round 1 review hardening (#1850): An Phat multi-segment Apple URLs + SHA-1 truncation,
+    // prefix-collision candidates, category/editorial guards, O(N) title cleaning & An Phát lang="vi"
+    const { createHash } = await import('node:crypto');
+    const { sanitizeAnPhatItemId } =
+      await import('./extractors/ecommerce-detector.js');
+    const { isVietnameseText } = await import('./i18n.js');
+
+    assert.deepEqual(
+      extractIdsFromUrl(
+        'anphatpc',
+        'https://www.anphatpc.com.vn/apple-ipad-11-inch-ipad-wi-fi-128gb-blue-md4a4za/a.html'
+      ),
+      {
+        externalItemId:
+          'ap-apple-ipad-11-inch-ipad-wi-fi-128gb-blue-md4a4za_2fa',
+        externalShopId: null,
+      }
+    );
+    const longAnPhatPath =
+      'laptop-apple-macbook-air-mdhf4sa/a-mba-13.6-m5/10c/10gpu/16g/1t/35w/midnight-vietnam-edition-special-config-2026-ultra-extended-sku';
+    const expectedNormalized = longAnPhatPath.replace(/[^a-z0-9-]/g, (ch) => {
+      const hex = ch.codePointAt(0)?.toString(16).padStart(2, '0') ?? '00';
+      return `_${hex}`;
+    });
+    const expectedSha1 = createHash('sha1')
+      .update(expectedNormalized)
+      .digest('hex')
+      .slice(0, 10);
+    const expectedTrimmed = expectedNormalized
+      .slice(0, 114)
+      .replace(/[-_]+$/g, '');
+    const expectedLongApId = `ap-${expectedTrimmed}-${expectedSha1}`;
+    assert.equal(sanitizeAnPhatItemId(longAnPhatPath), expectedLongApId);
+    assert.equal(
+      extractIdsFromUrl(
+        'anphatpc',
+        `https://www.anphatpc.com.vn/${longAnPhatPath}.html`
+      ).externalItemId,
+      expectedLongApId
+    );
+    assert.ok(expectedLongApId.length <= 128);
+
+    // Prefix-starting slugs & pre-prefixed unencoded IDs, plus non-leaking numeric underscore suffixes
+    const mzSelfPrefixed = buildCandidateExternalItemIds({
+      platform: 'memoryzone',
+      externalId: 'mz-v9p1t0bw',
+    });
+    assert.ok(
+      mzSelfPrefixed.includes('mz-mz-v9p1t0bw'),
+      'raw slug starting with mz- must still produce mz-mz-...'
+    );
+    const apPrePrefixed = buildCandidateExternalItemIds({
+      platform: 'anphatpc',
+      externalId: 'ap-laptop_id49201',
+    });
+    assert.ok(
+      apPrePrefixed.includes('ap-laptop_5fid49201') &&
+        apPrePrefixed.includes('ap-ap-laptop_5fid49201')
+    );
+    const nkNumericUnderscore = buildCandidateExternalItemIds({
+      platform: 'nguyenkim',
+      externalId: 'laptop_274819201',
+    });
+    assert.equal(
+      nkNumericUnderscore.includes('274819201'),
+      false,
+      'retail underscore slugs must not leak bare numeric suffixes across platforms'
+    );
+
+    // Editorial / brand-category / used-hub rejections on MediaMart, HACOM, Clickbuy, Viettel Store
+    for (const [plat, nonPdp] of [
+      ['mediamart', 'https://mediamart.vn/tu-van-tieu-dung/top-5-iphone-16'],
+      ['hacom', 'https://hacom.vn/laptop-asus'],
+      ['clickbuy', 'https://clickbuy.com.vn/dien-thoai-iphone'],
+      ['clickbuy', 'https://clickbuy.com.vn/iphone-cu'],
+      ['clickbuy', 'https://clickbuy.com.vn/thay-pin'],
+      ['viettelstore', 'https://viettelstore.vn/chuyen-muc-tin/iphone-16'],
+      ['viettelstore', 'https://viettelstore.vn/dtdd-apple-iphone'],
+    ] as const) {
+      assert.equal(
+        extractIdsFromUrl(plat, nonPdp).externalItemId,
+        null,
+        nonPdp
+      );
+    }
+
+    // O(N) title cleaning on pathological whitespace input & An Phát Vietnamese detection
+    const t0 = performance.now();
+    const cleanedAdversarial = cleanExtractedProductTitle(
+      `iPhone 16 Pro${' '.repeat(20_000)}|NotAStore`
+    );
+    assert.ok(
+      performance.now() - t0 < 50,
+      'cleanExtractedProductTitle must run in O(N)'
+    );
+    assert.ok(cleanedAdversarial.startsWith('iPhone 16 Pro'));
+    assert.equal(isVietnameseText('An Phát Computer'), true);
   }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }

@@ -269,16 +269,17 @@ export function selectFreshestSessionSignal<T extends SessionSignalEntry>(
   return tabSignal ?? latestSignal ?? null;
 }
 
-const SAFE_EXTERNAL_ID_REGEX = /^[a-zA-Z0-9_.-]{1,120}$/;
+const SAFE_EXTERNAL_ID_CHARS_REGEX = /^[a-zA-Z0-9_.-]+$/;
 const RESERVED_EXTERNAL_ID_REGEX =
   /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i;
 
-function sanitizeExternalIdentifier(val: unknown): string | null {
+function sanitizeExternalIdentifier(val: unknown, maxLen = 120): string | null {
   if (typeof val !== 'string') return null;
   const cleaned = val.replace(/\p{Cc}+/gu, '').trim();
   if (
     !cleaned ||
-    !SAFE_EXTERNAL_ID_REGEX.test(cleaned) ||
+    cleaned.length > maxLen ||
+    !SAFE_EXTERNAL_ID_CHARS_REGEX.test(cleaned) ||
     !/[a-zA-Z0-9]/.test(cleaned) ||
     cleaned.startsWith('.') ||
     cleaned.endsWith('.') ||
@@ -397,7 +398,10 @@ export function sanitizeExtensionProductSignal(
     ...safeSignal,
     platform: validPlatform,
     canonicalUrl: sanitizeCanonicalSignalUrl(safeSignal.canonicalUrl),
-    externalItemId: sanitizeExternalIdentifier(safeSignal.externalItemId),
+    externalItemId: sanitizeExternalIdentifier(
+      safeSignal.externalItemId,
+      validPlatform === 'anphatpc' ? 128 : 120
+    ),
     externalShopId: sanitizeExternalIdentifier(safeSignal.externalShopId),
     title: trimmedTitle,
     selectedVariant: trimmedVariant,

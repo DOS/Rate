@@ -39,6 +39,7 @@ import {
   sanitizePostgrestFilterToken,
   type ParsedEcommerceUrl,
   parseEcommerceUrlOrQuery,
+  sanitizeAnPhatItemId,
   extractProductKeywordFromUrl,
   firstImageUrl,
   resolveCompareEffectiveUserRating,
@@ -69,6 +70,7 @@ export {
   filterAndSortMerchants,
   sanitizePostgrestFilterToken,
   parseEcommerceUrlOrQuery,
+  sanitizeAnPhatItemId,
   stripEcommerceNoiseTokens,
   extractProductKeywordFromUrl,
 } from './rate-domain-core';
@@ -4526,13 +4528,6 @@ const WAVE_UNDERSCORE_ENCODED_PLATFORMS = new Set<
   'memoryzone',
 ]);
 
-function encodeAnPhatSlugForItemId(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9-]/g, (ch) => {
-    const hex = ch.codePointAt(0)?.toString(16).padStart(2, '0') ?? '00';
-    return `_${hex}`;
-  });
-}
-
 function lookupOfferDiscountAnalysis(
   byOffer: Record<string, OfferDiscountAnalysis> | null | undefined,
   rawId: unknown
@@ -4592,7 +4587,7 @@ export function selectOfferForUrlInspection(
 }
 
 /**
- * Inspect an e-commerce product/shop URL (all 10 platforms) or keyword:
+ * Inspect an e-commerce product/shop URL (all 22 platforms) or keyword:
  * - Resolves exact `platform_item_id` or `url` against `rate.products`
  * - Or resolves `platform_shop_id` / merchant name against `rate.merchants`
  * - Or resolves product slug / keyword against `rate.master_products`
@@ -4634,38 +4629,53 @@ export async function inspectProductOrShopUrl(
 
   // 1. Direct lookup by platform_item_id if parsed from URL
   if (parsedUrl.platformItemId) {
-    const candidateIds = new Set<string>([parsedUrl.platformItemId]);
+    const rawItemId = parsedUrl.platformItemId;
+    const lowerItemId = rawItemId.toLowerCase();
+    const candidateIds = new Set<string>([rawItemId, lowerItemId]);
     if (parsedUrl.platformShopId) {
-      candidateIds.add(
-        `${parsedUrl.platformShopId}_${parsedUrl.platformItemId}`
-      );
+      candidateIds.add(`${parsedUrl.platformShopId}_${rawItemId}`);
     }
     const prefix = parsedUrl.platform
       ? PLATFORM_ITEM_ID_PREFIX[parsedUrl.platform]
       : undefined;
-    if (prefix && !parsedUrl.platformItemId.startsWith(prefix)) {
-      candidateIds.add(`${prefix}${parsedUrl.platformItemId}`);
-      const lowerId = parsedUrl.platformItemId.toLowerCase();
-      candidateIds.add(`${prefix}${lowerId}`);
-      if (
-        parsedUrl.platform &&
-        WAVE_UNDERSCORE_ENCODED_PLATFORMS.has(parsedUrl.platform) &&
-        lowerId.includes('_')
-      ) {
-        const waveEncoded = `${prefix}${lowerId.replace(/_/g, '_5f')}`;
-        if (waveEncoded.length <= 128) candidateIds.add(waveEncoded);
+    if (prefix) {
+      const rawSlugs = [rawItemId];
+      if (lowerItemId.startsWith(prefix) && rawItemId.length > prefix.length) {
+        rawSlugs.push(rawItemId.slice(prefix.length));
       }
-      if (parsedUrl.platform === 'anphatpc') {
-        const apEncoded = `${prefix}${encodeAnPhatSlugForItemId(parsedUrl.platformItemId)}`;
-        if (apEncoded.length <= 128) candidateIds.add(apEncoded);
+      for (const slugCandidate of rawSlugs) {
+        const lowerSlug = slugCandidate.toLowerCase();
+        if (`${prefix}${slugCandidate}`.length <= 128) {
+          candidateIds.add(`${prefix}${slugCandidate}`);
+        }
+        if (`${prefix}${lowerSlug}`.length <= 128) {
+          candidateIds.add(`${prefix}${lowerSlug}`);
+        }
+        if (
+          parsedUrl.platform &&
+          WAVE_UNDERSCORE_ENCODED_PLATFORMS.has(parsedUrl.platform) &&
+          lowerSlug.includes('_')
+        ) {
+          const waveEncoded = `${prefix}${lowerSlug.replace(/_/g, '_5f')}`;
+          if (waveEncoded.length <= 128) candidateIds.add(waveEncoded);
+        }
+        if (parsedUrl.platform === 'anphatpc') {
+          const apEncoded = sanitizeAnPhatItemId(slugCandidate);
+          if (apEncoded && apEncoded.length <= 128) {
+            candidateIds.add(apEncoded);
+          }
+        }
       }
     }
     if (
-      (parsedUrl.platform === 'topzone' ||
-        parsedUrl.platform === 'dienmayxanh') &&
-      !parsedUrl.platformItemId.startsWith('tgdd-')
+      parsedUrl.platform === 'topzone' ||
+      parsedUrl.platform === 'dienmayxanh'
     ) {
-      candidateIds.add(`tgdd-${parsedUrl.platformItemId}`);
+      const bareMwg = rawItemId.replace(/^(?:tz|dmx|tgdd)-/i, '');
+      if (bareMwg) {
+        candidateIds.add(`tgdd-${bareMwg}`);
+        candidateIds.add(`tgdd-${bareMwg.toLowerCase()}`);
+      }
     }
 
     const { data: prodRow, error: prodErr } = await supabase

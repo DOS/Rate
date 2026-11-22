@@ -26,6 +26,7 @@ import {
   normalizeMasterProductRow,
   parseEcommerceUrlOrQuery,
   RateDataUnavailableError,
+  sanitizeAnPhatItemId,
   stripEcommerceNoiseTokens,
   type CanonicalCategorySlug,
   type MasterProduct,
@@ -1252,16 +1253,6 @@ export function buildCandidateExternalItemIds(params: {
     return [];
   }
 
-  candidateItemIds.add(cleanExternalId);
-  if (cleanExternalId.includes('_')) {
-    const parts = cleanExternalId.split('_');
-    if (parts[1] && isValidExternalEntityId(parts[1])) {
-      candidateItemIds.add(parts[1]);
-    }
-  }
-  if (cleanShopId && !cleanExternalId.includes('_')) {
-    candidateItemIds.add(`${cleanShopId}_${cleanExternalId}`);
-  }
   const prefixMap: Partial<Record<SupportedEcommercePlatform, string>> = {
     tiktok: 'tts-',
     cellphones: 'cps-',
@@ -1294,45 +1285,68 @@ export function buildCandidateExternalItemIds(params: {
     'memoryzone',
   ]);
   const prefix = params.platform ? prefixMap[params.platform] : undefined;
-  if (prefix && !cleanExternalId.startsWith(prefix)) {
-    const prefixed = `${prefix}${cleanExternalId}`;
-    if (isValidExternalEntityId(prefixed)) {
-      candidateItemIds.add(prefixed);
+
+  candidateItemIds.add(cleanExternalId);
+  const lowerCleanExternalId = cleanExternalId.toLowerCase();
+  if (isValidExternalEntityId(lowerCleanExternalId)) {
+    candidateItemIds.add(lowerCleanExternalId);
+  }
+  // `shopId_itemId` underscore splitting applies only to non-prefixed marketplaces
+  // (`shopee`, `lazada`, `tiki`); retail slugs with `_` must not split into numeric suffixes.
+  if (!prefix && cleanExternalId.includes('_')) {
+    const parts = cleanExternalId.split('_');
+    if (parts[1] && isValidExternalEntityId(parts[1])) {
+      candidateItemIds.add(parts[1]);
     }
-    const lowerPrefixed = `${prefix}${cleanExternalId.toLowerCase()}`;
-    if (isValidExternalEntityId(lowerPrefixed)) {
-      candidateItemIds.add(lowerPrefixed);
-    }
+  }
+  if (!prefix && cleanShopId && !cleanExternalId.includes('_')) {
+    candidateItemIds.add(`${cleanShopId}_${cleanExternalId}`);
+  }
+  if (prefix) {
+    const rawSlugs = [cleanExternalId];
     if (
-      params.platform &&
-      waveUnderscorePlatforms.has(params.platform) &&
-      cleanExternalId.includes('_')
+      lowerCleanExternalId.startsWith(prefix) &&
+      cleanExternalId.length > prefix.length
     ) {
-      const waveEncoded = `${prefix}${cleanExternalId.toLowerCase().replace(/_/g, '_5f')}`;
-      if (isValidExternalEntityId(waveEncoded)) {
-        candidateItemIds.add(waveEncoded);
-      }
+      rawSlugs.push(cleanExternalId.slice(prefix.length));
     }
-    if (params.platform === 'anphatpc') {
-      const apEncodedSlug = cleanExternalId
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, (ch) => {
-          const hex = ch.codePointAt(0)?.toString(16).padStart(2, '0') ?? '00';
-          return `_${hex}`;
-        });
-      const apCandidate = `${prefix}${apEncodedSlug}`;
-      if (isValidExternalEntityId(apCandidate)) {
-        candidateItemIds.add(apCandidate);
+    for (const slugCandidate of rawSlugs) {
+      const lowerSlug = slugCandidate.toLowerCase();
+      const prefixed = `${prefix}${slugCandidate}`;
+      if (isValidExternalEntityId(prefixed)) {
+        candidateItemIds.add(prefixed);
+      }
+      const lowerPrefixed = `${prefix}${lowerSlug}`;
+      if (isValidExternalEntityId(lowerPrefixed)) {
+        candidateItemIds.add(lowerPrefixed);
+      }
+      if (
+        params.platform &&
+        waveUnderscorePlatforms.has(params.platform) &&
+        lowerSlug.includes('_')
+      ) {
+        const waveEncoded = `${prefix}${lowerSlug.replace(/_/g, '_5f')}`;
+        if (isValidExternalEntityId(waveEncoded)) {
+          candidateItemIds.add(waveEncoded);
+        }
+      }
+      if (params.platform === 'anphatpc') {
+        const apCandidate = sanitizeAnPhatItemId(slugCandidate);
+        if (apCandidate && isValidExternalEntityId(apCandidate)) {
+          candidateItemIds.add(apCandidate);
+        }
       }
     }
   }
-  if (
-    (params.platform === 'topzone' || params.platform === 'dienmayxanh') &&
-    !cleanExternalId.startsWith('tgdd-')
-  ) {
-    const legacyTgdd = `tgdd-${cleanExternalId}`;
-    if (isValidExternalEntityId(legacyTgdd)) {
-      candidateItemIds.add(legacyTgdd);
+  if (params.platform === 'topzone' || params.platform === 'dienmayxanh') {
+    const bareMwg = cleanExternalId.replace(/^(?:tz|dmx|tgdd)-/i, '');
+    for (const mwgCandidate of [
+      `tgdd-${bareMwg}`,
+      `tgdd-${bareMwg.toLowerCase()}`,
+    ]) {
+      if (bareMwg && isValidExternalEntityId(mwgCandidate)) {
+        candidateItemIds.add(mwgCandidate);
+      }
     }
   }
   return Array.from(candidateItemIds);

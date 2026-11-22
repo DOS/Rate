@@ -324,6 +324,186 @@ const ACCESSORY_SLUG_PREFIX =
 const isSeriesListingSlug = (slug: string) =>
   /-series$/.test(slug) && !ACCESSORY_SLUG_PREFIX.test(slug);
 
+const MEDIAMART_ALLOWED_CATEGORY_PREFIXES = new Set([
+  'smartphones',
+  'dien-thoai',
+  'dien-thoai-di-dong',
+  'laptop',
+  'may-tinh-xach-tay',
+  'macbook',
+  'may-tinh-bang',
+  'tablet',
+  'ipad',
+  'smartwatch',
+  'dong-ho-thong-minh',
+  'tai-nghe',
+  'san-pham',
+  'products',
+]);
+
+const HACOM_CATEGORY_BRAND_SLUG_REGEX =
+  /^(?:laptop-(?:asus|dell|acer|lenovo|hp|msi|apple|lg|gigabyte)|may-tinh-nguyen-bo-theo-hang|may-tinh-mini-da-dung)$/i;
+
+const CLICKBUY_NON_PRODUCT_SLUG_REGEX =
+  /^(?:dien-thoai-(?:iphone|samsung|xiaomi|oppo|vivo|realme|nokia|honor|asus|tcl|google|sony|tecno|infinix|masstel|itel)|(?:iphone|samsung|dien-thoai|ipad|macbook|apple-watch)-cu|thay-pin|ep-kinh|google-pixel|trang)$/i;
+
+const VIETTELSTORE_PRODUCT_CATEGORY_SEGMENTS = new Set([
+  'dien-thoai',
+  'may-tinh-bang',
+  'tablet',
+  'laptop',
+  'may-tinh-xach-tay',
+  'dong-ho-thong-minh',
+  'dong-ho',
+  'apple-watch',
+  'smartwatch',
+  'tai-nghe',
+  'am-thanh',
+  'loa',
+  'phu-kien',
+  'man-hinh',
+  'pc',
+  'tivi',
+  'san-pham',
+  'products',
+]);
+
+const VIETTELSTORE_NON_PRODUCT_PREFIXES = new Set([
+  'tra-gop',
+  'so-sanh',
+  'so-sanh-san-pham',
+  'tin-tuc',
+  'chuyen-muc-tin',
+  'landing',
+  'khuyen-mai',
+  'site',
+  'he-thong-sieu-thi',
+  'sieu-thi',
+  'ho-tro',
+  'tuyen-dung',
+  'account',
+  'login',
+  'dang-nhap',
+  'register',
+  'dang-ky',
+  'auth',
+  'captcha',
+  'challenge',
+  'cart',
+  'gio-hang',
+  'dtdd',
+  'mtb',
+  'tim-kiem',
+  'ket-qua-tim-kiem',
+]);
+
+const VIETTELSTORE_CATEGORY_SLUG_REGEX =
+  /^(?:dtdd(?:-|$)|mtb(?:-|$)|laptop-(?:apple|asus|acer|dell|hp|lenovo|msi|lg)$|phu-kien-o-to$|bao-da-op-lung$|tam-dan$)/i;
+
+const ANPHAT_EXTRA_NON_PRODUCT_FIRST_SEGMENTS = new Set([
+  'template',
+  'templates',
+  'includes',
+  'user',
+  'order',
+  'don-hang',
+  'rss',
+  'sitemap',
+  'robots.txt',
+]);
+
+const ANPHAT_INFO_SUFFIX_REGEX =
+  /(?:^|-)(?:he-thong-showroom|tin-khuyen-mai|tin-tuc|khuyen-mai|bao-hanh|chinh-sach|huong-dan|lien-he|tuyen-dung|gioi-thieu|pc-an-phat)$/i;
+
+function sha1Hex10(input: string): string {
+  const bytes = new TextEncoder().encode(input);
+  const bitLen = bytes.length * 8;
+  const paddedLen = (((bytes.length + 8) >>> 6) + 1) << 6;
+  const buf = new Uint8Array(paddedLen);
+  buf.set(bytes);
+  buf[bytes.length] = 0x80;
+  const view = new DataView(buf.buffer);
+  view.setUint32(paddedLen - 8, Math.floor(bitLen / 0x100000000), false);
+  view.setUint32(paddedLen - 4, bitLen >>> 0, false);
+
+  let h0 = 0x67452301;
+  let h1 = 0xefcdab89;
+  let h2 = 0x98badcfe;
+  let h3 = 0x10325476;
+  let h4 = 0xc3d2e1f0;
+  const w = new Uint32Array(80);
+
+  for (let offset = 0; offset < paddedLen; offset += 64) {
+    for (let i = 0; i < 16; i++) {
+      w[i] = view.getUint32(offset + i * 4, false);
+    }
+    for (let i = 16; i < 80; i++) {
+      const n = w[i - 3]! ^ w[i - 8]! ^ w[i - 14]! ^ w[i - 16]!;
+      w[i] = ((n << 1) | (n >>> 31)) >>> 0;
+    }
+
+    let a = h0;
+    let b = h1;
+    let c = h2;
+    let d = h3;
+    let e = h4;
+
+    for (let i = 0; i < 80; i++) {
+      let f: number;
+      let k: number;
+      if (i < 20) {
+        f = (b & c) | (~b & d);
+        k = 0x5a827999;
+      } else if (i < 40) {
+        f = b ^ c ^ d;
+        k = 0x6ed9eba1;
+      } else if (i < 60) {
+        f = (b & c) | (b & d) | (c & d);
+        k = 0x8f1bbcdc;
+      } else {
+        f = b ^ c ^ d;
+        k = 0xca62c1d6;
+      }
+      const temp =
+        ((((a << 5) | (a >>> 27)) >>> 0) + (f >>> 0) + e + k + w[i]!) >>> 0;
+      e = d;
+      d = c;
+      c = ((b << 30) | (b >>> 2)) >>> 0;
+      b = a;
+      a = temp;
+    }
+
+    h0 = (h0 + a) >>> 0;
+    h1 = (h1 + b) >>> 0;
+    h2 = (h2 + c) >>> 0;
+    h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0;
+  }
+
+  return (
+    h0.toString(16).padStart(8, '0') + h1.toString(16).padStart(8, '0')
+  ).slice(0, 10);
+}
+
+export function sanitizeAnPhatItemId(rawKey: string): string {
+  const cleaned = rawKey.trim().replace(/^\/+|\/+$/g, '');
+  if (!cleaned) return '';
+  const normalized = cleaned.toLowerCase().replace(/[^a-z0-9-]/g, (ch) => {
+    const hex = ch.codePointAt(0)?.toString(16).padStart(2, '0') ?? '00';
+    return `_${hex}`;
+  });
+  if (!normalized) return '';
+  const maxSlugLen = 125;
+  if (normalized.length <= maxSlugLen) {
+    return `ap-${normalized}`;
+  }
+  const digest = sha1Hex10(normalized);
+  const keepLen = Math.max(1, maxSlugLen - digest.length - 1);
+  let trimmed = normalized.slice(0, keepLen).replace(/[-_]+$/g, '');
+  if (!trimmed) trimmed = normalized.slice(0, keepLen);
+  return `ap-${trimmed}-${digest}`;
+}
+
 function extractValidRetailItemSlug(
   retailPlatform: SupportedEcommercePlatform,
   segments: readonly string[]
@@ -376,7 +556,12 @@ function extractValidRetailItemSlug(
       return null;
     }
   } else if (retailPlatform === 'mediamart') {
-    if (segments.length !== 2) return null;
+    if (
+      segments.length !== 2 ||
+      !MEDIAMART_ALLOWED_CATEGORY_PREFIXES.has(firstSegLower)
+    ) {
+      return null;
+    }
   } else if (
     retailPlatform === 'tgdd' ||
     retailPlatform === 'dienmayxanh' ||
@@ -405,17 +590,51 @@ function extractValidRetailItemSlug(
     }
   } else if (retailPlatform === 'viettelstore') {
     if (segments.length > 2) return null;
+    if (segments.length === 2) {
+      if (VIETTELSTORE_NON_PRODUCT_PREFIXES.has(firstSegLower)) return null;
+      const leafLower = lastRaw.toLowerCase().replace(/\.html?$/i, '');
+      const hasPid = /(?:^|-)pid[1-9]\d{1,14}$/i.test(leafLower);
+      if (
+        !VIETTELSTORE_PRODUCT_CATEGORY_SEGMENTS.has(firstSegLower) &&
+        !hasPid
+      ) {
+        return null;
+      }
+    }
   } else if (retailPlatform === 'anphatpc') {
     const hasHtmlExt = /\.html?$/i.test(lastRaw);
     const isDirectRoutePrefix =
       segments.length === 2 &&
       (firstSegLower === 'products' || firstSegLower === 'san-pham');
     if (!hasHtmlExt && !isDirectRoutePrefix) return null;
-    if (firstRawLower.startsWith('ajax') || firstRawLower.endsWith('.php')) {
+    if (
+      firstRawLower.startsWith('ajax') ||
+      firstRawLower.endsWith('.php') ||
+      ANPHAT_EXTRA_NON_PRODUCT_FIRST_SEGMENTS.has(firstRawLower) ||
+      ANPHAT_EXTRA_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) ||
+      RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower)
+    ) {
       return null;
     }
     if (segments.some((s) => /_dm\d+$/i.test(s.replace(/\.html?$/i, '')))) {
       return null;
+    }
+    if (segments.length > 1 && !isDirectRoutePrefix) {
+      const lastClean = lastRaw.replace(/\.html?$/i, '');
+      if (!lastClean) return null;
+      const rawKey = [...segments.slice(0, -1), lastClean].join('/');
+      const rawKeyLower = rawKey.toLowerCase();
+      if (
+        rawKey.length < 3 ||
+        rawKey.length > 512 ||
+        rawKeyLower.includes('..') ||
+        ANPHAT_DESK_PHONE_SLUG_REGEX.test(rawKeyLower) ||
+        RETAIL_AUTH_OR_NON_PRODUCT_SLUG_REGEX.test(rawKeyLower) ||
+        ANPHAT_INFO_SUFFIX_REGEX.test(lastClean.toLowerCase())
+      ) {
+        return null;
+      }
+      return sanitizeAnPhatItemId(rawKey) || null;
     }
   }
 
@@ -428,10 +647,13 @@ function extractValidRetailItemSlug(
 
   const lastSeg = lastRaw.replace(/\.html?$/i, '') || null;
   const lastSegLower = (lastSeg || '').toLowerCase();
+  const vtsHasPid =
+    retailPlatform === 'viettelstore' &&
+    /(?:^|-)pid[1-9]\d{1,14}$/i.test(lastSegLower);
   if (
     !lastSeg ||
     lastSeg.length < 2 ||
-    lastSeg.length > 120 ||
+    lastSeg.length > 256 ||
     !/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/i.test(lastSegLower) ||
     lastSegLower.includes('..') ||
     /^(?:0+|null|undefined|nan|infinity|-infinity|true|false|default|index|home|trang-chu|404|page-not-found|error)$/i.test(
@@ -442,13 +664,26 @@ function extractValidRetailItemSlug(
     RETAIL_BRAND_LISTING_SLUGS.has(lastSegLower) ||
     RETAIL_AUTH_OR_NON_PRODUCT_SLUG_REGEX.test(lastSegLower) ||
     isSeriesListingSlug(lastSegLower) ||
+    (retailPlatform === 'hacom' &&
+      HACOM_CATEGORY_BRAND_SLUG_REGEX.test(lastSegLower)) ||
+    (retailPlatform === 'clickbuy' &&
+      CLICKBUY_NON_PRODUCT_SLUG_REGEX.test(lastSegLower)) ||
+    (retailPlatform === 'viettelstore' &&
+      !vtsHasPid &&
+      (VIETTELSTORE_NON_PRODUCT_PREFIXES.has(lastSegLower) ||
+        VIETTELSTORE_CATEGORY_SLUG_REGEX.test(lastSegLower))) ||
     (retailPlatform === 'anphatpc' &&
-      ANPHAT_DESK_PHONE_SLUG_REGEX.test(lastSegLower))
+      (ANPHAT_DESK_PHONE_SLUG_REGEX.test(lastSegLower) ||
+        ANPHAT_INFO_SUFFIX_REGEX.test(lastSegLower)))
   ) {
     return null;
   }
 
-  return lastSeg;
+  if (retailPlatform === 'anphatpc' && lastSeg.length > 120) {
+    return sanitizeAnPhatItemId(lastSeg) || null;
+  }
+
+  return lastSeg.length <= 120 ? lastSeg : null;
 }
 
 export function extractIdsFromUrl(
@@ -1020,10 +1255,14 @@ export function extractRatingFromJsonLd(aggRaw: unknown): {
 
 export function cleanExtractedProductTitle(rawTitle: string): string {
   if (typeof rawTitle !== 'string') return '';
-  const withoutPlatformSuffix = stripLoneSurrogates(rawTitle)
-    .replace(/\p{Cc}+/gu, ' ')
+  // Bound code points and collapse whitespace first so suffix matching stays strictly O(N).
+  const normalizedTitle = sliceCodePoints(stripLoneSurrogates(rawTitle), 2048)
+    .replace(/[\p{Cc}\s]+/gu, ' ')
+    .trim();
+  if (!normalizedTitle) return '';
+  const withoutPlatformSuffix = normalizedTitle
     .replace(
-      /\s*(?:\||[-\u2013\u2014])\s*(?:Shopee(?:\s*Việt\s*Nam|\s*VN)?|Lazada(?:\s*Việt\s*Nam|\s*VN)?|Tiki(?:\.vn)?|TikTok\s*Shop|CellphoneS(?:\.com\.vn)?|Thế\s*Giới\s*Di\s*Động|Thegioididong(?:\.com)?|TopZone(?:\.vn)?|Điện\s*Máy\s*Xanh|Dienmayxanh(?:\.com)?|FPT\s*Shop|Fptshop(?:\.com\.vn)?|Hoàng\s*Hà\s*Mobile|HoangHaMobile(?:\.com)?|Di\s*Động\s*Việt|Didongviet(?:\.vn)?|Phong\s*Vũ|Phongvu(?:\.vn)?|GearVN(?:\.com)?|Nguy\u1ec5n\s*Kim|Nguyenkim(?:\.com)?|ShopDunk(?:\.com)?|HACOM(?:\.vn)?|Hanoicomputer(?:\.vn)?|Clickbuy(?:\.com\.vn)?|Viettel\s*Store|Viettelstore(?:\.vn)?|Si\u00eau\s*th\u1ecb\s*\u0111i\u1ec7n\s*m\u00e1y\s*Pico|Pico(?:\.vn)?|Media\s*Mart|Mediamart(?:\.vn)?|MemoryZone(?:\.com\.vn)?|An\s*Ph\u00e1t(?:\s*Computer|\s*PC)?|Anphatpc(?:\.com\.vn)?).*$/i,
+      / ?(?:\||[-\u2013\u2014]) ?(?:Shopee(?:\s*Việt\s*Nam|\s*VN)?|Lazada(?:\s*Việt\s*Nam|\s*VN)?|Tiki(?:\.vn)?|TikTok\s*Shop|CellphoneS(?:\.com\.vn)?|Thế\s*Giới\s*Di\s*Động|Thegioididong(?:\.com)?|TopZone(?:\.vn)?|Điện\s*Máy\s*Xanh|Dienmayxanh(?:\.com)?|FPT\s*Shop|Fptshop(?:\.com\.vn)?|Hoàng\s*Hà\s*Mobile|HoangHaMobile(?:\.com)?|Di\s*Động\s*Việt|Didongviet(?:\.vn)?|Phong\s*Vũ|Phongvu(?:\.vn)?|GearVN(?:\.com)?|Nguy\u1ec5n\s*Kim|Nguyenkim(?:\.com)?|ShopDunk(?:\.com)?|HACOM(?:\.vn)?|Hanoicomputer(?:\.vn)?|Clickbuy(?:\.com\.vn)?|Viettel\s*Store|Viettelstore(?:\.vn)?|Si\u00eau\s*th\u1ecb\s*\u0111i\u1ec7n\s*m\u00e1y\s*Pico|Pico(?:\.vn)?|Media\s*Mart|Mediamart(?:\.vn)?|MemoryZone(?:\.com\.vn)?|An\s*Ph\u00e1t(?:\s*Computer|\s*PC)?|Anphatpc(?:\.com\.vn)?).*$/i,
       ''
     )
     .replace(/\s+/g, ' ')
@@ -1306,7 +1545,7 @@ export function extractProductSignalFromDom(
     '.product-detail-price .price-sale',
     '.cb-pbox__now:not([hidden])',
     '.wrap-price .new-price',
-    '.special-price .price',
+    '.special-price .price:not(.related-products *):not(.product-item *):not(.product-card *):not(.product-box *):not(header *):not(footer *)',
     '.tpt---sale-price',
     '.box-price-present',
   ];
@@ -1333,8 +1572,8 @@ export function extractProductSignalFromDom(
     '.product-detail-price .price-old',
     '.cb-pbox__old:not([hidden])',
     '.wrap-price .old-price',
-    '.product-price-regular',
-    '.old-price .price',
+    '.product-price-regular:not(.related-products *):not(.product-item *):not(.product-card *):not(.product-box *):not(header *):not(footer *)',
+    '.old-price .price:not(.related-products *):not(.product-item *):not(.product-card *):not(.product-box *):not(header *):not(footer *)',
     '.tpt---price-through',
     '.box-price-old',
     'del',

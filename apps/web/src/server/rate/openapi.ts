@@ -303,7 +303,7 @@ function buildBaseRateOpenApiSpec(
       summary:
         'Standardized 10-Group Tech Specs, Price History, Product Deal Radar & AI Review Auditing API',
       description:
-        'OpenAPI 3.1 specification for the Rate.vn REST API v1. The website, the Rate browser extension (10 Vietnamese marketplaces and retailers) and open e-commerce research all use these endpoints.',
+        'OpenAPI 3.1 specification for the Rate.vn REST API v1. The website, the Rate browser extension (22 Vietnamese marketplaces and retailers) and open e-commerce research all use these endpoints.',
       license: {
         name: 'MIT Open-Core License',
         url: 'https://github.com/DOS/Rate',
@@ -333,7 +333,7 @@ function buildBaseRateOpenApiSpec(
       {
         name: 'URL Inspector & Extension MV3',
         description:
-          'Real-time URL/SKU canonicalization, 10-platform hybrid lookup, evidence-based price verdict, and zero-trust quarantine ingestion.',
+          'Real-time URL/SKU canonicalization, 22-platform hybrid lookup, evidence-based price verdict, and zero-trust quarantine ingestion.',
       },
       {
         name: 'Merchants & Dual Risk Score',
@@ -1948,7 +1948,7 @@ function buildBaseRateOpenApiSpec(
         get: {
           operationId: 'getCrossPlatformDealRadar',
           summary:
-            'Cross-Platform Deal Radar & Fake-Sale Trap Feed across 10 platforms',
+            'Cross-Platform Deal Radar & Fake-Sale Trap Feed across 22 platforms',
           description:
             'Returns real-time genuine cross-platform deals (`genuineDeals`, current offers below the cross-retailer median) and inflated fake-sale traps (`fakeSaleTraps`) audited against cross-retailer median prices. A genuine deal has `verdict` `genuine_all_time_low` (the multi-platform price floor) only when the product has 3 or more offers and the deal is the cheapest offer at least 2% below the median; otherwise it is `best_market_deal`, since the median of 2 offers is just their midpoint.',
           tags: ['Products & Specs'],
@@ -1987,7 +1987,7 @@ function buildBaseRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                'Genuine deal radar and fake-sale trap list across 10 retailers.',
+                'Genuine deal radar and fake-sale trap list across 22 retailers.',
             },
           },
         },

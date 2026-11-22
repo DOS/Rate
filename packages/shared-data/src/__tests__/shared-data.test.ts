@@ -2942,10 +2942,6 @@ function testExtensionObservation(): void {
   for (const tgddUrl of [
     'https://thegioididong.com/dtdd/iphone-16-pro-max',
     'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
-    'https://topzone.vn/iphone/iphone-16-pro-max',
-    'https://www.topzone.vn/iphone/iphone-16-pro-max',
-    'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
-    'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
   ]) {
     assert.ok(
       parse({
@@ -2956,14 +2952,28 @@ function testExtensionObservation(): void {
       tgddUrl
     );
   }
+  for (const separatedSisterUrl of [
+    'https://topzone.vn/iphone/iphone-16-pro-max',
+    'https://www.topzone.vn/iphone/iphone-16-pro-max',
+    'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
+    'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
+  ]) {
+    const res = parse({
+      ...valid,
+      marketplace: 'tgdd',
+      listing_url: separatedSisterUrl,
+    });
+    assert.equal(res.ok, false, separatedSisterUrl);
+    if (!res.ok) assert.equal(res.field, 'listing_url');
+  }
   // Every marketplace accepts its own hosts and refuses another's.
   assert.ok(rules.isExtensionMarketplaceHost('lazada', 'www.lazada.vn'));
   assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'thegioididong.com'));
   assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.thegioididong.com'));
-  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'topzone.vn'));
-  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.topzone.vn'));
-  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'dienmayxanh.com'));
-  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.dienmayxanh.com'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'topzone.vn'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'www.topzone.vn'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'dienmayxanh.com'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'www.dienmayxanh.com'));
   assert.ok(rules.isExtensionMarketplaceHost('tiktok', 'shop.tiktok.com'));
   assert.ok(!rules.isExtensionMarketplaceHost('tiktok', 'm.tiktok.com'));
   assert.ok(!rules.isExtensionMarketplaceHost('lazada', 'notlazada.vn'));

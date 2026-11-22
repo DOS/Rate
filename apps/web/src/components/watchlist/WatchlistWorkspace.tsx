@@ -121,6 +121,16 @@ const PLATFORM_DISPLAY_LABELS: Record<string, string> = {
   anphatpc: 'An Phát Computer',
 };
 
+const VIETNAMESE_NAMED_PLATFORMS = new Set([
+  'tgdd',
+  'hoangha',
+  'didongviet',
+  'phongvu',
+  'dienmayxanh',
+  'nguyenkim',
+  'anphatpc',
+]);
+
 export function sanitizeWatchlistBestOfferUrl(rawUrl: unknown): string | null {
   if (typeof rawUrl !== 'string') return null;
   const cleaned = rawUrl.replace(/\p{Cc}+/gu, '').trim();
@@ -1501,10 +1511,20 @@ export default function WatchlistWorkspace({
                         <span className="badge bg-dark rounded-pill me-1 text-white">
                           <ContentText
                             text={
-                              PLATFORM_DISPLAY_LABELS[bestOffer.platform] ||
-                              bestOffer.platform.toUpperCase()
+                              Object.hasOwn(
+                                PLATFORM_DISPLAY_LABELS,
+                                bestOffer.platform
+                              )
+                                ? PLATFORM_DISPLAY_LABELS[bestOffer.platform]!
+                                : bestOffer.platform.toUpperCase()
                             }
                             locale={locale || 'vi'}
+                            lang={
+                              (locale || 'vi') !== 'vi' &&
+                              VIETNAMESE_NAMED_PLATFORMS.has(bestOffer.platform)
+                                ? 'vi'
+                                : undefined
+                            }
                           />
                         </span>
                         <span className="fw-medium">
