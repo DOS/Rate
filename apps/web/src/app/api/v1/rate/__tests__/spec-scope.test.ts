@@ -1113,6 +1113,13 @@ async function testSpecMatchesBodies() {
       '400',
       await reviews.GET(get('/api/v1/rate/reviews')),
     ],
+    [
+      '/api/v1/rate/merchants',
+      '400',
+      await merchants.GET(
+        get('/api/v1/rate/merchants?platform=not-a-platform')
+      ),
+    ],
   ];
   masterRows = [];
   errorBodies.push([
@@ -1167,13 +1174,158 @@ async function testSpecMatchesBodies() {
     }
   }
 
-  // The extension lookup answers its result under `data` (route not run
-  // here: the lookup itself is covered above).
+  // The extension lookup answers its result directly under `data` with no
+  // nested `data.data` wrapper (#1830).
   const extLookup = okSchema('/api/v1/rate/extension/lookup');
   for (const key of radarDetail) {
     assert.ok(specSchemaAt(spec, extLookup, ['data', 'radarSignal', key]));
   }
   assert.equal(specSchemaAt(spec, extLookup, ['radar_signal']), null);
+  assert.equal(
+    specSchemaAt(spec, extLookup, ['data', 'data']),
+    null,
+    'extension lookup schema must not nest a second data object'
+  );
+  assert.ok(
+    specSchemaAt(spec, extLookup, [
+      'data',
+      'priceAssessment',
+      'implausiblyLow',
+    ]),
+    'extension lookup priceAssessment documents optional implausiblyLow'
+  );
+  catalog = [PHONE];
+  const extLookupRoute = await import('../extension/lookup/route');
+  const extLookupRes = await extLookupRoute.GET(
+    get(
+      '/api/v1/rate/extension/lookup?title=Apple%20iPhone%2016%20128GB&price=21990000&mode=pill',
+      '203.0.113.88'
+    )
+  );
+  assert.equal(extLookupRes.status, 200);
+  const extLookupBody = await extLookupRes.json();
+  assert.equal('data' in extLookupBody.data, false);
+  expectPaths('/api/v1/rate/extension/lookup', extLookupBody, [
+    'ok',
+    'data.matchStatus',
+    'data.priceAssessment.verdict',
+    'data.priceAssessment.badgeLabel',
+    'data.priceAssessment.explanation',
+    'data.priceAssessment.messageKey',
+    'data.priceAssessment.messageParams',
+    'data.priceAssessment.observedPrice',
+    'data.priceAssessment.observedOriginalPrice',
+    'data.priceAssessment.claimedDiscountPct',
+    'data.priceAssessment.vsMarketMedianPct',
+    'data.priceAssessment.marketMinPrice',
+    'data.priceAssessment.marketMedianPrice',
+    'data.priceAssessment.marketMaxPrice',
+    'data.priceAssessment.historicalMinPrice',
+    'data.priceAssessment.historicalMaxPrice',
+    'data.priceAssessment.cheaperOfferCount',
+    'data.priceAssessment.maxSavingsAmount',
+  ]);
+
+  // GET /products documents category=all and brands query parameter (#1830).
+  const productParams = paths['/api/v1/rate/products']!.get!
+    .parameters as Array<{
+    name: string;
+    in: string;
+    required?: boolean;
+    schema: { type: string; enum?: string[]; default?: unknown };
+  }>;
+  const productCategoryParam = productParams.find((p) => p.name === 'category');
+  assert.ok(productCategoryParam, '/products documents category');
+  assert.deepEqual(productCategoryParam.schema.enum, [
+    'smartphones',
+    'tablets',
+    'laptops',
+    'smartwatches',
+    'earbuds',
+    'all',
+  ]);
+  assert.equal(productCategoryParam.schema.default, 'smartphones');
+  const productBrandsParam = productParams.find((p) => p.name === 'brands');
+  assert.ok(productBrandsParam, '/products documents brands');
+  assert.equal(productBrandsParam.in, 'query');
+  assert.notEqual(productBrandsParam.required, true);
+  assert.equal(productBrandsParam.schema.type, 'string');
+  assert.ok(
+    productParams.some((p) => p.name === 'brand'),
+    '/products keeps brand alias'
+  );
+  const allBrandsList = await listProducts('category=all&brands=Apple,Samsung');
+  assert.equal(allBrandsList.status, 200);
+  assert.equal(allBrandsList.body.category, 'all');
+
+  // GET /reviews documents optional `v` variant size slug under RATE_ITEM_MODEL (#1830).
+  const prevItemModelFlag = process.env.RATE_ITEM_MODEL;
+  try {
+    delete process.env.RATE_ITEM_MODEL;
+    const flagOffSpec = buildRateOpenApiSpec('https://rate.vn');
+    assert.equal(
+      flagOffSpec.paths['/api/v1/rate/reviews']!.get!.parameters!.some(
+        (p) => p.name === 'v'
+      ),
+      false,
+      'flag off does not advertise v on /reviews'
+    );
+    for (const mode of ['item', 'nullable_variant'] as const) {
+      process.env.RATE_ITEM_MODEL = mode;
+      const flagOnSpec = buildRateOpenApiSpec('https://rate.vn');
+      const reviewParams =
+        flagOnSpec.paths['/api/v1/rate/reviews']!.get!.parameters!;
+      const vParam = reviewParams.find((p) => p.name === 'v');
+      assert.ok(vParam, `/reviews documents v when RATE_ITEM_MODEL=${mode}`);
+      assert.equal(vParam.in, 'query');
+      assert.notEqual(vParam.required, true);
+      assert.equal(vParam.schema.type, 'string');
+      const slugParam = reviewParams.find((p) => p.name === 'slug');
+      assert.match(String(slugParam?.description ?? ''), /Item slug/);
+    }
+  } finally {
+    if (prevItemModelFlag === undefined) delete process.env.RATE_ITEM_MODEL;
+    else process.env.RATE_ITEM_MODEL = prevItemModelFlag;
+  }
+
+  // GET /openapi returns standard ApiError JSON shape on 500 failures, matching /openapi.json (#1830).
+  const openApiRoute = await import('../openapi/route');
+  const openApiJsonRoute = await import('../openapi.json/route');
+  const loggedErrors: string[] = [];
+  const origConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    loggedErrors.push(args.map(String).join(' '));
+  };
+  let openApiErrRes: Response;
+  let openApiJsonErrRes: Response;
+  try {
+    openApiErrRes = await openApiRoute.GET({
+      get url(): string {
+        throw new Error('PGRST116 relation "rate.items" internal leak');
+      },
+    } as unknown as Request);
+    openApiJsonErrRes = await openApiJsonRoute.GET({
+      get nextUrl(): never {
+        throw new Error('PGRST116 relation "rate.items" internal leak');
+      },
+    } as unknown as NextRequest);
+  } finally {
+    console.error = origConsoleError;
+  }
+  assert.equal(openApiErrRes.status, 500);
+  assert.equal(openApiErrRes.headers.get('access-control-allow-origin'), '*');
+  assert.equal(loggedErrors.length, 1);
+  const openApiErrBody = await openApiErrRes.json();
+  const openApiJsonErrBody = await openApiJsonErrRes.json();
+  assert.deepEqual(openApiErrBody, {
+    ok: false,
+    error: 'Failed to build OpenAPI specification',
+  });
+  assert.deepEqual(openApiErrBody, openApiJsonErrBody);
+  assert.equal(
+    (okSchema('/api/v1/rate/openapi', 'get', '500') as { $ref?: string }).$ref,
+    '#/components/schemas/ApiError'
+  );
 
   // /lookup and /inspect: 429 with Retry-After, and `q` or `url`.
   for (const route of ['/api/v1/rate/lookup', '/api/v1/rate/inspect']) {

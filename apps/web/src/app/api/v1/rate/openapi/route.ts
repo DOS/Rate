@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { buildRateOpenApiSpec } from '@/server/rate/openapi';
-import { PUBLIC_API_CORS_HEADERS } from '@/server/rate/api-handler';
+import {
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
+} from '@/server/rate/api-handler';
 import { createLogger, serializeError } from '@/lib/logger';
 
 const log = createLogger('api.openapi');
@@ -27,9 +30,11 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     log.error('openapi build failed', { error: serializeError(err) });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500, headers: PUBLIC_API_CORS_HEADERS }
+    return jsonApiError(
+      500,
+      'Failed to build OpenAPI specification',
+      err,
+      PUBLIC_API_CORS_HEADERS
     );
   }
 }
