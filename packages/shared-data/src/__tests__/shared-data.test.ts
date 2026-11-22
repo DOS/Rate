@@ -312,7 +312,7 @@ function testMasterProductAndScrapedProductSchemas(): void {
   assert.deepEqual(master.images, []);
   assert.deepEqual(master.metadata, {});
 
-  for (const platform of [
+  const all22Platforms = [
     'shopee',
     'lazada',
     'tiki',
@@ -323,16 +323,32 @@ function testMasterProductAndScrapedProductSchemas(): void {
     'hoangha',
     'didongviet',
     'phongvu',
-  ]) {
+    'dienmayxanh',
+    'topzone',
+    'gearvn',
+    'nguyenkim',
+    'shopdunk',
+    'hacom',
+    'clickbuy',
+    'viettelstore',
+    'pico',
+    'mediamart',
+    'memoryzone',
+    'anphatpc',
+  ];
+  assert.deepEqual(SupportedEcommercePlatformSchema.options, all22Platforms);
+  for (const platform of all22Platforms) {
     assert.equal(
       SupportedEcommercePlatformSchema.safeParse(platform).success,
       true
     );
   }
-  assert.equal(
-    SupportedEcommercePlatformSchema.safeParse('amazon').success,
-    false
-  );
+  for (const unsupported of ['amazon', 'ebay', 'GEARVN', 'anphat', '']) {
+    assert.equal(
+      SupportedEcommercePlatformSchema.safeParse(unsupported).success,
+      false
+    );
+  }
 
   const scraped = ScrapedProductSchema.parse({
     platform: 'shopee',

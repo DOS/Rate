@@ -5,10 +5,22 @@ export type SupportedEcommercePlatform =
   | 'tiktok'
   | 'cellphones'
   | 'tgdd'
+  | 'dienmayxanh'
+  | 'topzone'
   | 'fptshop'
   | 'hoangha'
   | 'didongviet'
-  | 'phongvu';
+  | 'phongvu'
+  | 'gearvn'
+  | 'nguyenkim'
+  | 'shopdunk'
+  | 'hacom'
+  | 'clickbuy'
+  | 'viettelstore'
+  | 'pico'
+  | 'mediamart'
+  | 'memoryzone'
+  | 'anphatpc';
 
 export type ExtensionPriceVerdict =
   | 'genuine_deal'

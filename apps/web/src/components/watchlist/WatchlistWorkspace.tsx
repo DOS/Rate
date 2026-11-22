@@ -107,6 +107,18 @@ const PLATFORM_DISPLAY_LABELS: Record<string, string> = {
   hoangha: 'Hoàng Hà Mobile',
   didongviet: 'Di Động Việt',
   phongvu: 'Phong Vũ',
+  dienmayxanh: 'Điện Máy Xanh',
+  topzone: 'TopZone',
+  gearvn: 'GearVN',
+  nguyenkim: 'Nguyễn Kim',
+  shopdunk: 'ShopDunk',
+  hacom: 'HACOM',
+  clickbuy: 'Clickbuy',
+  viettelstore: 'Viettel Store',
+  pico: 'Pico',
+  mediamart: 'MediaMart',
+  memoryzone: 'MemoryZone',
+  anphatpc: 'An Phát Computer',
 };
 
 export function sanitizeWatchlistBestOfferUrl(rawUrl: unknown): string | null {
@@ -1487,8 +1499,13 @@ export default function WatchlistWorkspace({
                           {t('bestOfferPrefix', { count: platformCount })}
                         </span>{' '}
                         <span className="badge bg-dark rounded-pill me-1 text-white">
-                          {PLATFORM_DISPLAY_LABELS[bestOffer.platform] ||
-                            bestOffer.platform.toUpperCase()}
+                          <ContentText
+                            text={
+                              PLATFORM_DISPLAY_LABELS[bestOffer.platform] ||
+                              bestOffer.platform.toUpperCase()
+                            }
+                            locale={locale || 'vi'}
+                          />
                         </span>
                         <span className="fw-medium">
                           <ContentText

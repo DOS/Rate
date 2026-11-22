@@ -1070,7 +1070,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Full Web Product & URL Inspector with price verdict and price history chart',
           description:
-            'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 10 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the price verdict (`PriceVerdictLevel`), and returns full product detail with the Deal Radar signal (`data.radarSignal`, null when no product matched). One of `q` or `url` is required. Limited to 30 requests per minute per client IP (shared with `/lookup`, counted on each server instance); past it the answer is 429 with `Retry-After`.',
+            'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 22 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the price verdict (`PriceVerdictLevel`), and returns full product detail with the Deal Radar signal (`data.radarSignal`, null when no product matched). One of `q` or `url` is required. Limited to 30 requests per minute per client IP (shared with `/lookup`, counted on each server instance); past it the answer is 429 with `Retry-After`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -1156,7 +1156,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Low-latency Hybrid Lookup for Rate Browser Extension Manifest V3',
           description:
-            'Dedicated read-only lookup endpoint for the Rate Browser Extension MV3 across 10 platforms (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`). Performs deterministic `platform_item_id` lookup, canonical model fallback, accessory gatekeeping, price verdict calculation (`PriceVerdictLevel`), and returns the Deal Radar signal as `data.radarSignal`.',
+            'Dedicated read-only lookup endpoint for the Rate Browser Extension MV3 across 22 platforms (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`, `dienmayxanh`, `topzone`, `gearvn`, `nguyenkim`, `shopdunk`, `hacom`, `clickbuy`, `viettelstore`, `pico`, `mediamart`, `memoryzone`, `anphatpc`). Performs deterministic `platform_item_id` lookup, canonical model fallback, accessory gatekeeping, price verdict calculation (`PriceVerdictLevel`), and returns the Deal Radar signal as `data.radarSignal`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -2120,7 +2120,7 @@ function buildBaseRateOpenApiSpec(
           type: 'string',
           enum: supportedPlatforms,
           description:
-            '10 supported Vietnamese e-commerce marketplaces and authorized electronics retailers.',
+            '22 supported Vietnamese e-commerce marketplaces and authorized electronics retailers.',
         },
         CanonicalRateCategorySlug: {
           type: 'string',

@@ -4495,11 +4495,43 @@ const PLATFORM_ITEM_ID_PREFIX: Partial<
   tiktok: 'tts-',
   cellphones: 'cps-',
   tgdd: 'tgdd-',
+  dienmayxanh: 'dmx-',
+  topzone: 'tz-',
   fptshop: 'fpt-',
   hoangha: 'hhm-',
   didongviet: 'ddv-',
   phongvu: 'pv-',
+  gearvn: 'gearvn-',
+  nguyenkim: 'nk-',
+  shopdunk: 'shopdunk-',
+  hacom: 'hacom-',
+  clickbuy: 'cb-',
+  viettelstore: 'vts-',
+  pico: 'pico-',
+  mediamart: 'mm-',
+  memoryzone: 'mz-',
+  anphatpc: 'ap-',
 };
+
+const WAVE_UNDERSCORE_ENCODED_PLATFORMS = new Set<
+  NonNullable<ParsedEcommerceUrl['platform']>
+>([
+  'nguyenkim',
+  'shopdunk',
+  'hacom',
+  'clickbuy',
+  'viettelstore',
+  'pico',
+  'mediamart',
+  'memoryzone',
+]);
+
+function encodeAnPhatSlugForItemId(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9-]/g, (ch) => {
+    const hex = ch.codePointAt(0)?.toString(16).padStart(2, '0') ?? '00';
+    return `_${hex}`;
+  });
+}
 
 function lookupOfferDiscountAnalysis(
   byOffer: Record<string, OfferDiscountAnalysis> | null | undefined,
@@ -4613,6 +4645,27 @@ export async function inspectProductOrShopUrl(
       : undefined;
     if (prefix && !parsedUrl.platformItemId.startsWith(prefix)) {
       candidateIds.add(`${prefix}${parsedUrl.platformItemId}`);
+      const lowerId = parsedUrl.platformItemId.toLowerCase();
+      candidateIds.add(`${prefix}${lowerId}`);
+      if (
+        parsedUrl.platform &&
+        WAVE_UNDERSCORE_ENCODED_PLATFORMS.has(parsedUrl.platform) &&
+        lowerId.includes('_')
+      ) {
+        const waveEncoded = `${prefix}${lowerId.replace(/_/g, '_5f')}`;
+        if (waveEncoded.length <= 128) candidateIds.add(waveEncoded);
+      }
+      if (parsedUrl.platform === 'anphatpc') {
+        const apEncoded = `${prefix}${encodeAnPhatSlugForItemId(parsedUrl.platformItemId)}`;
+        if (apEncoded.length <= 128) candidateIds.add(apEncoded);
+      }
+    }
+    if (
+      (parsedUrl.platform === 'topzone' ||
+        parsedUrl.platform === 'dienmayxanh') &&
+      !parsedUrl.platformItemId.startsWith('tgdd-')
+    ) {
+      candidateIds.add(`tgdd-${parsedUrl.platformItemId}`);
     }
 
     const { data: prodRow, error: prodErr } = await supabase

@@ -31,10 +31,22 @@ const ALLOWED_EXTENSION_PLATFORMS: ReadonlySet<SupportedEcommercePlatform> =
     'tiktok',
     'cellphones',
     'tgdd',
+    'dienmayxanh',
+    'topzone',
     'fptshop',
     'hoangha',
     'didongviet',
     'phongvu',
+    'gearvn',
+    'nguyenkim',
+    'shopdunk',
+    'hacom',
+    'clickbuy',
+    'viettelstore',
+    'pico',
+    'mediamart',
+    'memoryzone',
+    'anphatpc',
   ]);
 
 export const ALLOWED_API_BASE_ORIGINS = [

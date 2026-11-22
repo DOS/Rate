@@ -719,7 +719,7 @@ export default function DealFinderWorkspace({
     if (typeof window === 'undefined' || !dealRadar) return;
     const payload = {
       source:
-        'Rate.vn cross-store price lows and fake-sale warnings (10 stores)',
+        'Rate.vn cross-store price lows and fake-sale warnings (22 stores)',
       categoryFilter,
       exportedAt: new Date().toISOString(),
       totalClustersAnalyzed: dealRadar.totalClustersAnalyzed,

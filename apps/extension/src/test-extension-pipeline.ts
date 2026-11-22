@@ -134,7 +134,7 @@ async function runTests() {
   );
   assert.equal(
     detectEcommercePlatform('https://www.topzone.vn/iphone/iphone-16-pro-max'),
-    'tgdd'
+    'topzone'
   );
   assert.equal(
     detectEcommercePlatform('https://www.google.com/search?q=shopee.vn'),
@@ -158,7 +158,23 @@ async function runTests() {
   );
   assert.equal(
     detectPlatformFromInput(null, 'https://www.dienmayxanh.com/dtdd/iphone-16'),
-    'tgdd'
+    'dienmayxanh'
+  );
+  assert.equal(
+    detectPlatformFromInput(
+      'tgdd',
+      'https://www.dienmayxanh.com/dtdd/iphone-16'
+    ),
+    'dienmayxanh',
+    'Legacy tgdd platform hint upgrades to dienmayxanh when rawUrl is dienmayxanh.com'
+  );
+  assert.equal(
+    detectPlatformFromInput(
+      'tgdd',
+      'https://www.topzone.vn/iphone/iphone-16-pro-max'
+    ),
+    'topzone',
+    'Legacy tgdd platform hint upgrades to topzone when rawUrl is topzone.vn'
   );
   assert.deepEqual(
     parseEcommerceUrlOrQuery(
@@ -190,7 +206,7 @@ async function runTests() {
     ),
     {
       isUrl: true,
-      platform: 'tgdd',
+      platform: 'topzone',
       platformShopId: null,
       platformItemId: 'iphone-16-pro-max-256gb',
       internalSlug: null,
@@ -247,10 +263,10 @@ async function runTests() {
     null,
     'parseEcommerceUrlOrQuery must reject spoofed domains'
   );
-  assert.equal(Object.keys(EXTENSION_CAPABILITY_MATRIX).length, 10);
+  assert.equal(Object.keys(EXTENSION_CAPABILITY_MATRIX).length, 22);
   assert.equal(parseVndPriceText('28.990.000₫ - 34.990.000₫'), 28990000);
   console.log(
-    '  ✅ [1/6] URL Canonicalization & 10-Platform ID Extraction passed'
+    '  ✅ [1/6] URL Canonicalization & 22-Platform ID Extraction passed'
   );
 
   // 2. Gatekeeper Layer 0: Accessory & Spare Part Rejection
@@ -440,6 +456,35 @@ async function runTests() {
   assert.equal(EXTENSION_CAPABILITY_MATRIX.hoangha.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.didongviet.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.phongvu.crowdVerifyQueue, true);
+  for (const wavePlatform of [
+    'dienmayxanh',
+    'topzone',
+    'gearvn',
+    'nguyenkim',
+    'shopdunk',
+    'hacom',
+    'clickbuy',
+    'viettelstore',
+    'pico',
+    'mediamart',
+    'memoryzone',
+    'anphatpc',
+  ] as const) {
+    assert.equal(EXTENSION_CAPABILITY_MATRIX[wavePlatform].lookup, true);
+    assert.equal(
+      EXTENSION_CAPABILITY_MATRIX[wavePlatform].exactItemMatch,
+      true
+    );
+    assert.equal(
+      EXTENSION_CAPABILITY_MATRIX[wavePlatform].crossCatalogMatch,
+      true
+    );
+    assert.equal(
+      EXTENSION_CAPABILITY_MATRIX[wavePlatform].crowdVerifyQueue,
+      false,
+      `${wavePlatform} crowdVerifyQueue must remain false until DOS-Me SQL migration`
+    );
+  }
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tiktok.lookup, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.hoangha.lookup, true);
   assert.equal(DEFAULT_API_BASE_URL, 'https://rate.vn');
@@ -580,19 +625,93 @@ async function runTests() {
       );
     }
 
-    for (const url of [
-      'https://thegioididong.com/dtdd/iphone-16-pro-max',
-      'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
-      'https://topzone.vn/iphone/iphone-16-pro-max',
-      'https://www.topzone.vn/iphone/iphone-16-pro-max',
-      'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
-      'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
-    ]) {
-      assert.ok(injectedOn(url), `content script must run on ${url}`);
-      assert.equal(detectEcommercePlatform(url), 'tgdd', url);
-      assert.equal(
-        extractIdsFromUrl('tgdd', url).externalItemId,
+    for (const [url, expectedPlatform, expectedItemId] of [
+      [
+        'https://thegioididong.com/dtdd/iphone-16-pro-max',
+        'tgdd',
         'iphone-16-pro-max',
+      ],
+      [
+        'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
+        'tgdd',
+        'iphone-16-pro-max',
+      ],
+      [
+        'https://topzone.vn/iphone/iphone-16-pro-max',
+        'topzone',
+        'iphone-16-pro-max',
+      ],
+      [
+        'https://www.topzone.vn/iphone/iphone-16-pro-max',
+        'topzone',
+        'iphone-16-pro-max',
+      ],
+      [
+        'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
+        'dienmayxanh',
+        'iphone-16-pro-max',
+      ],
+      [
+        'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
+        'dienmayxanh',
+        'iphone-16-pro-max',
+      ],
+      [
+        'https://gearvn.com/products/laptop-gaming-asus-rog-strix',
+        'gearvn',
+        'laptop-gaming-asus-rog-strix',
+      ],
+      [
+        'https://www.nguyenkim.com/dien-thoai-iphone-16-pro-max.html',
+        'nguyenkim',
+        'dien-thoai-iphone-16-pro-max',
+      ],
+      [
+        'https://shopdunk.com/iphone-16-pro-max',
+        'shopdunk',
+        'iphone-16-pro-max',
+      ],
+      [
+        'https://hacom.vn/laptop-apple-macbook-air-m3',
+        'hacom',
+        'laptop-apple-macbook-air-m3',
+      ],
+      [
+        'https://clickbuy.com.vn/apple-iphone-16-pro-max.html',
+        'clickbuy',
+        'apple-iphone-16-pro-max',
+      ],
+      [
+        'https://viettelstore.vn/dien-thoai/iphone-16-pro-max-pid341099.html',
+        'viettelstore',
+        'iphone-16-pro-max-pid341099',
+      ],
+      [
+        'https://pico.vn/39871-dien-thoai-apple-iphone-16-pro-max',
+        'pico',
+        '39871-dien-thoai-apple-iphone-16-pro-max',
+      ],
+      [
+        'https://mediamart.vn/smartphones/apple-iphone-16-pro-max',
+        'mediamart',
+        'apple-iphone-16-pro-max',
+      ],
+      [
+        'https://memoryzone.com.vn/products/macbook-pro-14-m4',
+        'memoryzone',
+        'macbook-pro-14-m4',
+      ],
+      [
+        'https://www.anphatpc.com.vn/laptop-apple-macbook-air-m3_id49201.html',
+        'anphatpc',
+        'laptop-apple-macbook-air-m3_id49201',
+      ],
+    ] as const) {
+      assert.ok(injectedOn(url), `content script must run on ${url}`);
+      assert.equal(detectEcommercePlatform(url), expectedPlatform, url);
+      assert.equal(
+        extractIdsFromUrl(expectedPlatform, url).externalItemId,
+        expectedItemId,
         url
       );
       assert.ok(
@@ -607,6 +726,26 @@ async function runTests() {
       'https://*.topzone.vn/*',
       'https://dienmayxanh.com/*',
       'https://*.dienmayxanh.com/*',
+      'https://gearvn.com/*',
+      'https://*.gearvn.com/*',
+      'https://nguyenkim.com/*',
+      'https://*.nguyenkim.com/*',
+      'https://shopdunk.com/*',
+      'https://*.shopdunk.com/*',
+      'https://hacom.vn/*',
+      'https://*.hacom.vn/*',
+      'https://clickbuy.com.vn/*',
+      'https://*.clickbuy.com.vn/*',
+      'https://viettelstore.vn/*',
+      'https://*.viettelstore.vn/*',
+      'https://pico.vn/*',
+      'https://*.pico.vn/*',
+      'https://mediamart.vn/*',
+      'https://*.mediamart.vn/*',
+      'https://memoryzone.com.vn/*',
+      'https://*.memoryzone.com.vn/*',
+      'https://anphatpc.com.vn/*',
+      'https://*.anphatpc.com.vn/*',
     ]) {
       assert.ok(matches.includes(pattern), `matches missing ${pattern}`);
       assert.ok(hosts.includes(pattern), `host_permissions missing ${pattern}`);
@@ -615,6 +754,16 @@ async function runTests() {
       'https://eviltopzone.vn/iphone/iphone-16-pro-max',
       'https://evildienmayxanh.com/dtdd/iphone-16-pro-max',
       'https://evilthegioididong.com/dtdd/iphone-16-pro-max',
+      'https://evilgearvn.com/products/iphone-16-pro-max',
+      'https://evilnguyenkim.com/iphone-16-pro-max.html',
+      'https://evilshopdunk.com/iphone-16-pro-max',
+      'https://evilhacom.vn/iphone-16-pro-max',
+      'https://evilclickbuy.com.vn/iphone-16-pro-max.html',
+      'https://evilviettelstore.vn/dien-thoai/iphone-16-pro-max.html',
+      'https://evilpico.vn/iphone-16-pro-max',
+      'https://evilmediamart.vn/smartphones/iphone-16-pro-max',
+      'https://evilmemoryzone.com.vn/products/iphone-16-pro-max',
+      'https://evilanphatpc.com.vn/iphone-16-pro-max.html',
     ]) {
       assert.ok(
         !injectedOn(lookalikeUrl),
@@ -1697,8 +1846,8 @@ async function runTests() {
 
   assert.equal(
     detectEcommercePlatform('https://www.dienmayxanh.com/dtdd/iphone-16e'),
-    'tgdd',
-    'detectEcommercePlatform must map dienmayxanh.com to tgdd'
+    'dienmayxanh',
+    'detectEcommercePlatform must map dienmayxanh.com to dienmayxanh'
   );
   assert.deepEqual(
     extractIdsFromUrl(
@@ -8397,17 +8546,17 @@ async function runTests() {
         ['tiki.vn/sp-p777888.html', 'tiki', '777888'],
         ['tiktok.com/@apple/product/999111', 'tiktok', '999111'],
         ['thegioididong.com/dtdd/iphone-16-pro', 'tgdd', 'iphone-16-pro'],
-        ['topzone.vn/iphone/iphone-16-pro', 'tgdd', 'iphone-16-pro'],
+        ['topzone.vn/iphone/iphone-16-pro', 'topzone', 'iphone-16-pro'],
         [
           'www.topzone.vn/iphone/iphone-16-pro?utm_source=fb#specs',
-          'tgdd',
+          'topzone',
           'iphone-16-pro',
           'https://www.topzone.vn/iphone/iphone-16-pro',
         ],
-        ['dienmayxanh.com/dtdd/iphone-16-pro', 'tgdd', 'iphone-16-pro'],
+        ['dienmayxanh.com/dtdd/iphone-16-pro', 'dienmayxanh', 'iphone-16-pro'],
         [
           '//www.dienmayxanh.com/dtdd/iphone-16-pro',
-          'tgdd',
+          'dienmayxanh',
           'iphone-16-pro',
           'https://www.dienmayxanh.com/dtdd/iphone-16-pro',
         ],
@@ -8427,6 +8576,52 @@ async function runTests() {
           'phongvu.vn/apple-iphone-16-pro--s2502001',
           'phongvu',
           'apple-iphone-16-pro--s2502001',
+        ],
+        [
+          'gearvn.com/products/laptop-asus-rog-strix',
+          'gearvn',
+          'laptop-asus-rog-strix',
+        ],
+        [
+          'www.nguyenkim.com/dien-thoai-iphone-16-pro.html',
+          'nguyenkim',
+          'dien-thoai-iphone-16-pro',
+        ],
+        ['shopdunk.com/iphone-16-pro', 'shopdunk', 'iphone-16-pro'],
+        [
+          'hacom.vn/laptop-apple-macbook-air-m3',
+          'hacom',
+          'laptop-apple-macbook-air-m3',
+        ],
+        [
+          'clickbuy.com.vn/apple-iphone-16-pro.html',
+          'clickbuy',
+          'apple-iphone-16-pro',
+        ],
+        [
+          'viettelstore.vn/dien-thoai/iphone-16-pro-pid341098.html',
+          'viettelstore',
+          'iphone-16-pro-pid341098',
+        ],
+        [
+          'pico.vn/39870-dien-thoai-iphone-16-pro',
+          'pico',
+          '39870-dien-thoai-iphone-16-pro',
+        ],
+        [
+          'mediamart.vn/smartphones/iphone-16-pro',
+          'mediamart',
+          'iphone-16-pro',
+        ],
+        [
+          'memoryzone.com.vn/products/macbook-pro-14-m4',
+          'memoryzone',
+          'macbook-pro-14-m4',
+        ],
+        [
+          'www.anphatpc.com.vn/laptop-apple-macbook-air-m3_id49201.html',
+          'anphatpc',
+          'laptop-apple-macbook-air-m3_id49201',
         ],
       ];
       for (const [
@@ -11750,6 +11945,529 @@ async function runTests() {
         else delete g[key];
       }
     }
+  }
+  // --- DOS/Rate#1850: 12 Wave 1-3 retail platforms across detector, lookup & SQL boundary ---
+  {
+    const { cleanExtractedProductTitle, extractProductSignalFromDom } =
+      await import('./extractors/ecommerce-detector.js');
+    const { buildCandidateExternalItemIds } =
+      await import('../../web/src/server/rate/extension.js');
+
+    // 1. Positive PDP detection & ID extraction across all 12 Wave 1-3 platforms
+    for (const [url, expectedPlatform, expectedId] of [
+      [
+        'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
+        'dienmayxanh',
+        'iphone-16-pro-max',
+      ],
+      [
+        'https://www.topzone.vn/iphone/iphone-16-pro-max',
+        'topzone',
+        'iphone-16-pro-max',
+      ],
+      [
+        'https://gearvn.com/products/laptop-gaming-asus-rog-strix',
+        'gearvn',
+        'laptop-gaming-asus-rog-strix',
+      ],
+      [
+        'https://gearvn.com/collections/laptop-gaming/products/asus-tuf-a15',
+        'gearvn',
+        'asus-tuf-a15',
+      ],
+      [
+        'https://www.nguyenkim.com/dien-thoai-iphone-16-pro-max.html',
+        'nguyenkim',
+        'dien-thoai-iphone-16-pro-max',
+      ],
+      [
+        'https://shopdunk.com/iphone-16-pro-max',
+        'shopdunk',
+        'iphone-16-pro-max',
+      ],
+      [
+        'https://hacom.vn/laptop-apple-macbook-air-m3',
+        'hacom',
+        'laptop-apple-macbook-air-m3',
+      ],
+      [
+        'https://clickbuy.com.vn/apple-iphone-16-pro-max.html',
+        'clickbuy',
+        'apple-iphone-16-pro-max',
+      ],
+      [
+        'https://viettelstore.vn/dien-thoai/iphone-16-pro-max-pid341099.html',
+        'viettelstore',
+        'iphone-16-pro-max-pid341099',
+      ],
+      [
+        'https://pico.vn/39871-dien-thoai-apple-iphone-16-pro-max',
+        'pico',
+        '39871-dien-thoai-apple-iphone-16-pro-max',
+      ],
+      [
+        'https://mediamart.vn/smartphones/apple-iphone-16-pro-max',
+        'mediamart',
+        'apple-iphone-16-pro-max',
+      ],
+      [
+        'https://memoryzone.com.vn/products/macbook-pro-14-m4',
+        'memoryzone',
+        'macbook-pro-14-m4',
+      ],
+      [
+        'https://memoryzone.com.vn/ssd-samsung-990-pro-1tb',
+        'memoryzone',
+        'ssd-samsung-990-pro-1tb',
+      ],
+      [
+        'https://www.anphatpc.com.vn/laptop-apple-macbook-air-m3_id49201.html',
+        'anphatpc',
+        'laptop-apple-macbook-air-m3_id49201',
+      ],
+    ] as const) {
+      assert.equal(detectEcommercePlatform(url), expectedPlatform, url);
+      assert.deepEqual(
+        extractIdsFromUrl(expectedPlatform, url),
+        { externalItemId: expectedId, externalShopId: null },
+        url
+      );
+    }
+
+    // 2. Non-product category, brand, auth, policy, static-asset, and desk-phone rejections
+    for (const [platform, badUrl] of [
+      ['dienmayxanh', 'https://www.dienmayxanh.com/dtdd'],
+      ['topzone', 'https://www.topzone.vn/iphone'],
+      ['gearvn', 'https://gearvn.com/collections/laptop-gaming'],
+      ['gearvn', 'https://gearvn.com/pages/chinh-sach-bao-hanh'],
+      ['nguyenkim', 'https://www.nguyenkim.com/dien-thoai-di-dong.c'],
+      ['nguyenkim', 'https://www.nguyenkim.com/apple.b'],
+      ['shopdunk', 'https://shopdunk.com/iphone'],
+      ['shopdunk', 'https://shopdunk.com/iphone-16-series'],
+      ['hacom', 'https://hacom.vn/buildpc'],
+      ['hacom', 'https://hacom.vn/chinh-sach-bao-hanh'],
+      ['clickbuy', 'https://clickbuy.com.vn/sua-chua'],
+      ['viettelstore', 'https://viettelstore.vn/dien-thoai'],
+      ['viettelstore', 'https://viettelstore.vn/tin-tuc/iphone-16-ra-mat'],
+      ['pico', 'https://pico.vn/dien-thoai.c'],
+      ['mediamart', 'https://mediamart.vn/smartphones'],
+      ['memoryzone', 'https://memoryzone.com.vn/collections/ssd'],
+      [
+        'anphatpc',
+        'https://www.anphatpc.com.vn/may-tinh-xach-tay-laptop_dm1013.html',
+      ],
+      [
+        'anphatpc',
+        'https://www.anphatpc.com.vn/dien-thoai-ban-panasonic-kx-ts500_id1234.html',
+      ],
+      ['anphatpc', 'https://www.anphatpc.com.vn/laptop-asus-without-html-ext'],
+    ] as const) {
+      assert.equal(
+        extractIdsFromUrl(platform, badUrl).externalItemId,
+        null,
+        `must reject non-product URL ${badUrl}`
+      );
+    }
+
+    // 3. Title suffix cleaning across Wave 1-3 chains
+    for (const [rawTitle, expectedClean] of [
+      ['Laptop ASUS ROG Strix G16 | GearVN.com', 'Laptop ASUS ROG Strix G16'],
+      ['iPhone 16 Pro Max 256GB - Nguyễn Kim', 'iPhone 16 Pro Max 256GB'],
+      ['iPhone 16 Pro Max 256GB | ShopDunk.com', 'iPhone 16 Pro Max 256GB'],
+      ['MacBook Air M3 13 inch | HACOM', 'MacBook Air M3 13 inch'],
+      [
+        'Samsung Galaxy S25 Ultra - Clickbuy.com.vn',
+        'Samsung Galaxy S25 Ultra',
+      ],
+      ['iPhone 16 Pro 128GB | Viettel Store', 'iPhone 16 Pro 128GB'],
+      ['iPhone 16 Pro Max - Siêu thị điện máy Pico', 'iPhone 16 Pro Max'],
+      ['iPhone 16 Pro Max 256GB | MediaMart', 'iPhone 16 Pro Max 256GB'],
+      ['MacBook Pro 14 M4 - MemoryZone', 'MacBook Pro 14 M4'],
+      ['Laptop MacBook Air M3 | An Phát Computer', 'Laptop MacBook Air M3'],
+    ] as const) {
+      assert.equal(
+        cleanExtractedProductTitle(rawTitle),
+        expectedClean,
+        rawTitle
+      );
+    }
+
+    // 4. DOM extraction with MediaMart .product-price-regular strikethrough original price
+    const mediamartDoc = {
+      title: 'Apple iPhone 16 Pro Max 256GB | MediaMart',
+      querySelectorAll: (sel: string) =>
+        sel === 'script[type="application/ld+json"]'
+          ? [
+              {
+                textContent: JSON.stringify({
+                  '@type': 'Product',
+                  name: 'Apple iPhone 16 Pro Max 256GB | MediaMart',
+                  offers: {
+                    '@type': 'Offer',
+                    price: '29990000',
+                    availability: 'https://schema.org/InStock',
+                  },
+                }),
+              },
+            ]
+          : [],
+      querySelector: (sel: string) =>
+        sel === '.product-price-regular'
+          ? { textContent: '34.990.000₫' }
+          : null,
+    } as unknown as Document;
+    const mediamartSignal = extractProductSignalFromDom(
+      mediamartDoc,
+      'https://mediamart.vn/smartphones/apple-iphone-16-pro-max?utm_source=zalo'
+    );
+    assert.ok(mediamartSignal);
+    assert.equal(mediamartSignal.platform, 'mediamart');
+    assert.equal(
+      mediamartSignal.canonicalUrl,
+      'https://mediamart.vn/smartphones/apple-iphone-16-pro-max'
+    );
+    assert.equal(mediamartSignal.externalItemId, 'apple-iphone-16-pro-max');
+    assert.equal(mediamartSignal.price, 29_990_000);
+    assert.equal(mediamartSignal.originalPrice, 34_990_000);
+
+    // 5. Server lookup candidate item ID prefixes across all 12 Wave 1-3 platforms
+    const dmxIds = buildCandidateExternalItemIds({
+      platform: 'dienmayxanh',
+      externalId: 'iphone-16-pro-max',
+    });
+    assert.ok(
+      dmxIds.includes('dmx-iphone-16-pro-max') &&
+        dmxIds.includes('tgdd-iphone-16-pro-max')
+    );
+    const tzIds = buildCandidateExternalItemIds({
+      platform: 'topzone',
+      externalId: 'iphone-16-pro-max',
+    });
+    assert.ok(
+      tzIds.includes('tz-iphone-16-pro-max') &&
+        tzIds.includes('tgdd-iphone-16-pro-max')
+    );
+    assert.ok(
+      buildCandidateExternalItemIds({
+        platform: 'anphatpc',
+        externalId: 'laptop_id49201',
+      }).includes('ap-laptop_5fid49201')
+    );
+    assert.ok(
+      buildCandidateExternalItemIds({
+        platform: 'nguyenkim',
+        externalId: 'iphone_16',
+      }).includes('nk-iphone_5f16')
+    );
+
+    // 6. Service-worker sender validation & DOS-Me SQL boundary (crowd observation skipped for Wave 1-3)
+    const g1850 = globalThis as Record<string, unknown>;
+    const savedChrome1850 = Object.getOwnPropertyDescriptor(g1850, 'chrome');
+    const savedFetch1850 = Object.getOwnPropertyDescriptor(g1850, 'fetch');
+    try {
+      const local1850 = new Map<string, unknown>([
+        ['apiBaseUrl', 'https://rate.vn'],
+        ['crowdContributeOptIn', true],
+        ['crowdConsentVersion', 2],
+      ]);
+      const session1850 = new Map<string, unknown>();
+      const swFetchCalls1850: string[] = [];
+      let swHandler1850:
+        | ((
+            msg: Record<string, unknown>,
+            sender: Record<string, unknown>,
+            sendResponse: (res: unknown) => void
+          ) => boolean | void)
+        | null = null;
+
+      Object.defineProperty(g1850, 'chrome', {
+        configurable: true,
+        writable: true,
+        value: {
+          runtime: {
+            id: 'rate-ext-1850',
+            getManifest: () => ({ version: '2.0.0' }),
+            getURL: (p: string) => `chrome-extension://rate-ext-1850/${p}`,
+            onInstalled: { addListener: () => {} },
+            onStartup: { addListener: () => {} },
+            onMessage: {
+              addListener: (cb: typeof swHandler1850) => {
+                swHandler1850 = cb;
+              },
+            },
+          },
+          storage: {
+            local: {
+              get: async (keys?: string | string[]) => {
+                const list = Array.isArray(keys)
+                  ? keys
+                  : typeof keys === 'string'
+                    ? [keys]
+                    : [...local1850.keys()];
+                return Object.fromEntries(
+                  list
+                    .filter((k) => local1850.has(k))
+                    .map((k) => [k, local1850.get(k)])
+                );
+              },
+              set: async (items: Record<string, unknown>) => {
+                for (const [k, v] of Object.entries(items)) local1850.set(k, v);
+              },
+              remove: async (keys: string | string[]) => {
+                for (const k of Array.isArray(keys) ? keys : [keys]) {
+                  local1850.delete(k);
+                }
+              },
+            },
+            session: {
+              get: async (keys?: string | string[]) => {
+                const list = Array.isArray(keys)
+                  ? keys
+                  : typeof keys === 'string'
+                    ? [keys]
+                    : [...session1850.keys()];
+                return Object.fromEntries(
+                  list
+                    .filter((k) => session1850.has(k))
+                    .map((k) => [k, session1850.get(k)])
+                );
+              },
+              set: async (items: Record<string, unknown>) => {
+                for (const [k, v] of Object.entries(items))
+                  session1850.set(k, v);
+              },
+              remove: async (keys: string | string[]) => {
+                for (const k of Array.isArray(keys) ? keys : [keys]) {
+                  session1850.delete(k);
+                }
+              },
+            },
+          },
+          sidePanel: {
+            setPanelBehavior: async () => {},
+            open: async () => {},
+          },
+          action: {
+            setBadgeText: async () => {},
+            setBadgeBackgroundColor: async () => {},
+          },
+          tabs: {
+            query: async () => [{ id: 88, active: true }],
+            create: async () => ({ id: 89 }),
+          },
+        },
+      });
+      Object.defineProperty(g1850, 'fetch', {
+        configurable: true,
+        writable: true,
+        value: async (input: string | URL) => {
+          const href = String(input);
+          swFetchCalls1850.push(href);
+          if (href.includes('/api/v1/rate/extension/submitter')) {
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                submitterId: '11111111-1111-4111-8111-111111111111',
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            );
+          }
+          if (href.includes('/api/v1/rate/extension/observation')) {
+            return new Response(JSON.stringify({ ok: true }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                matchStatus: 'exact_listing',
+                platform: 'gearvn',
+                canonicalUrl: 'https://gearvn.com/products/asus-rog-strix',
+                detectedStorageGb: 512,
+                isAccessoryOrPart: false,
+                accessoryReason: null,
+                variantCandidates: [],
+                priceAssessment: {
+                  verdict: 'genuine_deal',
+                  badgeLabel: 'Giá Tốt Thực Sự',
+                  explanation: 'Giá tốt',
+                  observedPrice: 28_990_000,
+                  observedOriginalPrice: 32_990_000,
+                  claimedDiscountPct: 12,
+                  vsMarketMedianPct: -6,
+                  marketMinPrice: 28_990_000,
+                  marketMedianPrice: 30_990_000,
+                  marketMaxPrice: 32_990_000,
+                  historicalMinPrice: 28_990_000,
+                  historicalMaxPrice: 33_990_000,
+                  cheaperOfferCount: 0,
+                  maxSavingsAmount: 0,
+                },
+                masterProduct: null,
+                matchedOffer: null,
+                topCheaperOffers: [],
+                allOffers: [],
+                merchantProfile: null,
+                reviewSummary: null,
+                priceHistory: null,
+                compareUrl: null,
+                productDetailUrl: null,
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        },
+      });
+
+      await import(
+        new URL('./background/service-worker.js?case=1850sw', import.meta.url)
+          .href
+      );
+      const callSw1850 = (
+        msg: Record<string, unknown>,
+        sender: Record<string, unknown>
+      ) =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          const asyncReply = swHandler1850!(msg, sender, (r) =>
+            resolve(r as Record<string, unknown>)
+          );
+          if (asyncReply === false) {
+            // sendResponse already called synchronously
+          }
+        });
+
+      for (const [platform, pageUrl, itemId] of [
+        [
+          'dienmayxanh',
+          'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
+          'iphone-16-pro-max',
+        ],
+        [
+          'topzone',
+          'https://www.topzone.vn/iphone/iphone-16-pro-max',
+          'iphone-16-pro-max',
+        ],
+        [
+          'gearvn',
+          'https://gearvn.com/products/asus-rog-strix',
+          'asus-rog-strix',
+        ],
+        [
+          'nguyenkim',
+          'https://www.nguyenkim.com/iphone-16-pro-max.html',
+          'iphone-16-pro-max',
+        ],
+        [
+          'shopdunk',
+          'https://shopdunk.com/iphone-16-pro-max',
+          'iphone-16-pro-max',
+        ],
+        ['hacom', 'https://hacom.vn/macbook-air-m3', 'macbook-air-m3'],
+        [
+          'clickbuy',
+          'https://clickbuy.com.vn/iphone-16-pro-max.html',
+          'iphone-16-pro-max',
+        ],
+        [
+          'viettelstore',
+          'https://viettelstore.vn/dien-thoai/iphone-16-pro-max.html',
+          'iphone-16-pro-max',
+        ],
+        [
+          'pico',
+          'https://pico.vn/39871-iphone-16-pro-max',
+          '39871-iphone-16-pro-max',
+        ],
+        [
+          'mediamart',
+          'https://mediamart.vn/smartphones/iphone-16-pro-max',
+          'iphone-16-pro-max',
+        ],
+        [
+          'memoryzone',
+          'https://memoryzone.com.vn/products/macbook-pro-14-m4',
+          'macbook-pro-14-m4',
+        ],
+        [
+          'anphatpc',
+          'https://www.anphatpc.com.vn/macbook-air-m3_id49201.html',
+          'macbook-air-m3_id49201',
+        ],
+      ] as const) {
+        const res = await callSw1850(
+          {
+            type: 'RATE_PRODUCT_DETECTED',
+            signal: {
+              platform,
+              canonicalUrl: pageUrl,
+              externalItemId: itemId,
+              externalShopId: null,
+              title: 'iPhone 16 Pro Max 256GB',
+              selectedVariant: '256GB',
+              price: 28_990_000,
+              originalPrice: 32_990_000,
+              ratingStar: 4.9,
+              ratingCount: 25,
+            },
+          },
+          {
+            id: 'rate-ext-1850',
+            tab: { id: 88, windowId: 1, active: true },
+            url: pageUrl,
+          }
+        );
+        assert.equal(
+          res.ok,
+          true,
+          `Wave 1-3 lookup must succeed for ${platform}`
+        );
+      }
+      await new Promise((r) => setTimeout(r, 30));
+      assert.equal(
+        swFetchCalls1850.some(
+          (u) => u.includes('/submitter') || u.includes('/observation')
+        ),
+        false,
+        'Wave 1-3 detections must NOT hit extension observation endpoints before DOS-Me SQL migration'
+      );
+
+      // Cross-store sender spoofing on Wave 1-3 origins must be rejected
+      const spoofRes = await callSw1850(
+        {
+          type: 'RATE_PRODUCT_DETECTED',
+          signal: {
+            platform: 'gearvn',
+            canonicalUrl: 'https://gearvn.com/products/asus-rog-strix',
+            externalItemId: 'asus-rog-strix',
+            externalShopId: null,
+            title: 'ASUS ROG Strix',
+            selectedVariant: null,
+            price: 28_990_000,
+            originalPrice: null,
+            ratingStar: null,
+            ratingCount: null,
+          },
+        },
+        {
+          id: 'rate-ext-1850',
+          tab: { id: 88, windowId: 1, active: true },
+          url: 'https://shopdunk.com/iphone-16-pro-max',
+        }
+      );
+      assert.equal(spoofRes.ok, false, 'cross-store sender spoofing must fail');
+    } finally {
+      if (savedChrome1850)
+        Object.defineProperty(g1850, 'chrome', savedChrome1850);
+      else delete g1850.chrome;
+      if (savedFetch1850) Object.defineProperty(g1850, 'fetch', savedFetch1850);
+      else delete g1850.fetch;
+    }
+
+    console.log(
+      '  ✅ [Wave 1-3 12 retail platforms across detector, lookup & SQL boundary (#1850)] Verified'
+    );
   }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }

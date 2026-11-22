@@ -350,7 +350,7 @@ async function runCoreArchitectureSuite() {
         enum: string[];
       }
     ).enum.length,
-    10
+    22
   );
   console.log(
     '  ✅ [7/8] OpenAPI 3.1.0 Specification (/api/v1/rate/openapi.json) passed'
@@ -623,12 +623,25 @@ async function runCoreArchitectureSuite() {
     'shopee',
     'lazada',
     'tiki',
+    'tiktok',
     'cellphones',
     'tgdd',
     'fptshop',
     'hoangha',
     'didongviet',
     'phongvu',
+    'dienmayxanh',
+    'topzone',
+    'gearvn',
+    'nguyenkim',
+    'shopdunk',
+    'hacom',
+    'clickbuy',
+    'viettelstore',
+    'pico',
+    'mediamart',
+    'memoryzone',
+    'anphatpc',
   ]) {
     assert.ok(
       merchantExplorerSrc.includes(`'${plat}'`),
@@ -7943,7 +7956,7 @@ async function runCoreArchitectureSuite() {
     // keep their capitals; two or more other capitalised words in a row mean
     // Title Case.
     const names =
-      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|OpenAPI|Next\.js|PostgreSQL|Supabase|Authorization: Bearer|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoang Ha Mobile|Hoang Ha|Di Dong Viet|The Gioi Di Dong|Phong Vu|Natural Titanium|Alex Nguyen|Wikimedia Commons|Vietnam|Shopee|Lazada|Tiki|Apple|iPhone|Pro|Max|Samsung|Galaxy|Xiaomi|Google|Pixel|Huawei|Garmin|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|Bayesian \w+|Helpful|Report|[A-Z]{2,}\w*|\w+-[A-Z]\w*/g;
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|OpenAPI|Next\.js|PostgreSQL|Supabase|Authorization: Bearer|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoang Ha Mobile|Hoang Ha|Di Dong Viet|The Gioi Di Dong|Dien May Xanh|TopZone|GearVN|Nguyen Kim|ShopDunk|HACOM|Clickbuy|Viettel Store|Pico|MediaMart|MemoryZone|An Phat Computer|An Phat|Phong Vu|Natural Titanium|Alex Nguyen|Wikimedia Commons|Vietnam|Shopee|Lazada|Tiki|Apple|iPhone|Pro|Max|Samsung|Galaxy|Xiaomi|Google|Pixel|Huawei|Garmin|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|Bayesian \w+|Helpful|Report|[A-Z]{2,}\w*|\w+-[A-Z]\w*/g;
     const strip = (s: string) => s.replace(/\{[^}]+\}/g, '').replace(names, '');
     const titleCase =
       /\b[A-Z][a-z]+\b(\s+(&|and|of|to|for|in|the|a|on|with|by|or|from|vs|at)?\s*\b[A-Z][a-z]+\b)+/;
@@ -7981,7 +7994,7 @@ async function runCoreArchitectureSuite() {
     // Names keep their capitals: brands, products, retailers, programs,
     // places and people used in examples.
     const names =
-      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|OpenAPI|Next\.js|PostgreSQL|Supabase|Authorization: Bearer|Hoàng Hà|Di Động Việt|Thế Giới Di Động|Phong Vũ|Việt Nam|Wikimedia Commons|Bộ TT&TT|Minh Quân|Hà Nội|Nguyễn Văn A|Pro Max|Pro|Titan Tự Nhiên|AI Review Analyzer|Rate Trust Score|Bayesian|GSMArena|PhoneArena|GitHub|Wi-Fi|Bluetooth|Hi-Res|Qi|MagSafe|Hz|Bayes|Rate Lab|API Playground|Kiểm tra link|Liên hệ|Hữu ích|Báo cáo|Shopee|Lazada|Tiki|Apple|iPhone|Samsung|Galaxy|Xiaomi|Google|Pixel|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|[A-ZĐ]{2,}\w*/g;
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|OpenAPI|Next\.js|PostgreSQL|Supabase|Authorization: Bearer|Hoàng Hà|Di Động Việt|Thế Giới Di Động|Điện Máy Xanh|TopZone|GearVN|Nguyễn Kim|ShopDunk|HACOM|Clickbuy|Viettel Store|Pico|MediaMart|MemoryZone|An Phát Computer|An Phát|Phong Vũ|Việt Nam|Wikimedia Commons|Bộ TT&TT|Minh Quân|Hà Nội|Nguyễn Văn A|Pro Max|Pro|Titan Tự Nhiên|AI Review Analyzer|Rate Trust Score|Bayesian|GSMArena|PhoneArena|GitHub|Wi-Fi|Bluetooth|Hi-Res|Qi|MagSafe|Hz|Bayes|Rate Lab|API Playground|Kiểm tra link|Liên hệ|Hữu ích|Báo cáo|Shopee|Lazada|Tiki|Apple|iPhone|Samsung|Galaxy|Xiaomi|Google|Pixel|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|[A-ZĐ]{2,}\w*/g;
     const strip = (s: string) =>
       s
         .normalize('NFC')
@@ -14987,6 +15000,209 @@ async function runCoreArchitectureSuite() {
     const { runProductPointsDisplaySuite } =
       await import('../../../lib/__tests__/product-points-display.test');
     await runProductPointsDisplaySuite();
+  }
+
+  // DOS/Rate#1850: All 12 Wave 1-3 retail platforms across web URL parser, lookup candidate IDs, OpenAPI, and SQL-safe crowd ingest boundary
+  {
+    const {
+      EXTENSION_CAPABILITY_MATRIX,
+      buildCandidateExternalItemIds,
+      detectPlatformFromInput,
+      ingestExtensionCrowdSignal,
+    } = await import('../extension');
+    const { SUPPORTED_PLATFORM_SLUGS } = await import('../api-handler');
+    const { extractProductKeywordFromUrl, parseEcommerceUrlOrQuery } =
+      await import('../../../lib/rate-domain-core');
+
+    const wave1To3Cases = [
+      {
+        platform: 'dienmayxanh' as const,
+        pdpUrl: 'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max-256gb',
+        nonPdpUrl: 'https://www.dienmayxanh.com/dtdd',
+        expectedSlug: 'iphone-16-pro-max-256gb',
+        expectedPrefixedId: 'dmx-iphone-16-pro-max-256gb',
+      },
+      {
+        platform: 'topzone' as const,
+        pdpUrl: 'https://www.topzone.vn/iphone/iphone-16-pro-max-256gb',
+        nonPdpUrl: 'https://www.topzone.vn/iphone',
+        expectedSlug: 'iphone-16-pro-max-256gb',
+        expectedPrefixedId: 'tz-iphone-16-pro-max-256gb',
+      },
+      {
+        platform: 'gearvn' as const,
+        pdpUrl: 'https://gearvn.com/products/laptop-asus-rog-strix-g16',
+        nonPdpUrl: 'https://gearvn.com/collections/laptop-gaming',
+        expectedSlug: 'laptop-asus-rog-strix-g16',
+        expectedPrefixedId: 'gearvn-laptop-asus-rog-strix-g16',
+      },
+      {
+        platform: 'nguyenkim' as const,
+        pdpUrl: 'https://www.nguyenkim.com/dien-thoai-iphone-16-pro-max.html',
+        nonPdpUrl: 'https://www.nguyenkim.com/dien-thoai.c',
+        expectedSlug: 'dien-thoai-iphone-16-pro-max',
+        expectedPrefixedId: 'nk-dien-thoai-iphone-16-pro-max',
+      },
+      {
+        platform: 'shopdunk' as const,
+        pdpUrl: 'https://shopdunk.com/iphone-16-pro-max-256gb',
+        nonPdpUrl: 'https://shopdunk.com/iphone',
+        expectedSlug: 'iphone-16-pro-max-256gb',
+        expectedPrefixedId: 'shopdunk-iphone-16-pro-max-256gb',
+      },
+      {
+        platform: 'hacom' as const,
+        pdpUrl: 'https://hacom.vn/laptop-apple-macbook-air-m3-256gb',
+        nonPdpUrl: 'https://hacom.vn/laptop-gaming-do-hoa',
+        expectedSlug: 'laptop-apple-macbook-air-m3-256gb',
+        expectedPrefixedId: 'hacom-laptop-apple-macbook-air-m3-256gb',
+      },
+      {
+        platform: 'clickbuy' as const,
+        pdpUrl: 'https://clickbuy.com.vn/iphone-16-pro-max-256gb',
+        nonPdpUrl: 'https://clickbuy.com.vn/sua-chua',
+        expectedSlug: 'iphone-16-pro-max-256gb',
+        expectedPrefixedId: 'cb-iphone-16-pro-max-256gb',
+      },
+      {
+        platform: 'viettelstore' as const,
+        pdpUrl:
+          'https://viettelstore.vn/dien-thoai/iphone-16-pro-max-pid341920.html',
+        nonPdpUrl: 'https://viettelstore.vn/ket-qua-tim-kiem.html',
+        expectedSlug: 'iphone-16-pro-max-pid341920',
+        expectedPrefixedId: 'vts-iphone-16-pro-max-pid341920',
+      },
+      {
+        platform: 'pico' as const,
+        pdpUrl: 'https://pico.vn/45678-dien-thoai-iphone-16-pro-max.html',
+        nonPdpUrl: 'https://pico.vn/dien-thoai',
+        expectedSlug: '45678-dien-thoai-iphone-16-pro-max',
+        expectedPrefixedId: 'pico-45678-dien-thoai-iphone-16-pro-max',
+      },
+      {
+        platform: 'mediamart' as const,
+        pdpUrl: 'https://mediamart.vn/smartphones/iphone-16-pro-max-256gb',
+        nonPdpUrl: 'https://mediamart.vn/smartphones',
+        expectedSlug: 'iphone-16-pro-max-256gb',
+        expectedPrefixedId: 'mm-iphone-16-pro-max-256gb',
+      },
+      {
+        platform: 'memoryzone' as const,
+        pdpUrl:
+          'https://memoryzone.com.vn/products/laptop-apple-macbook-air-m3',
+        nonPdpUrl: 'https://memoryzone.com.vn/collections/laptop',
+        expectedSlug: 'laptop-apple-macbook-air-m3',
+        expectedPrefixedId: 'mz-laptop-apple-macbook-air-m3',
+      },
+      {
+        platform: 'anphatpc' as const,
+        pdpUrl:
+          'https://www.anphatpc.com.vn/laptop-apple-macbook-air-13.6-inch-m3_id49201.html',
+        nonPdpUrl:
+          'https://www.anphatpc.com.vn/may-tinh-xach-tay-laptop_dm1005.html',
+        expectedSlug: 'laptop-apple-macbook-air-13.6-inch-m3_id49201',
+        expectedPrefixedId:
+          'ap-laptop-apple-macbook-air-13_2e6-inch-m3_5fid49201',
+      },
+    ];
+
+    assert.equal(SUPPORTED_PLATFORM_SLUGS.size, 22);
+
+    let rpcInvoked = false;
+    const fakeRateClient = {
+      rpc: async () => {
+        rpcInvoked = true;
+        return { data: null, error: null };
+      },
+    };
+
+    for (const tc of wave1To3Cases) {
+      assert.ok(SUPPORTED_PLATFORM_SLUGS.has(tc.platform), tc.platform);
+      const cap = EXTENSION_CAPABILITY_MATRIX[tc.platform];
+      assert.ok(cap, tc.platform);
+      assert.equal(cap.lookup, true, tc.platform);
+      assert.equal(cap.exactItemMatch, true, tc.platform);
+      assert.equal(cap.crossCatalogMatch, true, tc.platform);
+      assert.equal(cap.crowdVerifyQueue, false, tc.platform);
+
+      assert.equal(detectPlatformFromInput(null, tc.pdpUrl), tc.platform);
+      assert.equal(detectPlatformFromInput(tc.platform, null), tc.platform);
+
+      const parsedPdp = parseEcommerceUrlOrQuery(tc.pdpUrl);
+      assert.equal(parsedPdp.isUrl, true, tc.pdpUrl);
+      assert.equal(parsedPdp.platform, tc.platform, tc.pdpUrl);
+      assert.equal(parsedPdp.platformItemId, tc.expectedSlug, tc.pdpUrl);
+
+      const parsedNonPdp = parseEcommerceUrlOrQuery(tc.nonPdpUrl);
+      assert.equal(parsedNonPdp.isUrl, true, tc.nonPdpUrl);
+      assert.equal(parsedNonPdp.platform, tc.platform, tc.nonPdpUrl);
+      assert.equal(parsedNonPdp.platformItemId, null, tc.nonPdpUrl);
+
+      const kw = extractProductKeywordFromUrl(tc.pdpUrl);
+      assert.ok(kw.length >= 4, `${tc.platform} keyword: "${kw}"`);
+
+      const candidateIds = buildCandidateExternalItemIds({
+        externalId: tc.expectedSlug,
+        platform: tc.platform,
+      });
+      assert.ok(
+        candidateIds.includes(tc.expectedPrefixedId),
+        `${tc.platform} candidates ${JSON.stringify(candidateIds)} missing ${tc.expectedPrefixedId}`
+      );
+
+      // Crowd ingest must stop cleanly at capability gate without calling PostgreSQL RPC
+      const ingestRes = await ingestExtensionCrowdSignal({
+        platform: tc.platform,
+        externalItemId: tc.expectedSlug,
+        url: tc.pdpUrl,
+        title: 'Apple iPhone 16 Pro Max 256GB',
+        price: 29_990_000,
+        userConsentOptIn: true,
+        rateClient: fakeRateClient,
+      });
+      assert.equal(ingestRes.accepted, false, tc.platform);
+      assert.equal(
+        ingestRes.jobState,
+        'platform_worker_pending_phase_5_1',
+        tc.platform
+      );
+    }
+    assert.equal(
+      rpcInvoked,
+      false,
+      'Wave 1-3 crowd ingest must never call enqueue_crowd_verify_signal before DOS-Me migration'
+    );
+
+    // Legacy compatibility: older extension clients sending platform=tgdd on topzone.vn / dienmayxanh.com upgrade cleanly
+    assert.equal(
+      detectPlatformFromInput(
+        'tgdd',
+        'https://www.topzone.vn/iphone/iphone-16-pro-max'
+      ),
+      'topzone'
+    );
+    assert.equal(
+      detectPlatformFromInput(
+        'tgdd',
+        'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max'
+      ),
+      'dienmayxanh'
+    );
+    assert.ok(
+      buildCandidateExternalItemIds({
+        externalId: 'iphone-16-pro-max',
+        platform: 'topzone',
+      }).includes('tgdd-iphone-16-pro-max')
+    );
+    assert.ok(
+      buildCandidateExternalItemIds({
+        externalId: 'iphone-16-pro-max',
+        platform: 'dienmayxanh',
+      }).includes('tgdd-iphone-16-pro-max')
+    );
+    console.log(
+      '  ✅ DOS/Rate#1850 Wave 1-3 12 retail platforms web & API parity passed'
+    );
   }
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

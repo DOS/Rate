@@ -12,6 +12,13 @@
 
 export const EXTENSION_OBSERVATION_VERSION = 1;
 
+/**
+ * Marketplaces accepted by `rate.extension_observations` and
+ * `rate.submit_extension_observation` in PostgreSQL (`20261106160000` in
+ * `DOS-Me`). Kept at the 10 SQL-checked marketplaces until a coordinated
+ * `DOS-Me` migration widens the table `CHECK` and RPC allowlist (see
+ * `DOS/Rate#1762` and `DOS/Rate#1850`).
+ */
 const EXTENSION_MARKETPLACES = [
   'shopee',
   'lazada',

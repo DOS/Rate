@@ -68,7 +68,19 @@ export type SupportedEcommercePlatform =
   | 'fptshop'
   | 'hoangha'
   | 'didongviet'
-  | 'phongvu';
+  | 'phongvu'
+  | 'dienmayxanh'
+  | 'topzone'
+  | 'gearvn'
+  | 'nguyenkim'
+  | 'shopdunk'
+  | 'hacom'
+  | 'clickbuy'
+  | 'viettelstore'
+  | 'pico'
+  | 'mediamart'
+  | 'memoryzone'
+  | 'anphatpc';
 
 export interface PlatformCapability {
   platform: SupportedEcommercePlatform;
@@ -162,6 +174,106 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     exactItemMatch: true,
     crossCatalogMatch: true,
     crowdVerifyQueue: true,
+  },
+  // Wave 1-3 retail chains (DOS/Rate#1850): full lookup, exact item match, and
+  // cross-catalog comparison are enabled; `crowdVerifyQueue` stays false until
+  // a DOS-Me migration widens `rate.enqueue_crowd_verify_signal` and M2 SQL
+  // CHECK constraints (`DOS/Rate#1762`).
+  dienmayxanh: {
+    platform: 'dienmayxanh',
+    displayName: 'Điện Máy Xanh',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  topzone: {
+    platform: 'topzone',
+    displayName: 'TopZone',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  gearvn: {
+    platform: 'gearvn',
+    displayName: 'GearVN',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  nguyenkim: {
+    platform: 'nguyenkim',
+    displayName: 'Nguyễn Kim',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  shopdunk: {
+    platform: 'shopdunk',
+    displayName: 'ShopDunk',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  hacom: {
+    platform: 'hacom',
+    displayName: 'HACOM',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  clickbuy: {
+    platform: 'clickbuy',
+    displayName: 'Clickbuy',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  viettelstore: {
+    platform: 'viettelstore',
+    displayName: 'Viettel Store',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  pico: {
+    platform: 'pico',
+    displayName: 'Pico',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  mediamart: {
+    platform: 'mediamart',
+    displayName: 'MediaMart',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  memoryzone: {
+    platform: 'memoryzone',
+    displayName: 'MemoryZone',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  anphatpc: {
+    platform: 'anphatpc',
+    displayName: 'An Phát Computer',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
   },
 };
 
@@ -412,31 +524,9 @@ export function extractKeywordFromProductUrl(rawUrl?: string | null): string {
   return extractProductKeywordFromUrl(rawUrl);
 }
 
-export function detectPlatformFromInput(
-  rawPlatform?: string | null,
+function detectPlatformFromUrlHost(
   rawUrl?: string | null
 ): SupportedEcommercePlatform | null {
-  const norm =
-    typeof rawPlatform === 'string'
-      ? rawPlatform
-          .replace(/\p{Cc}+/gu, '')
-          .trim()
-          .toLowerCase()
-      : '';
-  if (
-    norm === 'shopee' ||
-    norm === 'lazada' ||
-    norm === 'tiki' ||
-    norm === 'tiktok' ||
-    norm === 'cellphones' ||
-    norm === 'tgdd' ||
-    norm === 'fptshop' ||
-    norm === 'hoangha' ||
-    norm === 'didongviet' ||
-    norm === 'phongvu'
-  ) {
-    return norm;
-  }
   if (!rawUrl || typeof rawUrl !== 'string') return null;
   if (/\p{Cc}/u.test(rawUrl)) return null;
   const trimmedUrl = rawUrl.trim();
@@ -477,18 +567,51 @@ export function detectPlatformFromInput(
   if (isDomainOrSubdomain(host, 'tiki.vn')) return 'tiki';
   if (isDomainOrSubdomain(host, 'tiktok.com')) return 'tiktok';
   if (isDomainOrSubdomain(host, 'cellphones.com.vn')) return 'cellphones';
-  if (
-    isDomainOrSubdomain(host, 'thegioididong.com') ||
-    isDomainOrSubdomain(host, 'topzone.vn') ||
-    isDomainOrSubdomain(host, 'dienmayxanh.com')
-  ) {
-    return 'tgdd';
-  }
+  if (isDomainOrSubdomain(host, 'thegioididong.com')) return 'tgdd';
+  if (isDomainOrSubdomain(host, 'dienmayxanh.com')) return 'dienmayxanh';
+  if (isDomainOrSubdomain(host, 'topzone.vn')) return 'topzone';
   if (isDomainOrSubdomain(host, 'fptshop.com.vn')) return 'fptshop';
   if (isDomainOrSubdomain(host, 'hoanghamobile.com')) return 'hoangha';
   if (isDomainOrSubdomain(host, 'didongviet.vn')) return 'didongviet';
   if (isDomainOrSubdomain(host, 'phongvu.vn')) return 'phongvu';
+  if (isDomainOrSubdomain(host, 'gearvn.com')) return 'gearvn';
+  if (isDomainOrSubdomain(host, 'nguyenkim.com')) return 'nguyenkim';
+  if (isDomainOrSubdomain(host, 'shopdunk.com')) return 'shopdunk';
+  if (isDomainOrSubdomain(host, 'hacom.vn')) return 'hacom';
+  if (isDomainOrSubdomain(host, 'clickbuy.com.vn')) return 'clickbuy';
+  if (isDomainOrSubdomain(host, 'viettelstore.vn')) return 'viettelstore';
+  if (isDomainOrSubdomain(host, 'pico.vn')) return 'pico';
+  if (isDomainOrSubdomain(host, 'mediamart.vn')) return 'mediamart';
+  if (isDomainOrSubdomain(host, 'memoryzone.com.vn')) return 'memoryzone';
+  if (isDomainOrSubdomain(host, 'anphatpc.com.vn')) return 'anphatpc';
   return null;
+}
+
+export function detectPlatformFromInput(
+  rawPlatform?: string | null,
+  rawUrl?: string | null
+): SupportedEcommercePlatform | null {
+  const norm =
+    typeof rawPlatform === 'string'
+      ? rawPlatform
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  const urlPlatform = detectPlatformFromUrlHost(rawUrl);
+  if (Object.hasOwn(EXTENSION_CAPABILITY_MATRIX, norm)) {
+    // Older extension builds sent `platform=tgdd` for MWG sister domains
+    // `topzone.vn` and `dienmayxanh.com` before DOS/Rate#1850 promoted them to
+    // first-class platforms; upgrade seamlessly when `rawUrl` names one.
+    if (
+      norm === 'tgdd' &&
+      (urlPlatform === 'topzone' || urlPlatform === 'dienmayxanh')
+    ) {
+      return urlPlatform;
+    }
+    return norm as SupportedEcommercePlatform;
+  }
+  return urlPlatform;
 }
 
 /**
@@ -1143,16 +1266,73 @@ export function buildCandidateExternalItemIds(params: {
     tiktok: 'tts-',
     cellphones: 'cps-',
     tgdd: 'tgdd-',
+    dienmayxanh: 'dmx-',
+    topzone: 'tz-',
     fptshop: 'fpt-',
     hoangha: 'hhm-',
     didongviet: 'ddv-',
     phongvu: 'pv-',
+    gearvn: 'gearvn-',
+    nguyenkim: 'nk-',
+    shopdunk: 'shopdunk-',
+    hacom: 'hacom-',
+    clickbuy: 'cb-',
+    viettelstore: 'vts-',
+    pico: 'pico-',
+    mediamart: 'mm-',
+    memoryzone: 'mz-',
+    anphatpc: 'ap-',
   };
+  const waveUnderscorePlatforms = new Set<SupportedEcommercePlatform>([
+    'nguyenkim',
+    'shopdunk',
+    'hacom',
+    'clickbuy',
+    'viettelstore',
+    'pico',
+    'mediamart',
+    'memoryzone',
+  ]);
   const prefix = params.platform ? prefixMap[params.platform] : undefined;
   if (prefix && !cleanExternalId.startsWith(prefix)) {
     const prefixed = `${prefix}${cleanExternalId}`;
     if (isValidExternalEntityId(prefixed)) {
       candidateItemIds.add(prefixed);
+    }
+    const lowerPrefixed = `${prefix}${cleanExternalId.toLowerCase()}`;
+    if (isValidExternalEntityId(lowerPrefixed)) {
+      candidateItemIds.add(lowerPrefixed);
+    }
+    if (
+      params.platform &&
+      waveUnderscorePlatforms.has(params.platform) &&
+      cleanExternalId.includes('_')
+    ) {
+      const waveEncoded = `${prefix}${cleanExternalId.toLowerCase().replace(/_/g, '_5f')}`;
+      if (isValidExternalEntityId(waveEncoded)) {
+        candidateItemIds.add(waveEncoded);
+      }
+    }
+    if (params.platform === 'anphatpc') {
+      const apEncodedSlug = cleanExternalId
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, (ch) => {
+          const hex = ch.codePointAt(0)?.toString(16).padStart(2, '0') ?? '00';
+          return `_${hex}`;
+        });
+      const apCandidate = `${prefix}${apEncodedSlug}`;
+      if (isValidExternalEntityId(apCandidate)) {
+        candidateItemIds.add(apCandidate);
+      }
+    }
+  }
+  if (
+    (params.platform === 'topzone' || params.platform === 'dienmayxanh') &&
+    !cleanExternalId.startsWith('tgdd-')
+  ) {
+    const legacyTgdd = `tgdd-${cleanExternalId}`;
+    if (isValidExternalEntityId(legacyTgdd)) {
+      candidateItemIds.add(legacyTgdd);
     }
   }
   return Array.from(candidateItemIds);

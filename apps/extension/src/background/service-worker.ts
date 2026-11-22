@@ -1,8 +1,5 @@
 import { RATE_API_V1_ENDPOINTS } from '@repo/shared-data';
-import {
-  EXTENSION_MARKETPLACES,
-  isExtensionMarketplaceHost,
-} from '@repo/shared-data/rules';
+import { EXTENSION_MARKETPLACES } from '@repo/shared-data/rules';
 import type {
   ExtensionLookupData,
   ExtensionSettings,
@@ -153,18 +150,12 @@ async function fetchExtensionLookup(
   );
 }
 
-const SUPPORTED_CROWD_PLATFORMS = new Set([
-  'shopee',
-  'lazada',
-  'tiki',
-  'tiktok',
-  'cellphones',
-  'tgdd',
-  'fptshop',
-  'hoangha',
-  'didongviet',
-  'phongvu',
-]);
+// Opt-in ExtensionObservation v1 quarantine remains restricted to the 10
+// SQL-checked marketplaces (`EXTENSION_MARKETPLACES`) until a coordinated
+// `DOS-Me` PostgreSQL migration widens `rate.extension_observations` (#1850).
+const SUPPORTED_CROWD_PLATFORMS: ReadonlySet<string> = new Set<string>(
+  EXTENSION_MARKETPLACES
+);
 
 const QUICK_QUERY_BARE_MARKETPLACE_DOMAINS = [
   'shopee.vn',
@@ -179,6 +170,16 @@ const QUICK_QUERY_BARE_MARKETPLACE_DOMAINS = [
   'hoanghamobile.com',
   'didongviet.vn',
   'phongvu.vn',
+  'gearvn.com',
+  'nguyenkim.com',
+  'shopdunk.com',
+  'hacom.vn',
+  'clickbuy.com.vn',
+  'viettelstore.vn',
+  'pico.vn',
+  'mediamart.vn',
+  'memoryzone.com.vn',
+  'anphatpc.com.vn',
 ] as const;
 
 function normalizeQuickQueryBareMarketplaceUrl(
@@ -231,6 +232,53 @@ interface VerifiedMarketplaceUrl {
   origin: string;
 }
 
+/**
+ * Exact store hosts permitted by `manifest.json` `host_permissions` across all
+ * 22 supported Vietnamese stores. A leading `.` allows valid `[a-z0-9-]+`
+ * subdomains as well as the bare base domain.
+ */
+const ALLOWED_EXTENSION_STORE_HOSTS: Readonly<
+  Record<SupportedEcommercePlatform, readonly string[]>
+> = {
+  shopee: ['shopee.vn'],
+  lazada: ['lazada.vn', '.lazada.vn'],
+  tiki: ['tiki.vn'],
+  tiktok: ['www.tiktok.com', 'shop.tiktok.com'],
+  cellphones: ['cellphones.com.vn'],
+  tgdd: ['thegioididong.com', '.thegioididong.com'],
+  dienmayxanh: ['dienmayxanh.com', '.dienmayxanh.com'],
+  topzone: ['topzone.vn', '.topzone.vn'],
+  fptshop: ['fptshop.com.vn'],
+  hoangha: ['hoanghamobile.com'],
+  didongviet: ['didongviet.vn'],
+  phongvu: ['phongvu.vn'],
+  gearvn: ['gearvn.com', '.gearvn.com'],
+  nguyenkim: ['nguyenkim.com', '.nguyenkim.com'],
+  shopdunk: ['shopdunk.com', '.shopdunk.com'],
+  hacom: ['hacom.vn', '.hacom.vn'],
+  clickbuy: ['clickbuy.com.vn', '.clickbuy.com.vn'],
+  viettelstore: ['viettelstore.vn', '.viettelstore.vn'],
+  pico: ['pico.vn', '.pico.vn'],
+  mediamart: ['mediamart.vn', '.mediamart.vn'],
+  memoryzone: ['memoryzone.com.vn', '.memoryzone.com.vn'],
+  anphatpc: ['anphatpc.com.vn', '.anphatpc.com.vn'],
+};
+
+function isAllowedExtensionStoreHost(
+  platform: SupportedEcommercePlatform,
+  host: string
+): boolean {
+  const h = host.toLowerCase();
+  return ALLOWED_EXTENSION_STORE_HOSTS[platform].some((allowed) => {
+    if (!allowed.startsWith('.')) return h === allowed;
+    if (h === allowed.slice(1)) return true;
+    if (!h.endsWith(allowed)) return false;
+    return /^(?:[a-z0-9-]+\.)+$/.test(
+      h.slice(0, h.length - allowed.length + 1)
+    );
+  });
+}
+
 function resolvePositiveIntId(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
     ? value
@@ -264,8 +312,10 @@ function resolveMarketplaceFromHttpsUrl(
     ) {
       return null;
     }
-    for (const marketplace of EXTENSION_MARKETPLACES) {
-      if (isExtensionMarketplaceHost(marketplace, host)) {
+    for (const marketplace of Object.keys(
+      ALLOWED_EXTENSION_STORE_HOSTS
+    ) as SupportedEcommercePlatform[]) {
+      if (isAllowedExtensionStoreHost(marketplace, host)) {
         return { marketplace, origin: parsed.origin.toLowerCase() };
       }
     }
