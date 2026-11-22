@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import {
   MAX_VALID_VND_PRICE,
+  isCanonicalCategorySlug,
   resolveCompareEffectiveUserRating,
 } from '@/lib/rate-domain';
 import type { Metadata } from 'next';
@@ -64,7 +65,11 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
-import { versusHref } from '@/lib/item-compare';
+import {
+  canonicalVersusOrder,
+  isParseableVersusPair,
+  versusHref,
+} from '@/lib/item-compare';
 import { withoutSpecSheet } from '@/lib/hero-products';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
@@ -143,6 +148,159 @@ export function formatCatalogRadarPriceVnd(
   return safe != null ? formatPriceVnd(safe, locale) : '-';
 }
 
+const SAFE_PAGE_VERSUS_SLUG_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/;
+const UNSAFE_PAGE_VERSUS_SLUG_KEYS = new Set([
+  '0',
+  'null',
+  'undefined',
+  'nan',
+  'none',
+  'na',
+  'false',
+  'true',
+  '__proto__',
+  'constructor',
+  'prototype',
+  'tostring',
+  'tolocalestring',
+  'valueof',
+  'hasownproperty',
+  'isprototypeof',
+  'propertyisenumerable',
+  ...Object.getOwnPropertyNames(Object.prototype).map((k) => k.toLowerCase()),
+]);
+
+function isSafePageVersusSlug(slug: unknown): slug is string {
+  return (
+    typeof slug === 'string' &&
+    SAFE_PAGE_VERSUS_SLUG_RE.test(slug) &&
+    !slug.includes('..') &&
+    !slug.endsWith('.') &&
+    !(slug in Object.prototype) &&
+    !UNSAFE_PAGE_VERSUS_SLUG_KEYS.has(slug.toLowerCase())
+  );
+}
+
+export function lookupCatalogPageOwnSlug(
+  map: Readonly<Record<string, string>> | null | undefined,
+  slug: string
+): string | undefined {
+  if (
+    !map ||
+    typeof map !== 'object' ||
+    Array.isArray(map) ||
+    typeof slug !== 'string' ||
+    !slug ||
+    !Object.hasOwn(map, slug)
+  ) {
+    return undefined;
+  }
+  const val = map[slug];
+  return typeof val === 'string' && val ? val : undefined;
+}
+
+function canBeCatalogPageVersusSide(
+  slug: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): boolean {
+  if (typeof slug !== 'string' || !slug) return false;
+  const rawItem = lookupCatalogPageOwnSlug(itemSlugBySlug, slug);
+  if (rawItem?.toLowerCase().includes('-vs-')) return false;
+  const side =
+    isSafePageVersusSlug(rawItem) && !rawItem.toLowerCase().includes('-vs-')
+      ? rawItem
+      : slug;
+  return isSafePageVersusSlug(side) && !side.toLowerCase().includes('-vs-');
+}
+
+export function isValidCatalogPageVersusPair(
+  slugA: string,
+  slugB: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): boolean {
+  if (
+    typeof slugA !== 'string' ||
+    typeof slugB !== 'string' ||
+    !slugA ||
+    !slugB ||
+    slugA.toLowerCase() === slugB.toLowerCase()
+  ) {
+    return false;
+  }
+  if (
+    !canBeCatalogPageVersusSide(slugA, itemSlugBySlug) ||
+    !canBeCatalogPageVersusSide(slugB, itemSlugBySlug)
+  ) {
+    return false;
+  }
+  const rawItemA = lookupCatalogPageOwnSlug(itemSlugBySlug, slugA);
+  const rawItemB = lookupCatalogPageOwnSlug(itemSlugBySlug, slugB);
+  if (
+    rawItemA &&
+    rawItemB &&
+    rawItemA.toLowerCase() === rawItemB.toLowerCase()
+  ) {
+    return false;
+  }
+  const sideA =
+    isSafePageVersusSlug(rawItemA) && !rawItemA.toLowerCase().includes('-vs-')
+      ? rawItemA
+      : slugA;
+  const sideB =
+    isSafePageVersusSlug(rawItemB) && !rawItemB.toLowerCase().includes('-vs-')
+      ? rawItemB
+      : slugB;
+  if (sideA.toLowerCase() === sideB.toLowerCase()) return false;
+  const [first, second] = canonicalVersusOrder(sideA, sideB);
+  return isParseableVersusPair(first, second);
+}
+
+export function pickCatalogVersusPair<T extends { slug: string }>(
+  rows: readonly T[],
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): [T, T] | null {
+  for (let i = 0; i < rows.length; i++) {
+    const a = rows[i];
+    if (!a || !canBeCatalogPageVersusSide(a.slug, itemSlugBySlug)) continue;
+    for (let j = i + 1; j < rows.length; j++) {
+      const b = rows[j];
+      if (!b || !canBeCatalogPageVersusSide(b.slug, itemSlugBySlug)) continue;
+      if (isValidCatalogPageVersusPair(a.slug, b.slug, itemSlugBySlug)) {
+        return [a, b];
+      }
+    }
+  }
+  return null;
+}
+
+export type CatalogPriceChipKey =
+  | 'page.chipPrice'
+  | 'page.chipPriceZero'
+  | 'page.chipPriceMillion'
+  | 'page.chipPriceMillionPlus';
+
+export function formatCatalogPriceChip(
+  minPrice: number,
+  maxPrice: number,
+  maxSliderMillion: number,
+  t: (
+    key: CatalogPriceChipKey,
+    values?: Record<string, string | number>
+  ) => string
+): string {
+  const safeMin = Number.isFinite(minPrice) && minPrice > 0 ? minPrice : 0;
+  const safeMax = Number.isFinite(maxPrice) && maxPrice > 0 ? maxPrice : 0;
+  const minLabel =
+    safeMin > 0
+      ? t('page.chipPriceMillion', { amount: Math.round(safeMin / 1_000_000) })
+      : t('page.chipPriceZero');
+  const maxLabel =
+    safeMax > 0
+      ? t('page.chipPriceMillion', { amount: Math.round(safeMax / 1_000_000) })
+      : t('page.chipPriceMillionPlus', { amount: maxSliderMillion });
+  return t('page.chipPrice', { min: minLabel, max: maxLabel });
+}
+
 export function buildCatalogPageItemSlugMap(
   rows: readonly { slug: string; item_slug?: string }[]
 ): Record<string, string> {
@@ -150,8 +308,17 @@ export function buildCatalogPageItemSlugMap(
   for (const row of rows) {
     if (!row || typeof row.slug !== 'string' || !row.slug) continue;
     const itemSlug = catalogRowSlug(row);
-    if (itemSlug && itemSlug !== row.slug) {
-      map[row.slug] = itemSlug;
+    if (itemSlug && itemSlug !== row.slug && !Object.hasOwn(map, row.slug)) {
+      if (row.slug === '__proto__') {
+        Object.defineProperty(map, row.slug, {
+          value: itemSlug,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      } else {
+        map[row.slug] = itemSlug;
+      }
     }
   }
   return map;
@@ -372,18 +539,9 @@ export async function CategoryCatalogContent({
   const radarIndex = buildRadarIndex(categoryDealRadar);
   const itemSlugBySlug = buildCatalogPageItemSlugMap(products);
   const quickCompareSlugs = buildCatalogQuickCompareSlugs(products);
-  const resolveSideSlug = (slug: string): string => {
-    const mapped = itemSlugBySlug[slug];
-    return mapped && !mapped.includes('-vs-') ? mapped : slug;
-  };
-  const versusPairA = products[0];
-  const versusPairB = versusPairA
-    ? products.find(
-        (p) =>
-          p.slug !== versusPairA.slug &&
-          resolveSideSlug(p.slug) !== resolveSideSlug(versusPairA.slug)
-      )
-    : undefined;
+  const versusPair = pickCatalogVersusPair(products, itemSlugBySlug);
+  const versusPairA = versusPair?.[0];
+  const versusPairB = versusPair?.[1];
 
   const validGenuineDeals = Array.isArray(categoryDealRadar?.genuineDeals)
     ? categoryDealRadar.genuineDeals.filter(
@@ -446,14 +604,14 @@ export async function CategoryCatalogContent({
   }
 
   if (minPrice > 0 || maxPrice > 0) {
-    const minM = minPrice > 0 ? `${Math.round(minPrice / 1_000_000)}tr` : '0đ';
-    const maxM =
-      maxPrice > 0
-        ? `${Math.round(maxPrice / 1_000_000)}tr`
-        : `${schema.priceRangeMillion.max}tr+`;
     activeChips.push({
       id: 'price',
-      label: t('page.chipPrice', { min: minM, max: maxM }),
+      label: formatCatalogPriceChip(
+        minPrice,
+        maxPrice,
+        schema.priceRangeMillion.max,
+        t
+      ),
       removeHref: buildFilterHref(basePath, rawSearch, {
         minPrice: null,
         maxPrice: null,
@@ -817,31 +975,35 @@ export async function CategoryCatalogContent({
                             : t('page.quickCompare2')}
                         </Link>
                       )}
-                      {versusPairA &&
-                        versusPairB &&
-                        products[0] &&
-                        products[1] && (
-                          <IntentLink
-                            href={
-                              versusPairB === products[1] &&
-                              !itemSlugBySlug[versusPairA.slug] &&
-                              !itemSlugBySlug[versusPairB.slug]
-                                ? versusHref(products[0].slug, products[1].slug)
-                                : versusHref(
-                                    versusPairA.slug,
-                                    versusPairB.slug,
-                                    itemSlugBySlug
-                                  )
-                            }
-                            className="rate-results-link"
-                          >
-                            <BsArrowLeftRight aria-hidden="true" />
-                            {t('page.versus1v1Badge', {
-                              brandA: versusPairA.brand,
-                              brandB: versusPairB.brand,
-                            })}
-                          </IntentLink>
-                        )}
+                      {versusPairA && versusPairB && (
+                        <IntentLink
+                          href={
+                            versusPairA === products[0] &&
+                            versusPairB === products[1] &&
+                            !lookupCatalogPageOwnSlug(
+                              itemSlugBySlug,
+                              versusPairA.slug
+                            ) &&
+                            !lookupCatalogPageOwnSlug(
+                              itemSlugBySlug,
+                              versusPairB.slug
+                            )
+                              ? versusHref(products[0].slug, products[1].slug)
+                              : versusHref(
+                                  versusPairA.slug,
+                                  versusPairB.slug,
+                                  itemSlugBySlug
+                                )
+                          }
+                          className="rate-results-link"
+                        >
+                          <BsArrowLeftRight aria-hidden="true" />
+                          {t('page.versus1v1Badge', {
+                            brandA: versusPairA.brand,
+                            brandB: versusPairB.brand,
+                          })}
+                        </IntentLink>
+                      )}
                       <IntentLink
                         href={`/leaderboard?cat=${categorySlug}`}
                         className="rate-results-link"
@@ -873,7 +1035,9 @@ export async function CategoryCatalogContent({
                 <CategoryCatalogToolbar
                   categorySlug={categorySlug}
                   categoryTitle={
-                    facets.currentCategory?.name || schema.categoryTitle
+                    locale !== 'vi' && isCanonicalCategorySlug(categorySlug)
+                      ? schema.categoryTitle
+                      : facets.currentCategory?.name || schema.categoryTitle
                   }
                   products={products.map(withoutSpecSheet)}
                   dealRadar={categoryDealRadar}

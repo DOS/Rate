@@ -6,7 +6,11 @@ import { BsDownload } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import { formatNumber } from '@/lib/locale-format';
+import {
+  formatDecimal,
+  formatNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 import { displayedScore5, formatScoreFixed } from '@/lib/rating-display';
 import {
   MAX_VALID_VND_PRICE,
@@ -24,10 +28,143 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
-import { versusHref } from '@/lib/item-compare';
+import {
+  canonicalVersusOrder,
+  isParseableVersusPair,
+  versusHref,
+} from '@/lib/item-compare';
 import { catalogRowSlug, type ItemCatalogRow } from '@/lib/item-directory';
 
 const CATALOG_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+const SAFE_CATALOG_VERSUS_SLUG_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/;
+const UNSAFE_CATALOG_VERSUS_SLUG_KEYS = new Set([
+  '0',
+  'null',
+  'undefined',
+  'nan',
+  'none',
+  'na',
+  'false',
+  'true',
+  '__proto__',
+  'constructor',
+  'prototype',
+  'tostring',
+  'tolocalestring',
+  'valueof',
+  'hasownproperty',
+  'isprototypeof',
+  'propertyisenumerable',
+  ...Object.getOwnPropertyNames(Object.prototype).map((k) => k.toLowerCase()),
+]);
+
+function isSafeCatalogVersusSlug(slug: unknown): slug is string {
+  return (
+    typeof slug === 'string' &&
+    SAFE_CATALOG_VERSUS_SLUG_RE.test(slug) &&
+    !slug.includes('..') &&
+    !slug.endsWith('.') &&
+    !(slug in Object.prototype) &&
+    !UNSAFE_CATALOG_VERSUS_SLUG_KEYS.has(slug.toLowerCase())
+  );
+}
+
+export function lookupCatalogOwnSlug(
+  map: Readonly<Record<string, string>> | null | undefined,
+  slug: string
+): string | undefined {
+  if (
+    !map ||
+    typeof map !== 'object' ||
+    Array.isArray(map) ||
+    typeof slug !== 'string' ||
+    !slug ||
+    !Object.hasOwn(map, slug)
+  ) {
+    return undefined;
+  }
+  const val = map[slug];
+  return typeof val === 'string' && val ? val : undefined;
+}
+
+function setCatalogOwnSlug(
+  map: Record<string, string>,
+  slug: string,
+  value: string
+): void {
+  if (slug === '__proto__') {
+    Object.defineProperty(map, slug, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  } else {
+    map[slug] = value;
+  }
+}
+
+export function resolveCatalogVersusSideSlug(
+  slug: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): string {
+  if (typeof slug !== 'string' || !slug) return '';
+  const mapped = lookupCatalogOwnSlug(itemSlugBySlug, slug);
+  return isSafeCatalogVersusSlug(mapped) &&
+    !mapped.toLowerCase().includes('-vs-')
+    ? mapped
+    : slug;
+}
+
+function canBeCatalogVersusSide(
+  slug: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): boolean {
+  if (typeof slug !== 'string' || !slug) return false;
+  if (
+    lookupCatalogOwnSlug(itemSlugBySlug, slug)?.toLowerCase().includes('-vs-')
+  ) {
+    return false;
+  }
+  const side = resolveCatalogVersusSideSlug(slug, itemSlugBySlug);
+  return isSafeCatalogVersusSlug(side) && !side.toLowerCase().includes('-vs-');
+}
+
+export function isValidCatalogVersusPair(
+  slugA: string,
+  slugB: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): boolean {
+  if (
+    typeof slugA !== 'string' ||
+    typeof slugB !== 'string' ||
+    !slugA ||
+    !slugB ||
+    slugA.toLowerCase() === slugB.toLowerCase()
+  ) {
+    return false;
+  }
+  if (
+    !canBeCatalogVersusSide(slugA, itemSlugBySlug) ||
+    !canBeCatalogVersusSide(slugB, itemSlugBySlug)
+  ) {
+    return false;
+  }
+  const rawItemA = lookupCatalogOwnSlug(itemSlugBySlug, slugA);
+  const rawItemB = lookupCatalogOwnSlug(itemSlugBySlug, slugB);
+  if (
+    rawItemA &&
+    rawItemB &&
+    rawItemA.toLowerCase() === rawItemB.toLowerCase()
+  ) {
+    return false;
+  }
+  const sideA = resolveCatalogVersusSideSlug(slugA, itemSlugBySlug);
+  const sideB = resolveCatalogVersusSideSlug(slugB, itemSlugBySlug);
+  if (sideA.toLowerCase() === sideB.toLowerCase()) return false;
+  const [first, second] = canonicalVersusOrder(sideA, sideB);
+  return isParseableVersusPair(first, second);
+}
 
 export function sanitizeCatalogToolbarText(
   value: unknown,
@@ -85,16 +222,26 @@ export function sanitizeCatalogDownloadSlug(
   return slug || fallback;
 }
 
+export function resolveCatalogExportSlug(
+  p: { slug: string; item_slug?: string },
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): string {
+  const mapped = lookupCatalogOwnSlug(itemSlugBySlug, p.slug);
+  const raw = mapped || catalogRowSlug(p);
+  return sanitizeCatalogToolbarText(raw, '', 120);
+}
+
 export function buildCatalogJsonProductEntry(
-  p: MasterProduct,
+  p: MasterProduct & { item_slug?: string },
   rank: number,
-  signal: RadarSignal | null | undefined
+  signal: RadarSignal | null | undefined,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
 ) {
   const rawUser = resolveCompareEffectiveUserRating(p);
   const expertScore10 = resolveCompareExpertRating10(p);
   return {
     rank,
-    slug: sanitizeCatalogToolbarText(p.slug, '', 120),
+    slug: resolveCatalogExportSlug(p, itemSlugBySlug),
     name: sanitizeCatalogToolbarText(p.name, 'Unknown'),
     brand: sanitizeCatalogToolbarText(p.brand, '', 80),
     userRating: rawUser > 0 ? rawUser : null,
@@ -110,18 +257,22 @@ export function buildCatalogItemSlugMap(
   itemSlugBySlug?: Readonly<Record<string, string>> | null
 ): Record<string, string> {
   const map: Record<string, string> = {};
-  if (itemSlugBySlug) {
+  if (
+    itemSlugBySlug &&
+    typeof itemSlugBySlug === 'object' &&
+    !Array.isArray(itemSlugBySlug)
+  ) {
     for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
       if (slug && typeof itemSlug === 'string' && itemSlug) {
-        map[slug] = itemSlug;
+        setCatalogOwnSlug(map, slug, itemSlug);
       }
     }
   }
   for (const p of products) {
     if (!p || typeof p.slug !== 'string' || !p.slug) continue;
     const rowSlug = catalogRowSlug(p);
-    if (rowSlug && rowSlug !== p.slug && !map[p.slug]) {
-      map[p.slug] = rowSlug;
+    if (rowSlug && rowSlug !== p.slug && !Object.hasOwn(map, p.slug)) {
+      setCatalogOwnSlug(map, p.slug, rowSlug);
     }
   }
   return map;
@@ -131,7 +282,8 @@ export function buildCatalogCsvRow(
   p: ItemCatalogRow,
   rank: number,
   safeCategorySlug: string,
-  radar: RadarSignal | null | undefined
+  radar: RadarSignal | null | undefined,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
 ): string[] {
   const rawUser = resolveCompareEffectiveUserRating(p);
   const userRating = rawUser > 0 ? rawUser : null;
@@ -140,7 +292,7 @@ export function buildCatalogCsvRow(
   const maxPrice = sanitizeCatalogPriceVnd(p.max_price);
   return [
     String(rank),
-    sanitizeCatalogToolbarText(p.slug, '', 120),
+    resolveCatalogExportSlug(p, itemSlugBySlug),
     sanitizeCatalogToolbarText(p.name, 'Unknown'),
     sanitizeCatalogToolbarText(p.brand, '', 80),
     safeCategorySlug,
@@ -154,6 +306,86 @@ export function buildCatalogCsvRow(
     maxPrice > 0 ? String(maxPrice) : '',
     ...radarCsvCells(radar),
   ];
+}
+
+export type CatalogMarkdownKey =
+  | 'toolbar.mdTitle'
+  | 'toolbar.mdColModel'
+  | 'toolbar.mdColBrand'
+  | 'toolbar.mdColUserRating'
+  | 'toolbar.mdColExpertScore'
+  | 'toolbar.mdColAuthenticReviews'
+  | 'toolbar.mdColMinPrice'
+  | 'toolbar.mdColPriceSignal'
+  | 'toolbar.unratedText';
+
+export function buildCatalogMarkdown(
+  products: readonly ItemCatalogRow[],
+  categoryTitle: string,
+  radarFor: (slug: string) => RadarSignal | null | undefined,
+  locale: string,
+  t: (
+    key: CatalogMarkdownKey,
+    values?: Record<string, string | number>
+  ) => string
+): string {
+  const safeTitle = sanitizeCatalogToolbarText(
+    categoryTitle,
+    'smartphones',
+    120
+  );
+  const headers = [
+    '#',
+    sanitizeCatalogToolbarText(t('toolbar.mdColModel'), 'Model'),
+    sanitizeCatalogToolbarText(t('toolbar.mdColBrand'), 'Brand'),
+    sanitizeCatalogToolbarText(
+      t('toolbar.mdColUserRating'),
+      'User rating (/5.0)'
+    ),
+    sanitizeCatalogToolbarText(
+      t('toolbar.mdColExpertScore'),
+      'Expert score (/10)'
+    ),
+    sanitizeCatalogToolbarText(
+      t('toolbar.mdColAuthenticReviews'),
+      'Authentic reviews'
+    ),
+    sanitizeCatalogToolbarText(t('toolbar.mdColMinPrice'), 'Min price (VND)'),
+    sanitizeCatalogToolbarText(t('toolbar.mdColPriceSignal'), 'Price signal'),
+  ];
+  const sep = headers.map(() => '---');
+  const rows = products.map((p, idx) => {
+    const rawUser = resolveCompareEffectiveUserRating(p);
+    const userRating = rawUser > 0 ? rawUser : null;
+    const expertScore10 = resolveCompareExpertRating10(p);
+    const radar = radarFor(p.slug);
+    const minPrice = sanitizeCatalogPriceVnd(p.min_price);
+    const authReviews = sanitizeCatalogCount(
+      p.authentic_review_count || p.total_reviews || 0
+    );
+    return [
+      String(idx + 1),
+      sanitizeCatalogToolbarText(p.name, 'Unknown'),
+      sanitizeCatalogToolbarText(p.brand, '-', 80),
+      userRating != null
+        ? `${formatDecimal(displayedScore5(userRating), locale, 1)}/${formatDecimal(5, locale, 1)}`
+        : t('toolbar.unratedText'),
+      expertScore10 != null
+        ? `${formatDecimal(expertScore10, locale, 1)}/10`
+        : t('toolbar.unratedText'),
+      formatNumber(authReviews, locale),
+      minPrice > 0 ? formatPriceVnd(minPrice, locale) : '-',
+      radarMarkdownCell(radar, locale),
+    ];
+  });
+
+  return [
+    t('toolbar.mdTitle', { title: safeTitle, count: products.length }),
+    '',
+    `| ${headers.join(' | ')} |`,
+    `| ${sep.join(' | ')} |`,
+    ...rows.map((r) => `| ${r.join(' | ')} |`),
+  ].join('\n');
 }
 
 interface CategoryCatalogToolbarProps {
@@ -196,80 +428,54 @@ export default function CategoryCatalogToolbar({
     [products, itemSlugBySlug]
   );
 
-  const sideSlugFor = (slug: string): string => {
-    const mapped = resolvedItemSlugBySlug[slug];
-    return mapped && !mapped.includes('-vs-') ? mapped : slug;
-  };
+  const validCandidates = useMemo(
+    () =>
+      products.filter((p) =>
+        canBeCatalogVersusSide(p.slug, resolvedItemSlugBySlug)
+      ),
+    [products, resolvedItemSlugBySlug]
+  );
+
+  const selectableProductsA = useMemo(
+    () =>
+      validCandidates.filter((pA) =>
+        validCandidates.some((pB) =>
+          isValidCatalogVersusPair(pA.slug, pB.slug, resolvedItemSlugBySlug)
+        )
+      ),
+    [validCandidates, resolvedItemSlugBySlug]
+  );
 
   const effectiveSlugA = useMemo(() => {
-    if (slugA && products.some((p) => p.slug === slugA)) return slugA;
-    return products[0]?.slug ?? '';
-  }, [slugA, products]);
+    if (slugA && selectableProductsA.some((p) => p.slug === slugA)) {
+      return slugA;
+    }
+    return selectableProductsA[0]?.slug ?? '';
+  }, [slugA, selectableProductsA]);
 
-  const activeSideA = sideSlugFor(effectiveSlugA);
+  const selectableProductsB = useMemo(() => {
+    if (!effectiveSlugA) return [];
+    return validCandidates.filter((p) =>
+      isValidCatalogVersusPair(effectiveSlugA, p.slug, resolvedItemSlugBySlug)
+    );
+  }, [effectiveSlugA, validCandidates, resolvedItemSlugBySlug]);
 
   const effectiveSlugB = useMemo(() => {
-    if (
-      slugB &&
-      slugB !== effectiveSlugA &&
-      sideSlugFor(slugB) !== activeSideA &&
-      products.some((p) => p.slug === slugB)
-    ) {
+    if (slugB && selectableProductsB.some((p) => p.slug === slugB)) {
       return slugB;
     }
-    return (
-      products.find(
-        (p) => p.slug !== effectiveSlugA && sideSlugFor(p.slug) !== activeSideA
-      )?.slug ?? ''
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slugB, effectiveSlugA, activeSideA, products, resolvedItemSlugBySlug]);
+    return selectableProductsB[0]?.slug ?? '';
+  }, [slugB, selectableProductsB]);
 
   const handleCopyCatalogMarkdown = async () => {
     if (typeof navigator === 'undefined' || products.length === 0) return;
-    const headers = [
-      '#',
-      'Model',
-      'Brand',
-      'User Rating (/5.0)',
-      'Expert Score (/10)',
-      'Authentic Reviews',
-      'Min Price (VND)',
-      'Price signal',
-    ];
-    const sep = headers.map(() => '---');
-    const rows = products.map((p, idx) => {
-      const rawUser = resolveCompareEffectiveUserRating(p);
-      const userRating = rawUser > 0 ? rawUser : null;
-      const expertScore10 = resolveCompareExpertRating10(p);
-      const radar = radarFor(p.slug);
-      const minPrice = sanitizeCatalogPriceVnd(p.min_price);
-      const authReviews = sanitizeCatalogCount(
-        p.authentic_review_count || p.total_reviews || 0
-      );
-      return [
-        String(idx + 1),
-        sanitizeCatalogToolbarText(p.name, 'Unknown'),
-        sanitizeCatalogToolbarText(p.brand, '-', 80),
-        userRating != null
-          ? `${formatScoreFixed(displayedScore5(userRating), 1)}/5.0`
-          : t('toolbar.unratedText'),
-        expertScore10 != null
-          ? `${formatScoreFixed(expertScore10, 1)}/10`
-          : t('toolbar.unratedText'),
-        String(authReviews),
-        minPrice > 0 ? `${formatNumber(minPrice, locale)} ₫` : '-',
-        radarMarkdownCell(radar, locale),
-      ];
-    });
-
-    const md = [
-      `### 📂 Rate.vn category catalog: ${safeCategoryTitle} (${products.length} devices)`,
-      '',
-      `| ${headers.join(' | ')} |`,
-      `| ${sep.join(' | ')} |`,
-      ...rows.map((r) => `| ${r.join(' | ')} |`),
-    ].join('\n');
+    const md = buildCatalogMarkdown(
+      products,
+      safeCategoryTitle,
+      radarFor,
+      locale,
+      t
+    );
 
     try {
       await navigator.clipboard.writeText(md);
@@ -297,7 +503,13 @@ export default function CategoryCatalogToolbar({
       ...RADAR_CSV_HEADERS,
     ];
     const rows = products.map((p, idx) =>
-      buildCatalogCsvRow(p, idx + 1, safeCategorySlug, radarFor(p.slug))
+      buildCatalogCsvRow(
+        p,
+        idx + 1,
+        safeCategorySlug,
+        radarFor(p.slug),
+        resolvedItemSlugBySlug
+      )
     );
 
     const csvContent =
@@ -327,7 +539,12 @@ export default function CategoryCatalogToolbar({
       exportedAt: new Date().toISOString(),
       productCount: products.length,
       products: products.map((p, idx) =>
-        buildCatalogJsonProductEntry(p, idx + 1, radarFor(p.slug))
+        buildCatalogJsonProductEntry(
+          p,
+          idx + 1,
+          radarFor(p.slug),
+          resolvedItemSlugBySlug
+        )
       ),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -348,7 +565,13 @@ export default function CategoryCatalogToolbar({
   return (
     <div className="rate-card rate-catalog-toolbar mb-3">
       <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        {effectiveSlugA && effectiveSlugB ? (
+        {effectiveSlugA &&
+        effectiveSlugB &&
+        isValidCatalogVersusPair(
+          effectiveSlugA,
+          effectiveSlugB,
+          resolvedItemSlugBySlug
+        ) ? (
           <div className="d-flex align-items-center flex-grow-1 flex-wrap gap-2">
             <span className="rate-catalog-toolbar-label">
               {t('toolbar.quick1v1Label', { title: safeCategoryTitle })}
@@ -360,7 +583,7 @@ export default function CategoryCatalogToolbar({
               onChange={(e) => setSlugA(e.target.value)}
               aria-label={t('toolbar.selectDeviceAAria')}
             >
-              {products.map((p) => (
+              {selectableProductsA.map((p) => (
                 <option key={p.slug} value={p.slug}>
                   {p.name}
                 </option>
@@ -376,33 +599,23 @@ export default function CategoryCatalogToolbar({
               onChange={(e) => setSlugB(e.target.value)}
               aria-label={t('toolbar.selectDeviceBAria')}
             >
-              {products
-                .filter(
-                  (p) =>
-                    p.slug !== effectiveSlugA &&
-                    sideSlugFor(p.slug) !== activeSideA
-                )
-                .map((p) => (
-                  <option key={p.slug} value={p.slug}>
-                    {p.name}
-                  </option>
-                ))}
+              {selectableProductsB.map((p) => (
+                <option key={p.slug} value={p.slug}>
+                  {p.name}
+                </option>
+              ))}
             </select>
-            {effectiveSlugA &&
-              effectiveSlugB &&
-              sideSlugFor(effectiveSlugB) !== activeSideA && (
-                <Link
-                  href={versusHref(
-                    effectiveSlugA,
-                    effectiveSlugB,
-                    resolvedItemSlugBySlug
-                  )}
-                  className="btn btn-sm btn-primary fw-semibold px-3"
-                  data-testid="catalog-1v1-go-btn"
-                >
-                  {t('toolbar.versusGoBtn')}
-                </Link>
+            <Link
+              href={versusHref(
+                effectiveSlugA,
+                effectiveSlugB,
+                resolvedItemSlugBySlug
               )}
+              className="btn btn-sm btn-primary fw-semibold px-3"
+              data-testid="catalog-1v1-go-btn"
+            >
+              {t('toolbar.versusGoBtn')}
+            </Link>
           </div>
         ) : (
           <div />
