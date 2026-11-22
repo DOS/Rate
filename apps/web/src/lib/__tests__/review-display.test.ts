@@ -6,10 +6,16 @@ import { NextIntlClientProvider } from 'next-intl';
 import csMessages from '../../../locales/cs.json';
 import enMessages from '../../../locales/en.json';
 import viMessages from '../../../locales/vi.json';
+import {
+  RATING_CRITERIA_CATEGORIES,
+  getRatingCriteria,
+} from '@repo/shared-data/rules';
 import JReviewsSection, {
   buildJReviewsMarkdown,
+  normalizeReviewCriteriaRatings,
   type JReviewsSectionProps,
 } from '../../components/reviews/JReviewsSection';
+import ReviewFormV2 from '../../components/reviews/ReviewFormV2';
 import { pickClientMessages } from '../client-messages';
 import { EMPTY_RADAR_SIGNAL, type RadarSignal } from '../deal-radar';
 import {
@@ -694,11 +700,382 @@ function main() {
       v2OpenHtml,
       new RegExp(`<div id="${escapeRe(v2Match[1])}"><form[^>]*review-form-v2`)
     );
+
+    // DOS/Rate#1837: ReviewFormV2 renders Czech criterion labels on /cs across
+    // every category instead of falling back to English, and JReviewsSection
+    // drives criteriaAverages + review card badges from getRatingCriteria with
+    // legacy mapping, zero double-counting, extra valid keys, and cs comma scores.
+    const renderFormV2 = (
+      loc: 'vi' | 'en' | 'cs',
+      categorySlug?: string
+    ): string => {
+      const full =
+        loc === 'en' ? enMessages : loc === 'cs' ? csMessages : viMessages;
+      const messages = pickClientMessages(
+        full as unknown as Record<string, unknown>,
+        'productDetail'
+      );
+      const Provider = NextIntlClientProvider as React.ComponentType<{
+        locale: string;
+        messages: typeof messages;
+        timeZone: string;
+        children?: React.ReactNode;
+      }>;
+      return renderToStaticMarkup(
+        React.createElement(
+          Provider,
+          { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+          React.createElement(ReviewFormV2, {
+            masterProductId: '22222222-2222-4222-8222-222222221837',
+            productName: 'Test Product',
+            categorySlug,
+            defaultAuthorName: 'Tester',
+            onStored: () => {},
+          })
+        )
+      );
+    };
+
+    for (const cat of RATING_CRITERIA_CATEGORIES) {
+      const expectedCriteria = getRatingCriteria(cat);
+      const csFormHtml = renderFormV2('cs', cat);
+      const enFormHtml = renderFormV2('en', cat);
+      const viFormHtml = renderFormV2('vi', cat);
+      for (const crit of expectedCriteria) {
+        assert.ok(
+          csFormHtml.includes(crit.label.cs),
+          `cs ReviewFormV2 (${cat}) must render ${crit.label.cs}`
+        );
+        assert.match(
+          csFormHtml,
+          new RegExp(
+            `role="radiogroup"[^>]*aria-label="${escapeRe(crit.label.cs)}"`
+          ),
+          `cs ReviewFormV2 (${cat}) radiogroup aria-label must be Czech`
+        );
+        assert.match(
+          csFormHtml,
+          new RegExp(`aria-label="${escapeRe(crit.label.cs)}: 4,5 hvězdiček"`),
+          `cs ReviewFormV2 (${cat}) half-star radio aria-label must use Czech label and comma`
+        );
+        if (crit.label.cs !== crit.label.en) {
+          assert.ok(
+            !csFormHtml.includes(`>${crit.label.en}<`),
+            `cs ReviewFormV2 (${cat}) must not fall back to English ${crit.label.en}`
+          );
+        }
+        assert.ok(
+          enFormHtml.includes(crit.label.en),
+          `en ReviewFormV2 (${cat}) must render ${crit.label.en}`
+        );
+        assert.ok(
+          viFormHtml.includes(crit.label.vi),
+          `vi ReviewFormV2 (${cat}) must render ${crit.label.vi}`
+        );
+      }
+    }
   } finally {
     if (prevV2 === undefined)
       delete process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
     else process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2 = prevV2;
   }
+
+  // DOS/Rate#1837: normalizeReviewCriteriaRatings unit coverage.
+  assert.deepEqual(normalizeReviewCriteriaRatings('smartphones', null), {});
+  assert.deepEqual(normalizeReviewCriteriaRatings('smartphones', [1, 2]), {});
+  assert.deepEqual(
+    normalizeReviewCriteriaRatings('smartphones', {
+      screen: 4,
+      performance: 4.5,
+      camera: 5,
+      battery: 4,
+      value: 5,
+    }),
+    {
+      display: 4,
+      performance: 4.5,
+      camera: 5,
+      battery: 4,
+      value: 5,
+    }
+  );
+  // Canonical key wins over legacy key on the same review (no double-counting).
+  assert.deepEqual(
+    normalizeReviewCriteriaRatings('smartphones', {
+      display: 4.5,
+      screen: 2,
+      value: 5,
+    }),
+    { display: 4.5, value: 5 }
+  );
+  assert.deepEqual(
+    normalizeReviewCriteriaRatings('earbuds', {
+      sound: 4.5,
+      screen: 1.5,
+      anc: 4,
+      camera: 2,
+      performance: 5,
+      value: 5,
+    }),
+    { sound: 4.5, anc: 4, value: 5 }
+  );
+  // Legacy earbud/watch/tablet/laptop mappings drop unmapped legacy keys.
+  assert.deepEqual(
+    normalizeReviewCriteriaRatings('earbuds', {
+      screen: 4.5,
+      performance: 5,
+      camera: 4,
+      battery: 3.5,
+      value: 5,
+    }),
+    { sound: 4.5, anc: 4, battery: 3.5, value: 5 }
+  );
+  assert.deepEqual(
+    normalizeReviewCriteriaRatings('smartwatches', {
+      screen: 4,
+      performance: 5,
+      camera: 5,
+      battery: 4.5,
+      value: 5,
+    }),
+    { display: 4, battery: 4.5, value: 5 }
+  );
+  assert.deepEqual(
+    normalizeReviewCriteriaRatings('laptops', {
+      screen: 4,
+      performance: 4.5,
+      camera: 5,
+      battery: 4,
+      value: 5,
+    }),
+    { display: 4, performance: 4.5, battery: 4, value: 5 }
+  );
+  // Extra valid RatingCriterionKeys on a review are retained; bad keys/stars dropped.
+  const protoCarrier = Object.assign(Object.create({ display: 5 }), {
+    display: 4.5,
+    value: 5,
+    sound: 4.5,
+    anc: 4,
+    unknown_key: 5,
+    battery: 0,
+    camera: 6,
+    design: Number.NaN,
+  });
+  assert.deepEqual(
+    normalizeReviewCriteriaRatings('smartphones', protoCarrier),
+    { display: 4.5, value: 5, sound: 4.5, anc: 4 }
+  );
+
+  // DOS/Rate#1837: JReviewsSection SSR across earbuds, smartwatches, laptops,
+  // tablets, and smartphones in vi/en/cs.
+  const makeReview = (
+    id: string,
+    criteria_ratings: Record<string, number>,
+    helpfulness_weight = 1
+  ): ReviewItem =>
+    ({
+      id,
+      author_name: `Buyer ${id}`,
+      reviewer_type: 'user',
+      rating_star: 4.5,
+      helpfulness_weight,
+      include_in_rating: true,
+      flag_category: 'authentic',
+      verdict: 'authentic',
+      upvotes: 1,
+      downvotes: 0,
+      report_count: 0,
+      comment: 'Detailed buyer experience over several weeks of daily usage.',
+      created_at: '2026-11-20T00:00:00Z',
+      criteria_ratings,
+    }) as ReviewItem;
+
+  // 1) Earbuds v2 + legacy v1 review on /cs, /en, /vi: shows sound, anc,
+  //    comfort, calls, battery, value; never camera or screen; comma decimals on /cs.
+  const earbudReviews = [
+    makeReview('eb-v2', {
+      sound: 4.5,
+      anc: 4,
+      comfort: 4.5,
+      calls: 3.5,
+      value: 5,
+    }),
+    makeReview('eb-v1', {
+      screen: 3.5,
+      performance: 5,
+      camera: 5,
+      battery: 4.5,
+      value: 4,
+    }),
+  ];
+  const csEarbudsHtml = renderReviewsSection('cs', {
+    categorySlug: 'earbuds',
+    reviewCategorySlug: null,
+    reviews: earbudReviews,
+  });
+  for (const key of ['sound', 'anc', 'battery', 'comfort', 'calls', 'value']) {
+    assert.match(csEarbudsHtml, new RegExp(`data-criterion-card="${key}"`));
+  }
+  for (const forbidden of ['camera', 'screen', 'performance']) {
+    assert.doesNotMatch(
+      csEarbudsHtml,
+      new RegExp(`data-criterion-card="${forbidden}"`)
+    );
+    assert.doesNotMatch(
+      csEarbudsHtml,
+      new RegExp(`data-testid="review-criterion-badge-${forbidden}"`)
+    );
+  }
+  // sound average = (4.5 + 3.5) / 2 = 4,0/5; anc average = (4 + 5) / 2 = 4,5/5.
+  assert.match(
+    csEarbudsHtml,
+    /data-criterion-card="sound"[\s\S]*?Kvalita zvuku[\s\S]*?4,0\/5/
+  );
+  assert.match(
+    csEarbudsHtml,
+    /data-criterion-card="anc"[\s\S]*?Potlačení hluku[\s\S]*?4,5\/5/
+  );
+  assert.match(
+    csEarbudsHtml,
+    /data-testid="review-criterion-badge-sound"[^>]*>Kvalita zvuku: 4,5\/5 ★<\/span>/
+  );
+  assert.match(
+    csEarbudsHtml,
+    /data-testid="review-criterion-badge-comfort"[^>]*>Pohodlí při nošení: 4,5\/5 ★<\/span>/
+  );
+  assert.match(
+    csEarbudsHtml,
+    /data-testid="review-criterion-badge-calls"[^>]*>Mikrofon a hovory: 3,5\/5 ★<\/span>/
+  );
+  assert.doesNotMatch(csEarbudsHtml, /Fotoaparát/);
+  assert.doesNotMatch(csEarbudsHtml, /\d\.\d\/5/);
+
+  const enEarbudsHtml = renderReviewsSection('en', {
+    categorySlug: 'earbuds',
+    reviewCategorySlug: 'earbuds',
+    reviews: earbudReviews,
+  });
+  assert.match(
+    enEarbudsHtml,
+    /data-testid="review-criterion-badge-sound"[^>]*>Sound quality: 4\.5\/5 ★<\/span>/
+  );
+  assert.match(
+    enEarbudsHtml,
+    /data-testid="review-criterion-badge-anc"[^>]*>Noise cancelling: 4\.0\/5 ★<\/span>/
+  );
+  assert.doesNotMatch(enEarbudsHtml, /Camera/);
+
+  // 2) Smartwatches, laptops, and tablets render their category v2 criteria and
+  //    map legacy { screen: 4 } cleanly without showing camera on watches/tablets/laptops.
+  const csWatchHtml = renderReviewsSection('cs', {
+    categorySlug: 'smartwatches',
+    reviewCategorySlug: null,
+    reviews: [
+      makeReview('sw-v2', { health: 4.5, apps: 4, display: 5, value: 4.5 }),
+      makeReview('sw-v1', {
+        screen: 4,
+        performance: 5,
+        camera: 5,
+        battery: 4,
+        value: 4.5,
+      }),
+    ],
+  });
+  assert.match(
+    csWatchHtml,
+    /data-criterion-card="health"[\s\S]*?Sledování zdraví[\s\S]*?4,5\/5/
+  );
+  assert.match(
+    csWatchHtml,
+    /data-criterion-card="display"[\s\S]*?Displej[\s\S]*?4,5\/5/
+  );
+  assert.doesNotMatch(csWatchHtml, /data-criterion-card="camera"/);
+  assert.doesNotMatch(csWatchHtml, /Fotoaparát/);
+
+  const viLaptopHtml = renderReviewsSection('vi', {
+    categorySlug: 'laptops',
+    reviews: [
+      makeReview('lt-v2', {
+        performance: 5,
+        keyboard: 4.5,
+        thermals: 4,
+        design: 4.5,
+        value: 4.5,
+      }),
+      makeReview('lt-v1', { screen: 4, battery: 4.5, value: 4.5 }),
+    ],
+  });
+  assert.match(
+    viLaptopHtml,
+    /data-testid="review-criterion-badge-keyboard"[^>]*>Bàn phím và touchpad: 4\.5\/5 ★<\/span>/
+  );
+  assert.match(
+    viLaptopHtml,
+    /data-testid="review-criterion-badge-thermals"[^>]*>Tản nhiệt và độ ồn: 4\.0\/5 ★<\/span>/
+  );
+  assert.match(
+    viLaptopHtml,
+    /data-testid="review-criterion-badge-display"[^>]*>Màn hình: 4\.0\/5 ★<\/span>/
+  );
+  assert.doesNotMatch(viLaptopHtml, /data-criterion-card="camera"/);
+
+  const csTabletHtml = renderReviewsSection('cs', {
+    categorySlug: 'tablets',
+    reviews: [
+      makeReview('tb-v2', {
+        display: 4.5,
+        sound: 4.5,
+        software: 4,
+        value: 5,
+      }),
+    ],
+  });
+  assert.match(
+    csTabletHtml,
+    /data-testid="review-criterion-badge-sound"[^>]*>Reproduktory a multimédia: 4,5\/5 ★<\/span>/
+  );
+  assert.match(
+    csTabletHtml,
+    /data-testid="review-criterion-badge-software"[^>]*>Software a příslušenství: 4,0\/5 ★<\/span>/
+  );
+
+  // 3) Smartphones: no double-counting when both legacy `screen` and canonical
+  //    `display` appear on the same review, plus extra valid RatingCriterionKey
+  //    rendered on the individual review card.
+  const csPhoneMixedHtml = renderReviewsSection('cs', {
+    categorySlug: 'smartphones',
+    reviews: [
+      makeReview('ph-both', {
+        display: 4.5,
+        screen: 1.5,
+        design: 4,
+        value: 5,
+        sound: 4.5,
+      }),
+      makeReview('ph-legacy', {
+        screen: 3.5,
+        value: 5,
+      }),
+    ],
+  });
+  // display average must be (4.5 + 3.5) / 2 = 4,0/5 (never counting screen=1.5).
+  assert.match(
+    csPhoneMixedHtml,
+    /data-criterion-card="display"[\s\S]*?Displej[\s\S]*?4,0\/5/
+  );
+  assert.equal(
+    [
+      ...csPhoneMixedHtml.matchAll(
+        /data-testid="review-criterion-badge-display"/g
+      ),
+    ].length,
+    2,
+    'each review renders at most one display badge even when both display and screen exist'
+  );
+  assert.match(
+    csPhoneMixedHtml,
+    /data-testid="review-criterion-badge-sound"[^>]*>Kvalita zvuku: 4,5\/5 ★<\/span>/
+  );
 
   console.warn('✅ Review display suite passed');
 }
