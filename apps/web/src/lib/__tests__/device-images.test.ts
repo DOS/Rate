@@ -13,6 +13,7 @@ import {
   deviceImageSrcSet,
   type DeviceImageCredit,
 } from '../device-images';
+import { buildItemProductGroupNode } from '../item-page';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const devicesDir = join(here, '../../../public/img/devices');
@@ -269,6 +270,204 @@ async function main() {
       sample
     ),
     'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg'
+  );
+
+  // DOS/Rate#1819: Multi-size ProductGroup JSON-LD preserves CC BY-SA
+  // ImageObject licence/credit metadata on both ProductGroup and hasVariant.
+  const creditedHero = deviceImageJsonLd(
+    '/img/devices/sample-phone.jpg',
+    'https://rate.vn/img/devices/sample-phone.jpg',
+    sample
+  );
+  const uncreditedGallery = deviceImageJsonLd(
+    '/img/devices/apple-iphone-16-128gb.jpg',
+    'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg',
+    sample
+  );
+  const variantSample: Record<string, DeviceImageCredit> = {
+    'sample-phone-512gb': {
+      author: 'Variant Photographer',
+      sourceUrl:
+        'https://commons.wikimedia.org/wiki/File:Sample_phone_512gb.jpg',
+      license: 'CC BY-SA 4.0',
+      licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+    },
+  };
+  const variantSpecificCredited = deviceImageJsonLd(
+    '/img/devices/sample-phone-512gb.jpg',
+    'https://rate.vn/img/devices/sample-phone-512gb.jpg',
+    variantSample
+  );
+  const groupNode = buildItemProductGroupNode({
+    itemKey: 'brand:sample-phone',
+    name: 'Sample Phone',
+    brand: 'Brand',
+    canonicalUrl: 'https://rate.vn/smartphones/sample-phone',
+    description: 'Sample multi-size Item',
+    images: [
+      creditedHero,
+      uncreditedGallery,
+      '   ',
+      {},
+      { '@type': 'ImageObject', contentUrl: '   ' },
+    ],
+    variants: [
+      {
+        variantKey: '256gb',
+        label: '256GB',
+        minPrice: 19_990_000,
+        maxPrice: 21_990_000,
+        sellerCount: 4,
+      },
+      {
+        variantKey: '512gb',
+        label: '512GB',
+        minPrice: 23_990_000,
+        maxPrice: 24_990_000,
+        sellerCount: 3,
+        images: [variantSpecificCredited],
+      },
+      {
+        variantKey: '1tb',
+        label: '1TB',
+        minPrice: 0,
+        maxPrice: 0,
+        sellerCount: 0,
+      },
+    ],
+  }) as {
+    image?: unknown[];
+    hasVariant?: { sku: string; image?: unknown[] }[];
+  };
+  const expectedHeroImageObject = {
+    '@type': 'ImageObject',
+    contentUrl: 'https://rate.vn/img/devices/sample-phone.jpg',
+    creator: { '@type': 'Person', name: 'Sample Author' },
+    creditText: 'Sample Author, Wikimedia Commons, CC BY-SA 4.0',
+    license: 'https://creativecommons.org/licenses/by-sa/4.0/',
+    acquireLicensePage:
+      'https://commons.wikimedia.org/wiki/File:Sample_phone.jpg',
+  };
+  assert.deepEqual(groupNode.image, [
+    expectedHeroImageObject,
+    'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg',
+  ]);
+  assert.equal(groupNode.hasVariant?.length, 2);
+  assert.deepEqual(
+    groupNode.hasVariant![0]!.image,
+    [
+      expectedHeroImageObject,
+      'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg',
+    ],
+    'variant without custom images inherits ProductGroup ImageObject metadata'
+  );
+  assert.deepEqual(
+    groupNode.hasVariant![1]!.image,
+    [
+      {
+        '@type': 'ImageObject',
+        contentUrl: 'https://rate.vn/img/devices/sample-phone-512gb.jpg',
+        creator: { '@type': 'Person', name: 'Variant Photographer' },
+        creditText: 'Variant Photographer, Wikimedia Commons, CC BY-SA 4.0',
+        license: 'https://creativecommons.org/licenses/by-sa/4.0/',
+        acquireLicensePage:
+          'https://commons.wikimedia.org/wiki/File:Sample_phone_512gb.jpg',
+      },
+    ],
+    'variant with its own credited photo keeps its own ImageObject licence'
+  );
+  assert.notEqual(
+    groupNode.image![0],
+    groupNode.hasVariant![0]!.image![0],
+    'ImageObject records are cloned per node'
+  );
+  assert.notEqual(
+    (groupNode.image![0] as { creator?: unknown }).creator,
+    (groupNode.hasVariant![0]!.image![0] as { creator?: unknown }).creator,
+    'nested creator objects are cloned per node'
+  );
+
+  // Fallback when default variant has no images (`input.images = []`) on a
+  // multi-variant Item: BOTH ProductGroup and priced variants without custom
+  // images inherit the fallback ImageObject, and null contentUrl is stripped.
+  const fallbackGroupNode = buildItemProductGroupNode({
+    itemKey: 'brand:sample-phone',
+    name: 'Sample Phone',
+    brand: 'Brand',
+    canonicalUrl: 'https://rate.vn/smartphones/sample-phone',
+    description: 'Sample multi-size Item',
+    images: [],
+    variants: [
+      {
+        variantKey: '256gb',
+        label: '256GB',
+        minPrice: 19_990_000,
+        maxPrice: 20_990_000,
+        sellerCount: 2,
+      },
+      {
+        variantKey: '512gb',
+        label: '512GB',
+        minPrice: 23_990_000,
+        maxPrice: 24_990_000,
+        sellerCount: 3,
+        images: [
+          {
+            '@type': 'ImageObject',
+            contentUrl: '  https://rate.vn/img/devices/sample-phone.jpg  ',
+            creator: { '@type': 'Person', name: 'Fallback Author' },
+            license: 'https://creativecommons.org/licenses/by-sa/4.0/',
+          },
+          {
+            '@type': 'ImageObject',
+            contentUrl: null,
+            url: '  https://rate.vn/img/devices/sample-phone-alt.jpg  ',
+          },
+        ],
+      },
+    ],
+  }) as {
+    image?: unknown[];
+    hasVariant?: { sku: string; image?: unknown[] }[];
+  };
+  const expectedFallbackImages = [
+    {
+      '@type': 'ImageObject',
+      contentUrl: 'https://rate.vn/img/devices/sample-phone.jpg',
+      creator: { '@type': 'Person', name: 'Fallback Author' },
+      license: 'https://creativecommons.org/licenses/by-sa/4.0/',
+    },
+    {
+      '@type': 'ImageObject',
+      url: 'https://rate.vn/img/devices/sample-phone-alt.jpg',
+    },
+  ];
+  assert.deepEqual(fallbackGroupNode.image, expectedFallbackImages);
+  assert.equal(fallbackGroupNode.hasVariant?.length, 2);
+  assert.deepEqual(
+    fallbackGroupNode.hasVariant![0]!.image,
+    expectedFallbackImages,
+    'preceding priced variant without custom images inherits fallbackGroupImages'
+  );
+  assert.deepEqual(
+    fallbackGroupNode.hasVariant![1]!.image,
+    expectedFallbackImages
+  );
+  assert.equal(
+    'contentUrl' in (fallbackGroupNode.image![1] as Record<string, unknown>),
+    false,
+    'null contentUrl is stripped when url is present'
+  );
+
+  // ProductDetailView passes jsonLdProductImages (with deviceImageJsonLd) into
+  // buildItemProductGroupNode rather than plain URL strings (#1819).
+  assert.match(
+    productSource,
+    /buildItemProductGroupNode\(\{[\s\S]*?images:\s*jsonLdProductImages,/
+  );
+  assert.doesNotMatch(
+    productSource,
+    /const jsonLdImages = usableImageUrls\(product\.images\)\.map\(absoluteUrl\)/
   );
 
   console.warn('✅ Device image renditions suite passed');
