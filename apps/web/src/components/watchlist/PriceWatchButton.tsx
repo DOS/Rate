@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
@@ -37,6 +37,64 @@ export function sanitizePriceWatchInput(
   return Math.min(MAX_VALID_VND_PRICE, Math.round(num));
 }
 
+export interface PriceWatchKeyEventLike {
+  key: string;
+  defaultPrevented?: boolean;
+  preventDefault: () => void;
+}
+
+export function handlePriceWatchPopoverEscape(
+  event: PriceWatchKeyEventLike,
+  actions: {
+    closeEditor: () => void;
+    focusTrigger: () => void;
+  }
+): boolean {
+  if (event.key !== 'Escape' || event.defaultPrevented) return false;
+  event.preventDefault();
+  actions.closeEditor();
+  actions.focusTrigger();
+  return true;
+}
+
+export function handlePriceWatchInputKeyDown(
+  event: PriceWatchKeyEventLike,
+  actions: {
+    saveTarget: () => void;
+    closeEditor: () => void;
+    focusTrigger: () => void;
+  }
+): 'saved' | 'closed' | null {
+  if (event.defaultPrevented) return null;
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    actions.saveTarget();
+    return 'saved';
+  }
+  if (handlePriceWatchPopoverEscape(event, actions)) {
+    return 'closed';
+  }
+  return null;
+}
+
+export function shouldDismissPriceWatchOnOutsidePress(
+  container: { contains: (node: Node) => boolean } | null,
+  event: {
+    target?: EventTarget | null;
+    composedPath?: () => EventTarget[];
+  }
+): boolean {
+  if (!container) return false;
+  const path =
+    typeof event.composedPath === 'function' ? event.composedPath() : [];
+  if (path.length > 0) {
+    return !path.includes(container as unknown as EventTarget);
+  }
+  const target = event.target as Node | null | undefined;
+  if (!target) return false;
+  return !container.contains(target);
+}
+
 interface PriceWatchButtonProps {
   slug: string;
   name: string;
@@ -45,6 +103,7 @@ interface PriceWatchButtonProps {
   thumbnail: string | null;
   currentMinPrice: number;
   size?: 'sm' | 'md';
+  defaultOpen?: boolean;
 }
 
 export default function PriceWatchButton({
@@ -55,13 +114,19 @@ export default function PriceWatchButton({
   thumbnail,
   currentMinPrice,
   size = 'md',
+  defaultOpen = false,
 }: PriceWatchButtonProps) {
   const t = useTranslations('watchlist');
   const locale = useLocale();
+  const instanceId = useId();
+  const editorId = `${instanceId}-editor`;
+  const targetInputId = `${instanceId}-target-input`;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerBtnRef = useRef<HTMLButtonElement>(null);
   const safeSlug = sanitizeWatchlistSlug(slug);
   const safeCurrentMinPrice = sanitizeWatchlistPrice(currentMinPrice);
   const [watchedItem, setWatchedItem] = useState<WatchlistItem | null>(null);
-  const [showEditor, setShowEditor] = useState(false);
+  const [showEditor, setShowEditor] = useState(Boolean(defaultOpen));
   const [targetInput, setTargetInput] = useState<number>(
     computeWatchlistTargetPrice(safeCurrentMinPrice, 5)
   );
@@ -79,6 +144,27 @@ export default function PriceWatchButton({
     sync();
     return subscribeWatchlist(sync);
   }, [safeSlug, safeCurrentMinPrice]);
+
+  useEffect(() => {
+    if (!showEditor) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (shouldDismissPriceWatchOnOutsidePress(containerRef.current, event)) {
+        setShowEditor(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      handlePriceWatchPopoverEscape(event, {
+        closeEditor: () => setShowEditor(false),
+        focusTrigger: () => triggerBtnRef.current?.focus(),
+      });
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showEditor]);
 
   const handleSave = (customTarget: number) => {
     if (!safeSlug) return;
@@ -109,9 +195,12 @@ export default function PriceWatchButton({
   const preset10Pct = computeWatchlistTargetPrice(safeCurrentMinPrice, 10);
 
   return (
-    <div className="position-relative d-inline-block">
+    <div ref={containerRef} className="position-relative d-inline-block">
       <button
+        ref={triggerBtnRef}
         type="button"
+        aria-expanded={showEditor}
+        aria-controls={editorId}
         onClick={() => setShowEditor((prev) => !prev)}
         className={`btn ${
           watchedItem ? 'btn-success text-white' : 'btn-outline-primary'
@@ -130,6 +219,7 @@ export default function PriceWatchButton({
 
       {showEditor && (
         <div
+          id={editorId}
           className="card rounded-4 position-absolute text-dark border bg-white p-3 shadow-lg"
           style={{
             zIndex: 1050,
@@ -144,7 +234,10 @@ export default function PriceWatchButton({
               type="button"
               className="btn-close small"
               style={{ fontSize: '0.65rem' }}
-              onClick={() => setShowEditor(false)}
+              onClick={() => {
+                setShowEditor(false);
+                triggerBtnRef.current?.focus();
+              }}
               aria-label={t('closeAria')}
             />
           </div>
@@ -175,8 +268,11 @@ export default function PriceWatchButton({
           </div>
 
           <div className="input-group input-group-sm mb-2">
-            <span className="input-group-text">{t('targetInputLabel')}</span>
+            <label htmlFor={targetInputId} className="input-group-text">
+              {t('targetInputLabel')}
+            </label>
             <input
+              id={targetInputId}
               type="number"
               step={resolvePriceWatchStep(safeCurrentMinPrice)}
               min={MIN_WATCHLIST_TARGET_PRICE}
@@ -186,6 +282,13 @@ export default function PriceWatchButton({
                   sanitizePriceWatchInput(e.target.value, safeCurrentMinPrice)
                 )
               }
+              onKeyDown={(e) => {
+                handlePriceWatchInputKeyDown(e, {
+                  saveTarget: () => handleSave(targetInput),
+                  closeEditor: () => setShowEditor(false),
+                  focusTrigger: () => triggerBtnRef.current?.focus(),
+                });
+              }}
               className="form-control fw-semibold"
             />
           </div>
