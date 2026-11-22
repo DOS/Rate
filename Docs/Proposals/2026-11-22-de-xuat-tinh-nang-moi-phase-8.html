@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Đề xuất Tính năng Mới Phase 8 - Rate.vn (2026-2027)</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-2: #1d2228;
+      --surface-3: #242b33;
+      --border: #2a313a;
+      --border-strong: #3a4450;
+      --text: #e8edf2;
+      --muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-text: #ff7a76;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #4ade80;
+      --green-soft: rgba(74, 222, 128, 0.13);
+      --amber: #fbbf24;
+      --amber-soft: rgba(251, 191, 36, 0.14);
+      --blue: #93c5fd;
+      --blue-soft: rgba(147, 197, 253, 0.14);
+      --purple: #c4b5fd;
+      --purple-soft: rgba(196, 181, 253, 0.14);
+      --code-bg: #0b0d0f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 32px 16px 72px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+      font-size: 15px;
+    }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 29px;
+      line-height: 1.25;
+      margin: 12px 0 10px;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+
+    h2 {
+      font-size: 21px;
+      margin: 44px 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      color: #ffffff;
+      letter-spacing: -0.01em;
+    }
+
+    h3 {
+      font-size: 17px;
+      margin: 0 0 8px;
+      color: #ffffff;
+    }
+
+    h4 {
+      font-size: 14px;
+      margin: 14px 0 6px;
+      color: #ffffff;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    p, li {
+      color: var(--text);
+    }
+
+    ul, ol {
+      padding-left: 20px;
+      margin: 6px 0;
+    }
+
+    li {
+      margin-bottom: 4px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    a {
+      color: var(--accent-text);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      overflow-wrap: anywhere;
+    }
+
+    a:hover {
+      color: #ffa19e;
+    }
+
+    code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 13px;
+      color: #f1f5f9;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .top-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      line-height: 1.4;
+    }
+
+    .badge-accent {
+      background: var(--accent-soft);
+      color: var(--accent-text);
+      border: 1px solid rgba(255, 46, 41, 0.42);
+    }
+
+    .badge-green {
+      background: var(--green-soft);
+      color: var(--green);
+      border: 1px solid rgba(74, 222, 128, 0.35);
+    }
+
+    .badge-amber {
+      background: var(--amber-soft);
+      color: var(--amber);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+    }
+
+    .badge-blue {
+      background: var(--blue-soft);
+      color: var(--blue);
+      border: 1px solid rgba(147, 197, 253, 0.35);
+    }
+
+    .badge-purple {
+      background: var(--purple-soft);
+      color: var(--purple);
+      border: 1px solid rgba(196, 181, 253, 0.35);
+    }
+
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(195px, 1fr));
+      gap: 12px;
+      margin: 18px 0 24px;
+    }
+
+    .kpi-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .kpi-box .kpi-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+
+    .kpi-box .kpi-lbl {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .pkg-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .pkg-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: border-color 0.15s ease;
+    }
+
+    .pkg-card.recommended {
+      border: 2px solid var(--accent);
+      background: linear-gradient(180deg, rgba(255, 46, 41, 0.07) 0%, var(--surface) 42%);
+    }
+
+    .pkg-card h3 {
+      margin-top: 8px;
+      font-size: 18px;
+    }
+
+    .pkg-meta {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .callout {
+      background: var(--surface);
+      border-left: 4px solid var(--accent);
+      border-top: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 16px 0;
+    }
+
+    .callout strong {
+      color: #ffffff;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin: 12px 0;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .btn-chip {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      padding: 6px 13px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn-chip:hover {
+      border-color: var(--accent-text);
+    }
+
+    .btn-chip[aria-pressed="true"] {
+      background: var(--accent-soft);
+      color: #ffffff;
+      border-color: var(--accent);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 12px 0;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 720px;
+      background: var(--surface);
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      padding: 9px 11px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th:last-child, td:last-child {
+      border-right: none;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    th {
+      background: var(--surface-2);
+      color: #ffffff;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .score-pill {
+      display: inline-block;
+      min-width: 44px;
+      text-align: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: 13px;
+      background: var(--surface-3);
+      color: #ffffff;
+      border: 1px solid var(--border-strong);
+    }
+
+    .score-pill.top {
+      background: var(--accent-soft);
+      color: var(--accent-text);
+      border-color: rgba(255, 46, 41, 0.45);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin: 16px 0;
+    }
+
+    .card.hidden-by-filter {
+      display: none;
+    }
+
+    .card-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .card-head h3 {
+      flex: 1 1 300px;
+      margin: 0;
+      font-size: 18px;
+    }
+
+    dl.spec-dl {
+      margin: 12px 0 0;
+      display: grid;
+      grid-template-columns: 175px 1fr;
+      gap: 8px 14px;
+    }
+
+    dl.spec-dl dt {
+      color: var(--muted);
+      font-size: 13.5px;
+      font-weight: 600;
+    }
+
+    dl.spec-dl dd {
+      margin: 0;
+      font-size: 14.5px;
+    }
+
+    .rec {
+      color: var(--green);
+      font-weight: 600;
+    }
+
+    .warn-text {
+      color: var(--amber);
+      font-weight: 600;
+    }
+
+    /* Self-contained Dark UI Previews */
+    .ui-preview {
+      margin-top: 14px;
+      background: #111418;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .ui-preview-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .omnibus-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+    }
+
+    .omnibus-stat {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .omnibus-stat .lbl {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .omnibus-stat .val {
+      font-size: 17px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-top: 2px;
+    }
+
+    .omnibus-stat .sub {
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .demo-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .demo-row {
+      display: grid;
+      grid-template-columns: 180px 1fr 68px;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 0;
+      border-top: 1px solid var(--border);
+      font-size: 13.5px;
+    }
+
+    .bar-track {
+      height: 9px;
+      background: var(--surface-3);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 999px;
+      transition: width 0.2s ease;
+    }
+
+    .og-mock {
+      max-width: 540px;
+      background: linear-gradient(135deg, #14181d 0%, #0f1113 100%);
+      border: 1px solid rgba(255, 46, 41, 0.45);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .og-mock-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .og-mock-price {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--green);
+    }
+
+    .anti-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }
+
+    @media (max-width: 860px) {
+      .pkg-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      h1 {
+        font-size: 24px;
+      }
+      dl.spec-dl {
+        grid-template-columns: 1fr;
+        gap: 3px;
+      }
+      dl.spec-dl dt {
+        margin-top: 8px;
+      }
+      .demo-row {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="top-badges">
+    <span class="badge badge-accent">Đề xuất Chiến lược Phase 8</span>
+    <span class="badge badge-amber">Cần JOY chọn hướng</span>
+    <span class="badge badge-blue">Issue #1861 - Chỉ nghiên cứu, chưa tạo issue con</span>
+  </div>
+
+  <h1>Brainstorm &amp; Nghiên cứu Tính năng Mới Phase 8 cho Rate.vn</h1>
+  <p class="muted">
+    Ngày 22/11/2026 - Người soạn: <code>Brand</code> (Rate Core), theo yêu cầu trực tiếp của JOY trong phiên PO (<em>"Brainstorm research tính năng mới?"</em>).
+    Tài liệu này đối chiếu các mô hình kiểm chứng giá và đánh giá thành công nhất tại châu Âu / Séc (<code>Hlídač shopů</code>, <code>Heureka.cz</code>, <code>Idealo</code>, <code>Prisjakt</code>), Mỹ / Toàn cầu (<code>RTINGS.com</code>, <code>Keepa</code>, <code>Model Context Protocol</code>) với nỗi đau thực tế của người mua đồ công nghệ tại Việt Nam trên <strong>22 hệ thống bán lẻ và sàn TMĐT</strong> vừa hợp nhất.
+    Chưa tạo bất kỳ issue backlog nào và chưa chạm tới code runtime hay database.
+  </p>
+
+  <div class="kpi-strip" aria-label="Nền tảng tài sản hiện có của Rate.vn">
+    <div class="kpi-box">
+      <div class="kpi-val">22 sàn &amp; chuỗi</div>
+      <div class="kpi-lbl">10 sàn gốc + 12 chuỗi Wave 1-3 vừa lên repo (<code>#1859</code>)</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-val">5 ngành + 3 ngôn ngữ</div>
+      <div class="kpi-lbl">Điện thoại, Tablet, Laptop, Đồng hồ, Tai nghe (<code>vi</code>, <code>en</code>, <code>cs</code>)</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-val">6 trục tin cậy v2</div>
+      <div class="kpi-lbl">Điểm Bayes (<code>k=3, mu=4.2</code>), tách rủi ro <code>DOSafe</code> và <code>Seeding</code></div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-val">23 REST API v1 + MV3</div>
+      <div class="kpi-lbl">Cache <code>withRateDataCache</code>, <code>DOS ID</code> SSO, Extension Shadow DOM</div>
+    </div>
+  </div>
+
+  <h2>0. Tóm tắt Quyết Nhanh Trong 60 Giây - 3 Gói Lộ Trình Đề Xuất</h2>
+  <p>
+    Sau khi hoàn tất nền tảng bảo mật, chuẩn hóa dữ liệu và mở rộng lên 22 chuỗi bán lẻ ở Phase 6-7, khoảng trống lớn nhất của <code>rate.vn</code> hiện nay không còn nằm ở tầng cào dữ liệu thô, mà nằm ở <strong>3 điểm bùng nổ phía người dùng cuối</strong>:
+    (1) <strong>vũ khí vạch trần giảm giá ảo mùa cao điểm</strong> (Black Friday, 12.12, Tết),
+    (2) <strong>cá nhân hóa quyết định mua + kênh lan truyền tự nhiên qua mạng xã hội và AI Agents</strong>, và
+    (3) <strong>vòng lặp giữ chân người dùng quay lại tự động</strong>.
+  </p>
+
+  <div class="pkg-grid">
+    <div class="pkg-card recommended">
+      <div>
+        <span class="badge badge-accent">Khuyến nghị chạy đầu tiên</span>
+        <h3>Gói 8A - Quick-Win &amp; Lan Truyền Tự Nhiên (Zero Migration)</h3>
+        <p class="muted">Triển khai ngay trên dữ liệu đã có sẵn trong <code>DOS/Rate</code>, không cần chờ PR migration bên <code>DOS-Me</code>, chi phí hạ tầng tăng thêm gần bằng 0.</p>
+        <ul>
+          <li><strong>F1:</strong> Kiểm toán "Giá Đáy 30 Ngày Trước Sale" chuẩn EU Omnibus &amp; Chỉ báo Mua Ngay / Chờ Sale (<code>Hlídač shopů</code> + <code>Keepa</code>).</li>
+          <li><strong>F2:</strong> Thanh trượt trọng số theo nhu cầu sử dụng cá nhân (<code>RTINGS.com</code> Custom Ratings).</li>
+          <li><strong>F3:</strong> Thẻ Sự Thật Giá &amp; Đánh Giá động (<code>Dynamic OG Image</code> + xuất ảnh 1 chạm cho Zalo, Threads, TikTok, VOZ).</li>
+          <li><strong>F4:</strong> <code>Rate Shopping MCP Server</code> (<code>/api/mcp</code> + <code>@dos/rate-mcp</code> + <code>/llms.txt</code>) đón lưu lượng trích dẫn từ AI.</li>
+        </ul>
+      </div>
+      <div class="pkg-meta">
+        <strong>Đụng DB:</strong> <code>0</code> DDL (chỉ đọc bảng/cache sẵn có)<br />
+        <strong>Khối lượng:</strong> 4 task cỡ <code>S - M</code> (~2-3 tuần)
+      </div>
+    </div>
+
+    <div class="pkg-card">
+      <div>
+        <span class="badge badge-green">Bước tiếp nối giữ chân</span>
+        <h3>Gói 8B - Vòng Lặp Cảnh Báo Chủ Động &amp; MV3 3.0</h3>
+        <p class="muted">Biến khách vãng lai tra cứu 1 lần thành người dùng gắn bó lâu dài qua tài khoản <code>DOS ID</code> và tiện ích trình duyệt MV3.</p>
+        <ul>
+          <li><strong>F5:</strong> Cảnh báo chạm giá mục tiêu, đáy lịch sử (<code>ATL</code>) &amp; có hàng lại đa kênh (Email xác minh sẵn có, mở rộng Web Push / Telegram, có bộ lọc "Chỉ shop Chính hãng").</li>
+          <li><strong>F6:</strong> MV3 Extension 3.0 - Cảnh báo chống hớ ngay trang Giỏ hàng (<code>Checkout Guard</code>), ghim cảnh báo giá 1 chạm trong Side Panel và đồng bộ M2 đủ 22 sàn (<code>#1762</code>).</li>
+        </ul>
+      </div>
+      <div class="pkg-meta">
+        <strong>Đụng DB:</strong> Nhỏ (Pha 1 Email dùng bảng <code>rate.price_alerts</code> sẵn có; Pha 2 Web Push / Telegram cần 1 PR <code>DOS-Me</code>)<br />
+        <strong>Khối lượng:</strong> 2 cụm cỡ <code>M</code> (~3-4 tuần)
+      </div>
+    </div>
+
+    <div class="pkg-card">
+      <div>
+        <span class="badge badge-purple">Hào lũy sâu thị trường VN</span>
+        <h3>Gói 8C - Giá Thực Trả VN/A, Thu Cũ &amp; Giỏ Hàng Đa Sàn</h3>
+        <p class="muted">Giải quyết nỗi đau đặc thù nhất của bán lẻ công nghệ Việt Nam mà các công cụ quốc tế không thể sao chép.</p>
+        <ul>
+          <li><strong>F7:</strong> Bộ tính "Giá Thực Trả", tách bạch Chính hãng <code>VN/A</code> vs Nhập khẩu &amp; Kiểm chứng thực tế "Thu Cũ Đổi Mới" trên 22 chuỗi.</li>
+          <li><strong>F8:</strong> Tối ưu Giỏ hàng Combo đa sàn 2-5 món (<code>Basket Optimizer</code>) kết hợp Huy hiệu Chuỗi Uy Tín 180 ngày (<code>Heureka Ověřeno</code>).</li>
+        </ul>
+      </div>
+      <div class="pkg-meta">
+        <strong>Đụng DB:</strong> Pha đầu <code>0</code> DDL (tính trên BFF); Pha sâu cần 1 PR <code>DOS-Me</code> mở rộng <code>promotions</code> / <code>origin</code><br />
+        <strong>Khối lượng:</strong> 2 cụm cỡ <code>M - L</code> (~4-5 tuần)
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Đề xuất của Brand cho JOY:</strong> Duyệt triển khai <strong>Gói 8A trước</strong> (đặc biệt là <strong>F1 + F3 + F2 + F4</strong>) ngay cho mùa cao điểm mua sắm cuối năm (Black Friday, 12.12, Giáng sinh, Tết Âm lịch) vì 100% dữ liệu nguồn đã nằm trong PostgreSQL và không bị nghẽn bởi bất kỳ bước duyệt DDL nào trên <code>DOS-Me</code>; song song chuẩn bị thiết kế chi tiết cho <strong>F5</strong> (Gói 8B).
+  </div>
+
+  <h2>1. Nghiên Cứu Benchmark Quốc Tế (EU / Séc / Mỹ) &amp; Cộng Hưởng Đa Ngôn Ngữ (<code>vi</code> / <code>en</code> / <code>cs</code>)</h2>
+  <p>
+    Điểm độc đáo của <code>rate.vn</code> là hỗ trợ gốc 3 ngôn ngữ <code>vi</code>, <code>en</code>, <code>cs</code> (1.971 khóa dịch lá trên 21 namespace mỗi ngôn ngữ). Cộng đồng người Việt tại CH Séc và châu Âu vốn rất quen thuộc với <code>Hlídač shopů</code> và <code>Heureka.cz</code>, trong khi thị trường Việt Nam đang thiếu hoàn toàn một công cụ minh bạch tương đương trên 22 chuỗi lớn (<code>Thế Giới Di Động</code>, <code>CellphoneS</code>, <code>FPT Shop</code>, <code>ShopDunk</code>, <code>TopZone</code>, <code>Di Động Việt</code>, <code>Hoàng Hà</code>, <code>Viettel Store</code>, <code>GearVN</code>, <code>HACOM</code>, <code>An Phát</code>, <code>Phong Vũ</code>, <code>MemoryZone</code>, <code>Shopee</code>, <code>Lazada</code>, <code>TikTok Shop</code>...).
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Benchmark tham chiếu</th>
+          <th>Cơ chế cốt lõi giúp họ thắng</th>
+          <th>Nỗi đau tương ứng tại Việt Nam (2026)</th>
+          <th>Cách chuyển hóa vào Rate.vn Phase 8</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Hlídač shopů</strong> (CH Séc) &amp; <strong>Chỉ thị EU Omnibus Điều 6a</strong></td>
+          <td>Bắt buộc đối chiếu mọi nhãn "Giảm X%" với <strong>mức giá thấp nhất trong 30 ngày liền trước đợt sale</strong> (không cho phép nâng giá niêm yết 2 tuần trước Black Friday rồi giảm ảo).</td>
+          <td>Trước 11.11, 12.12, Black Friday và cận Tết, nhiều gian hàng đẩy "giá gạch ngang" lên bằng giá MSRP lúc mới ra mắt cách đây 1 năm để treo biển giảm 30-45%, dù giá thực bán suốt tháng trước không đổi.</td>
+          <td><strong>F1:</strong> Hiển thị trực diện con số <code>Đáy 30 ngày trước sale</code> và <code>% Giảm giá thực tế chuẩn Omnibus</code> ngay cạnh giá gạch ngang của nhà bán.</td>
+        </tr>
+        <tr>
+          <td><strong>RTINGS.com</strong> (Mỹ / Toàn cầu)</td>
+          <td><code>Custom Ratings</code> &amp; <code>Use-Case Scoring</code>: bỏ tư duy "một điểm chung cho mọi người", cho phép kéo thanh trượt trọng số hoặc chọn kịch bản dùng (Gaming, Văn phòng, Phim ảnh) để xếp hạng lại tức thì.</td>
+          <td>Người chạy xe công nghệ cần <em>Pin + Màn sáng + Độ bền</em>, sinh viên cần <em>Đáng tiền + Hiệu năng</em>, người làm nội dung cần <em>Camera + Mic</em>. Một điểm trung bình cứng làm chìm các máy chuyên biệt rất tốt.</td>
+          <td><strong>F2:</strong> Gắn bộ Preset 1 chạm và thanh trượt <code>0% - 100%</code> trực tiếp lên bộ tiêu chí <code>getRatingCriteria</code> (<code>rating-criteria.ts</code>) của 5 ngành hàng trên <code>/leaderboard</code> và <code>/compare</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>Keepa</strong> &amp; <strong>Prisjakt</strong> (Bắc Âu / EU)</td>
+          <td>Đặt giá hiện tại vào phân vị lịch sử 90-180 ngày (Bottom 10% = Mua ngay; vừa nhích lên từ đáy = Nên chờ đợt sale kế tiếp) và cảnh báo tự động khi chạm ngưỡng.</td>
+          <td>Người mua điện thoại/laptop 15-40 triệu VND luôn phân vân "Mua hôm nay hay đợi ngày đôi / cận Tết rẻ hơn 1-2 triệu?", dẫn tới trì hoãn hoặc mua đúng đỉnh giá.</td>
+          <td><strong>F1 + F5:</strong> Nhãn phân vị lịch sử <code>Mua ngay / Giá bình thường / Đang neo cao</code> kèm nút nhận thông báo <code>DOS ID</code> khi chạm đáy.</td>
+        </tr>
+        <tr>
+          <td><strong>Heureka.cz</strong> (<em>Ověřeno zákazníky</em> &amp; <em>Skutečná sleva</em>)</td>
+          <td>Huy hiệu chứng nhận chuỗi uy tín tính trên cửa sổ trượt 180 ngày từ người mua thật, cộng công cụ gom giỏ hàng tính tổng chi phí thực tế.</td>
+          <td>Người mua không phân biệt được gian hàng Mall thật, đại lý ủy quyền Apple (AAR) với shop trộn phụ kiện / hàng dựng hoặc tách đơn nhiều nơi bị đội phí ship.</td>
+          <td><strong>F7 + F8:</strong> Huy hiệu chuỗi uy tín 180 ngày kết hợp <code>dosafe_risk_score</code> + Bộ tối ưu giỏ hàng 2-5 món trên 22 sàn.</td>
+        </tr>
+        <tr>
+          <td><strong>Shopping MCP Servers</strong> (<code>BestPrice MCP</code>, chuẩn <code>MCP 2025-2026</code>)</td>
+          <td>Cung cấp công cụ có cấu trúc (<code>search</code>, <code>price_check</code>, <code>offer_audit</code>) để Claude, ChatGPT, Gemini, Cursor, Perplexity gọi trực tiếp thay vì đoán mò giá hoặc cào HTML lỗi.</td>
+          <td>Người dùng Việt Nam ngày càng hỏi AI "Tầm 20 triệu mua laptop nào ở đâu uy tín, không bị giá ảo?", nhưng LLM hiện trả lời bằng dữ liệu cũ hoặc thiếu kiểm chứng gian hàng.</td>
+          <td><strong>F4:</strong> Mở cổng <code>/api/mcp</code> chỉ đọc trên nền cache BFF + gói mã nguồn mở <code>@dos/rate-mcp</code>, biến mọi câu trả lời AI thành nguồn dẫn link về <code>rate.vn</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>2. Ma Trận Chấm Điểm Ưu Tiên 8 Tính Năng (Lọc &amp; Sắp Xếp Tương Tác)</h2>
+  <p class="muted">
+    Điểm ưu tiên tổng hợp (thang <code>100</code>) được tính có trọng số từ: <strong>Giá trị người mua (30%)</strong> + <strong>Tác động Tăng trưởng / SEO / Lan truyền (25%)</strong> + <strong>Độ sẵn sàng dữ liệu hiện có trong repo (25%)</strong> + <strong>Tối ưu chi phí &amp; tốc độ triển khai không vướng DDL (20%)</strong>.
+  </p>
+
+  <div class="toolbar" role="region" aria-label="Bộ lọc và sắp xếp bảng tính năng">
+    <div class="filter-group" role="group" aria-label="Lọc theo gói triển khai">
+      <button type="button" class="btn-chip" data-filter="all" aria-pressed="true">Tất cả (8)</button>
+      <button type="button" class="btn-chip" data-filter="8A" aria-pressed="false">Gói 8A - Zero Migration (4)</button>
+      <button type="button" class="btn-chip" data-filter="8B" aria-pressed="false">Gói 8B - Giữ chân &amp; MV3 (2)</button>
+      <button type="button" class="btn-chip" data-filter="8C" aria-pressed="false">Gói 8C - Hào lũy VN &amp; Đa sàn (2)</button>
+    </div>
+    <div class="filter-group" role="group" aria-label="Sắp xếp bảng">
+      <button type="button" class="btn-chip" data-sort="score" aria-pressed="true">Sắp theo Điểm Ưu Tiên</button>
+      <button type="button" class="btn-chip" data-sort="effort" aria-pressed="false">Sắp theo Nhanh làm trước</button>
+      <button type="button" class="btn-chip" data-sort="growth" aria-pressed="false">Sắp theo Tăng trưởng / Viral</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="priority-table">
+      <thead>
+        <tr>
+          <th>Mã &amp; Tính năng</th>
+          <th>Gói</th>
+          <th>Giá trị người mua</th>
+          <th>Dữ liệu sẵn có</th>
+          <th>Cỡ (Size)</th>
+          <th>Cần DOS-Me DDL?</th>
+          <th>Chi phí vận hành</th>
+          <th>Hào lũy (Moat)</th>
+          <th>Điểm</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr data-pkg="8A" data-score="95" data-effort="1" data-growth="92" data-target="card-f1">
+          <td><a href="#card-f1"><strong>F1.</strong> Kiểm toán Giá Đáy 30 Ngày chuẩn EU Omnibus &amp; Chỉ báo Mua Ngay / Chờ Sale</a></td>
+          <td><span class="badge badge-accent">8A</span></td>
+          <td>Rất cao (chống bẫy sale ngày đôi, Black Friday, Tết)</td>
+          <td><strong>95%</strong> (<code>rate.price_history</code>, <code>listing_price_context</code>)</td>
+          <td><code>S</code></td>
+          <td><span class="rec">Không (0 DDL)</span></td>
+          <td><code>$0</code> (tính trong SQL/BFF cache)</td>
+          <td>Lịch sử giá thực đa sàn tích lũy theo thời gian</td>
+          <td><span class="score-pill top">95</span></td>
+        </tr>
+        <tr data-pkg="8A" data-score="92" data-effort="1" data-growth="96" data-target="card-f3">
+          <td><a href="#card-f3"><strong>F3.</strong> Thẻ Sự Thật Giá &amp; Đánh Giá động (<code>Dynamic OG</code> &amp; Xuất ảnh MXH 1 chạm)</a></td>
+          <td><span class="badge badge-accent">8A</span></td>
+          <td>Cao (tóm tắt trực quan trong 3 giây khi gửi link)</td>
+          <td><strong>100%</strong> (<code>DealRadar</code>, <code>rating_score</code>, 6 trục v2)</td>
+          <td><code>S</code></td>
+          <td><span class="rec">Không (0 DDL)</span></td>
+          <td><code>~$0</code> (Edge/Node OG cache CDN 1h-24h)</td>
+          <td>Thương hiệu thị giác lan truyền trên Zalo, VOZ, Threads, TikTok</td>
+          <td><span class="score-pill top">92</span></td>
+        </tr>
+        <tr data-pkg="8A" data-score="90" data-effort="2" data-growth="88" data-target="card-f2">
+          <td><a href="#card-f2"><strong>F2.</strong> Thanh trượt trọng số theo nhu cầu cá nhân kiểu <code>RTINGS</code></a></td>
+          <td><span class="badge badge-accent">8A</span></td>
+          <td>Rất cao (chọn đúng máy hợp gu dùng &amp; túi tiền)</td>
+          <td><strong>95%</strong> (<code>getRatingCriteria</code>, <code>criteria_scores</code>, 10 nhóm spec)</td>
+          <td><code>S - M</code></td>
+          <td><span class="rec">Không (0 DDL)</span></td>
+          <td><code>$0</code> (100% tính toán phía Client + URL state)</td>
+          <td>Ma trận tiêu chí chuẩn hóa + đánh giá thật đã lọc seeding</td>
+          <td><span class="score-pill top">90</span></td>
+        </tr>
+        <tr data-pkg="8A" data-score="88" data-effort="2" data-growth="95" data-target="card-f4">
+          <td><a href="#card-f4"><strong>F4.</strong> <code>Rate Shopping MCP Server</code> &amp; cổng trích dẫn cho AI Agents (<code>/api/mcp</code>)</a></td>
+          <td><span class="badge badge-accent">8A</span></td>
+          <td>Cao (tra giá thật 22 sàn ngay trong Claude, ChatGPT, Gemini, DOSClaw)</td>
+          <td><strong>95%</strong> (23 REST API v1 + OpenAPI 3.1 + <code>withRateDataCache</code>)</td>
+          <td><code>M</code></td>
+          <td><span class="rec">Không (0 DDL)</span></td>
+          <td><code>~$0</code> (tái sử dụng cache BFF + giới hạn tần suất)</td>
+          <td>Nền tảng đầu tiên tại VN cấp chuẩn MCP kiểm chứng giá &amp; review</td>
+          <td><span class="score-pill top">88</span></td>
+        </tr>
+        <tr data-pkg="8B" data-score="86" data-effort="3" data-growth="87" data-target="card-f5">
+          <td><a href="#card-f5"><strong>F5.</strong> Cảnh báo chạm giá mục tiêu, đáy <code>ATL</code> &amp; có hàng lại đa kênh</a></td>
+          <td><span class="badge badge-green">8B</span></td>
+          <td>Rất cao (không cần tự canh giá mỗi ngày, không bỏ lỡ đáy thật)</td>
+          <td><strong>80%</strong> (<code>rate.price_alerts</code>, <code>upsert_price_alert</code>, <code>PriceAlertEvaluator</code>)</td>
+          <td><code>M</code></td>
+          <td>Pha 1 Email: <span class="rec">0 DDL</span>; Pha 2 Push/Telegram: <span class="warn-text">1 PR DOS-Me</span></td>
+          <td>Thấp (SMTP/Resend theo sự kiện giảm giá thật, có chống dội thư)</td>
+          <td>Tỷ lệ giữ chân người dùng (Retention) gắn chặt với <code>DOS ID</code></td>
+          <td><span class="score-pill">86</span></td>
+        </tr>
+        <tr data-pkg="8B" data-score="83" data-effort="3" data-growth="84" data-target="card-f6">
+          <td><a href="#card-f6"><strong>F6.</strong> MV3 Extension 3.0: Cảnh báo trang Giỏ hàng (<code>Checkout Guard</code>) &amp; Ghim giá 1 chạm</a></td>
+          <td><span class="badge badge-green">8B</span></td>
+          <td>Cao (cứu người mua đúng giây phút sắp bấm thanh toán hớ)</td>
+          <td><strong>85%</strong> (Shadow DOM Pill 22 sàn, Side Panel, <code>#1859</code>)</td>
+          <td><code>M</code></td>
+          <td>Guard + Ghim: <span class="rec">0 DDL</span>; M2 đủ 22 sàn: chờ <code>#1762</code></td>
+          <td><code>$0</code> (gọi lookup theo phiên giỏ hàng, có cache cục bộ)</td>
+          <td>Hiện diện trực tiếp ngay tại điểm thanh toán trên 22 sàn</td>
+          <td><span class="score-pill">83</span></td>
+        </tr>
+        <tr data-pkg="8C" data-score="81" data-effort="4" data-growth="82" data-target="card-f7">
+          <td><a href="#card-f7"><strong>F7.</strong> Bộ tính "Giá Thực Trả", tách Chính hãng <code>VN/A</code> &amp; Kiểm chứng Thu Cũ Đổi Mới</a></td>
+          <td><span class="badge badge-purple">8C</span></td>
+          <td>Rất cao với flagship 20-50 triệu VND (hiểu rõ chênh lệch bảo hành &amp; trợ giá)</td>
+          <td><strong>70%</strong> (<code>ProductNormalizer</code> <code>origin</code>, <code>ProductValueCalculator</code>)</td>
+          <td><code>M - L</code></td>
+          <td>Pha 1 BFF: <span class="rec">0 DDL</span>; Pha 2 lưu bảng: <span class="warn-text">1 PR DOS-Me</span></td>
+          <td><code>$0</code> (quy tắc định danh minh bạch, không dùng LLM lúc đọc)</td>
+          <td>Am hiểu sâu luật chơi bán lẻ công nghệ nội địa Việt Nam</td>
+          <td><span class="score-pill">81</span></td>
+        </tr>
+        <tr data-pkg="8C" data-score="78" data-effort="4" data-growth="79" data-target="card-f8">
+          <td><a href="#card-f8"><strong>F8.</strong> Tối ưu Giỏ hàng Combo đa sàn (2-5 món) &amp; Huy hiệu Chuỗi Uy Tín 180 ngày</a></td>
+          <td><span class="badge badge-purple">8C</span></td>
+          <td>Cao khi sắm trọn bộ (Laptop + Màn hình/SSD/Tai nghe hoặc hệ sinh thái Apple)</td>
+          <td><strong>75%</strong> (<code>getMasterProductOffersBatch</code>, <code>v_products_with_merchant_trust</code>)</td>
+          <td><code>M - L</code></td>
+          <td>Pha 1: <span class="rec">Không (0 DDL)</span>; Huy hiệu lưu sẵn: tuỳ chọn</td>
+          <td><code>$0</code> (thuật toán quy hoạch tổ hợp nhỏ chạy trong vài mili-giây)</td>
+          <td>Kết hợp độc nhất giữa Giá tổng + Rủi ro <code>DOSafe</code> trên 22 chuỗi</td>
+          <td><span class="score-pill">78</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>3. Hồ Sơ Phân Tích Chi Tiết Từng Tính Năng (Đối Chiếu Codebase Thật)</h2>
+
+  <!-- F1 -->
+  <div class="card" id="card-f1" data-card-pkg="8A">
+    <div class="card-head">
+      <h3>F1. Kiểm toán "Giá Đáy 30 Ngày Trước Sale" chuẩn EU Omnibus &amp; Chỉ báo Mua Ngay / Chờ Sale</h3>
+      <span class="badge badge-accent">Gói 8A</span>
+      <span class="badge badge-green">0 Migration DOS-Me</span>
+      <span class="badge badge-blue">Size: S</span>
+    </div>
+    <p class="muted">Lấy cảm hứng trực tiếp từ <strong>Hlídač shopů</strong> (CH Séc - công cụ giám sát tuân thủ Điều 6a Chỉ thị EU Omnibus 2019/2161) kết hợp phân vị chu kỳ giá của <strong>Keepa</strong> và <strong>Prisjakt</strong>.</p>
+    <dl class="spec-dl">
+      <dt>Nỗi đau người mua</dt>
+      <dd>Vào dịp 11.11, Black Friday, 12.12 và cận Tết, người mua thấy biển <em>"Giảm sốc 28% - Giá gốc 34.990.000đ chỉ còn 25.190.000đ"</em> nhưng không biết thực chất suốt 30 ngày trước đó máy vốn đã bán ở mức 24.990.000đ (tức thực tế còn đắt hơn 200.000đ). Đồng thời, người mua luôn băn khoăn mức giá hôm nay đã nằm ở vùng đáy 90 ngày để xuống tiền ngay hay nên đợi đợt sale tiếp theo.</dd>
+
+      <dt>Đã có sẵn trong repo</dt>
+      <dd>
+        <ul>
+          <li>Bảng <code>rate.price_history</code> có chỉ mục BRIN trên <code>recorded_at</code> và chống trùng theo <code>observation_id</code>.</li>
+          <li>Hàm SQL <code>rate.listing_price_context</code> (<code>20261106150000_rate_listing_price_context_peer_max_history_first.sql</code>) đã tính trung vị 60 ngày, <code>peer_reference_max</code> và kiểm tra độ tuổi lịch sử tối thiểu 14 ngày cho <code>PriceAnomalyAuditor</code>.</li>
+          <li>Component <code>PriceHistorySection.tsx</code> đã vẽ biểu đồ <code>30d</code> / <code>90d</code> / <code>all</code> và gắn nhãn <code>fake_discount</code>, <code>suspicious_discount</code>, <code>genuine_deal</code>; <code>deal-radar.ts</code> đã có quy tắc từ 3 nơi bán trở lên cho nhãn đáy giá đa sàn (<code>#1145</code>, <code>#1630</code>).</li>
+        </ul>
+      </dd>
+
+      <dt>Cần xây thêm</dt>
+      <dd>
+        <ul>
+          <li><strong>Hộp kiểm toán chuẩn EU Omnibus ngay trên trang sản phẩm, <code>/deals</code> và <code>/inspect</code>:</strong> Tách bạch 3 con số minh bạch cho từng gian hàng đang treo khuyến mãi: (1) <em>Giá gạch ngang shop tự ghi</em>, (2) <em>Giá thấp nhất thực tế trong 30 ngày liền trước</em> (<code>prior_30d_min_price</code> tính từ <code>price_history</code> khi có tối thiểu 14 ngày dữ liệu), và (3) <em>Mức giảm/tăng thực chất chuẩn Omnibus</em>.</li>
+          <li><strong>Chỉ báo quyết định <code>Mua Ngay hay Chờ?</code> (Percentile 90 ngày):</strong> Tính vị trí giá tốt nhất hiện tại của sản phẩm trong dải 90 ngày (khi đủ số điểm quan sát hợp lệ): vùng <code>&lt;= P15</code> hiện nhãn xanh <em>"Vùng đáy 90 ngày - Thời điểm tốt để mua"</em>; vùng <code>P15 - P70</code> hiện <em>"Giá ổn định thị trường"</em>; vùng <code>&gt; P70</code> (hoặc vừa nảy lên sau đợt sale) hiện <em>"Đang cao hơn đáy gần nhất X đ - Nên bật cảnh báo chờ sale"</em>.</li>
+          <li><strong>Bộ lọc chiến dịch mùa sale trên <code>/deals</code>:</strong> Chế độ xem nhanh <em>"Top Giảm Thật Đợt Sale"</em> và <em>"Cảnh Báo Tăng Giá Đệm Trước Sale"</em> trên toàn bộ 22 chuỗi.</li>
+        </ul>
+      </dd>
+
+      <dt>Tác động &amp; Chi phí</dt>
+      <dd><span class="rec">Tác động truyền thông &amp; báo chí rất mạnh</span> (chủ đề "bóc phốt sale ảo ngày đôi / Black Friday bằng dữ liệu thật 22 chuỗi" cực kỳ thu hút cộng đồng công nghệ VN và kiều bào Séc). Chi phí hạ tầng: <code>$0</code>, không gọi AI, nằm gọn trong luồng đọc lịch sử giá đã cache bởi <code>RATE_CACHE_TAGS.PRICE_HISTORY</code>.</dd>
+
+      <dt>Rủi ro &amp; Chốt chặn</dt>
+      <dd>Trung thực tuyệt đối với dữ liệu thưa: nếu sản phẩm mới lên kệ hoặc chuỗi lịch sử chưa đủ 14 ngày / chưa đủ mật độ điểm đo, bắt buộc hiện rõ <em>"Chưa đủ lịch sử 30 ngày để kết luận"</em> (giống quy tắc <code>insufficient_history</code> hiện có), tuyệt đối không suy diễn gây oan cho nhà bán.</dd>
+    </dl>
+
+    <div class="ui-preview" aria-label="Minh họa giao diện kiểm toán chuẩn EU Omnibus">
+      <div class="ui-preview-title">Minh họa hiển thị trên trang sản phẩm &amp; /inspect (Dữ liệu mẫu - Giá đang bán: 27.190.000đ)</div>
+      <div class="omnibus-grid">
+        <div class="omnibus-stat">
+          <div class="lbl">Giá đang bán vs Giá gạch ngang shop ghi</div>
+          <div class="val">27.190.000đ <span class="badge badge-amber">Shop ghi -22% từ 34,99tr</span></div>
+          <div class="sub muted">34.990.000đ là giá niêm yết lúc mới ra mắt</div>
+        </div>
+        <div class="omnibus-stat">
+          <div class="lbl">Đáy thực 30 ngày trước (Chuẩn Omnibus)</div>
+          <div class="val">27.490.000đ</div>
+          <div class="sub" style="color: var(--green);">Giảm thực tế so với đáy 30 ngày: -1,1% (-300.000đ)</div>
+        </div>
+        <div class="omnibus-stat">
+          <div class="lbl">Phân vị chu kỳ 90 ngày (22 sàn)</div>
+          <div class="val" style="color: var(--green);">Top 8% Đáy Giá</div>
+          <div class="sub muted">Khuyến nghị dữ liệu: Mua ngay tại chuỗi uy tín</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- F2 -->
+  <div class="card" id="card-f2" data-card-pkg="8A">
+    <div class="card-head">
+      <h3>F2. Thanh Trượt Trọng Số Theo Nhu Cầu Cá Nhân ("Chấm Điểm Cho Riêng Bạn" kiểu RTINGS)</h3>
+      <span class="badge badge-accent">Gói 8A</span>
+      <span class="badge badge-green">0 Migration DOS-Me</span>
+      <span class="badge badge-blue">Size: S - M</span>
+    </div>
+    <p class="muted">Lấy cảm hứng từ <strong>RTINGS.com Custom Ratings &amp; Use-Case Scoring</strong> - biến bảng điểm tĩnh thành công cụ tư vấn khách quan không cần chatbot AI.</p>
+    <dl class="spec-dl">
+      <dt>Nỗi đau người mua</dt>
+      <dd>Trên bảng xếp hạng hiện tại, mỗi ngành hàng có một bộ trọng số cố định (ví dụ điện thoại: Hiệu năng 20%, Camera 20%, Pin 20%, Màn hình 15%, Thiết kế 10%, Đáng tiền 15%). Tuy nhiên, một game thủ mua máy phụ chỉ cần Hiệu năng + Pin + Tản nhiệt và không quan tâm Camera; trong khi người mua tai nghe đi máy bay lại đặt Chống ồn (<code>ANC</code>) và Đeo thoải mái lên tới 70%.</dd>
+
+      <dt>Đã có sẵn trong repo</dt>
+      <dd>
+        <ul>
+          <li><code>packages/shared-data/src/rules/rating-criteria.ts</code> (<code>RATING_CRITERIA_VERSION = 1</code>) đã định nghĩa đầy đủ danh sách tiêu chí đa ngôn ngữ (<code>vi</code>, <code>en</code>, <code>cs</code>), trọng số gốc tổng bằng 100 và ánh xạ <code>SpecGroupKey</code> cho cả 5 ngành thiết bị.</li>
+          <li>Cột <code>rate.master_products.criteria_scores</code> (<code>20261101120000_rate_criteria_ratings.sql</code>), <code>expert_criteria_scores</code>, cùng hàm <code>weightedCriteriaScore5</code> trong <code>leaderboard-engine.ts</code> và trang so sánh <code>CompareWorkspace.tsx</code> (tối đa <code>MAX_COMPARE_ITEMS = 4</code> máy) đã hoạt động trên Production.</li>
+        </ul>
+      </dd>
+
+      <dt>Cần xây thêm</dt>
+      <dd>
+        <ul>
+          <li><strong>Thanh chọn nhanh kịch bản sử dụng (1-Click Use-Case Presets) theo từng ngành hàng:</strong>
+            Điện thoại (<em>Cân bằng mặc định, Cày Game &amp; Pin trâu, Nhiếp ảnh &amp; Vlog, Bền bỉ &amp; Thực dụng</em>);
+            Laptop (<em>Văn phòng / Sinh viên di động, Lập trình &amp; Đồ họa nặng, Gaming &amp; Tản nhiệt</em>);
+            Tai nghe (<em>Nghe nhạc Audiophile, Đi làm / Chống ồn ANC, Họp online &amp; Đàm thoại</em>)...</li>
+          <li><strong>Thanh trượt tùy chỉnh trọng số <code>0% - 100%</code> (tự chuẩn hóa tổng về 100%):</strong> Tích hợp ngay trên đầu <code>/leaderboard</code>, <code>/compare</code> và trang đối đầu 1v1 <code>/compare/[versus]</code>, tự động tính lại <code>Điểm hợp nhu cầu của bạn</code> và đổi ngôi vị người thắng cuộc kèm lời giải thích toán học rõ ràng.</li>
+          <li><strong>URL có thể chia sẻ trực tiếp:</strong> Mã hóa bộ trọng số gọn trên query string (ví dụ <code>/compare/iphone-17-vs-galaxy-s26?preset=camera</code>) mà không tạo rác chỉ mục SEO (giữ <code>rel="canonical"</code> về URL gốc).</li>
+        </ul>
+      </dd>
+
+      <dt>Tác động &amp; Chi phí</dt>
+      <dd><span class="rec">Tăng mạnh thời gian tương tác trên trang (Time-on-site) và tỷ lệ chuyển đổi sang nhấp chuột gian hàng</span> trên <code>/compare</code> và <code>/leaderboard</code>. Chi phí vận hành: <code>$0</code> vì toàn bộ phép nhân ma trận chạy tức thì trên trình duyệt từ dữ liệu SSR đã tải sẵn.</dd>
+
+      <dt>Rủi ro &amp; Chốt chặn</dt>
+      <dd>Tuân thủ nghiêm quyết định thiết kế <code>#1531 D3/D9</code>: luôn giữ nguyên và hiển thị rõ <em>"Điểm chuẩn Rate.vn"</em> ở cột gốc để không gây nhầm lẫn một máy có hai số điểm khác nhau; điểm tùy chỉnh được gắn nhãn riêng <em>"Điểm theo trọng số bạn chọn"</em>; các tiêu chí chưa đủ số lượng đánh giá thật vẫn giữ trạng thái không bịa số.</dd>
+    </dl>
+
+    <div class="ui-preview" aria-label="Bản thử tương tác thanh chọn nhu cầu kiểu RTINGS">
+      <div class="ui-preview-title">Trải nghiệm thử ngay: Chọn kịch bản để xem thứ hạng 2 mẫu máy minh họa đảo chiều tức thì</div>
+      <div class="demo-presets" role="group" aria-label="Chọn kịch bản thử nghiệm">
+        <button type="button" class="btn-chip demo-preset-btn" data-preset="default" aria-pressed="true">Mặc định (Hài hòa)</button>
+        <button type="button" class="btn-chip demo-preset-btn" data-preset="gaming" aria-pressed="false">Ưu tiên Hiệu năng &amp; Pin (65%)</button>
+        <button type="button" class="btn-chip demo-preset-btn" data-preset="camera" aria-pressed="false">Ưu tiên Camera &amp; Màn hình (65%)</button>
+      </div>
+      <div id="rtings-demo-weights" class="muted" style="font-size: 12.5px; margin-bottom: 8px;">
+        Trọng số đang áp dụng: Hiệu năng 20% - Camera 20% - Pin 20% - Màn hình 15% - Thiết kế 10% - Đáng tiền 15%
+      </div>
+      <div class="demo-row">
+        <div><strong>Mẫu A (Chuyên Camera)</strong></div>
+        <div class="bar-track"><div id="demo-bar-a" class="bar-fill" style="width: 90%;"></div></div>
+        <div><strong id="demo-score-a">4.5 / 5</strong></div>
+      </div>
+      <div class="demo-row">
+        <div><strong>Mẫu B (Pin 6500mAh + Chip mạnh)</strong></div>
+        <div class="bar-track"><div id="demo-bar-b" class="bar-fill" style="width: 88%;"></div></div>
+        <div><strong id="demo-score-b">4.4 / 5</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- F3 -->
+  <div class="card" id="card-f3" data-card-pkg="8A">
+    <div class="card-head">
+      <h3>F3. Thẻ Sự Thật Giá &amp; Đánh Giá Động (Dynamic OG Image &amp; Xuất Ảnh Mạng Xã Hội 1 Chạm)</h3>
+      <span class="badge badge-accent">Gói 8A</span>
+      <span class="badge badge-green">0 Migration DOS-Me</span>
+      <span class="badge badge-blue">Size: S</span>
+    </div>
+    <p class="muted">Biến mỗi lượt dán link trên Zalo, Messenger, Facebook Group, VOZ, Threads, Telegram hay TikTok thành một tấm danh thiếp kiểm chứng giá chuyên nghiệp.</p>
+    <dl class="spec-dl">
+      <dt>Nỗi đau người mua</dt>
+      <dd>Kiểm tra thực tế codebase hiện tại: toàn bộ <code>apps/web/src/app</code> chưa có bất kỳ route <code>opengraph-image</code> hay <code>/api/og</code> nào, còn <code>ProductShareAuditButton.tsx</code> mới chỉ xuất văn bản Markdown / CSV. Khi người dùng gửi link sản phẩm hoặc kèo so sánh <code>/compare/a-vs-b</code> vào nhóm chat gia đình trên Zalo hoặc diễn đàn VOZ để hỏi ý kiến, bản xem trước chỉ hiện logo tĩnh chung chung, đánh mất hoàn toàn sức nặng thuyết phục của dữ liệu 22 sàn.</dd>
+
+      <dt>Đã có sẵn trong repo</dt>
+      <dd>
+        <ul>
+          <li><code>ProductShareAuditButton.tsx</code> đã chuẩn hóa và làm sạch toàn bộ trường dữ liệu chia sẻ (<code>sanitizeShareAuditText</code>, điểm người dùng, điểm chuyên gia, số đánh giá thật, giá thấp nhất, số nơi bán, <code>radarSignal</code>).</li>
+          <li>Next.js 16.4 hỗ trợ gốc <code>next/og</code> (<code>ImageResponse</code>) ngay trên Node/Edge runtime mà không cần cài thêm trình duyệt headless.</li>
+        </ul>
+      </dd>
+
+      <dt>Cần xây thêm</dt>
+      <dd>
+        <ul>
+          <li><strong>3 mẫu Dynamic OpenGraph PNG (<code>1200x630</code>, Dark Theme chuẩn thương hiệu <code>#0f1113</code> + điểm nhấn đỏ <code>#FF2E29</code>):</strong> (1) Trang sản phẩm (Giá thấp nhất đã kiểm chứng trên X/22 sàn + Nhãn Deal Radar + Điểm sao Bayes + <code>% đánh giá thật</code>), (2) Trang so kè <code>1v1 Versus</code> (Bảng tỷ số đối đầu 2 máy), và (3) Trang tổng hợp <code>Deal Radar</code>.</li>
+          <li><strong>Nút "Tải Ảnh Thẻ Sự Thật (4:5 / 9:16)" ngay trong menu của <code>ProductShareAuditButton</code>:</strong> Cho phép người làm nội dung review TikTok, Threads, Reels, Facebook tải ngay tấm thẻ PNG sắc nét có gắn nguồn <code>rate.vn</code> chỉ bằng 1 cú nhấp.</li>
+        </ul>
+      </dd>
+
+      <dt>Tác động &amp; Chi phí</dt>
+      <dd><span class="rec">Tăng tỷ lệ nhấp (CTR) khi chia sẻ link xã hội lên gấp nhiều lần</span> và tạo hiệu ứng quảng bá thương hiệu miễn phí mỗi khi KOL/người dùng đăng bài hỏi đáp mua máy. Chi phí: <code>~$0</code> nhờ gắn header <code>Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400</code> và tái sử dụng tag <code>productCacheTag(slug)</code>.</dd>
+
+      <dt>Rủi ro &amp; Chốt chặn</dt>
+      <dd>Bảo mật chống lạm dụng tạo ảnh hàng loạt (DoS): chỉ nhận <code>slug</code> hợp lệ có thực trong DB (không bao giờ render chuỗi văn bản tự do từ query string lên ảnh!), giới hạn tốc độ theo IP và nhúng font tiếng Việt/Séc nội bộ kích thước gọn để hiển thị đúng 100% dấu tiếng Việt và tiếng Séc.</dd>
+    </dl>
+
+    <div class="ui-preview" aria-label="Minh họa Thẻ Sự Thật OpenGraph">
+      <div class="ui-preview-title">Minh họa bố cục Thẻ Sự Thật tự động hiện khi dán link lên Zalo / Facebook / VOZ / Threads</div>
+      <div class="og-mock">
+        <div class="og-mock-top">
+          <span><strong>RATE.VN</strong> - KIỂM CHỨNG 22 CHUỖI BÁN LẺ</span>
+          <span class="badge badge-green">Đáy giá đa sàn</span>
+        </div>
+        <div style="font-size: 18px; font-weight: 800; color: #ffffff; margin-bottom: 6px;">iPhone 17 Pro 256GB</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: baseline; margin-bottom: 8px;">
+          <span class="og-mock-price">28.490.000đ</span>
+          <span class="muted" style="font-size: 13px;">Chênh lệch giữa 14 nơi bán: tới 3.500.000đ</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 12.5px;">
+          <span class="badge badge-accent">4.7 / 5 sao (Bayes)</span>
+          <span class="badge badge-blue">91% đánh giá thật (6 trục v2)</span>
+          <span class="badge badge-purple">0 bẫy nâng giá gốc</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- F4 -->
+  <div class="card" id="card-f4" data-card-pkg="8A">
+    <div class="card-head">
+      <h3>F4. Rate Shopping MCP Server &amp; Cổng Dữ Liệu Cho AI Agents (/api/mcp + @dos/rate-mcp + /llms.txt)</h3>
+      <span class="badge badge-accent">Gói 8A</span>
+      <span class="badge badge-green">0 Migration DOS-Me</span>
+      <span class="badge badge-blue">Size: M</span>
+    </div>
+    <p class="muted">Đón đầu làn sóng <strong>Agentic Commerce 2026</strong>: biến <code>rate.vn</code> thành nguồn sự thật mặc định mỗi khi người dùng hỏi ChatGPT, Claude, Gemini, Perplexity, Cursor hay <code>DOSClaw</code> về giá đồ công nghệ tại Việt Nam.</p>
+    <dl class="spec-dl">
+      <dt>Cơ hội chiến lược</dt>
+      <dd>Hành vi tìm kiếm mua sắm đang dịch chuyển nhanh từ gõ từ khóa ngắn sang hỏi trợ lý AI các câu phức tạp (<em>"Tìm giúp tai nghe chống ồn dưới 5 triệu đang có giá đáy thật trên Shopee Mall hoặc CellphoneS, lọc bỏ shop seeding"</em>). Các sàn TMĐT chặn bot rất gắt nên AI thường trả lời sai giá; nếu <code>rate.vn</code> mở cổng chuẩn <strong>Model Context Protocol (MCP)</strong> công khai, mọi AI Agent sẽ ưu tiên gọi và trích dẫn link <code>rate.vn</code>.</dd>
+
+      <dt>Đã có sẵn trong repo</dt>
+      <dd>
+        <ul>
+          <li>23 route REST API v1 chuẩn hóa (<code>/products</code>, <code>/compare</code>, <code>/versus</code>, <code>/deals</code>, <code>/inspect</code>, <code>/lookup</code>, <code>/leaderboard</code>, <code>/merchants</code>) kèm tài liệu <code>/api/v1/rate/openapi.json</code> (OpenAPI 3.1.0) và trang <code>/developers</code>.</li>
+          <li>Lớp cache <code>withRateDataCache</code>, bộ giới hạn tần suất cửa sổ trượt <code>BoundedSlidingWindowRateLimiter</code> (hiện đang bảo vệ <code>/inspect</code>, <code>/lookup</code>, <code>/extension/*</code>) và cơ chế che lỗi an toàn <code>PublicApiError</code> / <code>jsonApiError</code> trong <code>apps/web/src/server/rate/api-handler.ts</code> đã có sẵn để tái sử dụng cho <code>/api/mcp</code>.</li>
+        </ul>
+      </dd>
+
+      <dt>Cần xây thêm</dt>
+      <dd>
+        <ul>
+          <li><strong>Endpoint Streamable HTTP MCP chỉ đọc tại <code>/api/mcp</code> (không trạng thái, không cần API key cho gói đọc cơ bản có giới hạn nhịp):</strong> Cung cấp 5 tool gọn nhẹ, định kiểu chặt bằng Zod 4: <code>search_verified_catalog</code>, <code>get_22_store_offers_and_price_truth</code>, <code>compare_devices_by_use_case</code>, <code>audit_listing_url</code>, và <code>get_genuine_deals</code>.</li>
+          <li><strong>Tệp chuẩn <code>/llms.txt</code> &amp; <code>/.well-known/mcp.json</code> + gói mỏng <code>packages/rate-mcp</code>:</strong> Giúp các trình duyệt AI, thư mục MCP quốc tế (MCP Registry) và hệ sinh thái nội bộ <code>DOS.AI</code> / <code>DOSClaw</code> tự động khám phá và kết nối chỉ bằng 1 dòng cấu hình.</li>
+          <li><strong>Bắt buộc đính kèm <code>canonical_citation_url</code> và nhãn thời điểm cập nhật (<code>price_observed_at</code>)</strong> trong mọi kết quả trả về để đảm bảo lưu lượng truy cập quay về <code>rate.vn</code>.</li>
+        </ul>
+      </dd>
+
+      <dt>Tác động &amp; Chi phí</dt>
+      <dd><span class="rec">Kênh thu hút lưu lượng tự nhiên mới (AI SEO / GEO) với chi phí marketing bằng 0</span>, đồng thời khẳng định vị thế Open-Core hiện đại của hệ sinh thái DOS trên GitHub. Chi phí DB gần như không đổi vì 100% tool MCP gọi lại các hàm đọc đã bọc <code>withRateDataCache</code> (không mở truy vấn tùy ý).</dd>
+
+      <dt>Rủi ro &amp; Chốt chặn</dt>
+      <dd>Chỉ mở quyền <strong>READ-ONLY</strong> trên dữ liệu công khai đã kiểm duyệt; áp trần kích thước request body, giới hạn số kết quả mỗi lần gọi (tối đa 10 mục) và áp rate-limit theo IP/token để ngăn đối thủ dùng MCP hút cạn toàn bộ cơ sở dữ liệu (anti-scraping).</dd>
+    </dl>
+  </div>
+
+  <!-- F5 -->
+  <div class="card" id="card-f5" data-card-pkg="8B">
+    <div class="card-head">
+      <h3>F5. Cảnh Báo Chạm Giá Mục Tiêu, Đáy Lịch Sử (ATL) &amp; Có Hàng Lại Đa Kênh</h3>
+      <span class="badge badge-green">Gói 8B</span>
+      <span class="badge badge-amber">Pha 1: 0 DDL / Pha 2: 1 PR DOS-Me</span>
+      <span class="badge badge-blue">Size: M</span>
+    </div>
+    <p class="muted">Khép kín vòng lặp giữ chân người dùng theo mô hình <strong>Keepa</strong> và <strong>Idealo</strong>, tận dụng hạ tầng cảnh báo giá đã xây xong 80% trong DB.</p>
+    <dl class="spec-dl">
+      <dt>Nỗi đau người mua</dt>
+      <dd>Hiện tại người dùng đã đăng nhập <code>DOS ID</code> có thể lưu mức giá mong muốn trên <code>/watchlist</code> (lưu vào bảng <code>rate.price_alerts</code> qua RPC <code>rate.upsert_price_alert</code>, tối đa 100 cảnh báo/người), và phía <code>DOS/Rate-Services</code> đã có <code>PriceAlertEvaluator</code>. Tuy nhiên, người mua vẫn thiếu trải nghiệm nhận thông báo chủ động tinh gọn, công tắc <em>"Chỉ báo khi shop Chính hãng giảm giá"</em> (tránh bị đánh thức bởi giá mồi của shop rủi ro cao) và nút hủy đăng ký 1 chạm.</dd>
+
+      <dt>Đã có sẵn trong repo</dt>
+      <dd>
+        <ul>
+          <li>Bảng <code>rate.price_alerts</code> + khóa bảo mật <code>20261018120000_rate_price_alert_auth_gate.sql</code> (bắt buộc email đã xác minh trong <code>auth.users</code>, khóa chống đua <code>pg_advisory_xact_lock</code>, cột <code>last_triggered_at</code>, đa ngôn ngữ <code>vi</code>/<code>en</code>/<code>cs</code>).</li>
+          <li>API <code>GET/POST /api/v1/rate/watchlist</code> và giao diện <code>WatchlistWorkspace.tsx</code> + xác thực <code>RateAuthPortal.tsx</code>.</li>
+        </ul>
+      </dd>
+
+      <dt>Cần xây thêm</dt>
+      <dd>
+        <ul>
+          <li><strong>Pha 1 (Không cần DDL):</strong> Hoàn thiện luồng gửi Email thông báo đa ngôn ngữ (<code>vi</code>, <code>en</code>, <code>cs</code>) từ worker khi <code>current_min_price &lt;= target_price</code> tại gian hàng hợp lệ (không phải giá mồi, <code>in_stock</code>), có thời gian nghỉ chống gửi lặp (ví dụ tối thiểu 7 ngày cho cùng một mức giá) và link hủy theo chuẩn <code>RFC 8058 List-Unsubscribe</code> ký bằng HMAC.</li>
+          <li><strong>Pha 2 (Mở rộng qua 1 PR <code>DOS-Me</code>):</strong> Thêm tùy chọn <code>official_only</code> (chỉ báo chuỗi <code>is_official = true</code> và <code>threat_risk_score &lt;= 20</code>), <code>notify_on_atl</code> (báo ngay khi lập đáy 90 ngày dù chưa chạm số gõ tay), cảnh báo <em>"Có hàng trở lại"</em> cho các mẫu cháy hàng đợt đầu (như iPhone Pro Max mới ra mắt), cùng kênh <strong>Web Push (PWA)</strong> và <strong>Telegram Bot liên kết DOS ID</strong>.</li>
+        </ul>
+      </dd>
+
+      <dt>Tác động &amp; Chi phí</dt>
+      <dd><span class="rec">Biến Rate.vn từ trang tra cứu một lần thành thói quen quay lại hàng tháng</span>, đồng thời thúc đẩy tỷ lệ đăng ký tài khoản <code>DOS ID</code> thật có xác minh email. Chi phí gửi email rất thấp vì chỉ phát sinh khi có biến động giảm giá thực sự vượt ngưỡng.</dd>
+
+      <dt>Rủi ro &amp; Chốt chặn</dt>
+      <dd>Tuyệt đối không cho phép nhập email của người khác (đã được RPC <code>upsert_price_alert</code> khóa chặt theo <code>auth.uid()</code>); kiểm tra nghiêm uy tín tên miền gửi thư (SPF, DKIM, DMARC) và tự động tắt cảnh báo nếu email bị trả lại (bounce).</dd>
+    </dl>
+  </div>
+
+  <!-- F6 -->
+  <div class="card" id="card-f6" data-card-pkg="8B">
+    <div class="card-head">
+      <h3>F6. MV3 Extension 3.0: Cảnh Báo Giỏ Hàng (Checkout Guard) &amp; Ghim Giá Mục Tiêu 1 Chạm</h3>
+      <span class="badge badge-green">Gói 8B</span>
+      <span class="badge badge-green">0 DDL cho Guard &amp; Ghim</span>
+      <span class="badge badge-blue">Size: M</span>
+    </div>
+    <p class="muted">Nâng cấp tiện ích trình duyệt Chrome MV3 vừa được mở rộng lên 22 chuỗi ở <code>#1859</code> để bảo vệ người mua ngay tại bước thanh toán.</p>
+    <dl class="spec-dl">
+      <dt>Hiện trạng trung thực</dt>
+      <dd>Tiện ích MV3 hiện tại (<code>apps/extension/src/content/content-script.ts</code>) <strong>đã có sẵn</strong> viên thuốc nổi (Shadow DOM Floating Trust Pill) trên trang chi tiết sản phẩm của cả 22 sàn, hiển thị câu <code>pillCheaperAt</code> (<em>"Rẻ hơn tại X nơi, tiết kiệm Y đ"</em>), cờ <code>radar-trap</code> và điểm tin cậy. Điểm còn thiếu là: (1) khi người mua đi thẳng từ quảng cáo vào trang Giỏ hàng / Thanh toán thì chưa có cảnh báo, (2) trong Side Panel chưa có nút bấm 1 chạm để đặt cảnh báo giá mà phải mở tab web mới, và (3) luồng đóng góp quan sát giá M2 mới mở cho 10 sàn gốc, còn 12 chuỗi mới đang chờ mở rộng ràng buộc SQL ở <code>#1762</code>.</dd>
+
+      <dt>Cần xây thêm</dt>
+      <dd>
+        <ul>
+          <li><strong>Chế độ <code>Checkout Price-Trap Guard</code> (không xâm lấn, tôn trọng quyền riêng tư):</strong> Khi người dùng ở trang giỏ hàng của 1 trong 22 chuỗi và sắp thanh toán một thiết bị đang bị đánh dấu <code>inflated_fake_sale</code> hoặc đắt hơn chuỗi chính hãng khác từ <code>&gt;= 5%</code> (hoặc <code>&gt;= 500.000đ</code>), hiển thị một dải thông báo gọn có thể tắt: chỉ rõ chuỗi chính hãng nào đang còn hàng rẻ hơn bao nhiêu tiền.</li>
+          <li><strong>Ghim Cảnh Báo Giá 1 chạm ngay trong Side Panel:</strong> Cho phép người dùng đã đăng nhập gắn mức giá mong muốn (ví dụ <em>"Báo tôi khi giảm thêm 5%"</em>) qua <code>POST /api/v1/rate/watchlist</code> ngay trong Side Panel mà không rời trang mua sắm.</li>
+          <li><strong>Hoàn tất đồng bộ 22/22 sàn cho M2 Crowd Observation (phối hợp <code>#1762</code> &amp; <code>#1606</code>):</strong> Sau khi JOY duyệt PR mở rộng danh sách sàn trong SQL <code>DOS-Me</code>, toàn bộ 12 chuỗi điện máy và PC mới (<code>GearVN</code>, <code>HACOM</code>, <code>An Phát</code>, <code>ShopDunk</code>, <code>TopZone</code>, <code>Điện Máy Xanh</code>...) sẽ có độ tươi giá thời gian thực ngang hàng 10 sàn đầu.</li>
+        </ul>
+      </dd>
+
+      <dt>Tác động &amp; Chi phí</dt>
+      <dd><span class="rec">Tạo khoảnh khắc "Rate.vn vừa cứu mình khỏi mất oan 1,5 triệu đồng"</span> - động lực mạnh nhất để người dùng đánh giá 5 sao trên Chrome Web Store và giới thiệu bạn bè. Không cần xin thêm bất kỳ quyền nhạy cảm nào trong <code>manifest.json</code> (giữ nguyên chỉ <code>storage</code>, <code>sidePanel</code> và 38 mẫu URL <code>host_permissions</code> hiện có của 22 sàn và <code>rate.vn</code>).</dd>
+
+      <dt>Rủi ro &amp; Chốt chặn</dt>
+      <dd>Không bao giờ đọc thông tin cá nhân, địa chỉ giao hàng, số điện thoại hay thẻ thanh toán trên trang checkout (chỉ trích xuất mã sản phẩm/URL và đơn giá niêm yết của món hàng bằng bộ lọc DOM an toàn sẵn có); có công tắc tắt riêng cho trang giỏ hàng trong phần cài đặt tiện ích.</dd>
+    </dl>
+  </div>
+
+  <!-- F7 -->
+  <div class="card" id="card-f7" data-card-pkg="8C">
+    <div class="card-head">
+      <h3>F7. Bộ Tính "Giá Thực Trả", Tách Bạch Chính Hãng VN/A &amp; Kiểm Chứng Thu Cũ Đổi Mới</h3>
+      <span class="badge badge-purple">Gói 8C</span>
+      <span class="badge badge-amber">Pha 1: 0 DDL / Pha 2: 1 PR DOS-Me</span>
+      <span class="badge badge-blue">Size: M - L</span>
+    </div>
+    <p class="muted">Giải quyết vùng mù lớn nhất của thị trường bán lẻ thiết bị công nghệ Việt Nam khi so sánh giữa các chuỗi lớn (<code>TGDĐ</code>, <code>FPT Shop</code>, <code>CellphoneS</code>, <code>ShopDunk</code>, <code>TopZone</code>) với các cửa hàng giá rẻ và sàn TMĐT.</p>
+    <dl class="spec-dl">
+      <dt>Nỗi đau người mua</dt>
+      <dd>Tại Việt Nam, cùng một chiếc iPhone hoặc MacBook có thể chênh nhau 3 triệu VND giữa 2 nơi bán nhưng bản chất khác nhau: một bên là hàng chính hãng <code>VN/A</code> nguyên seal xuất hóa đơn VAT đầy đủ và bảo hành ủy quyền 12 tháng, bên kia là hàng nhập khẩu hoặc đã kích hoạt bảo hành điện tử trước. Thêm vào đó, các biển quảng cáo <em>"Thu cũ đổi mới trợ giá 3 triệu"</em> thường tính trên điều kiện máy cũ "Loại 1 hoàn hảo 100%", khiến khách mang máy ra cửa hàng hay bị trừ tiền xước nhẹ/chai pin xuống Loại 2-3 rất hụt hẫng.</dd>
+
+      <dt>Đã có sẵn trong repo</dt>
+      <dd>
+        <ul>
+          <li><code>ProductNormalizer</code> (<code>apps/importer/src/shopee/product-normalizer.ts</code>) đã có kiểu phân loại <code>ProductOrigin = 'official_vna' | 'imported' | 'unknown'</code> và chặn hàng cũ <code>used</code> ngay từ đầu vào (<code>#1430</code>, <code>#1561</code>).</li>
+          <li><code>ProductValueCalculator.tsx</code> đã có công cụ tính chi phí sở hữu thực tế theo chu kỳ 12 / 24 / 36 tháng kèm tỷ lệ giữ giá bán lại (<code>estimateResaleRetentionRatio</code>).</li>
+          <li>Bảng <code>rate.promotions</code> đã tồn tại trong schema nền (<code>20261005130001_rate_platform_tables.sql</code>).</li>
+        </ul>
+      </dd>
+
+      <dt>Cần xây thêm</dt>
+      <dd>
+        <ul>
+          <li><strong>Nhãn minh bạch Nguồn gốc &amp; Bảo hành trên bảng so sánh 22 nơi bán (<code>ProductOffersExplorer.tsx</code>):</strong> Gắn huy hiệu rõ ràng <em>"Đại lý ủy quyền / Chính hãng VAT"</em>, <em>"Gian hàng Mall trên sàn"</em>, hoặc <em>"Cửa hàng độc lập - Kiểm tra kỹ điều kiện kích hoạt bảo hành"</em> kèm bộ lọc nhanh.</li>
+          <li><strong>Mô-đun mở rộng "Kiểm chứng Thu Cũ Đổi Mới vs Tự Bán Lại" ngay trong <code>ProductValueCalculator</code>:</strong> Cho người mua chọn tình trạng máy cũ thực tế (Đẹp không tì vết / Xước dăm nhẹ / Pin dưới 85%) để so sánh minh bạch giữa phương án mang ra chuỗi đổi nhanh (tiện, an toàn nhưng có hệ số khấu trừ ngoại hình) và phương án tự bán lại + mua đứt ở chuỗi đang có đáy giá trên <code>rate.vn</code>.</li>
+        </ul>
+      </dd>
+
+      <dt>Tác động &amp; Chi phí</dt>
+      <dd><span class="rec">Tạo lợi thế cạnh tranh bản địa hóa sâu sắc</span> mà không một trang so sánh giá nước ngoài hay công cụ AI chung chung nào có được. Chi phí vận hành: <code>$0</code> cho Pha 1.</dd>
+
+      <dt>Rủi ro &amp; Chốt chặn</dt>
+      <dd>Không bao giờ khẳng định con số định giá thu cũ là cam kết của nhà bán lẻ: ghi rõ nhãn <em>"Ước tính tham khảo theo khung khấu trừ phổ biến - Giá thu thực tế phụ thuộc thẩm định trực tiếp tại quầy"</em> để đảm bảo tính chuẩn xác pháp lý và trung thực với người dùng.</dd>
+    </dl>
+  </div>
+
+  <!-- F8 -->
+  <div class="card" id="card-f8" data-card-pkg="8C">
+    <div class="card-head">
+      <h3>F8. Tối Ưu Giỏ Hàng Combo Đa Sàn (2-5 Món) &amp; Huy Hiệu Chuỗi Uy Tín 180 Ngày</h3>
+      <span class="badge badge-purple">Gói 8C</span>
+      <span class="badge badge-green">Pha 1: 0 Migration DOS-Me</span>
+      <span class="badge badge-blue">Size: M - L</span>
+    </div>
+    <p class="muted">Kết hợp bài toán tối ưu giỏ hàng đa nhà bán của <strong>Prisjakt / BestPrice</strong> với chương trình chứng nhận nhà bán hàng tin cậy 180 ngày của <strong>Heureka.cz (Ověřeno zákazníky)</strong>.</p>
+    <dl class="spec-dl">
+      <dt>Nỗi đau người mua</dt>
+      <dd>Sinh viên nhập học hoặc người đi làm thường mua combo 2-4 thiết bị cùng lúc (ví dụ: <em>Laptop + Tai nghe chống ồn + Máy tính bảng/Đồng hồ</em> trên <code>GearVN</code>, <code>HACOM</code>, <code>An Phát</code>, <code>Phong Vũ</code>, <code>CellphoneS</code>, <code>Shopee</code>). Nếu mua gom hết tại 1 chuỗi thì tổng hóa đơn thường đắt hơn 1,5-4 triệu VND; nhưng nếu xé lẻ mỗi món một shop rẻ nhất thì dễ vướng shop rủi ro cao, tốn nhiều lần nhận hàng và rắc rối bảo hành.</dd>
+
+      <dt>Đã có sẵn trong repo</dt>
+      <dd>
+        <ul>
+          <li>Hàm <code>getMasterProductOffersBatch</code> và API <code>GET /api/v1/rate/watchlist?slugs=...</code> đã tải song song toàn bộ lời chào bán còn hàng hợp lệ của tối đa 20 sản phẩm trong một lần gọi.</li>
+          <li>View <code>rate.v_products_with_merchant_trust</code> đã hợp nhất điểm rủi ro an ninh mạng <code>dosafe_risk_score</code> (từ <code>dosafe.threat_intel</code>) và điểm rủi ro đánh giá ảo <code>review_risk_score</code> cho từng nhà bán.</li>
+        </ul>
+      </dd>
+
+      <dt>Cần xây thêm</dt>
+      <dd>
+        <ul>
+          <li><strong>Chế độ "Tối ưu Mua Trọn Bộ (Combo Optimizer)" ngay trong trang <code>/watchlist</code>:</strong> Khi người dùng đánh dấu từ 2 đến 5 sản phẩm trong danh sách theo dõi, hệ thống giải bài toán tối ưu và đề xuất song song 2 phương án:
+            (A) <em>Phương án Tiết kiệm tối đa (tách tối đa 2-3 chuỗi uy tín, chỉ nhận gian hàng có <code>threat_risk_score &lt;= 20</code>)</em> và
+            (B) <em>Phương án Tiện lợi 1 điểm đến (1 chuỗi duy nhất đang có đủ hàng với tổng tiền thấp nhất)</em>, hiển thị rõ số tiền chênh lệch giữa hai phương án.</li>
+          <li><strong>Huy hiệu "Chuỗi Đạt Chuẩn Tin Cậy 180 Ngày" trên <code>/merchants</code> và bảng giá:</strong> Chỉ cấp tự động cho nhà bán đạt đồng thời 3 ngưỡng cứng: không có cờ cảnh báo <code>DOSafe</code>, tỷ lệ đánh giá thật 6 trục cao ổn định trong 180 ngày và không tái diễn hành vi nâng giá gốc giảm ảo.</li>
+        </ul>
+      </dd>
+
+      <dt>Tác động &amp; Chi phí</dt>
+      <dd><span class="rec">Khai thác trọn vẹn sức mạnh của danh mục 12 chuỗi điện máy và PC mới thêm vào ở <code>#1859</code></span> (đặc biệt hiệu quả với tệp khách hàng mua đồ công nghệ giá trị cao). Thuật toán chạy trên tập tối đa 5 sản phẩm x 22 sàn nên hoàn tất dưới 5ms trên BFF, chi phí <code>$0</code>.</dd>
+
+      <dt>Rủi ro &amp; Chốt chặn</dt>
+      <dd>Huy hiệu tin cậy 180 ngày bắt buộc tính hoàn toàn tự động bằng công thức công khai từ dữ liệu kiểm toán (không bán gói quảng cáo mua huy hiệu), giữ vững tôn chỉ trung lập tuyệt đối của <code>rate.vn</code>.</dd>
+    </dl>
+  </div>
+
+  <h2>4. Ba Ý Tưởng Đã Xét Nhưng KHUYẾN NGHỊ KHÔNG LÀM Ở Phase 8 (Tránh Lãng Phí Nguồn Lực)</h2>
+  <p class="muted">Để giữ kiến trúc 4 tầng gọn nhẹ, không phát sinh chi phí LLM định kỳ và không làm loãng định vị "Sự thật giá &amp; đánh giá", Brand khuyến nghị gạt bỏ 3 hướng sau trong Phase 8:</p>
+
+  <div class="anti-grid">
+    <div class="card" style="margin: 0;">
+      <h3>1. Chatbot AI tư vấn mua sắm tự do trên trang công khai</h3>
+      <p class="muted"><strong>Lý do không làm:</strong> Tốn chi phí token LLM liên tục, dễ bị tấn công prompt-injection và nguy hiểm nhất là rủi ro AI "nói nhịu" sai giá sản phẩm. Bộ đôi <strong>F2 (Thanh trượt trọng số RTINGS)</strong> + <strong>F4 (MCP cho AI riêng của người dùng)</strong> giải quyết bài toán tư vấn chính xác 100% với chi phí LLM bằng <code>$0</code> cho Rate.</p>
+    </div>
+    <div class="card" style="margin: 0;">
+      <h3>2. Tự động thử mã giảm giá (Auto-Coupon Injector kiểu Honey cũ)</h3>
+      <p class="muted"><strong>Lý do không làm:</strong> Đòi hỏi can thiệp sâu vào ô nhập liệu thanh toán của các sàn, dễ gây xung đột giao diện, làm chậm quy trình duyệt Chrome Web Store và dễ gây nghi ngại về quyền riêng tư. <strong>F6 (Checkout Price-Trap Guard chỉ đọc)</strong> an toàn, minh bạch và đúng chất kiểm chứng của Rate hơn nhiều.</p>
+    </div>
+    <div class="card" style="margin: 0;">
+      <h3>3. Chợ rao vặt mua bán máy cũ trực tiếp giữa người dùng (P2P)</h3>
+      <p class="muted"><strong>Lý do không làm:</strong> Kéo theo rủi ro lừa đảo giao dịch, kiểm duyệt tin đăng rác và hỗ trợ tranh chấp nặng nề, đi chệch khỏi mô hình Open-Core dữ liệu kiểm chứng. Thay vào đó, <strong>F7 (Bộ tính tham khảo Thu cũ đổi mới vs Bán lại)</strong> hỗ trợ người dùng ra quyết định mà không ôm rủi ro vận hành chợ.</p>
+    </div>
+  </div>
+
+  <h2>5. Bảng Quyết Định Dành Cho JOY</h2>
+  <p>
+    Theo đúng quy chuẩn Product Owner (<code>AGENTS.md</code> Mục 6), chưa có bất kỳ issue tính năng nào được tạo. Khi JOY chọn một trong các phương án dưới đây trong phiên chat với PO, PO mới tiến hành tách thành các đặc tả issue chuẩn trên GitHub Project #9:
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Phương án lựa chọn</th>
+          <th>Phạm vi tính năng đưa vào Backlog Phase 8</th>
+          <th>Yêu cầu duyệt Migration DOS-Me</th>
+          <th>Khuyến nghị</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Phương án 1 (Khuyến nghị)</strong></td>
+          <td>Triển khai trọn bộ <strong>Gói 8A (F1 + F2 + F3 + F4)</strong> trước để kịp mùa sale cuối năm, đồng thời lên thiết kế kỹ thuật sẵn cho <strong>F5 (Cảnh báo giá Email - Gói 8B Pha 1)</strong>.</td>
+          <td><span class="rec">Không cần bất kỳ DDL nào trên DOS-Me</span> (chạy thẳng trên <code>DOS/Rate</code> và <code>Rate-Services</code>).</td>
+          <td><span class="rec">Khuyến nghị số 1:</span> Tốc độ ra mắt nhanh nhất, rủi ro bằng 0, tạo ngay cả giá trị chống giá ảo lẫn kênh lan truyền MXH + AI.</td>
+        </tr>
+        <tr>
+          <td><strong>Phương án 2 (Tăng tốc toàn diện)</strong></td>
+          <td>Duyệt cả <strong>Gói 8A + Gói 8B đầy đủ (F1 đến F6)</strong>, bao gồm cả Web Push / Telegram cho cảnh báo giá và đồng bộ M2 22 sàn (<code>#1762</code>).</td>
+          <td>Cần JOY duyệt 1-2 PR migration nhỏ bên <code>DOS-Me</code> ở nửa sau của đợt triển khai.</td>
+          <td>Phù hợp nếu JOY muốn đẩy mạnh giữ chân tài khoản <code>DOS ID</code> và Chrome Web Store ngay trong Q4/2026 - Q1/2027.</td>
+        </tr>
+        <tr>
+          <td><strong>Phương án 3 (Chọn lẻ theo mã)</strong></td>
+          <td>JOY chỉ định trực tiếp các mã muốn làm (ví dụ: <code>"Chỉ làm F1, F2, F7"</code>).</td>
+          <td>Tùy theo mã được chọn (<code>F1, F2, F3, F4, F6-Guard, F8-Pha1</code> đều <code>0</code> DDL).</td>
+          <td>Linh hoạt theo ưu tiên sản phẩm riêng của JOY.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="muted" style="margin-top: 28px; font-size: 13px;">
+    Tài liệu tự chứa 100% (không phụ thuộc CDN hay tài nguyên ngoài). Kiểm chứng mã nguồn tại nhánh <code>docs/1861-phase8-feature-brainstorm</code> (dựa trên <code>origin/dev</code> commit <code>56309d8a</code>).
+  </p>
+</div>
+
+<script>
+  (function () {
+    // 1. Filter & Sort for Priority Scorecard Table + Detail Cards
+    var filterBtns = document.querySelectorAll('[data-filter]');
+    var sortBtns = document.querySelectorAll('[data-sort]');
+    var tbody = document.querySelector('#priority-table tbody');
+    var cards = document.querySelectorAll('[data-card-pkg]');
+
+    function applyFilter(pkg) {
+      for (var i = 0; i < filterBtns.length; i++) {
+        var isMatch = filterBtns[i].getAttribute('data-filter') === pkg;
+        filterBtns[i].setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+      }
+      if (tbody) {
+        var rows = tbody.querySelectorAll('tr');
+        for (var r = 0; r < rows.length; r++) {
+          var rowPkg = rows[r].getAttribute('data-pkg');
+          rows[r].style.display = (pkg === 'all' || rowPkg === pkg) ? '' : 'none';
+        }
+      }
+      for (var c = 0; c < cards.length; c++) {
+        var cardPkg = cards[c].getAttribute('data-card-pkg');
+        if (pkg === 'all' || cardPkg === pkg) {
+          cards[c].classList.remove('hidden-by-filter');
+        } else {
+          cards[c].classList.add('hidden-by-filter');
+        }
+      }
+    }
+
+    function applySort(mode) {
+      for (var i = 0; i < sortBtns.length; i++) {
+        var isMatch = sortBtns[i].getAttribute('data-sort') === mode;
+        sortBtns[i].setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+      }
+      if (!tbody) return;
+      var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+      rows.sort(function (a, b) {
+        if (mode === 'effort') {
+          var ea = Number(a.getAttribute('data-effort') || 99);
+          var eb = Number(b.getAttribute('data-effort') || 99);
+          if (ea !== eb) return ea - eb;
+        } else if (mode === 'growth') {
+          var ga = Number(a.getAttribute('data-growth') || 0);
+          var gb = Number(b.getAttribute('data-growth') || 0);
+          if (gb !== ga) return gb - ga;
+        }
+        return Number(b.getAttribute('data-score') || 0) - Number(a.getAttribute('data-score') || 0);
+      });
+      for (var j = 0; j < rows.length; j++) {
+        tbody.appendChild(rows[j]);
+      }
+    }
+
+    for (var f = 0; f < filterBtns.length; f++) {
+      filterBtns[f].addEventListener('click', function () {
+        applyFilter(this.getAttribute('data-filter') || 'all');
+      });
+    }
+
+    for (var s = 0; s < sortBtns.length; s++) {
+      sortBtns[s].addEventListener('click', function () {
+        applySort(this.getAttribute('data-sort') || 'score');
+      });
+    }
+
+    // 2. Interactive RTINGS Use-Case Preset Demo inside Card F2
+    var presetData = {
+      default: {
+        label: 'Trọng số đang áp dụng: Hiệu năng 20% - Camera 20% - Pin 20% - Màn hình 15% - Thiết kế 10% - Đáng tiền 15%',
+        scoreA: '4.5 / 5',
+        widthA: '90%',
+        scoreB: '4.4 / 5',
+        widthB: '88%'
+      },
+      gaming: {
+        label: 'Trọng số đang áp dụng: Hiệu năng 35% - Pin 30% - Màn hình 15% - Đáng tiền 15% - Thiết kế 5% - Camera 0%',
+        scoreA: '4.1 / 5',
+        widthA: '82%',
+        scoreB: '4.8 / 5',
+        widthB: '96%'
+      },
+      camera: {
+        label: 'Trọng số đang áp dụng: Camera 45% - Màn hình 20% - Thiết kế 15% - Pin 10% - Hiệu năng 5% - Đáng tiền 5%',
+        scoreA: '4.9 / 5',
+        widthA: '98%',
+        scoreB: '3.9 / 5',
+        widthB: '78%'
+      }
+    };
+
+    var presetBtns = document.querySelectorAll('.demo-preset-btn');
+    var weightsText = document.getElementById('rtings-demo-weights');
+    var barA = document.getElementById('demo-bar-a');
+    var scoreA = document.getElementById('demo-score-a');
+    var barB = document.getElementById('demo-bar-b');
+    var scoreB = document.getElementById('demo-score-b');
+
+    for (var p = 0; p < presetBtns.length; p++) {
+      presetBtns[p].addEventListener('click', function () {
+        var key = this.getAttribute('data-preset') || 'default';
+        var cfg = presetData[key] || presetData.default;
+        for (var k = 0; k < presetBtns.length; k++) {
+          presetBtns[k].setAttribute('aria-pressed', presetBtns[k] === this ? 'true' : 'false');
+        }
+        if (weightsText) weightsText.textContent = cfg.label;
+        if (barA) barA.style.width = cfg.widthA;
+        if (scoreA) scoreA.textContent = cfg.scoreA;
+        if (barB) barB.style.width = cfg.widthB;
+        if (scoreB) scoreB.textContent = cfg.scoreB;
+      });
+    }
+  })();
+</script>
+</body>
+</html>
