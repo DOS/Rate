@@ -301,6 +301,8 @@ export function dosAiReviewAiClient(
   };
   const json = async <T>(path: string, init?: RequestInit, retry?: 'all' | 'throttled') =>
     JSON.parse((await call(path, init, retry)).text) as T;
+  const encodePathId = (value: string): string =>
+    encodeURIComponent((String(value) as string & { toWellFormed(): string }).toWellFormed());
   return {
     async createBatch(requests) {
       const form = new FormData();
@@ -329,7 +331,7 @@ export function dosAiReviewAiClient(
       return { id: batch.id };
     },
     async batchStatus(id) {
-      const batch = await json<{ status: string }>(`/batches/${encodeURIComponent(id)}`);
+      const batch = await json<{ status: string }>(`/batches/${encodePathId(id)}`);
       if (batch.status === 'cancelling') return 'canceling';
       return ['completed', 'failed', 'cancelled', 'expired'].includes(batch.status)
         ? 'ended'
@@ -340,7 +342,7 @@ export function dosAiReviewAiClient(
         status?: string;
         output_file_id?: string | null;
         errmsg?: string | null;
-      }>(`/batches/${encodeURIComponent(id)}`);
+      }>(`/batches/${encodePathId(id)}`);
       if (!batch.output_file_id) {
         // Failed as a whole, or ended with no line run: nothing to store.
         throw new BatchGoneError(
@@ -350,7 +352,7 @@ export function dosAiReviewAiClient(
       }
       let text: string;
       try {
-        text = (await call(`/files/${encodeURIComponent(batch.output_file_id)}/content`)).text;
+        text = (await call(`/files/${encodePathId(batch.output_file_id)}/content`)).text;
       } catch (err) {
         if (/ 404 /.test(String(err))) {
           throw new BatchGoneError(`dos.ai batch ${id}: its output file is gone (404)`, 'expired');
@@ -370,7 +372,7 @@ export function dosAiReviewAiClient(
       }
     },
     async cancelBatch(id) {
-      await call(`/batches/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+      await call(`/batches/${encodePathId(id)}/cancel`, { method: 'POST' });
     },
   };
 }
@@ -796,8 +798,13 @@ export async function storeAiRows(
     for (let attempt = 1; ; attempt++) {
       const { data, error } = await supabase.rpc('store_review_ai_points', { p_rows: part });
       if (!error) {
-        for (const [key, n] of Object.entries((data ?? {}) as Record<string, unknown>)) {
-          if (key in total) total[key as keyof StoreCounts] += Number(n) || 0;
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          for (const [key, n] of Object.entries(data as Record<string, unknown>)) {
+            if (Object.hasOwn(total, key)) {
+              const count = Number(n);
+              total[key as keyof StoreCounts] += Number.isFinite(count) && count > 0 ? count : 0;
+            }
+          }
         }
         break;
       }
@@ -811,15 +818,43 @@ export async function storeAiRows(
   return total;
 }
 
-const monthStart = (now: Date) =>
-  new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+const monthStartMs = (now: Date) => Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+
+function parseBatchUsd(raw: unknown): number | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : Number.POSITIVE_INFINITY;
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return Number.POSITIVE_INFINITY;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+  }
+  return Number.POSITIVE_INFINITY;
+}
 
 /** This month's spend of a model: reported cost, or the reserved ceiling while open. */
 export function monthSpendUsd(batches: readonly AiBatchRow[], model: string, now: Date): number {
-  const start = monthStart(now);
-  return batches
-    .filter(b => b.model === model && b.submitted_at >= start)
-    .reduce((s, b) => s + Number(b.cost_usd ?? b.reserved_usd ?? 0), 0);
+  const startMs = monthStartMs(now);
+  if (!Number.isFinite(startMs)) return Number.POSITIVE_INFINITY;
+  let total = 0;
+  for (const b of batches) {
+    if (b.model !== model) continue;
+    const submittedMs =
+      typeof b.submitted_at === 'string' ? Date.parse(b.submitted_at) : Number.NaN;
+    if (!Number.isFinite(submittedMs)) return Number.POSITIVE_INFINITY;
+    if (submittedMs < startMs) continue;
+    const cost = parseBatchUsd(b.cost_usd);
+    const reserved = parseBatchUsd(b.reserved_usd);
+    if (cost === Number.POSITIVE_INFINITY || reserved === Number.POSITIVE_INFINITY) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const safeReserved = reserved !== null && reserved > 0 ? reserved : 0;
+    const rowUsd = cost !== null ? (cost >= 0 ? cost : safeReserved) : safeReserved;
+    total += rowUsd;
+  }
+  return total;
 }
 
 const BATCH_COLUMNS =
@@ -1121,10 +1156,17 @@ export async function runReviewAiPointsJob(
   );
   result.monthSpendUsd = monthSpendUsd(refreshed, model, now);
   const cap = REVIEW_AI_MODELS[model].monthlyCapUsd;
-  result.capped = requests.length > 0 && result.monthSpendUsd + result.reservedUsd > cap;
+  result.capped =
+    requests.length > 0 &&
+    (!Number.isFinite(result.monthSpendUsd) ||
+      !Number.isFinite(result.reservedUsd) ||
+      result.monthSpendUsd + result.reservedUsd > cap);
+  const monthText = Number.isFinite(result.monthSpendUsd)
+    ? `$${result.monthSpendUsd.toFixed(4)}`
+    : 'non-finite (fail-closed)';
   logger.info(
     'review_ai.plan',
-    `${apply ? 'Sending' : 'Would send'} ${chosen.length} of ${candidates.length} due reviews in ${requests.length} requests; ceiling $${result.reservedUsd.toFixed(4)}, month $${result.monthSpendUsd.toFixed(4)} of $${cap}.`,
+    `${apply ? 'Sending' : 'Would send'} ${chosen.length} of ${candidates.length} due reviews in ${requests.length} requests; ceiling $${result.reservedUsd.toFixed(4)}, month ${monthText} of $${cap}.`,
     {
       apply,
       model,

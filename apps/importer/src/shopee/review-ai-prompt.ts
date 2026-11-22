@@ -367,7 +367,8 @@ export function batchCostUsd(
   }
 ): number {
   const price = REVIEW_AI_MODELS[model];
-  const n = (v: number | null | undefined) => (typeof v === 'number' && v > 0 ? v : 0);
+  const n = (v: number | null | undefined) =>
+    typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0;
   const usd =
     (n(usage.input_tokens) * price.input +
       n(usage.cache_read_input_tokens) * price.input * CACHE_READ_FACTOR +

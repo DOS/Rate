@@ -346,6 +346,7 @@ export interface MasterRatingExpected {
 }
 
 const CRITERION_KEY = /^[a-z_]{2,32}$/;
+const DISALLOWED_CRITERION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /**
  * P2's rating with P6's weight, per master (cluster_id scope): user reviews
@@ -374,7 +375,8 @@ export function expectedMasterRatings(input: {
       review.reviewer_type !== 'user' ||
       flag === null ||
       flag.include_in_rating === false ||
-      !(weight > 0)
+      !Number.isFinite(weight) ||
+      weight <= 0
     ) {
       continue;
     }
@@ -392,14 +394,21 @@ export function expectedMasterRatings(input: {
   }
   const out = new Map<string, MasterRatingExpected>();
   for (const [masterId, eligible] of byMaster) {
-    const rated = eligible.filter(e => e.star >= 1 && e.star <= 5);
+    const rated = eligible.filter(e => Number.isFinite(e.star) && e.star >= 1 && e.star <= 5);
     const sumW = rated.reduce((s, e) => s + e.w, 0n);
     const sumWS = rated.reduce((s, e) => s + e.w * toUnits(e.star, V_UNIT), 0n);
     const perKey = new Map<string, { writers: number; w: bigint; shown: bigint; ws: bigint }>();
     for (const e of eligible) {
       if (!e.criteria || typeof e.criteria !== 'object' || Array.isArray(e.criteria)) continue;
       for (const [key, value] of Object.entries(e.criteria as Record<string, unknown>)) {
-        if (!CRITERION_KEY.test(key) || typeof value !== 'number' || value < 1 || value > 5) {
+        if (
+          !CRITERION_KEY.test(key) ||
+          DISALLOWED_CRITERION_KEYS.has(key) ||
+          typeof value !== 'number' ||
+          !Number.isFinite(value) ||
+          value < 1 ||
+          value > 5
+        ) {
           continue;
         }
         const acc = perKey.get(key) ?? { writers: 0, w: 0n, shown: 0n, ws: 0n };
