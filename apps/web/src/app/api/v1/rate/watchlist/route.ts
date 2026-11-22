@@ -6,8 +6,10 @@ import {
   getCachedMasterProductBySlug,
   getCachedMasterProductOffers,
   getMasterProductOffersBatch,
+  getRateClient,
 } from '@/server/rate';
 import { resolveWatchlistSlug } from '@/server/rate/item-compare';
+import { getCachedCategorySlugById } from '@/server/rate/item-route';
 import { radarExportFields } from '@/lib/deal-radar';
 import {
   PUBLIC_API_CORS_HEADERS,
@@ -30,9 +32,90 @@ import { createLogger, serializeError } from '@/lib/logger';
 import {
   getMasterProductCategorySlug,
   getMasterProductHref,
+  isCanonicalCategorySlug,
+  type CanonicalCategorySlug,
 } from '@/lib/rate-domain-core';
 
 const log = createLogger('api.watchlist');
+
+const RESOLVABLE_ITEM_SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/;
+const UNSAFE_ITEM_SLUG_TOKENS = new Set([
+  '0',
+  'null',
+  'undefined',
+  'nan',
+  'none',
+  'n/a',
+  'na',
+  'false',
+  'true',
+  '__proto__',
+  'constructor',
+  'prototype',
+  ...Object.getOwnPropertyNames(Object.prototype).map((key) =>
+    key.toLowerCase()
+  ),
+]);
+
+function isResolvableWatchlistItemSlug(slug: unknown): slug is string {
+  return (
+    typeof slug === 'string' &&
+    RESOLVABLE_ITEM_SLUG_REGEX.test(slug) &&
+    !/^0+$/.test(slug) &&
+    !slug.endsWith('.') &&
+    !slug.includes('..') &&
+    !(slug in Object.prototype) &&
+    !UNSAFE_ITEM_SLUG_TOKENS.has(slug.toLowerCase())
+  );
+}
+
+async function resolveWatchlistItemCategorySlugs(
+  categoryIds: readonly string[]
+): Promise<Map<string, CanonicalCategorySlug | false>> {
+  const out = new Map<string, CanonicalCategorySlug | false>();
+  if (categoryIds.length === 0) return out;
+  let cachedById: ReadonlyMap<string, string>;
+  try {
+    cachedById = await getCachedCategorySlugById();
+  } catch {
+    for (const id of categoryIds) out.set(id, false);
+    return out;
+  }
+  await Promise.all(
+    categoryIds.map(async (id) => {
+      let rawSlug = cachedById.get(id);
+      if (rawSlug === undefined) {
+        try {
+          const { data, error } = await getRateClient()
+            .from('categories')
+            .select('slug')
+            .eq('id', id)
+            .maybeSingle();
+          if (error) {
+            out.set(id, false);
+            return;
+          }
+          rawSlug =
+            typeof (data as { slug?: unknown } | null)?.slug === 'string'
+              ? (data as { slug: string }).slug
+              : undefined;
+        } catch {
+          out.set(id, false);
+          return;
+        }
+      }
+      const norm =
+        typeof rawSlug === 'string'
+          ? rawSlug
+              .replace(/\p{Cc}+/gu, '')
+              .trim()
+              .toLowerCase()
+          : '';
+      out.set(id, isCanonicalCategorySlug(norm) ? norm : false);
+    })
+  );
+  return out;
+}
 
 const WATCHLIST_CORS_HEADERS: Record<string, string> = {
   ...PUBLIC_API_CORS_HEADERS,
@@ -133,7 +216,12 @@ export async function GET(request: NextRequest) {
     // size until one is chosen (`size_required`, DOS/Rate#1156); off: null.
     const itemTargets = new Map<
       string,
-      { variantSlug: string; itemSlug: string; sizeRequired: boolean }
+      {
+        variantSlug: string;
+        itemSlug: string;
+        itemCategoryId: string | null;
+        sizeRequired: boolean;
+      }
     >();
     const masterEntries = await Promise.all(
       slugs.map(async (slug) => {
@@ -149,9 +237,19 @@ export async function GET(request: NextRequest) {
       (entry): entry is NonNullable<(typeof masterEntries)[number]> =>
         entry !== null
     );
-    const offersByMaster = await getMasterProductOffersBatch(
-      validMasterEntries.map(([, master]) => master.id)
+    const itemCategoryIds = Array.from(
+      new Set(
+        Array.from(itemTargets.values())
+          .map((t) => t.itemCategoryId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      )
     );
+    const [offersByMaster, itemCategorySlugs] = await Promise.all([
+      getMasterProductOffersBatch(
+        validMasterEntries.map(([, master]) => master.id)
+      ),
+      resolveWatchlistItemCategorySlugs(itemCategoryIds),
+    ]);
 
     const entries = validMasterEntries.map(([slug, master]) => {
       const target = itemTargets.get(slug);
@@ -168,22 +266,39 @@ export async function GET(request: NextRequest) {
           MAX_VALID_VND_PRICE
         );
       // RATE_ITEM_MODEL on: point straight to the canonical Item page
-      // (`/<category>/<item-slug>`) with no `?v=` query parameter and zero 308
-      // redirect hops (DOS/Rate#1829); off or unlinked: the master's own href.
-      const candidateItemHref = target?.itemSlug
-        ? getMasterProductHref({
-            ...master,
-            slug: target.itemSlug,
-            metadata: {
-              ...(master.metadata &&
-              typeof master.metadata === 'object' &&
-              !Array.isArray(master.metadata)
-                ? master.metadata
-                : {}),
-              category_slug: getMasterProductCategorySlug(master),
-            },
-          })
+      // (`/<category>/<item-slug>`) in the Item's own category (#1281, #1829)
+      // with no `?v=` query parameter and zero 308 redirect hops; off,
+      // unlinked, non-catalogue Item category, or unresolvable Item slug (#1768):
+      // fall back to the master's own href.
+      const resolvedItemCategory: CanonicalCategorySlug | null = target
+        ? target.itemCategoryId === null
+          ? getMasterProductCategorySlug(master)
+          : (() => {
+              const mapped = itemCategorySlugs.get(target.itemCategoryId);
+              return typeof mapped === 'string' &&
+                isCanonicalCategorySlug(mapped)
+                ? mapped
+                : null;
+            })()
         : null;
+      const candidateItemHref =
+        target &&
+        resolvedItemCategory &&
+        isResolvableWatchlistItemSlug(target.itemSlug)
+          ? getMasterProductHref({
+              ...master,
+              slug: target.itemSlug,
+              category_id: null,
+              metadata: {
+                ...(master.metadata &&
+                typeof master.metadata === 'object' &&
+                !Array.isArray(master.metadata)
+                  ? master.metadata
+                  : {}),
+                category_slug: resolvedItemCategory,
+              },
+            })
+          : null;
       const productHref =
         candidateItemHref && /^\/[a-z]+\/[^/?#\s]+$/.test(candidateItemHref)
           ? candidateItemHref

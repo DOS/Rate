@@ -23,15 +23,23 @@ import {
 // exact (DOS/Rate#1383).
 const SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$/;
 
-async function resolveSlugAnyCase(
-  slug: string
-): Promise<{ slug: string; resolution: CompareResolution }> {
-  if (!SLUG_REGEX.test(slug)) return { slug, resolution: null };
+async function resolveSlugAnyCase(slug: string): Promise<{
+  slug: string;
+  resolution: CompareResolution;
+  itemCategoryId: string | null;
+}> {
+  if (!SLUG_REGEX.test(slug)) {
+    return { slug, resolution: null, itemCategoryId: null };
+  }
   // As typed, then lower-cased: the catalogue lookup is exact (#1383).
   const found = await lookupSlugAnyCase(slug, getCachedCatalogSlugResolution);
   return {
     slug: found.slug,
     resolution: await toCompareResolution(found.found),
+    itemCategoryId:
+      found.found && found.found.kind !== 'unlinked'
+        ? (found.found.item.category_id ?? null)
+        : null,
   };
 }
 
@@ -127,15 +135,21 @@ export function resolveVersusPlan(
 export function resolveWatchlistSlug(slug: string): Promise<{
   variantSlug: string;
   itemSlug: string;
+  itemCategoryId: string | null;
   sizeRequired: boolean;
 } | null> {
   return whenItemModel('watchlist slug', async () => {
-    const { slug: matchedSlug, resolution } = await resolveSlugAnyCase(slug);
+    const {
+      slug: matchedSlug,
+      resolution,
+      itemCategoryId,
+    } = await resolveSlugAnyCase(slug);
     if (!resolution || resolution.kind === 'unlinked') return null;
     if (resolution.kind === 'variant' && !resolution.retired) {
       return {
         variantSlug: resolution.variant.slug,
         itemSlug: resolution.item.slug,
+        itemCategoryId,
         sizeRequired: false,
       };
     }
@@ -147,6 +161,7 @@ export function resolveWatchlistSlug(slug: string): Promise<{
       return {
         variantSlug: sameSlug.slug,
         itemSlug: item.slug,
+        itemCategoryId,
         sizeRequired: false,
       };
     }
@@ -158,6 +173,7 @@ export function resolveWatchlistSlug(slug: string): Promise<{
       ? {
           variantSlug: shown.slug,
           itemSlug: item.slug,
+          itemCategoryId,
           sizeRequired: retired || variants.length > 1,
         }
       : null;

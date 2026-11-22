@@ -12,13 +12,21 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
 const ITEM = '11111111-1111-4111-8111-111111111155';
 const DRAFT_ITEM = '11111111-1111-4111-8111-111111111156';
 const LAPTOP_ITEM = '11111111-1111-4111-8111-111111111157';
+const DIVERGENT_CAT_ITEM = '11111111-1111-4111-8111-111111111158';
+const NON_CATALOG_ITEM = '11111111-1111-4111-8111-111111111159';
+const OVERLONG_SLUG_ITEM = '11111111-1111-4111-8111-111111111160';
 const V128 = '22222222-2222-4222-8222-222222222128';
 const V256 = '22222222-2222-4222-8222-222222222256';
 const LAPTOP_V256 = '22222222-2222-4222-8222-222222222777';
 const LAPTOP_RETIRED = '22222222-2222-4222-8222-222222222778';
+const DIVERGENT_V128 = '22222222-2222-4222-8222-222222222779';
+const NON_CATALOG_V128 = '22222222-2222-4222-8222-222222222780';
+const OVERLONG_V128 = '22222222-2222-4222-8222-222222222781';
 const LONE = '22222222-2222-4222-8222-222222222999';
 const CATEGORY = '55555555-5555-4555-8555-555555555555';
 const LAPTOP_CATEGORY = '55555555-5555-4555-8555-555555555556';
+const TABLET_CATEGORY = '55555555-5555-4555-8555-555555555557';
+const NON_CATALOG_CATEGORY = '55555555-5555-4555-8555-555555555558';
 
 const itemRow = {
   id: ITEM,
@@ -79,6 +87,96 @@ const laptopVariantRow = {
   min_price: 26990000,
   max_price: 28990000,
   merchant_count: 3,
+};
+const divergentCategoryItemRow = {
+  id: DIVERGENT_CAT_ITEM,
+  item_key: 'apple:ipad-mini-7',
+  slug: 'apple-ipad-mini-7',
+  name: 'Apple iPad mini 7',
+  brand: 'Apple',
+  model: 'iPad mini 7',
+  category_id: TABLET_CATEGORY,
+  default_variant_id: DIVERGENT_V128,
+  min_price: 13990000,
+  max_price: 14990000,
+  price_variant_count: 1,
+  merchant_count: 2,
+  listing_count: 2,
+  unknown_variant_listing_count: 0,
+  updated_at: '2026-10-29T00:00:00Z',
+};
+const divergentCategoryVariantRow = {
+  id: DIVERGENT_V128,
+  item_id: DIVERGENT_CAT_ITEM,
+  slug: 'apple-mini-7-128gb',
+  name: 'Apple mini 7 128GB',
+  variant_key: '128gb',
+  variant_name: '128GB',
+  sort_order: null,
+  storage_gb: 128,
+  min_price: 13990000,
+  max_price: 14990000,
+  merchant_count: 2,
+};
+const nonCatalogItemRow = {
+  id: NON_CATALOG_ITEM,
+  item_key: 'apple:mystery-pack',
+  slug: 'apple-mystery-pack',
+  name: 'Apple Mystery Pack',
+  brand: 'Apple',
+  model: 'Mystery Pack',
+  category_id: NON_CATALOG_CATEGORY,
+  default_variant_id: NON_CATALOG_V128,
+  min_price: 9990000,
+  max_price: 9990000,
+  price_variant_count: 1,
+  merchant_count: 1,
+  listing_count: 1,
+  unknown_variant_listing_count: 0,
+  updated_at: '2026-10-29T00:00:00Z',
+};
+const nonCatalogVariantRow = {
+  id: NON_CATALOG_V128,
+  item_id: NON_CATALOG_ITEM,
+  slug: 'apple-mystery-pack-128gb',
+  name: 'Apple Mystery Pack 128GB',
+  variant_key: '128gb',
+  variant_name: '128GB',
+  sort_order: null,
+  storage_gb: 128,
+  min_price: 9990000,
+  max_price: 9990000,
+  merchant_count: 1,
+};
+const overlongSlugItemRow = {
+  id: OVERLONG_SLUG_ITEM,
+  item_key: 'xiaomi:overlong',
+  slug: `xiaomi-${'x'.repeat(120)}`,
+  name: 'Xiaomi Overlong Phone',
+  brand: 'Xiaomi',
+  model: 'Overlong Phone',
+  category_id: CATEGORY,
+  default_variant_id: OVERLONG_V128,
+  min_price: 8990000,
+  max_price: 8990000,
+  price_variant_count: 1,
+  merchant_count: 1,
+  listing_count: 1,
+  unknown_variant_listing_count: 0,
+  updated_at: '2026-10-29T00:00:00Z',
+};
+const overlongVariantRow = {
+  id: OVERLONG_V128,
+  item_id: OVERLONG_SLUG_ITEM,
+  slug: 'xiaomi-overlong-128gb',
+  name: 'Xiaomi Overlong 128GB',
+  variant_key: '128gb',
+  variant_name: '128GB',
+  sort_order: null,
+  storage_gb: 128,
+  min_price: 8990000,
+  max_price: 8990000,
+  merchant_count: 1,
 };
 const watchlistMasterRow = (params: {
   id: string;
@@ -184,6 +282,48 @@ const WATCHLIST_MASTERS = [
     min_price: 19000000,
     max_price: 20000000,
   }),
+  watchlistMasterRow({
+    id: DIVERGENT_V128,
+    item_id: DIVERGENT_CAT_ITEM,
+    slug: 'apple-mini-7-128gb',
+    name: 'Apple mini 7 128GB',
+    brand: 'Apple',
+    category_id: CATEGORY,
+    category_slug: 'smartphones',
+    variant_key: '128gb',
+    storage_gb: 128,
+    status: 'published',
+    min_price: 13990000,
+    max_price: 14990000,
+  }),
+  watchlistMasterRow({
+    id: NON_CATALOG_V128,
+    item_id: NON_CATALOG_ITEM,
+    slug: 'apple-mystery-pack-128gb',
+    name: 'Apple Mystery Pack 128GB',
+    brand: 'Apple',
+    category_id: CATEGORY,
+    category_slug: 'smartphones',
+    variant_key: '128gb',
+    storage_gb: 128,
+    status: 'published',
+    min_price: 9990000,
+    max_price: 9990000,
+  }),
+  watchlistMasterRow({
+    id: OVERLONG_V128,
+    item_id: OVERLONG_SLUG_ITEM,
+    slug: 'xiaomi-overlong-128gb',
+    name: 'Xiaomi Overlong 128GB',
+    brand: 'Xiaomi',
+    category_id: CATEGORY,
+    category_slug: 'smartphones',
+    variant_key: '128gb',
+    storage_gb: 128,
+    status: 'published',
+    min_price: 8990000,
+    max_price: 8990000,
+  }),
 ];
 
 let calls: string[] = [];
@@ -227,11 +367,20 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     );
   }
   switch (url.pathname) {
-    case '/rest/v1/categories':
-      return json([
+    case '/rest/v1/categories': {
+      const allCategories = [
         { id: CATEGORY, slug: 'smartphones' },
         { id: LAPTOP_CATEGORY, slug: 'laptops' },
-      ]);
+        { id: TABLET_CATEGORY, slug: 'tablets' },
+        { id: NON_CATALOG_CATEGORY, slug: 'accessories' },
+      ];
+      const idFilter = url.searchParams.get('id');
+      if (idFilter?.startsWith('eq.')) {
+        const wantedId = idFilter.slice(3);
+        return json(allCategories.filter((c) => c.id === wantedId));
+      }
+      return json(allCategories);
+    }
     case '/rest/v1/rpc/search_master_products': {
       let body: unknown = null;
       if (typeof init?.body === 'string') {
@@ -259,6 +408,21 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         ) {
           return json([laptopItemRow]);
         }
+        if (
+          /slug=eq\.apple-ipad-mini-7(&|$)/.test(q) ||
+          q.includes(`id=eq.${DIVERGENT_CAT_ITEM}`)
+        ) {
+          return json([divergentCategoryItemRow]);
+        }
+        if (
+          /slug=eq\.apple-mystery-pack(&|$)/.test(q) ||
+          q.includes(`id=eq.${NON_CATALOG_ITEM}`)
+        ) {
+          return json([nonCatalogItemRow]);
+        }
+        if (q.includes(`id=eq.${OVERLONG_SLUG_ITEM}`)) {
+          return json([overlongSlugItemRow]);
+        }
         return json([]);
       }
       if (q.includes('select=id,slug')) {
@@ -270,6 +434,15 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       if (watchlistRouteTest) {
         if (q.includes(`item_id=eq.${LAPTOP_ITEM}`)) {
           return json([laptopVariantRow]);
+        }
+        if (q.includes(`item_id=eq.${DIVERGENT_CAT_ITEM}`)) {
+          return json([divergentCategoryVariantRow]);
+        }
+        if (q.includes(`item_id=eq.${NON_CATALOG_ITEM}`)) {
+          return json([nonCatalogVariantRow]);
+        }
+        if (q.includes(`item_id=eq.${OVERLONG_SLUG_ITEM}`)) {
+          return json([overlongVariantRow]);
         }
         if (q.includes('item_id=in.') || q.includes(`item_id=eq.${ITEM}`)) {
           return json([variantRow(V256, 256), variantRow(V128, 128)]);
@@ -486,6 +659,7 @@ async function main() {
   assert.deepEqual(await cmp.resolveWatchlistSlug('apple-iphone-16'), {
     variantSlug: 'apple-iphone-16-128gb',
     itemSlug: 'apple-iphone-16',
+    itemCategoryId: CATEGORY,
     sizeRequired: true,
   });
   // An Item sharing its slug with one of its sizes watches that size
@@ -493,6 +667,7 @@ async function main() {
   assert.deepEqual(await cmp.resolveWatchlistSlug('apple-iphone-16-128gb'), {
     variantSlug: 'apple-iphone-16-128gb',
     itemSlug: 'apple-iphone-16',
+    itemCategoryId: CATEGORY,
     sizeRequired: false,
   });
   itemsDown = true;
@@ -523,7 +698,7 @@ async function main() {
     calls = [];
     const offWatchRes = await watchlistRoute.GET(
       new NextRequest(
-        'http://localhost/api/v1/rate/watchlist?slugs=apple-iphone-16,apple-iphone-16-256gb,apple-macbook-air-m4-256gb,samsung-galaxy-s24'
+        'http://localhost/api/v1/rate/watchlist?slugs=apple-iphone-16,apple-iphone-16-256gb,apple-macbook-air-m4-256gb,apple-macbook-air-m4-unknown,samsung-galaxy-s24'
       )
     );
     assert.equal(offWatchRes.status, 200);
@@ -535,6 +710,11 @@ async function main() {
     assert.equal(offWatchBody.ok, true);
     assert.equal(offWatchBody.count, 3);
     assert.equal('apple-iphone-16' in offWatchBody.items, false);
+    assert.equal(
+      'apple-macbook-air-m4-unknown' in offWatchBody.items,
+      false,
+      'archived/retired variant is omitted when Item model is off'
+    );
     assert.equal(
       offWatchBody.items['apple-iphone-16-256gb']?.product_href,
       '/smartphones/apple-iphone-16-256gb'
@@ -548,8 +728,9 @@ async function main() {
       '/smartphones/samsung-galaxy-s24'
     );
 
-    // 2. Flag on (`item` and `nullable_variant`): resolveWatchlistSlug exposes itemSlug,
-    // and GET /api/v1/rate/watchlist emits canonical `/<category>/<item-slug>` with no `?v=`.
+    // 2. Flag on (`item` and `nullable_variant`): resolveWatchlistSlug exposes itemSlug &
+    // itemCategoryId, and GET /api/v1/rate/watchlist emits canonical `/<category>/<item-slug>`
+    // in the Item's own category (#1281, #1829) with no `?v=`.
     for (const mode of ['item', 'nullable_variant'] as const) {
       process.env.RATE_ITEM_MODEL = mode;
 
@@ -558,6 +739,7 @@ async function main() {
         {
           variantSlug: 'apple-macbook-air-m4-256gb',
           itemSlug: 'apple-macbook-air-m4',
+          itemCategoryId: LAPTOP_CATEGORY,
           sizeRequired: false,
         }
       );
@@ -566,6 +748,7 @@ async function main() {
         {
           variantSlug: 'apple-macbook-air-m4-256gb',
           itemSlug: 'apple-macbook-air-m4',
+          itemCategoryId: LAPTOP_CATEGORY,
           sizeRequired: false,
         }
       );
@@ -574,6 +757,7 @@ async function main() {
         {
           variantSlug: 'apple-macbook-air-m4-256gb',
           itemSlug: 'apple-macbook-air-m4',
+          itemCategoryId: LAPTOP_CATEGORY,
           sizeRequired: true,
         }
       );
@@ -581,13 +765,13 @@ async function main() {
 
       const onWatchRes = await watchlistRoute.GET(
         new NextRequest(
-          'http://localhost/api/v1/rate/watchlist?slugs=apple-iphone-16,apple-iphone-16-256gb,apple-macbook-air-m4-256gb,samsung-galaxy-s24'
+          'http://localhost/api/v1/rate/watchlist?slugs=apple-iphone-16,apple-iphone-16-256gb,apple-macbook-air-m4-256gb,apple-macbook-air-m4-unknown,samsung-galaxy-s24,apple-mini-7-128gb,apple-mystery-pack-128gb,xiaomi-overlong-128gb'
         )
       );
       assert.equal(onWatchRes.status, 200);
       const onWatchBody = await onWatchRes.json();
       assert.equal(onWatchBody.ok, true);
-      assert.equal(onWatchBody.count, 4);
+      assert.equal(onWatchBody.count, 8);
 
       const iphoneItemEntry = onWatchBody.items['apple-iphone-16'];
       assert.equal(iphoneItemEntry?.slug, 'apple-iphone-16-128gb');
@@ -614,6 +798,15 @@ async function main() {
       );
       assert.equal('size_required' in laptopVariantEntry, false);
 
+      const laptopRetiredEntry =
+        onWatchBody.items['apple-macbook-air-m4-unknown'];
+      assert.equal(laptopRetiredEntry?.slug, 'apple-macbook-air-m4-256gb');
+      assert.equal(
+        laptopRetiredEntry?.product_href,
+        '/laptops/apple-macbook-air-m4'
+      );
+      assert.equal(laptopRetiredEntry?.size_required, true);
+
       const unlinkedEntry = onWatchBody.items['samsung-galaxy-s24'];
       assert.equal(unlinkedEntry?.slug, 'samsung-galaxy-s24');
       assert.equal(
@@ -621,6 +814,28 @@ async function main() {
         '/smartphones/samsung-galaxy-s24'
       );
       assert.equal('size_required' in unlinkedEntry, false);
+
+      // Divergent Item category_id (`tablets`) overrides stale variant master category (`smartphones`) (#1281).
+      const divergentCatEntry = onWatchBody.items['apple-mini-7-128gb'];
+      assert.equal(divergentCatEntry?.slug, 'apple-mini-7-128gb');
+      assert.equal(
+        divergentCatEntry?.product_href,
+        '/tablets/apple-ipad-mini-7'
+      );
+
+      // Non-catalogue Item category (`accessories`) falls back to master's href instead of 404ing.
+      const nonCatalogEntry = onWatchBody.items['apple-mystery-pack-128gb'];
+      assert.equal(
+        nonCatalogEntry?.product_href,
+        '/smartphones/apple-mystery-pack-128gb'
+      );
+
+      // Over-120-char unresolvable Item slug falls back to master's href (#1768).
+      const overlongEntry = onWatchBody.items['xiaomi-overlong-128gb'];
+      assert.equal(
+        overlongEntry?.product_href,
+        '/smartphones/xiaomi-overlong-128gb'
+      );
 
       for (const entry of Object.values(onWatchBody.items) as Array<{
         product_href: string;
