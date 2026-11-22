@@ -54,12 +54,14 @@ like this:
   `dos-rate-services-services-antigravity-po-checkin.md` for Rate Services),
   outside the repository (in that PO's own notes or `po-state` folder), never
   committed, and never writes another PO's or line's file.
-- **One promoter.** Only the Claude Code PO runs `promote.mjs` and the
-  `verify-live.mjs` check after it. The Qwen and Antigravity POs ask the
-  Claude Code PO (or JOY, if they cannot reach it) when their merged work
-  needs a promotion. `promote.mjs` refuses to run when the session's claimant
-  (resolved as `board.mjs` does) is not `claude:` or cannot be resolved: a
-  guard against mistakes, not access control.
+- **Authorized promoters.** Normally the Claude Code PO runs `promote.mjs` and
+  the `verify-live.mjs` check after it; on Claude Code quota failover or JOY's
+  assignment, the Antigravity PO runs them instead (DOS/Rate#1849). The Qwen PO
+  (and the Antigravity PO when not on failover) asks the active promoting PO
+  (or JOY, if it cannot reach it) when merged work needs a promotion.
+  `promote.mjs` refuses to run when the session's claimant (resolved as
+  `board.mjs` does) is not `claude:` or `antigravity:`, or cannot be resolved:
+  a guard against mistakes, not access control.
 - The claim lock (see "Claims") keeps their sub-sessions off each other's
   issues even when two take the same issue at the same moment.
 
@@ -504,7 +506,9 @@ secrets and credentials (GitHub, Vercel, Supabase, `AI_API_KEY`,
 
 The normal `dev` -> `main` promotion is not one of these steps: it stays
 batched as `AGENTS.md` 0.2 and `Docs/Resources/RELEASE.md` say, needs no
-per-release question, and is run by the Claude Code PO only (`node scripts/ops/promote.mjs`,
+per-release question, and is run by the Claude Code PO (or the Antigravity PO
+on quota failover / JOY's assignment, passing
+`--claimant antigravity:<conversation id>`: `node scripts/ops/promote.mjs`,
 then `node scripts/ops/verify-live.mjs --wait 900`) at the first checkpoint:
 no ready backlog left, 10 or more PRs waiting on `dev`, the oldest
 unpromoted change older than 24 hours, or the end of a long working session.
