@@ -26,6 +26,7 @@ import {
 import PriceWatchButton, {
   handlePriceWatchInputKeyDown,
   handlePriceWatchPopoverEscape,
+  handleScopedPriceWatchPopoverEscape,
   shouldDismissPriceWatchOnOutsidePress,
 } from '../../components/watchlist/PriceWatchButton';
 import WatchlistWorkspace, {
@@ -338,6 +339,56 @@ function main() {
       null
     );
 
+    assert.equal(
+      handlePriceWatchInputKeyDown(
+        {
+          key: 'Enter',
+          nativeEvent: { isComposing: true },
+          preventDefault: () => {
+            prevented += 1;
+          },
+        },
+        {
+          saveTarget: () => {
+            saved += 1;
+          },
+          closeEditor: () => {
+            closed += 1;
+          },
+          focusTrigger: () => {
+            focused += 1;
+          },
+        }
+      ),
+      null,
+      'IME composition Enter must not commit PriceWatchButton target'
+    );
+    assert.equal(
+      handlePriceWatchInputKeyDown(
+        {
+          key: 'Enter',
+          keyCode: 229,
+          preventDefault: () => {
+            prevented += 1;
+          },
+        },
+        {
+          saveTarget: () => {
+            saved += 1;
+          },
+          closeEditor: () => {
+            closed += 1;
+          },
+          focusTrigger: () => {
+            focused += 1;
+          },
+        }
+      ),
+      null,
+      'keyCode 229 IME fallback must not commit PriceWatchButton target'
+    );
+    assert.equal(saved, 1);
+
     const insideChild = {} as Node;
     const outsideNode = {} as Node;
     const container = {
@@ -377,6 +428,56 @@ function main() {
       }),
       false
     );
+
+    assert.equal(
+      handleScopedPriceWatchPopoverEscape(
+        container,
+        {
+          key: 'Escape',
+          target: outsideNode as unknown as EventTarget,
+          preventDefault: () => {
+            prevented += 1;
+          },
+        },
+        {
+          closeEditor: () => {
+            closed += 1;
+          },
+          focusTrigger: () => {
+            focused += 1;
+          },
+        }
+      ),
+      false,
+      'Escape from outside this PriceWatchButton instance leaves it alone'
+    );
+    assert.equal(closed, 2);
+    assert.equal(focused, 2);
+
+    assert.equal(
+      handleScopedPriceWatchPopoverEscape(
+        container,
+        {
+          key: 'Escape',
+          target: insideChild as unknown as EventTarget,
+          preventDefault: () => {
+            prevented += 1;
+          },
+        },
+        {
+          closeEditor: () => {
+            closed += 1;
+          },
+          focusTrigger: () => {
+            focused += 1;
+          },
+        }
+      ),
+      true,
+      'Escape inside this PriceWatchButton instance closes and restores focus'
+    );
+    assert.equal(closed, 3);
+    assert.equal(focused, 3);
   }
 
   // 2. PriceWatchButton SSR disclosure & label htmlFor across vi/en/cs (#1693)
@@ -548,6 +649,57 @@ function main() {
     );
     assert.equal(savedInline, 1);
     assert.equal(cancelledInline, 1);
+    assert.equal(focusedEditBtn, 2);
+
+    assert.equal(
+      handleWatchlistInlineTargetKeyDown(
+        {
+          key: 'Enter',
+          nativeEvent: { isComposing: true },
+          preventDefault: () => {
+            preventedInline += 1;
+          },
+        },
+        {
+          saveTarget: () => {
+            savedInline += 1;
+          },
+          cancelEdit: () => {
+            cancelledInline += 1;
+          },
+          focusEditTrigger: () => {
+            focusedEditBtn += 1;
+          },
+        }
+      ),
+      null,
+      'IME composition Enter must not commit inline target input'
+    );
+    assert.equal(
+      handleWatchlistInlineTargetKeyDown(
+        {
+          key: 'Enter',
+          keyCode: 229,
+          preventDefault: () => {
+            preventedInline += 1;
+          },
+        },
+        {
+          saveTarget: () => {
+            savedInline += 1;
+          },
+          cancelEdit: () => {
+            cancelledInline += 1;
+          },
+          focusEditTrigger: () => {
+            focusedEditBtn += 1;
+          },
+        }
+      ),
+      null,
+      'keyCode 229 IME fallback must not commit inline target input'
+    );
+    assert.equal(savedInline, 1);
 
     assert.equal(
       handleWatchlistInlineTargetKeyDown(
@@ -574,8 +726,9 @@ function main() {
     );
     assert.equal(savedInline, 1);
 
-    // Canonical Item product_href (#1836) takes precedence when valid, with
-    // safe fallback to getMasterProductHref(live) and stored categoryPath.
+    // Canonical Item product_href (#1836) takes precedence when valid (up to
+    // 256-char producer limit), with safe fallback to getMasterProductHref(live)
+    // and sanitized stored categoryPath + slug.
     const variantCatalogRow = {
       id: 'mp-mini-7',
       slug: 'apple-mini-7-128gb',
@@ -593,6 +746,16 @@ function main() {
       '/tablets/apple-ipad-mini-7',
       'Canonical Item product_href wins over stale variant master category'
     );
+    const longCanonicalSlug = `asus-rog-${'x'.repeat(180)}`;
+    assert.equal(
+      resolveWatchlistDetailHref(
+        { slug: 'asus-rog-short', categoryPath: '/laptops' },
+        { product_href: `/laptops/${longCanonicalSlug}` },
+        variantCatalogRow
+      ),
+      `/laptops/${longCanonicalSlug}`,
+      '121-256 char canonical product_href is accepted up to producer limit'
+    );
     assert.equal(
       resolveWatchlistDetailHref(
         { slug: 'apple-mini-7-128gb', categoryPath: '/tablets' },
@@ -607,6 +770,9 @@ function main() {
       'https://evil.example/phish',
       '/smartphones/..bad',
       '/smartphones/trailing.',
+      '/smartphones/null',
+      '/smartphones/0',
+      `/smartphones/${'a'.repeat(257)}`,
       '',
     ]) {
       assert.equal(
@@ -617,6 +783,23 @@ function main() {
         ),
         '/tablets/apple-mini-7-128gb',
         `Unsafe product_href "${unsafeHref}" falls back to stored categoryPath`
+      );
+    }
+    for (const malformedStoredSlug of [
+      '../../api/secret',
+      'foo?x=1#bar',
+      'bad slug with spaces',
+      'null',
+      '0',
+    ]) {
+      assert.equal(
+        resolveWatchlistDetailHref(
+          { slug: malformedStoredSlug, categoryPath: '/tablets' },
+          null,
+          null
+        ),
+        '/tablets',
+        `Malformed stored slug "${malformedStoredSlug}" falls back safely to category root`
       );
     }
 
@@ -811,6 +994,47 @@ function main() {
           `<input type="number" aria-label="${escapeRegExp(escapeHtmlAttr(expectedInputAria))}"(\\s|/)`
         ),
         `${locale}: open WatchlistWorkspace names inline <input type="number"> with targetInputLabel + item.name`
+      );
+
+      // Spaced localStorage slug still emits a single whitespace-free IDREF token.
+      const spacedItem: WatchlistItem = {
+        ...watchedLaptop,
+        slug: 'legacy spaced slug',
+      };
+      const spacedOpenHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: mockRouter },
+          React.createElement(
+            IntlProvider,
+            {
+              locale,
+              messages: watchlistMessages,
+              timeZone: 'Asia/Ho_Chi_Minh',
+            },
+            React.createElement(WatchlistWorkspace, {
+              catalogProducts: [],
+              locale,
+              initialItems: [spacedItem],
+              initialEditingSlug: spacedItem.slug,
+            })
+          )
+        )
+      );
+      const spacedCtrlMatch = spacedOpenHtml.match(
+        new RegExp(
+          `<button\\b[^>]*aria-expanded="true"[^>]*aria-controls="([^"]+)"[^>]*aria-label="${escapeRegExp(escapeHtmlAttr(expectedEditAria))}"[^>]*>`
+        )
+      );
+      assert.ok(spacedCtrlMatch?.[1]);
+      assert.doesNotMatch(
+        spacedCtrlMatch[1],
+        /\s/,
+        `${locale}: inlineEditorId must contain zero whitespace even for spaced slugs`
+      );
+      assert.match(
+        spacedOpenHtml,
+        new RegExp(`<div id="${escapeRegExp(spacedCtrlMatch[1])}"(\\s|>)`)
       );
     }
   }

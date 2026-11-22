@@ -64,8 +64,11 @@ import StarRating from '@/components/elementary/StarRating';
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
   locale?: string;
+  /** SSR/unit-test fixture override (#1693). */
   initialItems?: WatchlistItem[];
+  /** SSR/unit-test fixture override (#1693). */
   initialEditingSlug?: string | null;
+  /** SSR/unit-test fixture override (#1693). */
   initialLiveDeals?: Record<string, LiveWatchlistDeal>;
 }
 
@@ -172,6 +175,12 @@ export function formatWatchlistTargetControlAriaLabel(
 export function handleWatchlistInlineTargetKeyDown(
   event: {
     key: string;
+    keyCode?: number;
+    isComposing?: boolean;
+    nativeEvent?: {
+      isComposing?: boolean;
+      keyCode?: number;
+    };
     defaultPrevented?: boolean;
     preventDefault: () => void;
   },
@@ -189,15 +198,26 @@ export function handleWatchlistInlineTargetKeyDown(
     return 'cancelled';
   }
   if (event.key === 'Enter') {
+    if (
+      event.isComposing ||
+      event.nativeEvent?.isComposing ||
+      event.keyCode === 229 ||
+      event.nativeEvent?.keyCode === 229
+    ) {
+      return null;
+    }
     event.preventDefault();
     actions.saveTarget();
+    actions.focusEditTrigger();
     return 'saved';
   }
   return null;
 }
 
 const VALID_WATCHLIST_PRODUCT_HREF_RE =
-  /^\/([a-z]+)\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,119})$/;
+  /^\/([a-z]+)\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,255})$/;
+const UNSAFE_WATCHLIST_HREF_SLUG_RE =
+  /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i;
 
 export function resolveWatchlistDetailHref(
   item: Pick<WatchlistItem, 'slug' | 'categoryPath'>,
@@ -213,7 +233,8 @@ export function resolveWatchlistDetailHref(
       itemSlug &&
       isCanonicalCategorySlug(categorySlug) &&
       !itemSlug.endsWith('.') &&
-      !itemSlug.includes('..')
+      !itemSlug.includes('..') &&
+      !UNSAFE_WATCHLIST_HREF_SLUG_RE.test(itemSlug)
     ) {
       return dealInfo.product_href;
     }
@@ -226,7 +247,10 @@ export function resolveWatchlistDetailHref(
       ? item.categoryPath.replace(/^\/+/, '').trim().toLowerCase()
       : '';
   const catSlug = isCanonicalCategorySlug(rawCat) ? rawCat : 'smartphones';
-  return `/${catSlug}/${item.slug}`;
+  return getMasterProductHref({
+    slug: item.slug,
+    metadata: { category_slug: catSlug },
+  });
 }
 
 export type WatchlistPortfolioMarkdownKey =
@@ -569,6 +593,7 @@ export default function WatchlistWorkspace({
       targetPrice: cleanTarget,
     });
     setEditingSlug(null);
+    editBtnRefs.current.get(item.slug)?.focus();
     // Cloud alerts need a signed-in account; signed-out users keep the local watchlist.
     const headers = await authorizedJsonHeaders();
     if (!headers) return;
@@ -1120,7 +1145,7 @@ export default function WatchlistWorkspace({
         </div>
       ) : (
         <div className="row g-4">
-          {items.map((item) => {
+          {items.map((item, itemIndex) => {
             const live = productBySlug.get(item.slug);
             const dealInfo = liveDeals[item.slug];
             const { currentMin, currentMax } =
@@ -1137,7 +1162,7 @@ export default function WatchlistWorkspace({
             // categoryPath remain the SSR/offline fallbacks (#1380).
             const detailHref = resolveWatchlistDetailHref(item, dealInfo, live);
             const isEditing = editingSlug === item.slug;
-            const inlineEditorId = `${workspaceId}-target-editor-${item.slug}`;
+            const inlineEditorId = `${workspaceId}-target-editor-${itemIndex}`;
             const bestOffer = dealInfo?.best_offer || null;
             const bestOfferSafeUrl = bestOffer
               ? sanitizeWatchlistBestOfferUrl(bestOffer.url)

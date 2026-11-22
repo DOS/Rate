@@ -39,8 +39,25 @@ export function sanitizePriceWatchInput(
 
 export interface PriceWatchKeyEventLike {
   key: string;
+  keyCode?: number;
+  isComposing?: boolean;
+  nativeEvent?: {
+    isComposing?: boolean;
+    keyCode?: number;
+  };
+  target?: EventTarget | null;
+  composedPath?: () => EventTarget[];
   defaultPrevented?: boolean;
   preventDefault: () => void;
+}
+
+function isImeComposingKeyEvent(event: PriceWatchKeyEventLike): boolean {
+  return Boolean(
+    event.isComposing ||
+    event.nativeEvent?.isComposing ||
+    event.keyCode === 229 ||
+    event.nativeEvent?.keyCode === 229
+  );
 }
 
 export function handlePriceWatchPopoverEscape(
@@ -67,6 +84,7 @@ export function handlePriceWatchInputKeyDown(
 ): 'saved' | 'closed' | null {
   if (event.defaultPrevented) return null;
   if (event.key === 'Enter') {
+    if (isImeComposingKeyEvent(event)) return null;
     event.preventDefault();
     actions.saveTarget();
     return 'saved';
@@ -95,6 +113,20 @@ export function shouldDismissPriceWatchOnOutsidePress(
   return !container.contains(target);
 }
 
+export function handleScopedPriceWatchPopoverEscape(
+  container: { contains: (node: Node) => boolean } | null,
+  event: PriceWatchKeyEventLike,
+  actions: {
+    closeEditor: () => void;
+    focusTrigger: () => void;
+  }
+): boolean {
+  if (!container || shouldDismissPriceWatchOnOutsidePress(container, event)) {
+    return false;
+  }
+  return handlePriceWatchPopoverEscape(event, actions);
+}
+
 interface PriceWatchButtonProps {
   slug: string;
   name: string;
@@ -103,6 +135,7 @@ interface PriceWatchButtonProps {
   thumbnail: string | null;
   currentMinPrice: number;
   size?: 'sm' | 'md';
+  /** SSR/unit-test fixture override to render the disclosure open (#1693). */
   defaultOpen?: boolean;
 }
 
@@ -153,7 +186,7 @@ export default function PriceWatchButton({
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      handlePriceWatchPopoverEscape(event, {
+      handleScopedPriceWatchPopoverEscape(containerRef.current, event, {
         closeEditor: () => setShowEditor(false),
         focusTrigger: () => triggerBtnRef.current?.focus(),
       });
@@ -183,12 +216,14 @@ export default function PriceWatchButton({
       addedAt: new Date().toISOString(),
     });
     setShowEditor(false);
+    triggerBtnRef.current?.focus();
   };
 
   const handleRemove = () => {
     if (!safeSlug) return;
     removeWatchlistItem(safeSlug);
     setShowEditor(false);
+    triggerBtnRef.current?.focus();
   };
 
   const preset5Pct = computeWatchlistTargetPrice(safeCurrentMinPrice, 5);
