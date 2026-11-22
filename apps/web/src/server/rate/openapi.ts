@@ -365,16 +365,26 @@ function buildBaseRateOpenApiSpec(
             {
               name: 'category',
               in: 'query',
-              description: 'Canonical hardware category slug',
+              description:
+                'Canonical hardware category slug (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`, or `all`).',
               schema: {
                 type: 'string',
-                enum: categorySlugs,
+                enum: [...categorySlugs, 'all'],
+                default: 'smartphones',
               },
+            },
+            {
+              name: 'brands',
+              in: 'query',
+              description:
+                'Comma-separated brand filter, up to 15 brands (e.g. `Apple,Samsung,Xiaomi`); `brand` is accepted as an alias when `brands` is empty or omitted.',
+              schema: { type: 'string' },
             },
             {
               name: 'brand',
               in: 'query',
-              description: 'Brand filter (e.g. Apple, Samsung, Xiaomi, ASUS)',
+              description:
+                'Brand filter alias for `brands` (single brand or comma-separated list, e.g. `Apple`, `Samsung,Xiaomi`)',
               schema: { type: 'string' },
             },
             {
@@ -1237,7 +1247,76 @@ function buildBaseRateOpenApiSpec(
                       matchStatus: { type: 'string' },
                       platform: { type: ['string', 'null'] },
                       canonicalUrl: { type: ['string', 'null'] },
-                      priceAssessment: { type: 'object' },
+                      priceAssessment: {
+                        type: 'object',
+                        additionalProperties: true,
+                        required: [
+                          'verdict',
+                          'badgeLabel',
+                          'explanation',
+                          'observedPrice',
+                          'observedOriginalPrice',
+                          'claimedDiscountPct',
+                          'vsMarketMedianPct',
+                          'marketMinPrice',
+                          'marketMedianPrice',
+                          'marketMaxPrice',
+                          'historicalMinPrice',
+                          'historicalMaxPrice',
+                          'cheaperOfferCount',
+                          'maxSavingsAmount',
+                        ],
+                        description:
+                          'Price verdict. `badgeLabel` and `explanation` are Vietnamese; `messageKey` and `messageParams` let a client show the same text in its own language (DOS/Rate#1326).',
+                        properties: {
+                          verdict: {
+                            $ref: '#/components/schemas/PriceVerdictLevel',
+                          },
+                          badgeLabel: { type: 'string' },
+                          explanation: { type: 'string' },
+                          messageKey: {
+                            type: 'string',
+                            description:
+                              'Absent when an accessory reason is free text.',
+                            enum: [
+                              'accessory',
+                              'accessory_keyword',
+                              'accessory_price_floor',
+                              'ambiguous_variant',
+                              'implausibly_low',
+                              'insufficient_history',
+                              'fake_discount',
+                              'genuine_deal',
+                              'above_market',
+                              'fair_market',
+                            ],
+                          },
+                          messageParams: {
+                            type: 'object',
+                            description:
+                              'The values the text interpolates: prices in VND and percentages as numbers, plus `keyword` (string) for `accessory_keyword`.',
+                            additionalProperties: {
+                              oneOf: [{ type: 'number' }, { type: 'string' }],
+                            },
+                          },
+                          observedPrice: { type: ['number', 'null'] },
+                          observedOriginalPrice: { type: ['number', 'null'] },
+                          claimedDiscountPct: { type: 'number' },
+                          vsMarketMedianPct: { type: ['number', 'null'] },
+                          marketMinPrice: { type: ['number', 'null'] },
+                          marketMedianPrice: { type: ['number', 'null'] },
+                          marketMaxPrice: { type: ['number', 'null'] },
+                          historicalMinPrice: { type: ['number', 'null'] },
+                          historicalMaxPrice: { type: ['number', 'null'] },
+                          cheaperOfferCount: { type: 'integer' },
+                          maxSavingsAmount: { type: 'number' },
+                          implausiblyLow: {
+                            type: 'boolean',
+                            description:
+                              'Present (`true`) when the observed price is far below every other store.',
+                          },
+                        },
+                      },
                       masterProduct: { type: ['object', 'null'] },
                       allOffers: { type: 'array', items: { type: 'object' } },
                       merchantProfile: {
@@ -1245,51 +1324,6 @@ function buildBaseRateOpenApiSpec(
                       },
                       radarSignal: {
                         anyOf: [RADAR_DETAIL_REF, { type: 'null' }],
-                      },
-                      data: {
-                        type: 'object',
-                        properties: {
-                          priceAssessment: {
-                            type: 'object',
-                            description:
-                              'Price verdict. `badgeLabel` and `explanation` are Vietnamese; `messageKey` and `messageParams` let a client show the same text in its own language (DOS/Rate#1326).',
-                            properties: {
-                              verdict: {
-                                $ref: '#/components/schemas/PriceVerdictLevel',
-                              },
-                              badgeLabel: { type: 'string' },
-                              explanation: { type: 'string' },
-                              messageKey: {
-                                type: 'string',
-                                description:
-                                  'Absent when an accessory reason is free text.',
-                                enum: [
-                                  'accessory',
-                                  'accessory_keyword',
-                                  'accessory_price_floor',
-                                  'ambiguous_variant',
-                                  'implausibly_low',
-                                  'insufficient_history',
-                                  'fake_discount',
-                                  'genuine_deal',
-                                  'above_market',
-                                  'fair_market',
-                                ],
-                              },
-                              messageParams: {
-                                type: 'object',
-                                description:
-                                  'The values the text interpolates: prices in VND and percentages as numbers, plus `keyword` (string) for `accessory_keyword`.',
-                                additionalProperties: {
-                                  oneOf: [
-                                    { type: 'number' },
-                                    { type: 'string' },
-                                  ],
-                                },
-                              },
-                            },
-                          },
-                        },
                       },
                     },
                   },
@@ -1408,6 +1442,7 @@ function buildBaseRateOpenApiSpec(
                 },
               }),
             },
+            '400': errorResponse('Unknown `platform` filter value.'),
           },
         },
       },
@@ -1968,6 +2003,7 @@ function buildBaseRateOpenApiSpec(
             '200': {
               description: 'OpenAPI 3.1.0 JSON document.',
             },
+            '500': errorResponse('Failed to build OpenAPI specification.'),
           },
         },
       },
@@ -1983,6 +2019,7 @@ function buildBaseRateOpenApiSpec(
             '200': {
               description: 'OpenAPI 3.1.0 JSON document.',
             },
+            '500': errorResponse('Failed to build OpenAPI specification.'),
           },
         },
       },
@@ -2561,6 +2598,26 @@ export function withItemModelDocs(
         items: { $ref: '#/components/schemas/MerchantOffer' },
       };
     }
+  }
+
+  const reviews = spec.paths['/api/v1/rate/reviews']?.get;
+  if (reviews) {
+    const slug = reviews.parameters?.find((p) => p.name === 'slug');
+    if (slug) {
+      slug.description =
+        'Master product slug (e.g. apple-iphone-16-128gb) or Item slug (e.g. apple-iphone-16).';
+    }
+    const params = [...(reviews.parameters ?? [])];
+    const slugAt = params.findIndex((p) => p.name === 'slug');
+    params.splice(slugAt < 0 ? params.length : slugAt + 1, 0, {
+      name: 'v',
+      in: 'query',
+      required: false,
+      description:
+        'Optional variant size slug (`variant_key`, e.g. `256gb`) when resolving `slug`. Without it, an old variant slug answers its own size and an Item slug answers its default variant. Ignored when `masterProductId` is provided.',
+      schema: { type: 'string' },
+    });
+    reviews.parameters = params;
   }
 
   const lookup = spec.paths['/api/v1/rate/extension/lookup']?.get;
