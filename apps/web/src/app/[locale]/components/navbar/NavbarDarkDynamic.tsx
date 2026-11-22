@@ -1,5 +1,10 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { IntentLink } from '@/components/elementary/IntentLink';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
@@ -21,6 +26,7 @@ import {
   tabbableIn,
   wrapFocusTarget,
 } from '@/lib/focus-trap';
+import { usePathname } from '@/lib/navigation';
 
 export interface NavbarLinkItem {
   readonly id?: string | number;
@@ -42,6 +48,49 @@ const DESKTOP_HIDDEN_LINK_IDS = new Set(['home', 'watchlist']);
 /** The width at which the navbar menu becomes the off-canvas phone menu (style.scss). */
 const PHONE_MENU_QUERY = '(max-width: 991.98px)';
 
+export interface NavbarLinkClickEventLike {
+  readonly button: number;
+  readonly metaKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+  readonly defaultPrevented: boolean;
+}
+
+export interface NavbarLinkTargetLike {
+  readonly href?: string | null;
+  readonly target?: string | null;
+  readonly hasDownload?: boolean;
+}
+
+/**
+ * True when an in-drawer `a[href]` was activated via plain primary click or
+ * Enter (which synthesizes an unmodified button-0 click) without opening a new
+ * browsing context or downloading a resource (DOS/Rate#1838).
+ */
+export function shouldCloseNavbarDrawerOnLinkClick(
+  event: NavbarLinkClickEventLike,
+  anchor: NavbarLinkTargetLike
+): boolean {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return false;
+  }
+  const rawHref = typeof anchor.href === 'string' ? anchor.href.trim() : '';
+  if (!rawHref) return false;
+  const rawTarget =
+    typeof anchor.target === 'string' ? anchor.target.trim().toLowerCase() : '';
+  if (rawTarget && rawTarget !== '_self') return false;
+  if (anchor.hasDownload) return false;
+  return true;
+}
+
 export function NavbarDarkDynamic({
   links,
   logoUrl,
@@ -50,6 +99,7 @@ export function NavbarDarkDynamic({
   readonly logoUrl?: string | null;
 }) {
   const tNav = useTranslations('rate.nav');
+  const pathname = usePathname();
   const [scroll, setScroll] = useState(false);
   const [toggle, setToggle] = useState(false);
   // Phone layout: the menu is off-canvas and traps focus while open. Every
@@ -64,6 +114,27 @@ export function NavbarDarkDynamic({
   const menuRef = useRef<HTMLDivElement>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const categoriesRef = useRef<HTMLLIElement>(null);
+  const [openForPathname, setOpenForPathname] = useState(pathname);
+
+  if (openForPathname !== pathname) {
+    setOpenForPathname(pathname);
+    if (toggle) setToggle(false);
+    if (categoriesOpen) setCategoriesOpen(false);
+  }
+
+  const handleNavLinkClick = (e: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (
+      !shouldCloseNavbarDrawerOnLinkClick(e, {
+        href: e.currentTarget.getAttribute('href'),
+        target: e.currentTarget.getAttribute('target'),
+        hasDownload: e.currentTarget.hasAttribute('download'),
+      })
+    ) {
+      return;
+    }
+    setToggle(false);
+    setCategoriesOpen(false);
+  };
 
   useEffect(() => {
     const query = window.matchMedia(PHONE_MENU_QUERY);
@@ -204,7 +275,12 @@ export function NavbarDarkDynamic({
   }, []);
 
   const logo = (
-    <IntentLink className="nav-brand" href="/" aria-label="Rate.vn">
+    <IntentLink
+      className="nav-brand"
+      href="/"
+      aria-label="Rate.vn"
+      onClick={handleNavLinkClick}
+    >
       {logoUrl ? (
         <Image
           src={logoUrl}
@@ -256,6 +332,7 @@ export function NavbarDarkDynamic({
                       href="/inspect"
                       className="d-flex align-items-center text-danger"
                       aria-label={tNav('inspect')}
+                      onClick={handleNavLinkClick}
                     >
                       <BsShieldCheck className="me-1" />
                     </IntentLink>
@@ -265,6 +342,7 @@ export function NavbarDarkDynamic({
                       href="/compare"
                       className="d-flex align-items-center text-dark"
                       aria-label={tNav('compare')}
+                      onClick={handleNavLinkClick}
                     >
                       <BsArrowLeftRight className="me-1" />
                     </IntentLink>
@@ -274,6 +352,7 @@ export function NavbarDarkDynamic({
                       href="/watchlist"
                       className="d-flex align-items-center text-primary"
                       aria-label={tNav('watchlist')}
+                      onClick={handleNavLinkClick}
                     >
                       <BsBellFill className="me-1" />
                     </IntentLink>
@@ -283,6 +362,7 @@ export function NavbarDarkDynamic({
                       href="/developers"
                       className="d-flex align-items-center text-dark"
                       aria-label={tNav('developers')}
+                      onClick={handleNavLinkClick}
                     >
                       <BsCodeSlash className="me-1" />
                     </IntentLink>
@@ -402,6 +482,10 @@ export function NavbarDarkDynamic({
                           <IntentLink
                             href={link.href!}
                             target={link.newTab ? '_blank' : undefined}
+                            rel={
+                              link.newTab ? 'noopener noreferrer' : undefined
+                            }
+                            onClick={handleNavLinkClick}
                           >
                             {link.label}
                           </IntentLink>
@@ -428,7 +512,9 @@ export function NavbarDarkDynamic({
                         : undefined
                     }
                   >
-                    <IntentLink href={link.href!}>{link.label}</IntentLink>
+                    <IntentLink href={link.href!} onClick={handleNavLinkClick}>
+                      {link.label}
+                    </IntentLink>
                   </li>
                 );
                 return (
@@ -453,7 +539,7 @@ export function NavbarDarkDynamic({
                           <li key={String(link.id)}>
                             <IntentLink
                               href={link.href!}
-                              onClick={() => setCategoriesOpen(false)}
+                              onClick={handleNavLinkClick}
                             >
                               {link.label}
                             </IntentLink>
@@ -483,6 +569,7 @@ export function NavbarDarkDynamic({
                   <IntentLink
                     href="/watchlist"
                     className="d-inline-flex align-items-center"
+                    onClick={handleNavLinkClick}
                   >
                     <BsBellFill className="fs-6 me-1" />
                     {tNav('priceWatchCta')}
