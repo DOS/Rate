@@ -37,6 +37,7 @@ import {
 import { hasRatingCriteria, storedPoint } from '@repo/shared-data/rules';
 import { evaluateReviewTrustAssessment } from '@/lib/rate-domain';
 import { isFilteredOutReview } from '@/lib/review-display';
+import { resolveApiItemContext } from '@/server/rate/item-api';
 import type { AuthenticatedRateRequest } from '@/server/rate/request-auth';
 
 const log = createLogger('api.reviews');
@@ -84,7 +85,19 @@ export async function GET(request: NextRequest) {
       }
       resolvedMasterId = parsedQuery.masterProductId;
     } else {
-      const product = await getCachedMasterProductBySlug(parsedQuery.slug!);
+      const requestedSlug = parsedQuery.slug!;
+      const variantParam = request.nextUrl?.searchParams?.get('v');
+      const itemContext =
+        (await resolveApiItemContext(requestedSlug, variantParam)) ??
+        (requestedSlug.toLowerCase() !== requestedSlug
+          ? await resolveApiItemContext(
+              requestedSlug.toLowerCase(),
+              variantParam
+            )
+          : null);
+      const product = await getCachedMasterProductBySlug(
+        itemContext ? itemContext.selected.slug : requestedSlug
+      );
       if (!product) {
         return NextResponse.json(
           { ok: false, error: 'Product not found', code: 'NOT_FOUND' },

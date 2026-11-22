@@ -66,6 +66,9 @@ let schemaMissing = false;
 let offersSchemaMissing = false;
 // The Item's published variants: both sizes, one, or none.
 let variantSet: 'both' | 'one' | 'none' = 'both';
+let itemReviewsEnabled = false;
+const LISTING_128 = '66666666-6666-4666-8666-666666666128';
+const LISTING_256 = '66666666-6666-4666-8666-666666666256';
 const OTHER = {
   ...master('55555555-5555-4555-8555-555555555555', 256),
   item_id: null,
@@ -132,8 +135,20 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
             : [];
       if (q.includes('slug=eq.apple-iphone-16-128gb')) return json([M128]);
       if (q.includes('slug=eq.apple-iphone-16-256gb')) return json([M256]);
+      if (itemReviewsEnabled && q.includes('slug=eq.apple-iphone-16-unknown'))
+        return json([
+          {
+            ...M128,
+            slug: 'apple-iphone-16-unknown',
+            variant_key: 'unknown',
+            storage_gb: null,
+            status: 'archived',
+          },
+        ]);
       if (q.includes(`slug=eq.${OTHER.slug}`)) return json([OTHER]);
       if (q.includes(`id=eq.${V128}`)) return json([M128]);
+      if (itemReviewsEnabled && q.includes(`id=eq.${V256}`))
+        return json([M256]);
       if (
         q.includes(`item_id=eq.${ITEM_ID}`) ||
         q.includes(`item_id=in.(${ITEM_ID})`)
@@ -142,6 +157,10 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
       return json([]);
     }
     case '/rest/v1/products':
+      if (itemReviewsEnabled && q.includes(`cluster_id=eq.${V128}`))
+        return json([{ id: LISTING_128 }]);
+      if (itemReviewsEnabled && q.includes(`cluster_id=eq.${V256}`))
+        return json([{ id: LISTING_256 }]);
       // A listing on the 128GB variant.
       if (q.includes('111222333') && q.includes('cluster_id=not.is.null'))
         return json([{ cluster_id: V128, platform_item_id: '111222333' }]);
@@ -177,6 +196,44 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
             merchant_trust_score: 90,
           },
         ]);
+      return json([]);
+    case '/rest/v1/reviews':
+      if (itemReviewsEnabled && q.includes(LISTING_256)) {
+        return json([
+          {
+            id: 'rev-item-256',
+            author_name: 'Buyer 256GB',
+            rating_star: 5,
+            comment: 'Spacious 256GB storage and crisp main camera.',
+            created_at: '2026-11-20T10:00:00Z',
+            reviewer_type: 'user',
+            helpfulness_weight: 1,
+            review_flags: {
+              verdict: 'authentic',
+              flag_category: 'authentic',
+              include_in_rating: true,
+            },
+          },
+        ]);
+      }
+      if (itemReviewsEnabled && q.includes(LISTING_128)) {
+        return json([
+          {
+            id: 'rev-item-128',
+            author_name: 'Buyer 128GB',
+            rating_star: 4,
+            comment: 'Compact 128GB model with reliable all-day battery.',
+            created_at: '2026-11-20T09:00:00Z',
+            reviewer_type: 'user',
+            helpfulness_weight: 1,
+            review_flags: {
+              verdict: 'authentic',
+              flag_category: 'authentic',
+              include_in_rating: true,
+            },
+          },
+        ]);
+      }
       return json([]);
     default:
       return json([]);
@@ -484,12 +541,156 @@ async function testExtensionLookup() {
   console.warn('  ✅ Extension lookup returns the Item and all its sizes');
 }
 
+async function testReviewsAndItemSizeRoutes() {
+  const { NextRequest } = await import('next/server');
+  const reviewsRoute = await import('../reviews/route');
+  const itemSizeRoute = await import('../item-size/[slug]/route');
+
+  itemReviewsEnabled = true;
+  try {
+    // 1. Flag off: canonical Item slug returns 404 without querying items; variant slug returns 200.
+    setFlag(undefined);
+    calls = [];
+    let res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16'
+      )
+    );
+    assert.equal(res.status, 404);
+    assert.equal((await res.json()).code, 'NOT_FOUND');
+    assert.ok(!calls.some((c) => c.startsWith('/rest/v1/items')));
+
+    res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16-128gb'
+      )
+    );
+    assert.equal(res.status, 200);
+    let body = await res.json();
+    assert.equal(body.masterProductId, V128);
+    assert.equal(body.data[0]?.id, 'rev-item-128');
+
+    // 2. Flag on, Item tables missing: falls back to master product lookup.
+    setFlag('item');
+    schemaMissing = true;
+    res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16-128gb'
+      )
+    );
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).masterProductId, V128);
+    schemaMissing = false;
+
+    // 3. Flag on: canonical Item slug resolves to default variant (256GB), ?v= selects variant, case-insensitive.
+    res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16'
+      )
+    );
+    assert.equal(res.status, 200);
+    body = await res.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.masterProductId, V256);
+    assert.equal(body.count, 1);
+    assert.equal(body.data[0]?.id, 'rev-item-256');
+
+    res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=APPLE-IPHONE-16'
+      )
+    );
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).masterProductId, V256);
+
+    res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16&v=128gb'
+      )
+    );
+    assert.equal(res.status, 200);
+    body = await res.json();
+    assert.equal(body.masterProductId, V128);
+    assert.equal(body.data[0]?.id, 'rev-item-128');
+
+    // Unknown ?v= on an Item slug and retired/archived variant slugs fall back to the default variant.
+    res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16&v=999gb'
+      )
+    );
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).masterProductId, V256);
+
+    res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16-unknown'
+      )
+    );
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).masterProductId, V256);
+
+    res = await reviewsRoute.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-17'
+      )
+    );
+    assert.equal(res.status, 404);
+    assert.equal((await res.json()).code, 'NOT_FOUND');
+
+    // 4. item-size/[slug] OPTIONS preflight and GET CORS headers (#1811).
+    const preflight = await itemSizeRoute.OPTIONS();
+    assert.equal(preflight.status, 204);
+    assert.equal(await preflight.text(), '');
+    assert.equal(preflight.headers.get('access-control-allow-origin'), '*');
+    assert.equal(
+      preflight.headers.get('access-control-allow-methods'),
+      'GET, OPTIONS'
+    );
+    assert.equal(
+      preflight.headers.get('access-control-allow-headers'),
+      'Content-Type, Authorization, X-Rate-Extension-Version'
+    );
+
+    const sizeRes = await itemSizeRoute.GET(
+      new Request(
+        'http://localhost/api/v1/rate/item-size/apple-iphone-16-128gb'
+      ),
+      { params: Promise.resolve({ slug: 'apple-iphone-16-128gb' }) }
+    );
+    assert.equal(sizeRes.status, 200);
+    assert.equal(sizeRes.headers.get('access-control-allow-origin'), '*');
+    assert.equal(
+      (await sizeRes.json()).data.product.slug,
+      'apple-iphone-16-128gb'
+    );
+
+    setFlag(undefined);
+    const sizeOffRes = await itemSizeRoute.GET(
+      new Request(
+        'http://localhost/api/v1/rate/item-size/apple-iphone-16-128gb'
+      ),
+      { params: Promise.resolve({ slug: 'apple-iphone-16-128gb' }) }
+    );
+    assert.equal(sizeOffRes.status, 404);
+    assert.equal(sizeOffRes.headers.get('access-control-allow-origin'), '*');
+  } finally {
+    itemReviewsEnabled = false;
+    schemaMissing = false;
+    setFlag(undefined);
+  }
+  console.warn(
+    '  ✅ /reviews resolves canonical Item slugs and /item-size/[slug] answers OPTIONS (#1811)'
+  );
+}
+
 async function main() {
   console.warn('🧪 API v1 Item fields suite (DOS/Rate#1158)');
   await testFlagOffUnchanged();
   await testDetailItemFields();
   await testGroupItem();
   await testExtensionLookup();
+  await testReviewsAndItemSizeRoutes();
 }
 
 main().catch((err) => {
