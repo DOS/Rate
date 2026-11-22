@@ -66,6 +66,8 @@ packages/*/.env
 .cursor/
 memory-bank/
 mcp.json
+!apps/web/src/app/.well-known/mcp.json/
+!apps/web/src/app/.well-known/mcp.json/**
 .cache
 
 .strapi-updater.json
