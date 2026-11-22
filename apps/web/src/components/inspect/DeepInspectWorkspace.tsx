@@ -12,7 +12,7 @@ import {
   discountVerdictCopy,
   type VerdictTranslator,
 } from '@/lib/discount-verdict-copy';
-import { formatScoreFixed } from '@/lib/rating-display';
+import { formatScoreFixed, roundScore } from '@/lib/rating-display';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { Link, useRouter } from '@/lib/navigation';
@@ -79,6 +79,7 @@ import {
 } from '@/lib/product-market-stats';
 import { productImageUrl } from '@/lib/rate-domain-core';
 import {
+  collapseWhitespace,
   formatDecimal,
   formatNumber,
   formatPercent,
@@ -692,8 +693,74 @@ function formatInspectNonNegativePlainNumber(
   return formatPlainNumber(safe, locale);
 }
 
+function sanitizeInspectMarkdownInline(
+  value: unknown,
+  fallback: string,
+  locale?: string | null,
+  maxLen = 160
+): string {
+  if (typeof value !== 'string') return fallback;
+  const cleaned = collapseWhitespace(
+    value.replace(INSPECT_CONTROL_CHARS_RE, ' ').replace(/\|/g, '-'),
+    locale
+  )
+    .trim()
+    .slice(0, maxLen);
+  return cleaned || fallback;
+}
+
+function sanitizeInspectMarkdownCodeSpan(
+  value: unknown,
+  fallback = '-',
+  maxLen = 120
+): string {
+  if (typeof value !== 'string') return fallback;
+  const cleaned = value
+    .replace(INSPECT_CONTROL_CHARS_RE, ' ')
+    .replace(/`+/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+  return cleaned || fallback;
+}
+
+function sanitizeInspectNullableScore100(value: unknown): number | null {
+  const num = parseInspectFiniteNumber(value);
+  if (num == null) return null;
+  const clamped = Math.min(100, Math.max(0, Math.round(num)));
+  return clamped === 0 ? 0 : clamped;
+}
+
+export type InspectMarkdownKey =
+  | 'title'
+  | 'mdQuery'
+  | 'mdProduct'
+  | 'mdBuyerScore'
+  | 'userNoScore'
+  | 'mdExpertScore'
+  | 'verifiedReviewsCount'
+  | 'mdPriceSignal'
+  | 'mdPriceVerdict'
+  | 'implausiblyLowBadge'
+  | 'currentPriceLabel'
+  | 'claimedOriginalLabel'
+  | 'historicalLowLabel'
+  | 'historicalHighLabel'
+  | 'radarGenuinePill'
+  | 'radarBelowMedianPill'
+  | 'radarFakePill'
+  | 'radarSpreadPill'
+  | 'mdSeller'
+  | 'unknownShop'
+  | 'mdTrustScore'
+  | 'trustNoData'
+  | 'dosafeRiskLabel'
+  | 'reviewRiskNoData'
+  | 'reviewRiskLabel'
+  | 'mdLink';
+
 export type InspectMarkdownTranslator = (
-  key: string,
+  key: InspectMarkdownKey,
   values?: Record<string, string | number>
 ) => string;
 
@@ -742,7 +809,11 @@ export function buildInspectAuditMarkdown(params: {
     reviewRiskDisplay,
   } = params;
   const cleanQuery = sanitizeInspectQuery(queryInput);
-  const shareUrl = `${origin}/inspect?q=${encodeURIComponent(cleanQuery)}`;
+  const cleanOrigin =
+    (typeof origin === 'string'
+      ? origin.replace(INSPECT_CONTROL_CHARS_RE, '').trim().replace(/\/+$/, '')
+      : '') || 'https://rate.vn';
+  const shareUrl = `${cleanOrigin}/inspect?q=${encodeURIComponent(cleanQuery)}`;
   const {
     currentPriceVnd: currentListedPrice,
     claimedOriginalVnd: rawClaimedOrig,
@@ -759,6 +830,18 @@ export function buildInspectAuditMarkdown(params: {
     matchedGenuineDeal?.priceCurrent
   );
   const spreadVnd = sanitizeInspectPriceVnd(matchedPriceSpread?.spreadVnd);
+  const parsedUserRating = parseInspectFiniteNumber(masterUserRating);
+  const clampedUserRating =
+    parsedUserRating != null && parsedUserRating > 0
+      ? Math.min(5, parsedUserRating)
+      : 0;
+  const hasShownUserRating = roundScore(clampedUserRating, 2) > 0;
+  const parsedExpertRating10 = parseInspectFiniteNumber(masterExpertRating10);
+  const clampedExpertRating10 =
+    parsedExpertRating10 != null && parsedExpertRating10 > 0
+      ? Math.min(10, parsedExpertRating10)
+      : 0;
+  const hasShownExpertRating10 = roundScore(clampedExpertRating10, 1) > 0;
   const safeReviewCount = master
     ? Math.max(
         0,
@@ -769,19 +852,26 @@ export function buildInspectAuditMarkdown(params: {
         )
       )
     : 0;
+  const normalizedTrust = sanitizeInspectNullableScore100(safeMerchantTrust);
+  const normalizedDosafe = sanitizeInspectNullableScore100(
+    dosafeDisplay?.score
+  );
+  const normalizedReviewRisk = sanitizeInspectNullableScore100(
+    reviewRiskDisplay?.score
+  );
   const lines = [
     `### 🔬 ${t('title')} · Rate.vn`,
     `- **${t('mdQuery')}:** \`${cleanQuery}\``,
     ...(master
       ? [
-          `- **${t('mdProduct')}:** ${master.name} (\`${master.model_key}\`)`,
+          `- **${t('mdProduct')}:** ${sanitizeInspectMarkdownInline(master.name, '-', locale)} (\`${sanitizeInspectMarkdownCodeSpan(master.model_key)}\`)`,
           `- **${t('mdBuyerScore')}:** ${
-            masterUserRating > 0
-              ? `★ ${formatPlainNumber(formatScoreFixed(masterUserRating, 2), locale)}/${formatDecimal(5, locale, 1)}`
+            hasShownUserRating
+              ? `★ ${formatPlainNumber(formatScoreFixed(clampedUserRating, 2), locale)}/${formatDecimal(5, locale, 1)}`
               : t('userNoScore')
           }${
-            masterExpertRating10 != null && masterExpertRating10 > 0
-              ? ` | ${t('mdExpertScore')}: ${formatPlainNumber(formatScoreFixed(masterExpertRating10, 1), locale)}/10`
+            hasShownExpertRating10
+              ? ` | ${t('mdExpertScore')}: ${formatPlainNumber(formatScoreFixed(clampedExpertRating10, 1), locale)}/10`
               : ''
           } ${t('verifiedReviewsCount', { count: safeReviewCount })}`,
           `- **${t('mdPriceSignal')}:** ${radarMarkdownCell(radarSignal, locale)}`,
@@ -822,7 +912,12 @@ export function buildInspectAuditMarkdown(params: {
               matchedGenuineDeal.savingsVsMedianPct,
               locale
             ),
-            platform: (matchedGenuineDeal.platform || 'shopee').toUpperCase(),
+            platform: sanitizeInspectMarkdownInline(
+              matchedGenuineDeal.platform,
+              'shopee',
+              locale,
+              32
+            ).toUpperCase(),
             price: formatNumber(genuineDealPriceVnd, locale),
           })}`,
         ]
@@ -834,7 +929,12 @@ export function buildInspectAuditMarkdown(params: {
               matchedFakeTrap.fakeMarkupPct,
               locale
             ),
-            platform: (matchedFakeTrap.platform || 'shopee').toUpperCase(),
+            platform: sanitizeInspectMarkdownInline(
+              matchedFakeTrap.platform,
+              'shopee',
+              locale,
+              32
+            ).toUpperCase(),
           })}`,
         ]
       : []),
@@ -846,18 +946,24 @@ export function buildInspectAuditMarkdown(params: {
               locale
             ),
             vnd: formatNumber(spreadVnd, locale),
-            cheapest: (
-              matchedPriceSpread.cheapestPlatform || 'shopee'
+            cheapest: sanitizeInspectMarkdownInline(
+              matchedPriceSpread.cheapestPlatform,
+              'shopee',
+              locale,
+              32
             ).toUpperCase(),
-            priciest: (
-              matchedPriceSpread.priciestPlatform || 'lazada'
+            priciest: sanitizeInspectMarkdownInline(
+              matchedPriceSpread.priciestPlatform,
+              'lazada',
+              locale,
+              32
             ).toUpperCase(),
           })}`,
         ]
       : []),
     ...(merchant
       ? [
-          `- **${t('mdSeller')}:** ${merchant.name} (${(merchant.platform || 'shopee').toUpperCase()}) | ${t('mdTrustScore')}: ${safeMerchantTrust == null ? t('trustNoData') : `**${formatNumber(safeMerchantTrust, locale)}/100**`} (${t('dosafeRiskLabel')}: ${dosafeDisplay == null ? t('reviewRiskNoData') : `${formatNumber(dosafeDisplay.score, locale)}/100`}, ${t('reviewRiskLabel')}: ${reviewRiskDisplay == null ? t('reviewRiskNoData') : `${formatNumber(reviewRiskDisplay.score, locale)}/100`})`,
+          `- **${t('mdSeller')}:** ${sanitizeInspectMarkdownInline(merchant.name, t('unknownShop'), locale)} (${sanitizeInspectMarkdownInline(merchant.platform, 'shopee', locale, 32).toUpperCase()}) | ${t('mdTrustScore')}: ${normalizedTrust == null ? t('trustNoData') : `**${formatNumber(normalizedTrust, locale)}/100**`} (${t('dosafeRiskLabel')}: ${normalizedDosafe == null ? t('reviewRiskNoData') : `${formatNumber(normalizedDosafe, locale)}/100`}, ${t('reviewRiskLabel')}: ${normalizedReviewRisk == null ? t('reviewRiskNoData') : `${formatNumber(normalizedReviewRisk, locale)}/100`})`,
         ]
       : []),
     `- **${t('mdLink')}:** ${shareUrl}`,
@@ -1219,7 +1325,7 @@ export default function DeepInspectWorkspace({
         queryInput,
         origin: window.location.origin,
         locale,
-        t: (key, values) => t(key as never, values as never),
+        t: (key, values) => t(key, values),
         tVerdict,
         tOffers: (key) => tOffers(key),
         master,

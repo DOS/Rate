@@ -53,6 +53,7 @@ import {
   sanitizeMerchantCount,
 } from '@/components/merchants/MerchantShareAuditButton';
 import {
+  collapseWhitespace,
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
@@ -258,6 +259,24 @@ export type MerchantDirectoryMarkdownTranslator = (
   values?: Record<string, string | number>
 ) => string;
 
+const DIRECTORY_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+function sanitizeMerchantDirectoryMarkdownCell(
+  value: unknown,
+  fallback = '-',
+  locale?: string | null,
+  maxLen = 160
+): string {
+  if (typeof value !== 'string') return fallback;
+  const cleaned = collapseWhitespace(
+    value.replace(DIRECTORY_CONTROL_CHARS_RE, ' ').replace(/\|/g, '-'),
+    locale
+  )
+    .trim()
+    .slice(0, maxLen);
+  return cleaned || fallback;
+}
+
 export function buildMerchantsDirectoryMarkdown(params: {
   merchants: readonly MerchantDirectoryExplorerItem[];
   radarPayload?: Parameters<typeof selectMerchantRadar>[0];
@@ -266,35 +285,70 @@ export function buildMerchantsDirectoryMarkdown(params: {
 }): string {
   const { merchants, radarPayload, t, locale } = params;
   const headers = [
-    sanitizeMerchantAuditText(t('dirMdColMerchant'), '-'),
-    sanitizeMerchantAuditText(t('dirMdColPlatform'), '-'),
-    sanitizeMerchantAuditText(t('dirMdColOfficialMall'), '-'),
-    sanitizeMerchantAuditText(t('dirMdColTrustScore'), '-'),
-    sanitizeMerchantAuditText(t('dirMdColReviewRisk'), '-'),
-    sanitizeMerchantAuditText(t('dirMdColGenuineDeals'), '-'),
-    sanitizeMerchantAuditText(t('dirMdColFakeTraps'), '-'),
-    sanitizeMerchantAuditText(t('dirMdColAuthenticReviews'), '-'),
-    sanitizeMerchantAuditText(t('dirMdColTrackedProducts'), '-'),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColMerchant'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColPlatform'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColOfficialMall'),
+      '-',
+      locale
+    ),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColTrustScore'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColReviewRisk'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColGenuineDeals'),
+      '-',
+      locale
+    ),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColFakeTraps'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColAuthenticReviews'),
+      '-',
+      locale
+    ),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColTrackedProducts'),
+      '-',
+      locale
+    ),
   ];
   const sep = headers.map(() => '---');
-  const yesCell = sanitizeMerchantAuditText(t('dirMdYes'), '-');
-  const noCell = sanitizeMerchantAuditText(t('dirMdNo'), '-');
-  const unknownMerchant = sanitizeMerchantAuditText(
-    t('dirMdUnknownMerchant'),
-    '-'
+  const yesCell = sanitizeMerchantDirectoryMarkdownCell(
+    t('dirMdYes'),
+    '-',
+    locale
   );
-  const trustNoData = sanitizeMerchantAuditText(t('trustNoData'), '-');
-  const reviewNoData = sanitizeMerchantAuditText(
+  const noCell = sanitizeMerchantDirectoryMarkdownCell(
+    t('dirMdNo'),
+    '-',
+    locale
+  );
+  const unknownMerchant = sanitizeMerchantDirectoryMarkdownCell(
+    t('dirMdUnknownMerchant'),
+    '-',
+    locale
+  );
+  const trustNoData = sanitizeMerchantDirectoryMarkdownCell(
+    t('trustNoData'),
+    '-',
+    locale
+  );
+  const reviewNoData = sanitizeMerchantDirectoryMarkdownCell(
     t('reviewRiskNoDataShort'),
-    '-'
+    '-',
+    locale
   );
   const rows = merchants.map((m) => {
     const rStats = selectMerchantRadar(radarPayload, m);
     const trust = merchantDirectoryTrustDisplay(m.trust_score);
     const review = merchantDirectoryReviewRiskDisplay(m);
     return [
-      sanitizeMerchantAuditText(m.name, unknownMerchant),
-      sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
+      sanitizeMerchantDirectoryMarkdownCell(m.name, unknownMerchant, locale),
+      sanitizeMerchantDirectoryMarkdownCell(
+        m.platform,
+        'shopee',
+        locale,
+        32
+      ).toUpperCase(),
       m.is_official ? yesCell : noCell,
       // No trust score: no number (DOS/Rate#1484).
       trust == null ? trustNoData : `${formatNumber(trust.score, locale)}/100`,

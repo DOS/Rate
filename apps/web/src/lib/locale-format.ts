@@ -8,8 +8,9 @@
 // thousands separator, a decimal comma, a non-breaking space before `%` and
 // `₫`, and `29. 10. 2026` for dates.
 //
-// API payloads, CSV/JSON exports and Markdown share text do not go through
-// this module; they keep their fixed machine-readable form.
+// API payloads and CSV/JSON exports do not go through this module; they keep
+// their fixed machine-readable form, while page text and localized Copy
+// Markdown summaries format through these helpers (DOS/Rate#1711, #1842).
 
 export type FormatLocale = 'vi' | 'en' | 'cs';
 

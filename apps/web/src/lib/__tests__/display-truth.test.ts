@@ -30,7 +30,10 @@ import {
   buildMerchantsDirectoryMarkdown,
   merchantDirectoryDosafeDisplay,
 } from '../../components/merchants/MerchantDirectoryExplorer';
-import { buildPriceHistoryMarkdown } from '../../components/price-history/PriceHistorySection';
+import {
+  buildPriceHistoryMarkdown,
+  sanitizePriceHistoryMarkdownCell,
+} from '../../components/price-history/PriceHistorySection';
 import { formatPercent, formatPriceVnd, NBSP } from '../locale-format';
 import { parseEcommerceUrlOrQuery } from '../rate-domain';
 import type { VerdictTranslator } from '../discount-verdict-copy';
@@ -1955,6 +1958,113 @@ for (const locale of LOCALES) {
       );
     }
   }
+}
+
+// Round-1 hardening (#1842): sanitize control chars, pipes, backticks, empty
+// merchant names, non-finite scores/trust, and Czech NBSP in Markdown cells.
+assert.equal(
+  sanitizePriceHistoryMarkdownCell(
+    `Sleva${NBSP}10${NBSP}% | test\nline`,
+    '-',
+    'cs'
+  ),
+  `Sleva${NBSP}10${NBSP}% - test line`
+);
+assert.equal(
+  sanitizePriceHistoryMarkdownCell(`Sleva${NBSP}10${NBSP}%`, '-'),
+  'Sleva 10 %'
+);
+assert.equal(sanitizePriceHistoryMarkdownCell(null, '-', 'cs'), '-');
+
+{
+  const csScoped = pickClientMessages(
+    readLocale('cs') as unknown as Record<string, unknown>,
+    'inspect'
+  );
+  const tInspectCs = createTranslator({
+    locale: 'cs',
+    messages: csScoped,
+    namespace: 'inspect',
+  });
+  const tVerdictCsScoped = createTranslator({
+    locale: 'cs',
+    messages: csScoped,
+    namespace: 'priceVerdict',
+  });
+  const tOffersCsScoped = createTranslator({
+    locale: 'cs',
+    messages: csScoped,
+    namespace: 'productDetail',
+  });
+  const hardenedInspectMd = buildInspectAuditMarkdown({
+    queryInput: 'test',
+    origin: '  https://rate.vn///  ',
+    locale: 'cs',
+    t: (key, values) => tInspectCs(key as never, values as never),
+    tVerdict: (key, values) => tVerdictCsScoped(key as never, values as never),
+    tOffers: (key) => tOffersCsScoped(key as never),
+    master: {
+      id: 'mp-edge',
+      slug: 'edge',
+      name: `iPhone\n16 | Pro${NBSP}Max`,
+      brand: 'Apple',
+      model: 'iPhone 16',
+      model_key: 'apple`inject\nkey',
+      authentic_review_count: 0,
+      total_reviews: 0,
+      status: 'published',
+    } as never,
+    masterUserRating: Number.POSITIVE_INFINITY,
+    masterExpertRating10: 0.001,
+    radarSignal: {
+      verdict: 'none',
+      savingsPct: 0,
+      fakeMarkupPct: 0,
+      spreadPct: 0,
+      genuineDeal: null,
+      fakeSaleTrap: null,
+      priceSpread: null,
+    },
+    offerImplausiblyLow: false,
+    matchedOfferUnavailable: false,
+    discount: null,
+    verdictPrices: {
+      currentPriceVnd: 0,
+      claimedOriginalVnd: 0,
+      historicalLowVnd: 0,
+      historicalHighVnd: 0,
+    },
+    merchant: {
+      id: 'm-edge',
+      name: '   \n  ',
+      platform: '  \t ',
+      platform_shop_id: 's',
+      is_official: false,
+    } as never,
+    safeMerchantTrust: Number.NaN,
+    dosafeDisplay: { score: 150 } as never,
+    reviewRiskDisplay: { score: Number.POSITIVE_INFINITY } as never,
+  });
+  assert.ok(
+    hardenedInspectMd.includes(
+      `iPhone 16 - Pro${NBSP}Max (\`apple'inject key\`)`
+    )
+  );
+  assert.ok(hardenedInspectMd.includes(readLocale('cs').inspect!.userNoScore!));
+  assert.ok(!hardenedInspectMd.includes('0,00/5,0'));
+  assert.ok(!hardenedInspectMd.includes('0,0/10'));
+  assert.ok(!hardenedInspectMd.includes('NaN'));
+  assert.ok(!hardenedInspectMd.includes('Infinity'));
+  assert.ok(
+    hardenedInspectMd.includes(
+      `${readLocale('cs').inspect!.unknownShop} (SHOPEE)`
+    )
+  );
+  assert.ok(hardenedInspectMd.includes('100/100'));
+  assert.ok(
+    hardenedInspectMd.includes('https://rate.vn/inspect?q=test') &&
+      !hardenedInspectMd.includes('rate.vn//')
+  );
 }
 
 console.log('display-truth: ok');

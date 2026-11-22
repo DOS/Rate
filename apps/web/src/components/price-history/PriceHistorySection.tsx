@@ -35,6 +35,7 @@ import {
 } from '@/lib/discount-verdict-copy';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
+  collapseWhitespace,
   formatDate,
   formatDecimal,
   formatNumber,
@@ -128,13 +129,14 @@ export function sanitizePriceHistoryCount(value: unknown): number {
 
 export function sanitizePriceHistoryMarkdownCell(
   value: unknown,
-  fallback = '-'
+  fallback = '-',
+  locale?: string | null
 ): string {
   if (typeof value !== 'string') return fallback;
-  const cleaned = value
-    .replace(PRICE_HISTORY_CONTROL_CHARS_RE, ' ')
-    .replace(/\|/g, '-')
-    .replace(/\s+/g, ' ')
+  const cleaned = collapseWhitespace(
+    value.replace(PRICE_HISTORY_CONTROL_CHARS_RE, ' ').replace(/\|/g, '-'),
+    locale
+  )
     .trim()
     .slice(0, 160);
   return cleaned || fallback;
@@ -243,31 +245,61 @@ export function buildPriceHistoryMarkdown(params: {
     params;
   const tr = params.t ?? defaultPriceHistoryMarkdownTranslator(locale);
   const headers = [
-    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColMerchant')),
-    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColPlatform')),
-    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColCurrentPrice')),
-    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColOriginalPrice')),
-    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColMedian90d')),
-    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColLow90d')),
-    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColVerdict')),
+    sanitizePriceHistoryMarkdownCell(
+      tr('priceHistoryMdColMerchant'),
+      '-',
+      locale
+    ),
+    sanitizePriceHistoryMarkdownCell(
+      tr('priceHistoryMdColPlatform'),
+      '-',
+      locale
+    ),
+    sanitizePriceHistoryMarkdownCell(
+      tr('priceHistoryMdColCurrentPrice'),
+      '-',
+      locale
+    ),
+    sanitizePriceHistoryMarkdownCell(
+      tr('priceHistoryMdColOriginalPrice'),
+      '-',
+      locale
+    ),
+    sanitizePriceHistoryMarkdownCell(
+      tr('priceHistoryMdColMedian90d'),
+      '-',
+      locale
+    ),
+    sanitizePriceHistoryMarkdownCell(
+      tr('priceHistoryMdColLow90d'),
+      '-',
+      locale
+    ),
+    sanitizePriceHistoryMarkdownCell(
+      tr('priceHistoryMdColVerdict'),
+      '-',
+      locale
+    ),
   ];
   const sep = headers.map(() => '---');
   const safeFakeCount = sanitizePriceHistoryCount(history.fakeDiscountCount);
   const safeGenuineCount = sanitizePriceHistoryCount(history.genuineDealCount);
   const rows = offerAnalyses.map((oa) => [
-    sanitizePriceHistoryMarkdownCell(oa.merchant_name),
-    sanitizePriceHistoryMarkdownCell((oa.platform || '').toUpperCase()),
+    sanitizePriceHistoryMarkdownCell(oa.merchant_name, '-', locale),
+    sanitizePriceHistoryMarkdownCell(oa.platform, '-', locale).toUpperCase(),
     formatVnd(oa.price_current, locale),
     formatVnd(oa.price_original, locale),
     formatVnd(oa.historical_median_price, locale),
     formatVnd(oa.historical_min_price, locale),
     sanitizePriceHistoryMarkdownCell(
-      discountVerdictCopy(tVerdict, oa, locale).label
+      discountVerdictCopy(tVerdict, oa, locale).label,
+      '-',
+      locale
     ),
   ]);
   return [
     tr('priceHistoryMdHeading', {
-      name: sanitizePriceHistoryMarkdownCell(productName),
+      name: sanitizePriceHistoryMarkdownCell(productName, '-', locale),
     }),
     `- **${tr('priceHistoryMdCurrentLowest')}**: ${formatVnd(history.currentMinPrice, locale)}`,
     `- **${tr('priceHistoryMdAllTimeLowest')}**: ${formatVnd(history.lowestEverPrice, locale)}`,
