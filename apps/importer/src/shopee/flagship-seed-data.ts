@@ -150,6 +150,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
         fcc_approval: 'FCC ID BCG-E8692A',
         sar_head: '1.08 W/kg',
         sar_body: '1.17 W/kg',
+        certifications: 'Model A3287 (Vietnam and other countries and regions)',
       },
     },
     key_specs: {
@@ -165,6 +166,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
       'connectivity.bluetooth': 'https://support.apple.com/en-us/121029',
       'regulatory.sar_head': 'https://www.apple.com/legal/rfexposure/iphone17,3/en/',
       'regulatory.sar_body': 'https://www.apple.com/legal/rfexposure/iphone17,3/en/',
+      'regulatory.certifications': 'https://support.apple.com/vi-vn/121029',
     },
   },
   'apple:iphone-16-plus:256gb': {
@@ -255,6 +257,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
         fcc_approval: 'FCC ID BCG-E8693A',
         sar_head: '1.12 W/kg',
         sar_body: '1.14 W/kg',
+        certifications: 'Model A3290 (Vietnam and other countries and regions)',
       },
     },
     key_specs: {
@@ -268,6 +271,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
     sources: {
       'cellular.bands_5g': 'https://support.apple.com/vi-vn/121030',
       'connectivity.bluetooth': 'https://support.apple.com/en-us/121030',
+      'regulatory.certifications': 'https://support.apple.com/vi-vn/121030',
     },
   },
   'apple:iphone-15:128gb': {
@@ -356,6 +360,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
         fcc_approval: 'FCC ID BCG-E8431A',
         sar_head: '1.12 W/kg',
         sar_body: '1.14 W/kg',
+        certifications: 'Model A3090 (Vietnam and other countries and regions)',
       },
     },
     key_specs: {
@@ -369,6 +374,7 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
     sources: {
       'cellular.bands_5g': 'https://support.apple.com/vi-vn/111831',
       'connectivity.bluetooth': 'https://support.apple.com/en-us/111831',
+      'regulatory.certifications': 'https://support.apple.com/vi-vn/111831',
     },
   },
 };
@@ -1177,7 +1183,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     key_specs: {
       screen: '13.6" Liquid Retina (2560x1664, 500 nits)',
       chip: 'Apple M3 (8-core CPU / 8-core GPU)',
-      camera: '1080p FaceTime HD + 3-Mic Studio Array',
+      camera: '1080p FaceTime HD',
       battery: '52.6 Wh (Lên tới 18 giờ, MagSafe 3)',
       storage: '256GB',
       ram: '16GB',
@@ -1482,7 +1488,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
       camera: {},
       connectivity: {
-        bluetooth: '5.3, AAC, Ultra-low latency 20-bit/48kHz Lossless Audio Protocol',
+        bluetooth: '5.3',
         usb: 'USB Type-C charging port',
         sensors:
           'Skin-detect sensor, motion-detecting accelerometer, speech-detecting accelerometer, touch control',
@@ -1503,6 +1509,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     key_specs: {
       chip: 'Apple H2 + Apple U1 Ultra Wideband',
       battery: '6h tai nghe / 30h hộp sạc (523 mAh)',
+    },
+    sources: {
+      'connectivity.bluetooth': 'https://support.apple.com/en-us/111836',
     },
     // Template text an earlier version of this seed wrote: a display, cameras, a cellular
     // network and phone hardware earbuds do not have (DOS/Rate#1793).
@@ -3200,7 +3209,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       chip: 'Apple M4 Pro (12-core CPU, 16-core GPU)',
       ram: '24GB',
       storage: '512GB',
-      camera: '12MP Center Stage + 3x Thunderbolt 5 (120Gb/s)',
+      camera: '12MP Center Stage Camera with Desk View',
       battery: '72.4Wh (22h) 96W MagSafe 3',
     },
     specifications: {
