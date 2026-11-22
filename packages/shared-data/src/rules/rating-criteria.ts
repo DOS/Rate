@@ -448,3 +448,418 @@ export function mapLegacyCriteriaRatings(
   }
   return out;
 }
+
+const DEVICE_CATEGORIES = [
+  'smartphones',
+  'tablets',
+  'laptops',
+  'smartwatches',
+  'earbuds',
+] as const;
+
+export type DeviceRatingCategorySlug = (typeof DEVICE_CATEGORIES)[number];
+
+export const RATING_DEVICE_CATEGORIES: readonly DeviceRatingCategorySlug[] =
+  DEVICE_CATEGORIES;
+
+const USE_CASE_PRESET_IDS = [
+  'default',
+  'gaming',
+  'camera',
+  'endurance',
+  'value',
+  'media',
+  'study_work',
+  'office',
+  'creator',
+  'fitness',
+  'smart_daily',
+  'audiophile',
+  'commute_anc',
+  'calls_work',
+] as const;
+
+export type UseCasePresetId = (typeof USE_CASE_PRESET_IDS)[number];
+
+export const RATING_USE_CASE_PRESET_IDS: readonly UseCasePresetId[] =
+  USE_CASE_PRESET_IDS;
+
+const KNOWN_USE_CASE_PRESET_ID_SET = new Set<string>(
+  RATING_USE_CASE_PRESET_IDS
+);
+
+export function isUseCasePresetId(key: unknown): key is UseCasePresetId {
+  const candidate = key;
+  return (
+    typeof candidate === 'string' && KNOWN_USE_CASE_PRESET_ID_SET.has(candidate)
+  );
+}
+
+export interface RatingUseCasePreset {
+  readonly id: UseCasePresetId;
+  readonly label: {
+    readonly vi: string;
+    readonly en: string;
+    readonly cs: string;
+  };
+  /** Share of each category criterion in percent; a preset's weights sum to 100. */
+  readonly weights: Readonly<Partial<Record<RatingCriterionKey, number>>>;
+}
+
+const p = (
+  id: UseCasePresetId,
+  vi: string,
+  en: string,
+  cs: string,
+  weights: Readonly<Partial<Record<RatingCriterionKey, number>>>
+): RatingUseCasePreset => ({
+  id,
+  label: { vi, en, cs },
+  weights,
+});
+
+function defaultPresetWeights(
+  categorySlug: string
+): Readonly<Partial<Record<RatingCriterionKey, number>>> {
+  const out: Partial<Record<RatingCriterionKey, number>> = {};
+  for (const criterion of getRatingCriteria(categorySlug)) {
+    out[criterion.key] = criterion.weight;
+  }
+  return out;
+}
+
+const RATING_USE_CASE_PRESETS: Readonly<
+  Record<string, readonly RatingUseCasePreset[]>
+> = {
+  smartphones: [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('smartphones')
+    ),
+    p(
+      'gaming',
+      'Cày game & pin trâu',
+      'Gaming & battery',
+      'Hraní her a výdrž',
+      {
+        performance: 40,
+        battery: 25,
+        display: 15,
+        value: 10,
+        camera: 5,
+        design: 5,
+      }
+    ),
+    p(
+      'camera',
+      'Nhiếp ảnh & quay vlog',
+      'Camera & creator',
+      'Fotoaparát a vlog',
+      {
+        camera: 45,
+        display: 20,
+        battery: 15,
+        performance: 10,
+        design: 5,
+        value: 5,
+      }
+    ),
+    p(
+      'endurance',
+      'Bền bỉ & thực dụng',
+      'Endurance & durability',
+      'Výdrž a odolnost',
+      {
+        battery: 35,
+        design: 25,
+        value: 20,
+        performance: 10,
+        display: 5,
+        camera: 5,
+      }
+    ),
+    p('value', 'Đáng tiền nhất (P/P)', 'Value-first', 'Nejlepší cena / výkon', {
+      value: 40,
+      performance: 20,
+      battery: 15,
+      display: 10,
+      camera: 10,
+      design: 5,
+    }),
+  ],
+  tablets: [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('tablets')
+    ),
+    p(
+      'media',
+      'Xem phim & giải trí',
+      'Media & entertainment',
+      'Filmy a zábava',
+      {
+        display: 35,
+        sound: 25,
+        battery: 20,
+        performance: 5,
+        software: 5,
+        design: 5,
+        value: 5,
+      }
+    ),
+    p(
+      'study_work',
+      'Học tập & ghi chú',
+      'Study & productivity',
+      'Studium a poznámky',
+      {
+        software: 25,
+        display: 20,
+        battery: 20,
+        performance: 15,
+        design: 10,
+        sound: 5,
+        value: 5,
+      }
+    ),
+    p(
+      'gaming',
+      'Chơi game & đa nhiệm',
+      'Gaming & multitasking',
+      'Hraní her a výkon',
+      {
+        performance: 40,
+        display: 25,
+        battery: 15,
+        sound: 5,
+        software: 5,
+        design: 5,
+        value: 5,
+      }
+    ),
+    p('value', 'Đáng tiền nhất (P/P)', 'Value-first', 'Nejlepší cena / výkon', {
+      value: 40,
+      display: 15,
+      performance: 15,
+      battery: 15,
+      sound: 5,
+      software: 5,
+      design: 5,
+    }),
+  ],
+  laptops: [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('laptops')
+    ),
+    p(
+      'office',
+      'Văn phòng & di động',
+      'Office & portability',
+      'Kancelář a mobilita',
+      {
+        battery: 30,
+        keyboard: 20,
+        design: 20,
+        display: 10,
+        performance: 10,
+        thermals: 5,
+        value: 5,
+      }
+    ),
+    p(
+      'creator',
+      'Lập trình & đồ họa nặng',
+      'Coding & creator',
+      'Programování a grafika',
+      {
+        performance: 35,
+        display: 25,
+        thermals: 15,
+        keyboard: 10,
+        battery: 5,
+        design: 5,
+        value: 5,
+      }
+    ),
+    p(
+      'gaming',
+      'Gaming & tản nhiệt',
+      'Gaming & thermals',
+      'Hraní her a chlazení',
+      {
+        performance: 40,
+        thermals: 25,
+        display: 15,
+        keyboard: 5,
+        battery: 5,
+        design: 5,
+        value: 5,
+      }
+    ),
+    p('value', 'Đáng tiền nhất (P/P)', 'Value-first', 'Nejlepší cena / výkon', {
+      value: 40,
+      performance: 20,
+      battery: 15,
+      display: 10,
+      keyboard: 5,
+      thermals: 5,
+      design: 5,
+    }),
+  ],
+  smartwatches: [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('smartwatches')
+    ),
+    p('fitness', 'Thể thao & sức khỏe', 'Fitness & health', 'Sport a zdraví', {
+      health: 45,
+      battery: 25,
+      design: 10,
+      display: 10,
+      apps: 5,
+      value: 5,
+    }),
+    p(
+      'endurance',
+      'Pin dài ngày & đi phượt',
+      'Multi-day endurance',
+      'Vícedenní výdrž',
+      {
+        battery: 45,
+        design: 20,
+        health: 15,
+        display: 10,
+        apps: 5,
+        value: 5,
+      }
+    ),
+    p(
+      'smart_daily',
+      'Đeo hằng ngày & tiện ích',
+      'Smart apps & daily wear',
+      'Chytré funkce a nošení',
+      {
+        apps: 30,
+        design: 25,
+        display: 20,
+        health: 10,
+        battery: 10,
+        value: 5,
+      }
+    ),
+    p('value', 'Đáng tiền nhất (P/P)', 'Value-first', 'Nejlepší cena / výkon', {
+      value: 40,
+      health: 20,
+      battery: 15,
+      design: 10,
+      apps: 10,
+      display: 5,
+    }),
+  ],
+  earbuds: [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('earbuds')
+    ),
+    p(
+      'audiophile',
+      'Nghe nhạc chuyên sâu',
+      'Audiophile sound',
+      'Audiofilský poslech',
+      {
+        sound: 50,
+        comfort: 20,
+        anc: 10,
+        battery: 10,
+        calls: 5,
+        value: 5,
+      }
+    ),
+    p(
+      'commute_anc',
+      'Đi làm & chống ồn ANC',
+      'ANC & commute',
+      'Cestování a ANC',
+      {
+        anc: 40,
+        comfort: 25,
+        battery: 15,
+        sound: 10,
+        calls: 5,
+        value: 5,
+      }
+    ),
+    p(
+      'calls_work',
+      'Họp online & đàm thoại',
+      'Meetings & calls',
+      'Schůzky a hovory',
+      {
+        calls: 40,
+        comfort: 25,
+        battery: 15,
+        anc: 10,
+        sound: 5,
+        value: 5,
+      }
+    ),
+    p('value', 'Đáng tiền nhất (P/P)', 'Value-first', 'Nejlepší cena / výkon', {
+      value: 40,
+      sound: 25,
+      battery: 15,
+      anc: 10,
+      comfort: 5,
+      calls: 5,
+    }),
+  ],
+  services: [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('services')
+    ),
+  ],
+};
+
+/**
+ * Curated RTINGS-style use-case presets for a category (DOS/Rate#1864).
+ * Unknown or null categories fall back to `smartphones`, matching `getRatingCriteria`.
+ */
+export function getRatingUseCasePresets(
+  categorySlug: string | null | undefined
+): readonly RatingUseCasePreset[] {
+  const raw = categorySlug;
+  const normalized =
+    typeof raw === 'string'
+      ? raw.replace(LOCALE_CONTROL_CHARS_RE, '').trim().toLowerCase()
+      : '';
+  return (
+    ownValue(RATING_USE_CASE_PRESETS, normalized) ??
+    RATING_USE_CASE_PRESETS.smartphones!
+  );
+}
+
+export function getRatingUseCasePresetLabel(
+  preset: Pick<RatingUseCasePreset, 'label'>,
+  locale: string | null | undefined
+): string {
+  return getRatingCriterionLabel(preset, locale);
+}
