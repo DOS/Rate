@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { getMasterProducts } from '@/lib/rate-api';
+import { getCachedMasterProducts } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
@@ -29,6 +29,15 @@ export async function generateMetadata({
   };
 }
 
+export function loadWatchlistCatalogProducts(
+  readProducts: typeof getCachedMasterProducts = getCachedMasterProducts
+) {
+  return readProducts({
+    categorySlug: 'all',
+    limit: 100,
+  });
+}
+
 export default async function WatchlistPage({
   params,
 }: {
@@ -38,10 +47,7 @@ export default async function WatchlistPage({
   setRequestLocale(locale);
   // No empty fallback: it would be cached for the whole revalidate window. A
   // failed regeneration keeps the last good page instead (DOS/Rate#491).
-  const catalogProducts = await getMasterProducts({
-    categorySlug: 'all',
-    limit: 100,
-  });
+  const catalogProducts = await loadWatchlistCatalogProducts();
 
   return (
     <ClientMessages scope="watchlist">
