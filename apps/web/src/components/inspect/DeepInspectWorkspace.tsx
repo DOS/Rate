@@ -657,6 +657,7 @@ export function buildInspectMarkdownPriceLines(params: {
     historicalLowLabel: string;
     historicalHighLabel: string;
   };
+  locale?: string | null;
 }): string[] {
   const current = sanitizeInspectPriceVnd(params.currentListedPrice);
   const orig = sanitizeInspectPriceVnd(params.claimedOrigPrice);
@@ -666,20 +667,202 @@ export function buildInspectMarkdownPriceLines(params: {
   if (current > 0) {
     const origSuffix =
       orig > current
-        ? ` | ${params.labels.claimedOriginalLabel}: ${orig.toLocaleString('vi-VN')} ₫`
+        ? ` | ${params.labels.claimedOriginalLabel}: ${formatPriceVnd(orig, params.locale)}`
         : '';
     out.push(
-      `- **${params.labels.currentPriceLabel}:** ${current.toLocaleString('vi-VN')} ₫${origSuffix}`
+      `- **${params.labels.currentPriceLabel}:** ${formatPriceVnd(current, params.locale)}${origSuffix}`
     );
   }
   if (low > 0 || high > 0) {
-    const lowStr = low > 0 ? `${low.toLocaleString('vi-VN')} ₫` : '-';
-    const highStr = high > 0 ? `${high.toLocaleString('vi-VN')} ₫` : '-';
+    const lowStr = low > 0 ? formatPriceVnd(low, params.locale) : '-';
+    const highStr = high > 0 ? formatPriceVnd(high, params.locale) : '-';
     out.push(
       `- **${params.labels.historicalLowLabel} / ${params.labels.historicalHighLabel}:** ${lowStr} - ${highStr}`
     );
   }
   return out;
+}
+
+function formatInspectNonNegativePlainNumber(
+  value: unknown,
+  locale?: string | null
+): string {
+  const num = parseInspectFiniteNumber(value);
+  const safe = num != null && num > 0 ? num : 0;
+  return formatPlainNumber(safe, locale);
+}
+
+export type InspectMarkdownTranslator = (
+  key: string,
+  values?: Record<string, string | number>
+) => string;
+
+export function buildInspectAuditMarkdown(params: {
+  queryInput: string;
+  origin: string;
+  locale: string;
+  t: InspectMarkdownTranslator;
+  tVerdict: VerdictTranslator;
+  tOffers: (
+    key: 'offersDiscontinuedBadge' | 'offersUnavailableBadge'
+  ) => string;
+  master: UrlInspectionResult['masterProduct'] | null;
+  masterUserRating: number;
+  masterExpertRating10: number | null;
+  radarSignal: ReturnType<typeof getRadarSignal>;
+  offerImplausiblyLow: boolean;
+  matchedOfferUnavailable: boolean;
+  matchedOfferAvailability?: OfferAvailability | null;
+  discount: OfferDiscountAnalysis | null;
+  verdictPrices: ReturnType<typeof resolveInspectPriceVerdictPrices>;
+  merchant: UrlInspectionResult['merchantProfile'] | null;
+  safeMerchantTrust: number | null;
+  dosafeDisplay: ReturnType<typeof inspectDosafeDisplay>;
+  reviewRiskDisplay: ReturnType<typeof inspectReviewRiskDisplay>;
+}): string {
+  const {
+    queryInput,
+    origin,
+    locale,
+    t,
+    tVerdict,
+    tOffers,
+    master,
+    masterUserRating,
+    masterExpertRating10,
+    radarSignal,
+    offerImplausiblyLow,
+    matchedOfferUnavailable,
+    matchedOfferAvailability,
+    discount,
+    verdictPrices,
+    merchant,
+    safeMerchantTrust,
+    dosafeDisplay,
+    reviewRiskDisplay,
+  } = params;
+  const cleanQuery = sanitizeInspectQuery(queryInput);
+  const shareUrl = `${origin}/inspect?q=${encodeURIComponent(cleanQuery)}`;
+  const {
+    currentPriceVnd: currentListedPrice,
+    claimedOriginalVnd: rawClaimedOrig,
+    historicalLowVnd: histLow,
+    historicalHighVnd: histHigh,
+  } = verdictPrices;
+  const matchedGenuineDeal = radarSignal.genuineDeal ?? null;
+  const genuinePillKey = isMultiPlatformFloor(matchedGenuineDeal)
+    ? 'radarGenuinePill'
+    : 'radarBelowMedianPill';
+  const matchedFakeTrap = radarSignal.fakeSaleTrap ?? null;
+  const matchedPriceSpread = radarSignal.priceSpread ?? null;
+  const genuineDealPriceVnd = sanitizeInspectPriceVnd(
+    matchedGenuineDeal?.priceCurrent
+  );
+  const spreadVnd = sanitizeInspectPriceVnd(matchedPriceSpread?.spreadVnd);
+  const safeReviewCount = master
+    ? Math.max(
+        0,
+        Math.floor(
+          parseInspectFiniteNumber(master.authentic_review_count) ||
+            parseInspectFiniteNumber(master.total_reviews) ||
+            0
+        )
+      )
+    : 0;
+  const lines = [
+    `### 🔬 ${t('title')} · Rate.vn`,
+    `- **${t('mdQuery')}:** \`${cleanQuery}\``,
+    ...(master
+      ? [
+          `- **${t('mdProduct')}:** ${master.name} (\`${master.model_key}\`)`,
+          `- **${t('mdBuyerScore')}:** ${
+            masterUserRating > 0
+              ? `★ ${formatPlainNumber(formatScoreFixed(masterUserRating, 2), locale)}/${formatDecimal(5, locale, 1)}`
+              : t('userNoScore')
+          }${
+            masterExpertRating10 != null && masterExpertRating10 > 0
+              ? ` | ${t('mdExpertScore')}: ${formatPlainNumber(formatScoreFixed(masterExpertRating10, 1), locale)}/10`
+              : ''
+          } ${t('verifiedReviewsCount', { count: safeReviewCount })}`,
+          `- **${t('mdPriceSignal')}:** ${radarMarkdownCell(radarSignal, locale)}`,
+        ]
+      : []),
+    ...(offerImplausiblyLow
+      ? [`- **${t('mdPriceVerdict')}:** **${t('implausiblyLowBadge')}**`]
+      : matchedOfferUnavailable && !discount
+        ? [
+            `- **${t('mdPriceVerdict')}:** **${
+              matchedOfferAvailability === 'discontinued'
+                ? tOffers('offersDiscontinuedBadge')
+                : tOffers('offersUnavailableBadge')
+            }**`,
+          ]
+        : discount
+          ? [
+              `- **${t('mdPriceVerdict')}:** ${inspectMarkdownPriceVerdict(tVerdict, discount, locale)}`,
+            ]
+          : []),
+    ...buildInspectMarkdownPriceLines({
+      currentListedPrice,
+      claimedOrigPrice: rawClaimedOrig,
+      histLow,
+      histHigh,
+      locale,
+      labels: {
+        currentPriceLabel: t('currentPriceLabel'),
+        claimedOriginalLabel: t('claimedOriginalLabel'),
+        historicalLowLabel: t('historicalLowLabel'),
+        historicalHighLabel: t('historicalHighLabel'),
+      },
+    }),
+    ...(matchedGenuineDeal && genuineDealPriceVnd > 0
+      ? [
+          `- ${t(genuinePillKey, {
+            pct: formatInspectNonNegativePlainNumber(
+              matchedGenuineDeal.savingsVsMedianPct,
+              locale
+            ),
+            platform: (matchedGenuineDeal.platform || 'shopee').toUpperCase(),
+            price: formatNumber(genuineDealPriceVnd, locale),
+          })}`,
+        ]
+      : []),
+    ...(matchedFakeTrap
+      ? [
+          `- ${t('radarFakePill', {
+            pct: formatInspectNonNegativePlainNumber(
+              matchedFakeTrap.fakeMarkupPct,
+              locale
+            ),
+            platform: (matchedFakeTrap.platform || 'shopee').toUpperCase(),
+          })}`,
+        ]
+      : []),
+    ...(matchedPriceSpread && spreadVnd > 0
+      ? [
+          `- ${t('radarSpreadPill', {
+            pct: formatInspectNonNegativePlainNumber(
+              matchedPriceSpread.spreadPct,
+              locale
+            ),
+            vnd: formatNumber(spreadVnd, locale),
+            cheapest: (
+              matchedPriceSpread.cheapestPlatform || 'shopee'
+            ).toUpperCase(),
+            priciest: (
+              matchedPriceSpread.priciestPlatform || 'lazada'
+            ).toUpperCase(),
+          })}`,
+        ]
+      : []),
+    ...(merchant
+      ? [
+          `- **${t('mdSeller')}:** ${merchant.name} (${(merchant.platform || 'shopee').toUpperCase()}) | ${t('mdTrustScore')}: ${safeMerchantTrust == null ? t('trustNoData') : `**${formatNumber(safeMerchantTrust, locale)}/100**`} (${t('dosafeRiskLabel')}: ${dosafeDisplay == null ? t('reviewRiskNoData') : `${formatNumber(dosafeDisplay.score, locale)}/100`}, ${t('reviewRiskLabel')}: ${reviewRiskDisplay == null ? t('reviewRiskNoData') : `${formatNumber(reviewRiskDisplay.score, locale)}/100`})`,
+        ]
+      : []),
+    `- **${t('mdLink')}:** ${shareUrl}`,
+  ];
+  return lines.join('\n');
 }
 
 export function resolveInspectOfferPlatform(offer: {
@@ -1032,80 +1215,28 @@ export default function DeepInspectWorkspace({
   const handleCopyAuditMarkdown = async () => {
     if (typeof window === 'undefined') return;
     try {
-      const cleanQuery = sanitizeInspectQuery(queryInput);
-      const shareUrl = `${window.location.origin}/inspect?q=${encodeURIComponent(
-        cleanQuery
-      )}`;
-      const {
-        currentPriceVnd: currentListedPrice,
-        claimedOriginalVnd: rawClaimedOrig,
-        historicalLowVnd: histLow,
-        historicalHighVnd: histHigh,
-      } = verdictPrices;
-      const genuineDealPriceVnd = sanitizeInspectPriceVnd(
-        matchedGenuineDeal?.priceCurrent
-      );
-      const spreadVnd = sanitizeInspectPriceVnd(matchedPriceSpread?.spreadVnd);
-      const lines = [
-        `### 🔬 ${t('title')} · Rate.vn`,
-        `- **${t('mdQuery')}:** \`${cleanQuery}\``,
-        ...(master
-          ? [
-              `- **${t('mdProduct')}:** ${master.name} (\`${master.model_key}\`)`,
-              `- **${t('mdBuyerScore')}:** ${masterUserRating > 0 ? `★ ${formatScoreFixed(masterUserRating, 2)}/5.0` : t('userNoScore')}${masterExpertRating10 != null ? ` | ${t('mdExpertScore')}: ${formatScoreFixed(masterExpertRating10, 1)}/10` : ''} ${t('verifiedReviewsCount', { count: master.authentic_review_count || master.total_reviews || 0 })}`,
-              `- **${t('mdPriceSignal')}:** ${radarMarkdownCell(radarSignal, locale)}`,
-            ]
-          : []),
-        ...(offerImplausiblyLow
-          ? [`- **${t('mdPriceVerdict')}:** **${t('implausiblyLowBadge')}**`]
-          : matchedOfferUnavailable && !discount
-            ? [
-                `- **${t('mdPriceVerdict')}:** **${
-                  matchedOffer?.availability === 'discontinued'
-                    ? tOffers('offersDiscontinuedBadge')
-                    : tOffers('offersUnavailableBadge')
-                }**`,
-              ]
-            : discount
-              ? [
-                  `- **${t('mdPriceVerdict')}:** ${inspectMarkdownPriceVerdict(tVerdict, discount, locale)}`,
-                ]
-              : []),
-        ...buildInspectMarkdownPriceLines({
-          currentListedPrice,
-          claimedOrigPrice: rawClaimedOrig,
-          histLow,
-          histHigh,
-          labels: {
-            currentPriceLabel: t('currentPriceLabel'),
-            claimedOriginalLabel: t('claimedOriginalLabel'),
-            historicalLowLabel: t('historicalLowLabel'),
-            historicalHighLabel: t('historicalHighLabel'),
-          },
-        }),
-        ...(matchedGenuineDeal && genuineDealPriceVnd > 0
-          ? [
-              `- ${t(genuinePillKey, { pct: matchedGenuineDeal.savingsVsMedianPct, platform: matchedGenuineDeal.platform.toUpperCase(), price: genuineDealPriceVnd.toLocaleString('vi-VN') })}`,
-            ]
-          : []),
-        ...(matchedFakeTrap
-          ? [
-              `- ${t('radarFakePill', { pct: matchedFakeTrap.fakeMarkupPct, platform: matchedFakeTrap.platform.toUpperCase() })}`,
-            ]
-          : []),
-        ...(matchedPriceSpread && spreadVnd > 0
-          ? [
-              `- ${t('radarSpreadPill', { pct: matchedPriceSpread.spreadPct, vnd: spreadVnd.toLocaleString('vi-VN'), cheapest: matchedPriceSpread.cheapestPlatform.toUpperCase(), priciest: matchedPriceSpread.priciestPlatform.toUpperCase() })}`,
-            ]
-          : []),
-        ...(merchant
-          ? [
-              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: ${safeMerchantTrust == null ? t('trustNoData') : `**${safeMerchantTrust}/100**`} (${t('dosafeRiskLabel')}: ${dosafeDisplay == null ? t('reviewRiskNoData') : `${dosafeDisplay.score}/100`}, ${t('reviewRiskLabel')}: ${reviewRiskDisplay == null ? t('reviewRiskNoData') : `${reviewRiskDisplay.score}/100`})`,
-            ]
-          : []),
-        `- **${t('mdLink')}:** ${shareUrl}`,
-      ];
-      await navigator.clipboard.writeText(lines.join('\n'));
+      const md = buildInspectAuditMarkdown({
+        queryInput,
+        origin: window.location.origin,
+        locale,
+        t: (key, values) => t(key as never, values as never),
+        tVerdict,
+        tOffers: (key) => tOffers(key),
+        master,
+        masterUserRating,
+        masterExpertRating10,
+        radarSignal,
+        offerImplausiblyLow,
+        matchedOfferUnavailable,
+        matchedOfferAvailability: matchedOffer?.availability,
+        discount,
+        verdictPrices,
+        merchant,
+        safeMerchantTrust,
+        dosafeDisplay,
+        reviewRiskDisplay,
+      });
+      await navigator.clipboard.writeText(md);
       setCopiedMd(true);
       setTimeout(() => setCopiedMd(false), 2500);
     } catch {

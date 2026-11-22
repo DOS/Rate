@@ -1117,6 +1117,16 @@ async function main() {
     tVerdict: tVerdictEn,
     locale: 'en',
   });
+  assert.ok(
+    enHistoryMd.startsWith(
+      '### 📈 Rate.vn price history and fake-sale check: Galaxy Buds3 Pro'
+    )
+  );
+  assert.ok(
+    enHistoryMd.includes(
+      '| Merchant | Platform | Current price (VND) | Original price (VND) | 90d median (VND) | 90d low (VND) | Price verdict |'
+    )
+  );
   assert.ok(enHistoryMd.includes('Fake sale warning (+35.0%)'));
   assert.equal(enHistoryMd.includes('Cảnh báo giảm giá ảo'), false);
 
@@ -1132,12 +1142,30 @@ async function main() {
   };
   const csHistoryMd = PriceHistorySectionMod.buildPriceHistoryMarkdown({
     productName: 'Galaxy Buds3 Pro',
-    history: emptyHistory,
+    history: {
+      ...emptyHistory,
+      currentMinPrice: 20_000_000,
+      lowestEverPrice: 18_500_000,
+    },
     offerAnalyses: [mkAnalysis('o1', 'normal_price')],
     radarSignal: radarFakeSignal,
     tVerdict: tVerdictCs,
     locale: 'cs',
   });
+  assert.ok(
+    csHistoryMd.startsWith(
+      '### 📈 Historie cen a kontrola falešných slev na Rate.vn: Galaxy Buds3 Pro'
+    )
+  );
+  assert.ok(
+    csHistoryMd.includes(
+      '| Obchod | Platforma | Aktuální cena (VND) | Původní cena (VND) | 90d medián (VND) | 90d minimum (VND) | Verdikt ceny |'
+    )
+  );
+  assert.ok(csHistoryMd.includes('20\u00a0000\u00a0000\u00a0₫'));
+  assert.ok(csHistoryMd.includes('18\u00a0500\u00a0000\u00a0₫'));
+  assert.equal(csHistoryMd.includes('20.000.000'), false);
+  assert.equal(csHistoryMd.includes('Current Lowest Price'), false);
   assert.ok(csHistoryMd.includes('Upozornění na falešnou slevu'));
   assert.equal(csHistoryMd.includes('Cảnh báo giảm giá ảo'), false);
 

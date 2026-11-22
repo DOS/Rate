@@ -236,6 +236,89 @@ export interface MerchantDirectoryExplorerPage {
   offset: number;
 }
 
+export type MerchantDirectoryMarkdownKey =
+  | 'dirMdHeading'
+  | 'dirMdColMerchant'
+  | 'dirMdColPlatform'
+  | 'dirMdColOfficialMall'
+  | 'dirMdColTrustScore'
+  | 'dirMdColReviewRisk'
+  | 'dirMdColGenuineDeals'
+  | 'dirMdColFakeTraps'
+  | 'dirMdColAuthenticReviews'
+  | 'dirMdColTrackedProducts'
+  | 'dirMdYes'
+  | 'dirMdNo'
+  | 'dirMdUnknownMerchant'
+  | 'trustNoData'
+  | 'reviewRiskNoDataShort';
+
+export type MerchantDirectoryMarkdownTranslator = (
+  key: MerchantDirectoryMarkdownKey,
+  values?: Record<string, string | number>
+) => string;
+
+export function buildMerchantsDirectoryMarkdown(params: {
+  merchants: readonly MerchantDirectoryExplorerItem[];
+  radarPayload?: Parameters<typeof selectMerchantRadar>[0];
+  t: MerchantDirectoryMarkdownTranslator;
+  locale: string;
+}): string {
+  const { merchants, radarPayload, t, locale } = params;
+  const headers = [
+    sanitizeMerchantAuditText(t('dirMdColMerchant'), '-'),
+    sanitizeMerchantAuditText(t('dirMdColPlatform'), '-'),
+    sanitizeMerchantAuditText(t('dirMdColOfficialMall'), '-'),
+    sanitizeMerchantAuditText(t('dirMdColTrustScore'), '-'),
+    sanitizeMerchantAuditText(t('dirMdColReviewRisk'), '-'),
+    sanitizeMerchantAuditText(t('dirMdColGenuineDeals'), '-'),
+    sanitizeMerchantAuditText(t('dirMdColFakeTraps'), '-'),
+    sanitizeMerchantAuditText(t('dirMdColAuthenticReviews'), '-'),
+    sanitizeMerchantAuditText(t('dirMdColTrackedProducts'), '-'),
+  ];
+  const sep = headers.map(() => '---');
+  const yesCell = sanitizeMerchantAuditText(t('dirMdYes'), '-');
+  const noCell = sanitizeMerchantAuditText(t('dirMdNo'), '-');
+  const unknownMerchant = sanitizeMerchantAuditText(
+    t('dirMdUnknownMerchant'),
+    '-'
+  );
+  const trustNoData = sanitizeMerchantAuditText(t('trustNoData'), '-');
+  const reviewNoData = sanitizeMerchantAuditText(
+    t('reviewRiskNoDataShort'),
+    '-'
+  );
+  const rows = merchants.map((m) => {
+    const rStats = selectMerchantRadar(radarPayload, m);
+    const trust = merchantDirectoryTrustDisplay(m.trust_score);
+    const review = merchantDirectoryReviewRiskDisplay(m);
+    return [
+      sanitizeMerchantAuditText(m.name, unknownMerchant),
+      sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
+      m.is_official ? yesCell : noCell,
+      // No trust score: no number (DOS/Rate#1484).
+      trust == null ? trustNoData : `${formatNumber(trust.score, locale)}/100`,
+      review == null
+        ? reviewNoData
+        : `${formatNumber(review.score, locale)}/100`,
+      formatNumber(sanitizeMerchantCount(rStats.genuineDealCount), locale),
+      formatNumber(sanitizeMerchantCount(rStats.fakeTrapCount), locale),
+      formatNumber(
+        sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count),
+        locale
+      ),
+      formatNumber(sanitizeMerchantCount(m.product_count), locale),
+    ];
+  });
+  return [
+    t('dirMdHeading', { count: merchants.length }),
+    '',
+    `| ${headers.join(' | ')} |`,
+    `| ${sep.join(' | ')} |`,
+    ...rows.map((r) => `| ${r.join(' | ')} |`),
+  ].join('\n');
+}
+
 interface MerchantDirectoryExplorerProps {
   /** First page for the initial filters, rendered on the server. */
   readonly initialPage: MerchantDirectoryExplorerPage;
@@ -519,45 +602,13 @@ export default function MerchantDirectoryExplorer({
 
   const buildMerchantsMarkdown = (
     filteredMerchants: MerchantDirectoryExplorerItem[]
-  ) => {
-    const headers = [
-      'Merchant',
-      'Platform',
-      'Official Mall',
-      'Trust Score (/100)',
-      'Review risk (/100)',
-      'Genuine Deals',
-      'Fake Sale Traps',
-      'Authentic Reviews',
-      'Tracked Products',
-    ];
-    const sep = headers.map(() => '---');
-    const rows = filteredMerchants.map((m) => {
-      const rStats = getMerchantRadarStats(m);
-      const trust = merchantDirectoryTrustDisplay(m.trust_score);
-      const review = merchantDirectoryReviewRiskDisplay(m);
-      return [
-        sanitizeMerchantAuditText(m.name, 'Unknown'),
-        sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
-        m.is_official ? 'Yes' : 'No',
-        // No trust score: no number (DOS/Rate#1484).
-        trust == null ? labels.trustNoData : `${trust.score}/100`,
-        review == null ? labels.reviewRiskNoData : `${review.score}/100`,
-        String(sanitizeMerchantCount(rStats.genuineDealCount)),
-        String(sanitizeMerchantCount(rStats.fakeTrapCount)),
-        String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
-        String(sanitizeMerchantCount(m.product_count)),
-      ];
+  ) =>
+    buildMerchantsDirectoryMarkdown({
+      merchants: filteredMerchants,
+      radarPayload,
+      t: (key, values) => t(key, values),
+      locale,
     });
-    const md = [
-      `### 🛡️ Rate.vn Merchant Trust Directory (${filteredMerchants.length} merchants)`,
-      '',
-      `| ${headers.join(' | ')} |`,
-      `| ${sep.join(' | ')} |`,
-      ...rows.map((r) => `| ${r.join(' | ')} |`),
-    ].join('\n');
-    return md;
-  };
 
   const handleCopyMerchantsMarkdown = async () => {
     if (typeof navigator === 'undefined' || matchedCount === 0) return;

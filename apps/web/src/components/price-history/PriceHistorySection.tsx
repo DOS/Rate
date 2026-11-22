@@ -37,8 +37,10 @@ import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   formatDate,
   formatDecimal,
+  formatNumber,
   formatPlainNumber,
   formatPriceVnd,
+  toFormatLocale,
 } from '@/lib/locale-format';
 
 interface PriceHistorySectionProps {
@@ -141,46 +143,139 @@ export function sanitizePriceHistoryMarkdownCell(
 const formatVnd = formatPriceHistoryVnd;
 const formatCompactVnd = formatCompactPriceHistoryVnd;
 
+export type PriceHistoryMarkdownKey =
+  | 'priceHistoryMdHeading'
+  | 'priceHistoryMdCurrentLowest'
+  | 'priceHistoryMdAllTimeLowest'
+  | 'priceHistoryMdFakeAlerts'
+  | 'priceHistoryMdGenuineDeals'
+  | 'priceHistoryMdPriceSignal'
+  | 'priceHistoryMdColMerchant'
+  | 'priceHistoryMdColPlatform'
+  | 'priceHistoryMdColCurrentPrice'
+  | 'priceHistoryMdColOriginalPrice'
+  | 'priceHistoryMdColMedian90d'
+  | 'priceHistoryMdColLow90d'
+  | 'priceHistoryMdColVerdict';
+
+export type PriceHistoryMarkdownTranslator = (
+  key: PriceHistoryMarkdownKey,
+  values?: Record<string, string | number>
+) => string;
+
+const FALLBACK_PRICE_HISTORY_MD_COPY: Record<
+  'vi' | 'en' | 'cs',
+  Record<PriceHistoryMarkdownKey, string>
+> = {
+  vi: {
+    priceHistoryMdHeading:
+      '### 📈 Lịch sử giá và kiểm tra giảm giá ảo trên Rate.vn: {name}',
+    priceHistoryMdCurrentLowest: 'Giá thấp nhất hiện tại',
+    priceHistoryMdAllTimeLowest: 'Giá thấp nhất từng ghi nhận',
+    priceHistoryMdFakeAlerts: 'Cảnh báo giảm giá ảo',
+    priceHistoryMdGenuineDeals: 'Giá tốt thật',
+    priceHistoryMdPriceSignal: 'Tín hiệu giá',
+    priceHistoryMdColMerchant: 'Gian hàng',
+    priceHistoryMdColPlatform: 'Sàn',
+    priceHistoryMdColCurrentPrice: 'Giá hiện tại (VND)',
+    priceHistoryMdColOriginalPrice: 'Giá gốc (VND)',
+    priceHistoryMdColMedian90d: 'Trung vị 90 ngày (VND)',
+    priceHistoryMdColLow90d: 'Thấp nhất 90 ngày (VND)',
+    priceHistoryMdColVerdict: 'Kết luận giá',
+  },
+  en: {
+    priceHistoryMdHeading:
+      '### 📈 Rate.vn price history and fake-sale check: {name}',
+    priceHistoryMdCurrentLowest: 'Current lowest price',
+    priceHistoryMdAllTimeLowest: 'Lowest price recorded',
+    priceHistoryMdFakeAlerts: 'Fake-sale warnings',
+    priceHistoryMdGenuineDeals: 'Genuine deals',
+    priceHistoryMdPriceSignal: 'Price signal',
+    priceHistoryMdColMerchant: 'Merchant',
+    priceHistoryMdColPlatform: 'Platform',
+    priceHistoryMdColCurrentPrice: 'Current price (VND)',
+    priceHistoryMdColOriginalPrice: 'Original price (VND)',
+    priceHistoryMdColMedian90d: '90d median (VND)',
+    priceHistoryMdColLow90d: '90d low (VND)',
+    priceHistoryMdColVerdict: 'Price verdict',
+  },
+  cs: {
+    priceHistoryMdHeading:
+      '### 📈 Historie cen a kontrola falešných slev na Rate.vn: {name}',
+    priceHistoryMdCurrentLowest: 'Aktuální nejnižší cena',
+    priceHistoryMdAllTimeLowest: 'Nejnižší zaznamenaná cena',
+    priceHistoryMdFakeAlerts: 'Upozornění na falešné slevy',
+    priceHistoryMdGenuineDeals: 'Skutečné slevy',
+    priceHistoryMdPriceSignal: 'Cenový signál',
+    priceHistoryMdColMerchant: 'Obchod',
+    priceHistoryMdColPlatform: 'Platforma',
+    priceHistoryMdColCurrentPrice: 'Aktuální cena (VND)',
+    priceHistoryMdColOriginalPrice: 'Původní cena (VND)',
+    priceHistoryMdColMedian90d: '90d medián (VND)',
+    priceHistoryMdColLow90d: '90d minimum (VND)',
+    priceHistoryMdColVerdict: 'Verdikt ceny',
+  },
+};
+
+function defaultPriceHistoryMarkdownTranslator(
+  locale?: string | null
+): PriceHistoryMarkdownTranslator {
+  const dict = FALLBACK_PRICE_HISTORY_MD_COPY[toFormatLocale(locale)];
+  return (key, values) => {
+    const template = dict[key];
+    if (!values) return template;
+    return template.replace(/\{(\w+)\}/g, (_, name: string) =>
+      name in values ? String(values[name]) : ''
+    );
+  };
+}
+
 export function buildPriceHistoryMarkdown(params: {
   productName: string;
   history: MasterProductPriceHistorySummary;
   offerAnalyses: readonly OfferDiscountAnalysis[];
   radarSignal?: RadarSignal | null;
+  t?: PriceHistoryMarkdownTranslator;
   tVerdict: VerdictTranslator;
   locale: string;
 }): string {
   const { productName, history, offerAnalyses, radarSignal, tVerdict, locale } =
     params;
+  const tr = params.t ?? defaultPriceHistoryMarkdownTranslator(locale);
   const headers = [
-    'Merchant',
-    'Platform',
-    'Current Price (VND)',
-    'Original Price (VND)',
-    '90d Median (VND)',
-    '90d Low (VND)',
-    'Price verdict',
+    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColMerchant')),
+    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColPlatform')),
+    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColCurrentPrice')),
+    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColOriginalPrice')),
+    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColMedian90d')),
+    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColLow90d')),
+    sanitizePriceHistoryMarkdownCell(tr('priceHistoryMdColVerdict')),
   ];
   const sep = headers.map(() => '---');
   const safeFakeCount = sanitizePriceHistoryCount(history.fakeDiscountCount);
   const safeGenuineCount = sanitizePriceHistoryCount(history.genuineDealCount);
   const rows = offerAnalyses.map((oa) => [
     sanitizePriceHistoryMarkdownCell(oa.merchant_name),
-    sanitizePriceHistoryMarkdownCell(oa.platform.toUpperCase()),
-    formatVnd(oa.price_current),
-    formatVnd(oa.price_original),
-    formatVnd(oa.historical_median_price),
-    formatVnd(oa.historical_min_price),
+    sanitizePriceHistoryMarkdownCell((oa.platform || '').toUpperCase()),
+    formatVnd(oa.price_current, locale),
+    formatVnd(oa.price_original, locale),
+    formatVnd(oa.historical_median_price, locale),
+    formatVnd(oa.historical_min_price, locale),
     sanitizePriceHistoryMarkdownCell(
       discountVerdictCopy(tVerdict, oa, locale).label
     ),
   ]);
   return [
-    `### 📈 Rate.vn price history and fake sale check: ${sanitizePriceHistoryMarkdownCell(productName)}`,
-    `- **Current Lowest Price**: ${formatVnd(history.currentMinPrice)}`,
-    `- **All-Time Lowest Recorded**: ${formatVnd(history.lowestEverPrice)}`,
-    `- **Fake Sale Alerts**: ${safeFakeCount} | **Genuine Deals**: ${safeGenuineCount}`,
+    tr('priceHistoryMdHeading', {
+      name: sanitizePriceHistoryMarkdownCell(productName),
+    }),
+    `- **${tr('priceHistoryMdCurrentLowest')}**: ${formatVnd(history.currentMinPrice, locale)}`,
+    `- **${tr('priceHistoryMdAllTimeLowest')}**: ${formatVnd(history.lowestEverPrice, locale)}`,
+    `- **${tr('priceHistoryMdFakeAlerts')}**: ${formatNumber(safeFakeCount, locale)} | **${tr('priceHistoryMdGenuineDeals')}**: ${formatNumber(safeGenuineCount, locale)}`,
     ...(radarSignal
-      ? [`- **Price signal**: ${radarMarkdownCell(radarSignal, locale)}`]
+      ? [
+          `- **${tr('priceHistoryMdPriceSignal')}**: ${radarMarkdownCell(radarSignal, locale)}`,
+        ]
       : []),
     '',
     `| ${headers.join(' | ')} |`,
@@ -442,6 +537,7 @@ export default function PriceHistorySection({
       history,
       offerAnalyses,
       radarSignal,
+      t: (key, values) => t(key, values),
       tVerdict,
       locale,
     });

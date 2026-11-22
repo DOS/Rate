@@ -1078,7 +1078,20 @@
     "listingUnavailableBadge": "Out of stock",
     "listingUnavailableTitle": "The store reports it sold out or discontinued. The price is the last one seen, not a current price.",
     "listingUnavailableAudit": "Out of stock, no deal check",
-    "listingDiscontinuedBadge": "Discontinued"
+    "listingDiscontinuedBadge": "Discontinued",
+    "dirMdHeading": "### 🛡️ Rate.vn merchant trust directory ({count, plural, one {# merchant} other {# merchants}})",
+    "dirMdColMerchant": "Merchant",
+    "dirMdColPlatform": "Platform",
+    "dirMdColOfficialMall": "Official Mall",
+    "dirMdColTrustScore": "Trust score (/100)",
+    "dirMdColReviewRisk": "Review risk (/100)",
+    "dirMdColGenuineDeals": "Below-median deals",
+    "dirMdColFakeTraps": "Fake-sale warnings",
+    "dirMdColAuthenticReviews": "Authentic reviews",
+    "dirMdColTrackedProducts": "Tracked products",
+    "dirMdYes": "Yes",
+    "dirMdNo": "No",
+    "dirMdUnknownMerchant": "Unknown"
   },
   "productDetail": {
     "jumpNavAria": "Jump to a section",
@@ -1300,7 +1313,20 @@
     "unknownSizeNote": "The seller does not state the storage, so these prices are not part of the product's \"from\" price.",
     "sizePanelLoading": "Loading this size…",
     "sizePanelLoadFailed": "Could not load this size.",
-    "sizePanelRetry": "Try again"
+    "sizePanelRetry": "Try again",
+    "priceHistoryMdHeading": "### 📈 Rate.vn price history and fake-sale check: {name}",
+    "priceHistoryMdCurrentLowest": "Current lowest price",
+    "priceHistoryMdAllTimeLowest": "Lowest price recorded",
+    "priceHistoryMdFakeAlerts": "Fake-sale warnings",
+    "priceHistoryMdGenuineDeals": "Genuine deals",
+    "priceHistoryMdPriceSignal": "Price signal",
+    "priceHistoryMdColMerchant": "Merchant",
+    "priceHistoryMdColPlatform": "Platform",
+    "priceHistoryMdColCurrentPrice": "Current price (VND)",
+    "priceHistoryMdColOriginalPrice": "Original price (VND)",
+    "priceHistoryMdColMedian90d": "90d median (VND)",
+    "priceHistoryMdColLow90d": "90d low (VND)",
+    "priceHistoryMdColVerdict": "Price verdict"
   },
   "homePage": {
     "catDescSmartphones": "Filter by chipset, RAM/ROM, refresh rate Hz, battery mAh & fast charge W",
