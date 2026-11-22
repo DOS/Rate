@@ -18,7 +18,13 @@ import {
 import { catalogRowSlug, type ItemCatalogRow } from '@/lib/item-directory';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
-import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
+import {
+  buildOgTruthCardImage,
+  defaultOpenGraph,
+  defaultTwitterCard,
+  fitTitle,
+  fitDescription,
+} from '@/lib/seo';
 import { scoreMasterProductForLeaderboard } from '@/lib/leaderboard-engine';
 import PageShell from '../../components/page-shell';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
@@ -102,9 +108,12 @@ export async function generateMetadata({
     return notFoundMeta();
   }
 
+  const canonicalVersusSlug = plan
+    ? plan.canonical.replace(/^\/compare\//, '')
+    : `${pair[0]}-vs-${pair[1]}`;
   const canonicalUrl = plan
     ? `https://rate.vn${plan.canonical}`
-    : `https://rate.vn/compare/${pair[0]}-vs-${pair[1]}`;
+    : `https://rate.vn/compare/${canonicalVersusSlug}`;
   const fullTitle = t('versusMetaTitle', { nameA: a.name, nameB: b.name });
   // Both names first; the fixed text, then the site name, give way to fit a
   // search result (DOS/Rate#777). The share card keeps the full title.
@@ -124,6 +133,12 @@ export async function generateMetadata({
     }),
     lang
   );
+  const ogImage = buildOgTruthCardImage({
+    type: 'versus',
+    versus: canonicalVersusSlug,
+    locale: lang,
+    alt: `${a.name} vs ${b.name}`,
+  });
 
   return {
     title,
@@ -136,7 +151,9 @@ export async function generateMetadata({
       title: fullTitle,
       description,
       url: canonicalUrl,
+      images: [ogImage],
     },
+    twitter: defaultTwitterCard(ogImage),
   };
 }
 
