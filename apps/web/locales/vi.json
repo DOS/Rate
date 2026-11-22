@@ -1822,6 +1822,9 @@
       "chipKeyword": "Từ khóa: \"{query}\"",
       "chipBrand": "Hãng: {brand}",
       "chipPrice": "Giá: {min} - {max}",
+      "chipPriceZero": "0 ₫",
+      "chipPriceMillion": "{amount}tr",
+      "chipPriceMillionPlus": "{amount}tr+",
       "searchLabel": "Tìm máy",
       "brandLabel": "Hãng",
       "searchBtn": "Tìm kiếm",
@@ -1868,7 +1871,15 @@
       "copyMdBtn": "Sao chép danh mục Markdown",
       "exportCsvBtn": "Xuất CSV ngành hàng",
       "exportJsonBtn": "Xuất JSON",
-      "exportMenu": "Xuất dữ liệu"
+      "exportMenu": "Xuất dữ liệu",
+      "mdTitle": "### 📂 Danh mục ngành hàng Rate.vn: {title} ({count} thiết bị)",
+      "mdColModel": "Mẫu máy",
+      "mdColBrand": "Hãng",
+      "mdColUserRating": "Điểm người mua (/5.0)",
+      "mdColExpertScore": "Điểm chuyên gia (/10)",
+      "mdColAuthenticReviews": "Đánh giá thật",
+      "mdColMinPrice": "Giá thấp nhất (VNĐ)",
+      "mdColPriceSignal": "Tín hiệu giá"
     },
     "sidebar": {
       "filterTitle": "Bộ lọc thông số",
@@ -1888,7 +1899,8 @@
       "rangeTo": "Đến:",
       "minPriceAria": "Giá tối thiểu",
       "maxPriceAria": "Giá tối đa",
-      "closeAria": "Đóng bộ lọc"
+      "closeAria": "Đóng bộ lọc",
+      "priceMillionUnit": "tr ₫"
     }
   },
   "heroSearch": {

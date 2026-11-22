@@ -1822,6 +1822,9 @@
       "chipKeyword": "Keyword: \"{query}\"",
       "chipBrand": "Brand: {brand}",
       "chipPrice": "Price: {min} - {max}",
+      "chipPriceZero": "0 VND",
+      "chipPriceMillion": "{amount}M VND",
+      "chipPriceMillionPlus": "{amount}M+ VND",
       "searchLabel": "Device",
       "brandLabel": "Brand",
       "searchBtn": "Search",
@@ -1868,7 +1871,15 @@
       "copyMdBtn": "Copy catalog Markdown",
       "exportCsvBtn": "Export category CSV",
       "exportJsonBtn": "Export JSON",
-      "exportMenu": "Export data"
+      "exportMenu": "Export data",
+      "mdTitle": "### 📂 Rate.vn category catalog: {title} ({count, plural, one {# device} other {# devices}})",
+      "mdColModel": "Model",
+      "mdColBrand": "Brand",
+      "mdColUserRating": "User rating (/5.0)",
+      "mdColExpertScore": "Expert score (/10)",
+      "mdColAuthenticReviews": "Authentic reviews",
+      "mdColMinPrice": "Min price (VND)",
+      "mdColPriceSignal": "Price signal"
     },
     "sidebar": {
       "filterTitle": "Spec filters",
@@ -1888,7 +1899,8 @@
       "rangeTo": "To:",
       "minPriceAria": "Minimum price",
       "maxPriceAria": "Maximum price",
-      "closeAria": "Close filters"
+      "closeAria": "Close filters",
+      "priceMillionUnit": "M VND"
     }
   },
   "heroSearch": {
