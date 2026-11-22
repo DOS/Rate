@@ -37,9 +37,21 @@ const CrowdIngestSchema = z.object({
       'hoangha',
       'didongviet',
       'phongvu',
+      'dienmayxanh',
+      'topzone',
+      'gearvn',
+      'nguyenkim',
+      'shopdunk',
+      'hacom',
+      'clickbuy',
+      'viettelstore',
+      'pico',
+      'mediamart',
+      'memoryzone',
+      'anphatpc',
     ])
     .optional(),
-  externalItemId: z.string().trim().min(1).max(120).optional(),
+  externalItemId: z.string().trim().min(1).max(128).optional(),
   externalShopId: z.string().trim().max(120).nullish(),
   url: z
     .string()

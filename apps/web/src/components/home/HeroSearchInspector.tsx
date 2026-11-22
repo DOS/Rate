@@ -104,7 +104,9 @@ export function isLikelyEcommerceUrl(input: unknown): boolean {
   const s = input.replace(HERO_INSPECTOR_CONTROL_CHARS_RE, '').trim();
   return (
     /^https?:\/\//i.test(s) ||
-    /shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|i\.\d+\.\d+/i.test(s)
+    /(?:^|\/\/|\.)(?:shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|cellphones\.com\.vn|thegioididong\.com|dienmayxanh\.com|topzone\.vn|fptshop\.com\.vn|hoanghamobile\.com|didongviet\.vn|phongvu\.vn|gearvn\.com|nguyenkim\.com|shopdunk\.com|hacom\.vn|clickbuy\.com\.vn|viettelstore\.vn|pico\.vn|mediamart\.vn|memoryzone\.com\.vn|anphatpc\.com\.vn)\/|i\.\d+\.\d+/i.test(
+      s
+    )
   );
 }
 

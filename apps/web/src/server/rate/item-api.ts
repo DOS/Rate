@@ -248,13 +248,25 @@ export function chooseItemVariant(
  * such listing exists.
  */
 export async function resolveListingItemContext(
-  platformItemIds: readonly string[]
+  platformItemIds: readonly string[],
+  platform?: string | null
 ): Promise<ApiItemContext | 'no_variant' | null> {
   if (!isItemModelOn() || platformItemIds.length === 0) return null;
   const client = getRateClient();
   if (!client) return null;
   // `item_id` is not in the generated types until #1150 lands.
-  const { data, error } = await (
+  type ListingItemQuery = {
+    eq: (col: string, val: string) => ListingItemQuery;
+    limit: (n: number) => PromiseLike<{
+      data: Array<{
+        item_id: string | null;
+        platform?: string | null;
+        platform_item_id?: string;
+      }> | null;
+      error: { message: string; code?: string } | null;
+    }>;
+  };
+  let query = (
     client.from('products') as unknown as {
       select: (cols: string) => {
         in: (
@@ -265,26 +277,20 @@ export async function resolveListingItemContext(
             col: string,
             value: null
           ) => {
-            not: (
-              col: string,
-              op: string,
-              value: null
-            ) => {
-              limit: (n: number) => PromiseLike<{
-                data: Array<{ item_id: string | null }> | null;
-                error: { message: string; code?: string } | null;
-              }>;
-            };
+            not: (col: string, op: string, value: null) => ListingItemQuery;
           };
         };
       };
     }
   )
-    .select('item_id, platform_item_id')
+    .select('item_id, platform, platform_item_id')
     .in('platform_item_id', platformItemIds)
     .is('cluster_id', null)
-    .not('item_id', 'is', null)
-    .limit(5);
+    .not('item_id', 'is', null);
+  if (platform) {
+    query = query.eq('platform', platform);
+  }
+  const { data, error } = await query.limit(10);
   if (error) {
     if (error.code && MISSING_SCHEMA_CODES.has(error.code)) {
       log.warn('item model on but products.item_id is missing', {
@@ -295,9 +301,21 @@ export async function resolveListingItemContext(
     log.error('listing item lookup failed', { message: error.message });
     throw new RateDataUnavailableError('products', error);
   }
-  const itemId = (data ?? []).find(
-    (r) => typeof r.item_id === 'string'
-  )?.item_id;
+  const itemId = (data ?? [])
+    .filter(
+      (r) =>
+        typeof r.item_id === 'string' &&
+        (!platform || !r.platform || r.platform === platform)
+    )
+    .sort((a, b) => {
+      const ai = a.platform_item_id
+        ? platformItemIds.indexOf(a.platform_item_id)
+        : -1;
+      const bi = b.platform_item_id
+        ? platformItemIds.indexOf(b.platform_item_id)
+        : -1;
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    })[0]?.item_id;
   if (!itemId) return null;
   return orUnavailable('listing item', async () => {
     const item = await getItemById(itemId);

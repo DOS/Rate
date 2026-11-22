@@ -351,8 +351,11 @@ function renderPanelContent(
         <div class="card-title">${escapeHtml(t('noProductTitle'))}</div>
         <p style="color: #9ca3af;">
           ${tHtml('noProductBody', [
-            `<strong>${escapeHtml(t('noProductStores'))}</strong>`,
-            `<strong>${escapeHtml(t('noProductLastStore'))}</strong>`,
+            `<strong>${t('noProductStores')
+              .split(', ')
+              .map((s) => contentTextHtml(s))
+              .join(', ')}</strong>`,
+            `<strong>${contentTextHtml(t('noProductLastStore'))}</strong>`,
             `<strong>${escapeHtml(t('quickLookupBoxName'))}</strong>`,
           ])}
         </p>

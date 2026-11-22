@@ -129,6 +129,22 @@ export function computeRetryDelayMs(
   return Math.min(safeMaxDelayMs, half + jitter);
 }
 
+const toWellFormedUtf16 = (value: string): string =>
+  (value as string & { toWellFormed(): string }).toWellFormed();
+
+function sliceUtf16WellFormed(value: string, maxUnits: number): string {
+  if (value.length <= maxUnits) return toWellFormedUtf16(value);
+  let end = maxUnits;
+  if (end > 0) {
+    const prev = value.charCodeAt(end - 1);
+    const next = value.charCodeAt(end);
+    if (prev >= 0xd800 && prev <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) {
+      end -= 1;
+    }
+  }
+  return toWellFormedUtf16(value.slice(0, end));
+}
+
 /**
  * Sanitizes untrusted AI-generated output text (`ai_summary`, `pros`, `cons`, `reason`)
  * by stripping HTML tags, control characters, URLs, and phone/Zalo numbers to prevent
@@ -140,26 +156,24 @@ export function sanitizeAiGeneratedText(raw: unknown, maxLen = 400): string {
     typeof maxLen === 'number' && Number.isFinite(maxLen) && maxLen >= 1
       ? Math.min(Math.floor(maxLen), MAX_LOG_STRING_LENGTH)
       : 400;
-  const boundedInput = raw.slice(0, Math.max(safeMaxLen * 4, 4096));
-  return (
-    boundedInput
-      // `[^<>]` rather than `[^>]`: a run of unclosed '<' would otherwise be
-      // rescanned to the end of the string from each '<' (quadratic).
-      .replace(/<[^<>]*>/g, ' ')
-      // Strip explicit http(s):// and www. URLs
-      .replace(/\b(?:https?:\/\/|www\.)\S+/gi, '[link-removed]')
-      // Strip bare domain links with common TLDs/paths (e.g. bit.ly/xyz, shopee.vn/abc, t.me/xyz)
-      .replace(
-        /\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:vn|com|net|org|io|me|ly|gg|co|shop|store|xyz|info)(?:\/\S*)?\b/gi,
-        '[link-removed]'
-      )
-      // Strip Vietnamese phone / Zalo numbers (e.g. 0912345678, +84 912 345 678, 098.123.4567)
-      .replace(/(?:\+?84|0)\s*[1-9](?:[\s.-]*\d){7,9}\b/g, '[phone-removed]')
-      .replace(/\p{Cc}+/gu, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, safeMaxLen)
-  );
+  const boundedInput = sliceUtf16WellFormed(raw, Math.max(safeMaxLen * 4, 4096));
+  const cleaned = boundedInput
+    // `[^<>]` rather than `[^>]`: a run of unclosed '<' would otherwise be
+    // rescanned to the end of the string from each '<' (quadratic).
+    .replace(/<[^<>]*>/g, ' ')
+    // Strip explicit http(s):// and www. URLs
+    .replace(/\b(?:https?:\/\/|www\.)\S+/gi, '[link-removed]')
+    // Strip bare domain links with common TLDs/paths (e.g. bit.ly/xyz, shopee.vn/abc, t.me/xyz)
+    .replace(
+      /\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:vn|com|net|org|io|me|ly|gg|co|shop|store|xyz|info)(?:\/\S*)?\b/gi,
+      '[link-removed]'
+    )
+    // Strip Vietnamese phone / Zalo numbers (e.g. 0912345678, +84 912 345 678, 098.123.4567)
+    .replace(/(?:\+?84|0)\s*[1-9](?:[\s.-]*\d){7,9}\b/g, '[phone-removed]')
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return sliceUtf16WellFormed(cleaned, safeMaxLen).trimEnd();
 }
 
 /**

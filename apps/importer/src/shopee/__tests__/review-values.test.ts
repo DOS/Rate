@@ -258,6 +258,51 @@ async function run() {
   assert.deepEqual(edge.get(M2)!.criteria_scores, {
     battery: { score: 4.133, weight_sum: 1.5, writers: 3 },
   });
+  // Hardening (#1853): NaN / Infinity in criteria_ratings, stars, or weights never reach BigInt,
+  // and prototype keys (__proto__, constructor, prototype) are ignored.
+  const protoCriteria = JSON.parse(
+    '{"__proto__":4,"constructor":4,"prototype":4,"battery":4}'
+  ) as Record<string, unknown>;
+  const malformedRatings = expectedMasterRatings({
+    reviews: [
+      review(40, 'l2', {
+        rating_star: 5,
+        criteria_ratings: {
+          ...protoCriteria,
+          display: Number.NaN,
+          camera: Number.POSITIVE_INFINITY,
+          sound: Number.NEGATIVE_INFINITY,
+        },
+      }),
+      review(41, 'l2', {
+        rating_star: 4,
+        criteria_ratings: { ...protoCriteria, display: Number.NaN },
+      }),
+      review(42, 'l2', {
+        rating_star: Number.NaN,
+        criteria_ratings: { ...protoCriteria, display: Number.POSITIVE_INFINITY },
+      }),
+      review(43, 'l2', { rating_exact: 'NaN', rating_star: 5 }),
+      review(44, 'l2', { rating_exact: Number.POSITIVE_INFINITY, rating_star: 5 }),
+      review(45, 'l2', { helpfulness_weight: Number.POSITIVE_INFINITY, rating_star: 5 }),
+      review(46, 'l2', { helpfulness_weight: 'NaN', rating_star: 5 }),
+      review(47, 'l2', { helpfulness_weight: Number.MAX_VALUE, rating_star: 5 }),
+    ],
+    listings,
+    values: new Map(),
+  });
+  const m2Malformed = malformedRatings.get(M2)!;
+  assert.equal(Object.getPrototypeOf(m2Malformed.criteria_scores), Object.prototype);
+  assert.equal(Object.hasOwn(m2Malformed.criteria_scores, '__proto__'), false);
+  assert.equal(Object.hasOwn(m2Malformed.criteria_scores, 'constructor'), false);
+  assert.equal(Object.hasOwn(m2Malformed.criteria_scores, 'prototype'), false);
+  assert.deepEqual(Object.keys(m2Malformed.criteria_scores), ['battery']);
+  assert.equal(m2Malformed.criteria_scores.battery!.writers, 3);
+  assert.equal(
+    m2Malformed.rating_weight_sum,
+    5,
+    'only finite 1..5 star reviews count and huge finite weight clamps cleanly to 3'
+  );
   assert.ok(
     !masterRatingMatches(
       {

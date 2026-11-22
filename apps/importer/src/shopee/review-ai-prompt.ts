@@ -366,15 +366,17 @@ export function batchCostUsd(
     cache_creation_input_tokens?: number | null;
   }
 ): number {
+  if (!isReviewAiModel(model)) return 0;
   const price = REVIEW_AI_MODELS[model];
-  const n = (v: number | null | undefined) => (typeof v === 'number' && v > 0 ? v : 0);
+  const mTokens = (v: number | null | undefined) =>
+    typeof v === 'number' && Number.isFinite(v) && v > 0 ? v / 1_000_000 : 0;
   const usd =
-    (n(usage.input_tokens) * price.input +
-      n(usage.cache_read_input_tokens) * price.input * CACHE_READ_FACTOR +
-      n(usage.cache_creation_input_tokens) * price.input * CACHE_WRITE_FACTOR +
-      n(usage.output_tokens) * price.output) /
-    1_000_000;
-  return usd * BATCH_DISCOUNT;
+    (mTokens(usage.input_tokens) * price.input +
+      mTokens(usage.cache_read_input_tokens) * price.input * CACHE_READ_FACTOR +
+      mTokens(usage.cache_creation_input_tokens) * price.input * CACHE_WRITE_FACTOR +
+      mTokens(usage.output_tokens) * price.output) *
+    BATCH_DISCOUNT;
+  return Number.isFinite(usd) ? usd : Number.POSITIVE_INFINITY;
 }
 
 /**

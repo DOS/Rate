@@ -12,7 +12,6 @@ import http from 'node:http';
 import assert from 'node:assert/strict';
 import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, KeySpecsSchema } from '@repo/shared-data';
-import { getCategorySpecTemplate } from '@repo/shared-data/rules';
 import { ProductNormalizer } from './product-normalizer.js';
 import {
   AiSpecEnricher,
@@ -25,7 +24,7 @@ import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
 } from './flagship-seed-data.js';
-import { hasSingleRearCamera } from './jobs/backfill-specs.js';
+import { hasSingleRearCamera, statesRearCamera } from './jobs/backfill-specs.js';
 import type { ShopeeProduct } from './types.js';
 
 dotenv.config();
@@ -306,9 +305,11 @@ async function runTests() {
         `Flagship seed ${device.model_key} missing group ${grp}`
       );
     }
-    // Earbuds and watches have no cameras: their seeds keep the group, empty or not, for
-    // the spec audit (DOS/Rate#1793).
-    if (getCategorySpecTemplate(device.categorySlug).groups.includes('camera')) {
+    // Phones and tablets always state rear cameras; laptops carry only their front webcam, and
+    // earbuds and watches have no cameras (DOS/Rate#1787, #1793, #1855).
+    const rearCameraExpected =
+      device.categorySlug === 'smartphones' || device.categorySlug === 'tablets';
+    if (rearCameraExpected || statesRearCamera(device.specifications.camera)) {
       assert.ok(
         device.specifications.camera?.main_camera,
         `Flagship seed ${device.model_key} missing main_camera`
@@ -317,6 +318,11 @@ async function runTests() {
         hasSingleRearCamera(device.specifications.camera) ||
           device.specifications.camera?.second_camera,
         `Flagship seed ${device.model_key} missing second_camera`
+      );
+    } else if (device.categorySlug === 'laptops') {
+      assert.ok(
+        device.specifications.camera?.front_camera,
+        `Flagship seed ${device.model_key} missing front_camera`
       );
     }
     console.log(

@@ -102,7 +102,7 @@ export const SOURCED_SEEDS_2026: FlagshipDeviceSeed[] = [
         sim_type: 'Nano-SIM + eSIM (dual eSIM supported)',
       },
       connectivity: {
-        bluetooth: '6.0, A2DP, LE',
+        bluetooth: '6',
         wlan: 'Wi-Fi 7 (802.11be) 2x2 MIMO, tri-band, hotspot (Apple N1 wireless chip)',
         usb: 'USB-C, USB 3 (up to 10Gb/s), DisplayPort',
         nfc: true,
@@ -145,6 +145,7 @@ export const SOURCED_SEEDS_2026: FlagshipDeviceSeed[] = [
       'cellular.sim_type': 'https://www.apple.com/vn/iphone-18-pro/specs/',
       'cellular.technology': 'https://www.apple.com/iphone-18-pro/specs/',
       connectivity: 'https://www.apple.com/iphone-18-pro/specs/',
+      'connectivity.bluetooth': 'https://www.apple.com/iphone-18-pro/specs/',
       multimedia: 'https://www.gsmarena.com/apple_iphone_18_pro_max-14716.php',
       'availability.announced': 'https://www.gsmarena.com/apple_iphone_18_pro_max-14716.php',
       'availability.vn_sale_date': 'https://cellphones.com.vn/iphone-18-pro.html',
@@ -255,7 +256,7 @@ export const SOURCED_SEEDS_2026: FlagshipDeviceSeed[] = [
         sim_type: 'Nano-SIM + eSIM (dual eSIM supported)',
       },
       connectivity: {
-        bluetooth: '6.0, A2DP, LE',
+        bluetooth: '6',
         wlan: 'Wi-Fi 7 (802.11be) 2x2 MIMO, tri-band, hotspot (Apple N1 wireless chip)',
         usb: 'USB-C, USB 3 (up to 10Gb/s), DisplayPort',
         nfc: true,
@@ -297,6 +298,7 @@ export const SOURCED_SEEDS_2026: FlagshipDeviceSeed[] = [
       'cellular.sim_type': 'https://www.apple.com/vn/iphone-18-pro/specs/',
       'cellular.technology': 'https://www.apple.com/iphone-18-pro/specs/',
       connectivity: 'https://www.apple.com/iphone-18-pro/specs/',
+      'connectivity.bluetooth': 'https://www.apple.com/iphone-18-pro/specs/',
       multimedia: 'https://www.gsmarena.com/apple_iphone_18_pro_5g-14934.php',
       'availability.announced': 'https://www.gsmarena.com/apple_iphone_18_pro_5g-14934.php',
       'availability.vn_sale_date': 'https://cellphones.com.vn/iphone-18-pro.html',
@@ -415,7 +417,7 @@ export const SOURCED_SEEDS_2026: FlagshipDeviceSeed[] = [
         sim_type: 'Nano-SIM + Nano-SIM + eSIM (max 2 at a time) (International)',
       },
       connectivity: {
-        bluetooth: '6.0, A2DP, LE',
+        bluetooth: '6.0',
         wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band, Wi-Fi Direct',
         usb: 'USB Type-C 3.2, DisplayPort 1.2, OTG',
         sensors:
@@ -454,6 +456,8 @@ export const SOURCED_SEEDS_2026: FlagshipDeviceSeed[] = [
         'https://fptshop.com.vn/dien-thoai/samsung-galaxy-s26-ultra',
       cellular: 'https://www.gsmarena.com/samsung_galaxy_s26_ultra_5g-14320.php',
       connectivity: 'https://www.gsmarena.com/samsung_galaxy_s26_ultra_5g-14320.php',
+      'connectivity.bluetooth':
+        'https://www.samsungmobilepress.com/media-assets/galaxy-s26-ultra?tab=specs',
       multimedia: 'https://www.gsmarena.com/samsung_galaxy_s26_ultra_5g-14320.php',
       'availability.announced_status':
         'https://www.gsmarena.com/samsung_galaxy_s26_ultra_5g-14320.php',

@@ -3,6 +3,7 @@ import { getCrossPlatformDealRadar } from '../../../../../server/rate/deals';
 import type { CanonicalCategorySlug } from '../../../../../lib/rate-api';
 import {
   PUBLIC_API_CORS_HEADERS,
+  SUPPORTED_PLATFORM_SLUGS,
   jsonApiError,
   parseBoundedIntParam,
   parseBoundedStringParam,
@@ -16,18 +17,7 @@ const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
   'earbuds',
 ]);
 
-const VALID_PLATFORMS = new Set<string>([
-  'shopee',
-  'lazada',
-  'tiki',
-  'tiktok',
-  'cellphones',
-  'tgdd',
-  'fptshop',
-  'hoangha',
-  'didongviet',
-  'phongvu',
-]);
+const VALID_PLATFORMS = SUPPORTED_PLATFORM_SLUGS;
 
 export async function OPTIONS() {
   return new NextResponse(null, {

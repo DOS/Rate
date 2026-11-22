@@ -1493,7 +1493,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     loudspeaker: 'Yes, stereo speakers',
     // As the sourced seed states them (DOS/Rate#1761).
     flash: 'Adaptive True Tone flash',
-    bluetooth: '6.0, A2DP, LE',
+    bluetooth: '6',
     wlan: 'Wi-Fi 7 (802.11be) 2x2 MIMO, tri-band, hotspot (Apple N1 wireless chip)',
     usb: 'USB-C, USB 3 (up to 10Gb/s), DisplayPort',
     location: 'Dual-frequency GPS (L1+L5), GLONASS, Galileo, QZSS, BeiDou, NavIC',
@@ -1558,7 +1558,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     loudspeaker: 'Yes, stereo speakers',
     // As the sourced seed states them (DOS/Rate#1761).
     flash: 'Adaptive True Tone flash',
-    bluetooth: '6.0, A2DP, LE',
+    bluetooth: '6',
     wlan: 'Wi-Fi 7 (802.11be) 2x2 MIMO, tri-band, hotspot (Apple N1 wireless chip)',
     usb: 'USB-C, USB 3 (up to 10Gb/s), DisplayPort',
     location: 'Dual-frequency GPS (L1+L5), GLONASS, Galileo, QZSS, BeiDou, NavIC',
@@ -1625,7 +1625,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     // As the sourced seed states them (GSMArena); its sources state no certifications
     // (DOS/Rate#1761).
     flash: 'LED flash, laser AF, auto-HDR, panorama',
-    bluetooth: '6.0, A2DP, LE',
+    bluetooth: '6.0',
     wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band, Wi-Fi Direct',
     usb: 'USB Type-C 3.2, DisplayPort 1.2, OTG',
     location: 'GPS, GLONASS, BDS, GALILEO, QZSS',

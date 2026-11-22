@@ -324,7 +324,9 @@ export function mergeAndSelectAiProductPoints(
     pros: list.filter(c => c.kind === 'pro').slice(0, max),
     cons: list.filter(c => c.kind === 'con').slice(0, max),
   });
-  const byCriterion: Record<string, { pros: PointCluster[]; cons: PointCluster[] }> = {};
+  const byCriterion: Record<string, { pros: PointCluster[]; cons: PointCluster[] }> = Object.create(
+    null
+  ) as Record<string, { pros: PointCluster[]; cons: PointCluster[] }>;
   for (const key of new Set(rebuilt.map(c => c.criterionKey ?? GENERAL_POINTS))) {
     byCriterion[key] = pickSides(
       rebuilt.filter(c => (c.criterionKey ?? GENERAL_POINTS) === key),

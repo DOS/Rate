@@ -465,6 +465,20 @@ try {
     ],
     [
       'listing_url',
+      good({
+        marketplace: 'tgdd',
+        listing_url: 'https://www.topzone.vn/iphone/x',
+      }),
+    ],
+    [
+      'listing_url',
+      good({
+        marketplace: 'tgdd',
+        listing_url: 'https://www.dienmayxanh.com/dtdd/x',
+      }),
+    ],
+    [
+      'listing_url',
       good({ listing_url: `https://shopee.vn/${'a'.repeat(2031)}` }),
     ],
     [

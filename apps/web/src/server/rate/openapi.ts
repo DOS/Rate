@@ -15,6 +15,7 @@ export interface OpenApiParameter {
     format?: string;
     enum?: string[];
     default?: string | number | boolean;
+    maxLength?: number;
   };
 }
 
@@ -303,7 +304,7 @@ function buildBaseRateOpenApiSpec(
       summary:
         'Standardized 10-Group Tech Specs, Price History, Product Deal Radar & AI Review Auditing API',
       description:
-        'OpenAPI 3.1 specification for the Rate.vn REST API v1. The website, the Rate browser extension (10 Vietnamese marketplaces and retailers) and open e-commerce research all use these endpoints.',
+        'OpenAPI 3.1 specification for the Rate.vn REST API v1. The website, the Rate browser extension (22 Vietnamese marketplaces and retailers) and open e-commerce research all use these endpoints.',
       license: {
         name: 'MIT Open-Core License',
         url: 'https://github.com/DOS/Rate',
@@ -333,7 +334,7 @@ function buildBaseRateOpenApiSpec(
       {
         name: 'URL Inspector & Extension MV3',
         description:
-          'Real-time URL/SKU canonicalization, 10-platform hybrid lookup, evidence-based price verdict, and zero-trust quarantine ingestion.',
+          'Real-time URL/SKU canonicalization, 22-platform hybrid lookup, evidence-based price verdict, and zero-trust quarantine ingestion.',
       },
       {
         name: 'Merchants & Dual Risk Score',
@@ -1070,7 +1071,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Full Web Product & URL Inspector with price verdict and price history chart',
           description:
-            'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 10 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the price verdict (`PriceVerdictLevel`), and returns full product detail with the Deal Radar signal (`data.radarSignal`, null when no product matched). One of `q` or `url` is required. Limited to 30 requests per minute per client IP (shared with `/lookup`, counted on each server instance); past it the answer is 429 with `Retry-After`.',
+            'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 22 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the price verdict (`PriceVerdictLevel`), and returns full product detail with the Deal Radar signal (`data.radarSignal`, null when no product matched). One of `q` or `url` is required. Limited to 30 requests per minute per client IP (shared with `/lookup`, counted on each server instance); past it the answer is 429 with `Retry-After`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -1156,7 +1157,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Low-latency Hybrid Lookup for Rate Browser Extension Manifest V3',
           description:
-            'Dedicated read-only lookup endpoint for the Rate Browser Extension MV3 across 10 platforms (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`). Performs deterministic `platform_item_id` lookup, canonical model fallback, accessory gatekeeping, price verdict calculation (`PriceVerdictLevel`), and returns the Deal Radar signal as `data.radarSignal`.',
+            'Dedicated read-only lookup endpoint for the Rate Browser Extension MV3 across 22 platforms (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`, `dienmayxanh`, `topzone`, `gearvn`, `nguyenkim`, `shopdunk`, `hacom`, `clickbuy`, `viettelstore`, `pico`, `mediamart`, `memoryzone`, `anphatpc`). Performs deterministic `platform_item_id` lookup, canonical model fallback, accessory gatekeeping, price verdict calculation (`PriceVerdictLevel`), and returns the Deal Radar signal as `data.radarSignal`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -1172,7 +1173,7 @@ function buildBaseRateOpenApiSpec(
               name: 'externalId',
               in: 'query',
               description: 'Platform item ID or shopId_itemId',
-              schema: { type: 'string' },
+              schema: { type: 'string', maxLength: 128 },
             },
             {
               name: 'shopId',
@@ -1948,7 +1949,7 @@ function buildBaseRateOpenApiSpec(
         get: {
           operationId: 'getCrossPlatformDealRadar',
           summary:
-            'Cross-Platform Deal Radar & Fake-Sale Trap Feed across 10 platforms',
+            'Cross-Platform Deal Radar & Fake-Sale Trap Feed across 22 platforms',
           description:
             'Returns real-time genuine cross-platform deals (`genuineDeals`, current offers below the cross-retailer median) and inflated fake-sale traps (`fakeSaleTraps`) audited against cross-retailer median prices. A genuine deal has `verdict` `genuine_all_time_low` (the multi-platform price floor) only when the product has 3 or more offers and the deal is the cheapest offer at least 2% below the median; otherwise it is `best_market_deal`, since the median of 2 offers is just their midpoint.',
           tags: ['Products & Specs'],
@@ -1987,7 +1988,7 @@ function buildBaseRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                'Genuine deal radar and fake-sale trap list across 10 retailers.',
+                'Genuine deal radar and fake-sale trap list across 22 retailers.',
             },
           },
         },
@@ -2120,7 +2121,7 @@ function buildBaseRateOpenApiSpec(
           type: 'string',
           enum: supportedPlatforms,
           description:
-            '10 supported Vietnamese e-commerce marketplaces and authorized electronics retailers.',
+            '22 supported Vietnamese e-commerce marketplaces and authorized electronics retailers.',
         },
         CanonicalRateCategorySlug: {
           type: 'string',
@@ -2146,7 +2147,7 @@ function buildBaseRateOpenApiSpec(
             externalItemId: {
               type: 'string',
               minLength: 1,
-              maxLength: 120,
+              maxLength: 128,
               example: '29512841920',
               description: 'Optional; derived from `url` when omitted.',
             },

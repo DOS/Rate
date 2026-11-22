@@ -1,28 +1,51 @@
 /**
- * DOS/Rate#1758: flagship seed and canonical entries carried template values copied from the
- * arena spec syncer's old defaults and the normalizer's generic fallbacks, and the backfill
- * wrote them to Production. Each one is now a value a cited source states, or gone (with a
- * retraction, since the backfill's merge never deletes a stored field).
+ * DOS/Rate#1758 & DOS/Rate#1855: flagship seed and canonical entries carried template values
+ * copied from the arena spec syncer's old defaults, the normalizer's generic fallbacks, and
+ * cross-category placeholders, and the backfill wrote them to Production. Each one is now a
+ * value an explicit per-field source states, or gone (with a retraction in
+ * `retract_spec_fields`, since the backfill's merge never deletes a stored field). Group-level
+ * `sources.<group>` entries never excuse template-shaped or cross-category field values.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { ProductSpecifications } from '@repo/shared-data';
+import {
+  ProductSpecificationsSchema,
+  type KeySpecs,
+  type ProductSpecifications,
+} from '@repo/shared-data';
 import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
   flagshipSeedsByItem,
+  type FlagshipDeviceSeed,
 } from '../flagship-seed-data.js';
-import { seedMasterSpecUpdate } from '../jobs/backfill-specs.js';
+import {
+  canonicalMasterUpdate,
+  hasSingleRearCamera,
+  REQUIRED_10_SPEC_GROUPS,
+  requiredSpecGroups,
+  seedMasterSpecUpdate,
+  statesRearCamera,
+} from '../jobs/backfill-specs.js';
+import { ProductNormalizer } from '../product-normalizer.js';
+import type { ShopeeProduct } from '../types.js';
 
 interface Entry {
   key: string;
+  categorySlug?: FlagshipDeviceSeed['categorySlug'];
+  has_5g?: boolean;
   specifications: ProductSpecifications;
+  key_specs?: KeySpecs;
   sources?: Readonly<Record<string, string>>;
 }
 
 const ENTRIES: Entry[] = [
   ...FLAGSHIP_DEVICES_TO_SEED.map(s => ({ ...s, key: s.model_key })),
-  ...Object.entries(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY).map(([key, e]) => ({ ...e, key })),
+  ...Object.entries(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY).map(([key, e]) => ({
+    ...e,
+    key,
+    categorySlug: 'smartphones' as const,
+  })),
 ];
 
 const at = (specs: ProductSpecifications, path: string): unknown => {
@@ -30,9 +53,8 @@ const at = (specs: ProductSpecifications, path: string): unknown => {
   return (specs as Record<string, Record<string, unknown> | undefined>)[group]?.[field];
 };
 
-// The arena syncer's former page-omitted defaults (removed in DOS/Rate#1754, still in
-// `arena-spec-syncer.ts` for the cellular ones) and the normalizer's generic fallbacks.
-// A seed may hold one only where its `sources` cite that field.
+// The arena syncer's former page-omitted defaults (removed in DOS/Rate#1754) and the
+// normalizer's generic fallbacks.
 const TEMPLATE_VALUES: ReadonlyArray<readonly [string, string]> = [
   ['regulatory.certifications', 'CE, FCC, RoHS, QCVN (BTTTT Vietnam)'],
   ['multimedia.audio_features', '24-bit/192kHz Hi-Res & Hi-Res Wireless audio'],
@@ -45,32 +67,286 @@ const TEMPLATE_VALUES: ReadonlyArray<readonly [string, string]> = [
   ['connectivity.bluetooth', '5.3, A2DP, LE'],
 ];
 
-// A field counts as sourced when `sources` cites it or its whole group.
-const cites = (entry: Entry, path: string): boolean =>
-  Boolean(entry.sources?.[path] ?? entry.sources?.[path.split('.')[0]!]);
+const BLUETOOTH_PROFILES_RE =
+  /\b\d+(?:\.\d+)?,\s*(?:A2DP|AVRCP|HFP|HSP|LE\b|AAC|SBC|aptX|LDAC|LHDC)/i;
+const CERT_CODES_RE = /\b(?:CE|FCC|NCC|KC|VCCI|SRRC|SDPPI|SIRIM|NBTC|IMDA|NTRA)\b|\bQCVN/;
+const TWO_BAND_NUMBERS_RE = /\bn?\d{1,3}\s*[,/]\s*n?\d{1,3}\b/;
+const BARE_NEGATIVE_PLACEHOLDER_RE = /^\s*(?:none|no|n\/a)\s*$/i;
+const CELLULAR_NON_CELLULAR_RE =
+  /^\s*(?:no|none|n\/a)\b|\b(?:wi-?fi|bluetooth)\b|\bno\s+(?:cellular|sim)\b/i;
+const LAPTOP_KEY_CAMERA_NON_WEBCAM_RE = /\b(?:Thunderbolt|HDMI|SDXC|\d+-Mic\b|Mic\s+Array)\b/i;
 
-test('no seed or canonical entry holds an unsourced template value', () => {
+const ALL_CAMERA_PATHS = [
+  'camera.rear_setup',
+  'camera.main_camera',
+  'camera.second_camera',
+  'camera.third_camera',
+  'camera.fourth_camera',
+  'camera.flash',
+  'camera.video_recording',
+  'camera.front_camera',
+] as const;
+
+const LAPTOP_REAR_CAMERA_PATHS = [
+  'camera.rear_setup',
+  'camera.main_camera',
+  'camera.second_camera',
+  'camera.third_camera',
+  'camera.fourth_camera',
+  'camera.flash',
+] as const;
+
+const CELLULAR_DETAIL_PATHS = [
+  'cellular.bands_5g',
+  'cellular.bands_4g',
+  'cellular.bands_3g',
+  'cellular.bands_2g',
+  'cellular.technology',
+  'cellular.data_speed',
+  'cellular.sim_type',
+  'cellular.volte',
+  'cellular.vowifi',
+] as const;
+
+// DOS/Rate#1855: template-shaped and cross-category values require an explicit field-level
+// `sources[path]` URL. A group-level `sources.<group>` never excuses them.
+const citesField = (entry: Entry, path: string): boolean => Boolean(entry.sources?.[path]);
+
+function findTemplateViolations(entry: Entry): string[] {
+  const issues: string[] = [];
+
+  for (const [path, value] of TEMPLATE_VALUES) {
+    if (at(entry.specifications, path) === value && !citesField(entry, path)) {
+      issues.push(`${entry.key}: unsourced template ${path} = ${JSON.stringify(value)}`);
+    }
+  }
+
+  const bluetooth = at(entry.specifications, 'connectivity.bluetooth');
+  if (
+    typeof bluetooth === 'string' &&
+    BLUETOOTH_PROFILES_RE.test(bluetooth) &&
+    !citesField(entry, 'connectivity.bluetooth')
+  ) {
+    issues.push(`${entry.key}: unsourced Bluetooth profile connectivity.bluetooth = ${bluetooth}`);
+  }
+
+  const certifications = at(entry.specifications, 'regulatory.certifications');
+  if (
+    typeof certifications === 'string' &&
+    CERT_CODES_RE.test(certifications) &&
+    !citesField(entry, 'regulatory.certifications')
+  ) {
+    issues.push(
+      `${entry.key}: unsourced regulatory codes regulatory.certifications = ${certifications}`
+    );
+  }
+
+  const bands5g = at(entry.specifications, 'cellular.bands_5g');
+  if (bands5g !== undefined) {
+    const text = String(bands5g);
+    if (/SA\/NSA\/Sub6/i.test(text) && !TWO_BAND_NUMBERS_RE.test(text)) {
+      issues.push(`${entry.key}: bare SA/NSA/Sub6 cellular.bands_5g = ${text}`);
+    } else if (!TWO_BAND_NUMBERS_RE.test(text) && !citesField(entry, 'cellular.bands_5g')) {
+      issues.push(`${entry.key}: unsourced 5G band text cellular.bands_5g = ${text}`);
+    }
+  }
+
+  if (entry.categorySlug === 'laptops') {
+    for (const path of LAPTOP_REAR_CAMERA_PATHS) {
+      const val = at(entry.specifications, path);
+      if (val !== undefined && !citesField(entry, path)) {
+        issues.push(`${entry.key}: unsourced laptop rear-camera field ${path} = ${String(val)}`);
+      }
+    }
+    const keyCam = entry.key_specs?.camera;
+    if (
+      typeof keyCam === 'string' &&
+      LAPTOP_KEY_CAMERA_NON_WEBCAM_RE.test(keyCam) &&
+      !citesField(entry, 'key_specs.camera')
+    ) {
+      issues.push(`${entry.key}: non-webcam laptop key_specs.camera = ${keyCam}`);
+    }
+  }
+
+  if (entry.categorySlug === 'smartwatches' || entry.categorySlug === 'earbuds') {
+    for (const path of ALL_CAMERA_PATHS) {
+      const val = at(entry.specifications, path);
+      if (val !== undefined && !citesField(entry, path)) {
+        issues.push(
+          `${entry.key}: unsourced ${entry.categorySlug} camera field ${path} = ${String(val)}`
+        );
+      }
+    }
+  }
+
+  if (entry.categorySlug === 'earbuds') {
+    for (const path of ['cellular.has_5g', ...CELLULAR_DETAIL_PATHS] as const) {
+      const val = at(entry.specifications, path);
+      if (val !== undefined && !citesField(entry, path)) {
+        issues.push(`${entry.key}: unsourced earbuds cellular field ${path} = ${String(val)}`);
+      }
+    }
+  }
+
+  const isNonCellularWatch =
+    entry.categorySlug === 'smartwatches' &&
+    entry.has_5g === false &&
+    at(entry.specifications, 'cellular.bands_4g') === undefined;
+  const isWifiOnlyTabletOrLaptop =
+    entry.has_5g === false &&
+    (entry.categorySlug === 'tablets' || entry.categorySlug === 'laptops');
+
+  if (isWifiOnlyTabletOrLaptop || isNonCellularWatch) {
+    for (const path of CELLULAR_DETAIL_PATHS) {
+      const val = at(entry.specifications, path);
+      if (val !== undefined && !citesField(entry, path)) {
+        issues.push(
+          `${entry.key}: unsourced non-cellular ${entry.categorySlug} cellular field ${path} = ${String(val)}`
+        );
+      }
+    }
+  }
+
+  for (const group of ['camera', 'cellular', 'connectivity'] as const) {
+    const groupObj = entry.specifications[group];
+    if (!groupObj || typeof groupObj !== 'object') continue;
+    for (const [field, val] of Object.entries(groupObj)) {
+      if (typeof val !== 'string') continue;
+      const path = `${group}.${field}`;
+      if (citesField(entry, path)) continue;
+      if (BARE_NEGATIVE_PLACEHOLDER_RE.test(val)) {
+        issues.push(`${entry.key}: unsourced placeholder ${path} = ${JSON.stringify(val)}`);
+      } else if (group === 'cellular' && CELLULAR_NON_CELLULAR_RE.test(val)) {
+        issues.push(
+          `${entry.key}: unsourced non-cellular placeholder ${path} = ${JSON.stringify(val)}`
+        );
+      }
+    }
+  }
+
+  return issues;
+}
+
+test('no seed or canonical entry holds an unsourced template or cross-category value', () => {
   for (const entry of ENTRIES) {
-    for (const [path, value] of TEMPLATE_VALUES) {
-      if (at(entry.specifications, path) !== value) continue;
-      assert.ok(cites(entry, path), `${entry.key}: unsourced template ${path} = ${value}`);
-    }
-    // The normalizer's Bluetooth shape with any version ("5.4, A2DP, LE").
-    const bluetooth = at(entry.specifications, 'connectivity.bluetooth');
-    if (typeof bluetooth === 'string' && /^\d+(\.\d+)?, A2DP, LE$/.test(bluetooth)) {
-      assert.ok(cites(entry, 'connectivity.bluetooth'), `${entry.key}: bluetooth ${bluetooth}`);
-    }
+    assert.deepEqual(findTemplateViolations(entry), [], entry.key);
   }
 });
 
-test('a 5G band field always lists bands', () => {
+test('group-level sources never mask template-shaped or cross-category field values (#1855)', () => {
+  const groupSourcesOnly: Readonly<Record<string, string>> = {
+    camera: 'https://www.apple.com/macbook-air/specs/',
+    cellular: 'https://www.apple.com/ipad-pro/specs/',
+    connectivity: 'https://www.apple.com/iphone-18-pro/specs/',
+    multimedia: 'https://www.gsmarena.com/example.php',
+    regulatory: 'https://www.apple.com/vn/iphone-18-pro/specs/',
+  };
+
+  const masked: Entry = {
+    key: 'test:masked-by-group:256gb',
+    categorySlug: 'laptops',
+    has_5g: false,
+    specifications: {
+      camera: {
+        rear_setup: 'None',
+        second_camera: 'None',
+        front_camera: '1080p FaceTime HD',
+      },
+      cellular: {
+        has_5g: false,
+        bands_5g: '5G Sub-6 (LTE Cat 20)',
+        technology: 'GPS + Wi-Fi + Bluetooth',
+        sim_type: 'No cellular',
+        volte: false,
+      },
+      connectivity: {
+        bluetooth: '5.3, AAC, Ultra-low latency Lossless',
+      },
+      multimedia: {
+        audio_features: '24-bit/192kHz Hi-Res & Hi-Res Wireless audio',
+      },
+      regulatory: {
+        certifications: 'QCVN127B',
+      },
+    },
+    key_specs: {
+      camera: '12MP Center Stage + 3x Thunderbolt 5',
+    },
+    sources: groupSourcesOnly,
+  };
+
+  const violations = findTemplateViolations(masked);
+  assert.ok(violations.some(v => v.includes('connectivity.bluetooth')));
+  assert.ok(violations.some(v => v.includes('regulatory.certifications')));
+  assert.ok(violations.some(v => v.includes('cellular.bands_5g')));
+  assert.ok(violations.some(v => v.includes('cellular.technology')));
+  assert.ok(violations.some(v => v.includes('cellular.sim_type')));
+  assert.ok(violations.some(v => v.includes('cellular.volte')));
+  assert.ok(violations.some(v => v.includes('multimedia.audio_features')));
+  assert.ok(violations.some(v => v.includes('camera.rear_setup')));
+  assert.ok(violations.some(v => v.includes('camera.second_camera')));
+  assert.ok(violations.some(v => v.includes('key_specs.camera')));
+
+  // Bare SA/NSA/Sub6 without band numbers is always rejected, even if cited.
+  const bareSaNsa: Entry = {
+    key: 'test:bare-sa-nsa:256gb',
+    categorySlug: 'smartphones',
+    has_5g: true,
+    specifications: { cellular: { has_5g: true, bands_5g: 'SA/NSA/Sub6' } },
+    sources: { 'cellular.bands_5g': 'https://example.com/specs' },
+  };
+  assert.ok(findTemplateViolations(bareSaNsa).some(v => v.includes('bare SA/NSA/Sub6')));
+
+  // GPS smartwatch with volte/vowifi is rejected without field-level citation.
+  const gpsWatch: Entry = {
+    key: 'test:gps-watch:64gb',
+    categorySlug: 'smartwatches',
+    has_5g: false,
+    specifications: { cellular: { has_5g: false, volte: false, vowifi: true } },
+    sources: { cellular: 'https://example.com/watch' },
+  };
+  assert.ok(findTemplateViolations(gpsWatch).some(v => v.includes('cellular.volte')));
+  assert.ok(findTemplateViolations(gpsWatch).some(v => v.includes('cellular.vowifi')));
+
+  // Explicit field-level sources clear only non-bare-SA/NSA/Sub6 cited paths.
+  const fieldCited: Entry = {
+    ...masked,
+    specifications: {
+      ...masked.specifications,
+      cellular: {
+        ...masked.specifications.cellular,
+        bands_5g: '5G (Sub-6)',
+      },
+    },
+    sources: {
+      ...groupSourcesOnly,
+      'camera.rear_setup': 'https://www.apple.com/macbook-air/specs/',
+      'camera.second_camera': 'https://www.apple.com/macbook-air/specs/',
+      'cellular.bands_5g': 'https://www.apple.com/ipad-pro/specs/',
+      'cellular.technology': 'https://www.apple.com/ipad-pro/specs/',
+      'cellular.sim_type': 'https://www.apple.com/ipad-pro/specs/',
+      'cellular.volte': 'https://www.apple.com/ipad-pro/specs/',
+      'connectivity.bluetooth': 'https://www.apple.com/iphone-18-pro/specs/',
+      'multimedia.audio_features': 'https://www.gsmarena.com/example.php',
+      'regulatory.certifications': 'https://www.apple.com/vn/iphone-18-pro/specs/',
+      'key_specs.camera': 'https://www.apple.com/macbook-pro/specs/',
+    },
+  };
+  assert.deepEqual(findTemplateViolations(fieldCited), []);
+});
+
+test('a 5G band field lists explicit bands or cites an official field-level source', () => {
   for (const entry of ENTRIES) {
     const bands = at(entry.specifications, 'cellular.bands_5g');
     if (bands === undefined) continue;
-    // "SA/NSA/Sub6" with no band number, bare or with a note ("(Snapdragon X75 Modem)").
-    if (/SA\/NSA\/Sub6/i.test(String(bands))) {
-      assert.match(String(bands), /\bn?\d{1,3}\b.*\bn?\d{1,3}\b/, `${entry.key}: ${bands}`);
+    const text = String(bands);
+    if (/SA\/NSA\/Sub6/i.test(text)) {
+      assert.match(text, TWO_BAND_NUMBERS_RE, `${entry.key}: ${text}`);
     }
+    assert.ok(
+      TWO_BAND_NUMBERS_RE.test(text) || citesField(entry, 'cellular.bands_5g'),
+      `${entry.key}: ${text}`
+    );
   }
 });
 
@@ -88,7 +364,7 @@ const byKey = (key: string): Entry => {
   return found;
 };
 
-test('the replaced values are the sourced ones', () => {
+test('the replaced values are the sourced ones (seeds, canonical entries, and 2026 normalizer)', () => {
   const expected: Record<string, Record<string, string>> = {
     'apple:iphone-16:128gb': {
       'cellular.bands_5g':
@@ -96,6 +372,7 @@ test('the replaced values are the sourced ones', () => {
       'connectivity.bluetooth': '5.3',
       'regulatory.sar_head': '1.08 W/kg',
       'regulatory.sar_body': '1.17 W/kg',
+      'regulatory.certifications': 'Model A3287 (Vietnam and other countries and regions)',
     },
     'apple:iphone-16-pro-max:256gb': {
       'cellular.bands_5g':
@@ -104,10 +381,12 @@ test('the replaced values are the sourced ones', () => {
     'apple:iphone-16-plus:256gb': {
       'cellular.bands_5g':
         'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n20/n25/n26/n28/n30/n66/n70/n75/n76; TDD-5G NR n38/n40/n41/n48/n53/n77/n78/n79',
+      'regulatory.certifications': 'Model A3290 (Vietnam and other countries and regions)',
     },
     'apple:iphone-15:128gb': {
       'cellular.bands_5g':
         '5G NR n1/n2/n3/n5/n7/n8/n12/n20/n25/n26/n28/n30/n38/n40/n41/n48/n53/n66/n70/n75/n76/n77/n78/n79',
+      'regulatory.certifications': 'Model A3090 (Vietnam and other countries and regions)',
     },
     'apple:iphone-16-pro:256gb': {
       'cellular.bands_5g':
@@ -125,6 +404,9 @@ test('the replaced values are the sourced ones', () => {
       'cellular.bands_5g': '5G (Sub-6)',
       'connectivity.bluetooth': '5.3',
     },
+    'apple:airpods-pro-2-usbc:64gb': {
+      'connectivity.bluetooth': '5.3',
+    },
     'xiaomi:14-ultra:512gb': {
       'cellular.bands_5g':
         '5G NR n1/n2/n3/n5/n7/n8/n20/n28/n38/n40/n41/n48/n66/n77/n78/n79 (n66 varies by region)',
@@ -135,47 +417,247 @@ test('the replaced values are the sourced ones', () => {
     },
     'oppo:find-x9-pro:512gb': { 'cellular.sim_type': 'Nano-SIM + Nano-SIM + eSIM' },
     'apple:ipad-pro-m5-11:256gb': {
+      'cellular.bands_5g':
+        '5G NR n1/n2/n3/n5/n7/n8/n12/n14/n20/n25/n26/n28/n29/n30/n38/n40/n41/n48/n66/n70/n71/n75/n77/n78/n79',
       'cellular.data_speed': '5G (sub-6 GHz) with 4x4 MIMO, Gigabit LTE with 4x4 MIMO',
       'connectivity.bluetooth': '6',
     },
+    'apple:watch-ultra-3-49mm:64gb': {
+      'cellular.bands_5g':
+        'FDD-5G NR n1/n2/n3/n5/n7/n8/n12/n14/n20/n25/n26/n28/n66/n71; TDD-5G NR n38/n40/n41/n53',
+      'connectivity.bluetooth': '5.3',
+    },
+    'apple:iphone-18-pro-max:256gb': { 'connectivity.bluetooth': '6' },
+    'apple:iphone-18-pro:256gb': { 'connectivity.bluetooth': '6' },
+    'samsung:galaxy-s26-ultra:256gb': { 'connectivity.bluetooth': '6.0' },
   };
   for (const [key, fields] of Object.entries(expected)) {
     const entry = byKey(key);
     for (const [path, value] of Object.entries(fields)) {
       assert.equal(at(entry.specifications, path), value, `${key}: ${path}`);
-      assert.ok(entry.sources?.[path], `${key}: ${path} has no source`);
+      assert.ok(entry.sources?.[path], `${key}: ${path} has no field-level source`);
     }
+  }
+
+  // Canonical backfill updates overwrite stale stored CE/FCC/QCVN certifications on all 3 rows.
+  for (const [key, entry] of Object.entries(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY)) {
+    const update = canonicalMasterUpdate(
+      {
+        specifications: {
+          regulatory: { certifications: 'CE, FCC, RoHS, QCVN (Bộ TT&TT Việt Nam)' },
+        },
+        key_specs: {},
+      },
+      entry
+    ) as { specifications: ProductSpecifications };
+    assert.equal(
+      update.specifications.regulatory?.certifications,
+      entry.specifications.regulatory?.certifications,
+      key
+    );
+    assert.doesNotMatch(update.specifications.regulatory?.certifications ?? '', CERT_CODES_RE, key);
+  }
+
+  // DOS/Rate#1803 item 6: the normalizer registry carries the sourced Bluetooth versions too.
+  const normalizer = new ProductNormalizer();
+  const normalize = (title: string) =>
+    normalizer.normalize({
+      itemId: '1',
+      shopId: '2',
+      title,
+      priceMin: 30_000_000,
+      priceMax: 30_000_000,
+      priceBeforeDiscount: 0,
+      currency: 'VND',
+      stock: 1,
+      historicalSold: 1,
+      ratingStar: 5,
+      ratingCount: 1,
+      images: [],
+      models: [],
+      attributes: [],
+      shop: { shopId: '2' },
+    } as unknown as ShopeeProduct);
+
+  for (const [title, bt] of [
+    ['Apple iPhone 18 Pro Max 256GB', '6'],
+    ['Apple iPhone 18 Pro 256GB', '6'],
+    ['Samsung Galaxy S26 Ultra 256GB', '6.0'],
+  ] as const) {
+    const out = normalize(title).specifications;
+    assert.equal(out.connectivity?.bluetooth, bt, title);
+    assert.doesNotMatch(out.connectivity?.bluetooth ?? '', BLUETOOTH_PROFILES_RE, title);
   }
 });
 
-// Fields no checked source states: dropped from the seed and retracted from stored rows.
-const RETRACTED: Record<string, string[]> = {
-  'samsung:galaxy-a55:256gb': ['cellular.bands_5g', 'connectivity.bluetooth'],
+// Fields no checked source states (including cross-category laptop/Wi-Fi placeholders):
+// dropped from each seed and listed in `retract_spec_fields` so `seedMasterSpecUpdate`
+// removes stale stored copies instead of keeping them on merge.
+const RETRACTED_SUBSETS: Record<string, readonly string[]> = {
+  'samsung:galaxy-s24-ultra:256gb': ['regulatory.certifications'],
+  'apple:iphone-16-pro-max:256gb': ['regulatory.certifications'],
+  'samsung:galaxy-a55:256gb': [
+    'cellular.bands_5g',
+    'connectivity.bluetooth',
+    'regulatory.certifications',
+  ],
+  'xiaomi:14-ultra:512gb': ['connectivity.bluetooth', 'regulatory.certifications'],
+  'oppo:find-x8:256gb': ['connectivity.bluetooth', 'regulatory.certifications'],
+  'apple:ipad-pro-m4-11:256gb': [
+    'cellular.technology',
+    'cellular.sim_type',
+    'cellular.volte',
+    'cellular.vowifi',
+    'regulatory.certifications',
+  ],
+  'apple:macbook-air-m3-13:256gb': [
+    'camera.rear_setup',
+    'camera.main_camera',
+    'camera.second_camera',
+    'cellular.technology',
+    'cellular.sim_type',
+    'cellular.volte',
+    'cellular.vowifi',
+    'regulatory.certifications',
+  ],
+  'apple:iphone-16-pro:256gb': ['regulatory.certifications'],
+  'apple:watch-series-10-42mm:64gb': [
+    'cellular.technology',
+    'cellular.sim_type',
+    'cellular.volte',
+    'cellular.vowifi',
+    'regulatory.certifications',
+  ],
+  'apple:airpods-pro-2-usbc:64gb': ['regulatory.certifications'],
+  'samsung:galaxy-tab-s10-ultra:256gb': ['regulatory.certifications'],
+  'xiaomi:pad-6s-pro:256gb': [
+    'connectivity.bluetooth',
+    'cellular.technology',
+    'cellular.sim_type',
+    'cellular.volte',
+    'cellular.vowifi',
+    'regulatory.certifications',
+  ],
+  'asus:zenbook-s-14:1024gb': [
+    'camera.rear_setup',
+    'camera.main_camera',
+    'camera.second_camera',
+    'cellular.technology',
+    'cellular.sim_type',
+    'cellular.volte',
+    'cellular.vowifi',
+  ],
+  'lenovo:thinkpad-x1-carbon-gen-12:512gb': [
+    'camera.rear_setup',
+    'camera.main_camera',
+    'camera.second_camera',
+    'cellular.technology',
+    'cellular.sim_type',
+    'cellular.volte',
+    'cellular.vowifi',
+  ],
+  'apple:watch-ultra-2:64gb': ['regulatory.certifications'],
+  'samsung:galaxy-watch-ultra:32gb': ['connectivity.bluetooth', 'regulatory.certifications'],
+  'garmin:forerunner-265:8gb': ['cellular.volte', 'cellular.vowifi', 'regulatory.certifications'],
+  'sony:wf-1000xm5:64gb': ['connectivity.bluetooth', 'regulatory.certifications'],
+  'samsung:galaxy-buds3-pro:64gb': ['connectivity.bluetooth', 'regulatory.certifications'],
+  'xiaomi:18-pro-max:512gb': ['connectivity.bluetooth', 'regulatory.certifications'],
   'xiaomi:17-pro-max:512gb': [
     'cellular.sim_type',
+    'connectivity.bluetooth',
     'multimedia.audio_features',
     'regulatory.certifications',
   ],
-  'xiaomi:pad-7-pro:256gb': ['multimedia.audio_features'],
+  'oppo:find-x9-pro:512gb': ['connectivity.bluetooth', 'regulatory.certifications'],
+  'apple:ipad-pro-m5-11:256gb': ['regulatory.certifications'],
+  'xiaomi:pad-7-pro:256gb': [
+    'cellular.sim_type',
+    'cellular.technology',
+    'connectivity.bluetooth',
+    'multimedia.audio_features',
+    'regulatory.certifications',
+  ],
+  'apple:macbook-air-m4-13:256gb': [
+    'camera.rear_setup',
+    'camera.main_camera',
+    'camera.second_camera',
+    'cellular.sim_type',
+    'cellular.technology',
+    'regulatory.certifications',
+  ],
+  'apple:macbook-pro-m4-pro-14:512gb': [
+    'camera.rear_setup',
+    'camera.main_camera',
+    'camera.second_camera',
+    'cellular.sim_type',
+    'cellular.technology',
+    'regulatory.certifications',
+  ],
+  'apple:watch-series-11-46mm:64gb': ['regulatory.certifications'],
+  'apple:watch-ultra-3-49mm:64gb': ['regulatory.certifications'],
+  'apple:airpods-pro-3:standard': ['connectivity.bluetooth', 'regulatory.certifications'],
+  'sony:wf-1000xm6:standard': ['connectivity.bluetooth', 'regulatory.certifications'],
 };
 
 test('fields no source states are dropped and retracted from stored rows', () => {
-  for (const [key, paths] of Object.entries(RETRACTED)) {
+  // Every seed's `retract_spec_fields` is deduplicated and never overlaps a field the seed sets.
+  for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
+    const retracted = seed.retract_spec_fields ?? [];
+    assert.equal(new Set(retracted).size, retracted.length, `${seed.model_key}: duplicate retract`);
+    for (const path of retracted) {
+      if (path.startsWith('key_specs.')) {
+        const keyField = path.slice('key_specs.'.length);
+        assert.equal(
+          (seed.key_specs as Record<string, unknown>)[keyField],
+          undefined,
+          `${seed.model_key} still sets ${path}`
+        );
+      } else {
+        assert.equal(
+          at(seed.specifications, path),
+          undefined,
+          `${seed.model_key} still sets ${path}`
+        );
+      }
+    }
+  }
+
+  const items = flagshipSeedsByItem();
+  for (const [key, paths] of Object.entries(RETRACTED_SUBSETS)) {
     const seed = FLAGSHIP_DEVICES_TO_SEED.find(s => s.model_key === key);
     assert.ok(seed, key);
-    assert.deepEqual(seed.retract_spec_fields, paths, key);
+    const retractedSet = new Set(seed.retract_spec_fields ?? []);
     for (const path of paths) {
+      assert.ok(retractedSet.has(path), `${key}: missing retract_spec_fields entry ${path}`);
       assert.equal(at(seed.specifications, path), undefined, `${key} still sets ${path}`);
     }
-    // The Item carries the retraction too.
-    const item = flagshipSeedsByItem().find(i => key.startsWith(`${i.itemKey}:`));
-    assert.ok(item, key);
-    for (const path of paths) assert.ok(item.retract_spec_fields.includes(path), key);
 
-    // The master update removes the stored template value instead of keeping it.
+    // The Item carries every retraction of its variants too.
+    const item = items.find(i => key.startsWith(`${i.itemKey}:`));
+    assert.ok(item, key);
+    for (const path of paths) {
+      assert.ok(item.retract_spec_fields.includes(path), `${key}: Item missing ${path}`);
+    }
+
+    // `seedMasterSpecUpdate` removes the stale stored template/placeholder values instead of
+    // keeping them, and the resulting specifications pass `auditMasterSpecs` runtime checks
+    // (schema, all 10 groups since seed specs omit `category_slug`, and rear-camera completeness).
     const stored = {
       specifications: {
-        cellular: { bands_5g: 'SA/NSA/Sub6', sim_type: 'Dual SIM (Nano-SIM + eSIM)' },
+        camera: {
+          rear_setup: 'None',
+          main_camera: '1080p Webcam',
+          second_camera: 'None',
+          front_camera: '1080p Webcam',
+        },
+        cellular: {
+          has_5g: false,
+          bands_5g: 'SA/NSA/Sub6',
+          technology: 'Wi-Fi Only',
+          sim_type: 'No cellular',
+          volte: false,
+          vowifi: true,
+        },
         connectivity: { bluetooth: '5.3, A2DP, LE' },
         multimedia: { audio_features: '24-bit/192kHz Hi-Res & Hi-Res Wireless audio' },
         regulatory: { certifications: 'CE, FCC, RoHS, QCVN (BTTTT Vietnam)' },
@@ -187,6 +669,24 @@ test('fields no source states are dropped and retracted from stored rows', () =>
     };
     for (const path of paths) {
       assert.equal(at(update.specifications, path), undefined, `${key} keeps stored ${path}`);
+    }
+    const parsed = ProductSpecificationsSchema.safeParse(update.specifications);
+    assert.equal(parsed.success, true, `${key}: ${parsed.error?.message}`);
+    assert.deepEqual(
+      requiredSpecGroups(update.specifications.category_slug),
+      REQUIRED_10_SPEC_GROUPS,
+      key
+    );
+    for (const grp of REQUIRED_10_SPEC_GROUPS) {
+      assert.ok(update.specifications[grp], `${key}: missing group ${grp} after retraction`);
+    }
+    if (statesRearCamera(update.specifications.camera)) {
+      assert.ok(update.specifications.camera?.main_camera?.trim(), `${key}: missing main_camera`);
+      assert.ok(
+        hasSingleRearCamera(update.specifications.camera) ||
+          update.specifications.camera?.second_camera?.trim(),
+        `${key}: missing second_camera`
+      );
     }
   }
 });

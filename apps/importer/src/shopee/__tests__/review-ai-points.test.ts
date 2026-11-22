@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { comparablePoint, storedPoint } from '@repo/shared-data/rules';
+import {
+  comparablePoint,
+  storedPoint,
+  type PointCluster,
+  type PointLine,
+} from '@repo/shared-data/rules';
+import { sanitizeAiGeneratedText } from '../logger.js';
+import { mergeAndSelectAiProductPoints } from '../product-points-ai-prompt.js';
 import {
   batchCostUsd,
   checkReviewPoints,
@@ -20,9 +27,12 @@ import {
   collectBatch,
   dosAiReviewAiClient,
   fromDosAiOutputLine,
+  monthSpendUsd,
   parseReviewAiPointsArgs,
   qualityStop,
   runReviewAiPointsJob,
+  storeAiRows,
+  type AiBatchRow,
   type AiMarkerRow,
   type AiReviewRow,
   type AiStoreRow,
@@ -1096,6 +1106,277 @@ function fakeSupabase(seed: Record<string, readonly object[]>) {
   return { client: client as unknown as RateSupabaseClient, tables, stores, writes, rpcs, state };
 }
 
+async function testHardening1853() {
+  const now = new Date('2026-11-20T00:00:00Z');
+  const mkBatch = (extra: Partial<AiBatchRow> = {}): AiBatchRow => ({
+    id: 'batch_harden01',
+    model: 'dos',
+    prompt_version: REVIEW_AI_PROMPT_VERSION,
+    status: 'stored',
+    manifest: [],
+    reserved_usd: 0.01,
+    cost_usd: 1.25,
+    submitted_at: '2026-11-02T00:00:00Z',
+    stored_at: '2026-11-02T01:00:00Z',
+    ...extra,
+  });
+
+  // 1) monthSpendUsd & runReviewAiPointsJob: non-finite values fail closed (Infinity, never NaN),
+  // negative values cannot subtract from spend, and +00:00 month start is counted.
+  for (const bad of [
+    mkBatch({ cost_usd: 'NaN', reserved_usd: 0.01 }),
+    mkBatch({ cost_usd: Number.NaN, reserved_usd: 0.01 }),
+    mkBatch({ cost_usd: null, reserved_usd: 'NaN' }),
+    mkBatch({ cost_usd: null, reserved_usd: null as unknown as number }),
+    mkBatch({ cost_usd: null, reserved_usd: -1 }),
+    mkBatch({ cost_usd: Number.POSITIVE_INFINITY, reserved_usd: 0.01 }),
+    mkBatch({ cost_usd: 'Infinity', reserved_usd: 0.01 }),
+    mkBatch({ cost_usd: '-Infinity', reserved_usd: 0.01 }),
+    mkBatch({ cost_usd: '', reserved_usd: 0.01 }),
+  ]) {
+    const spend = monthSpendUsd([bad, mkBatch({ id: 'batch_neg', cost_usd: -50 })], 'dos', now);
+    assert.equal(Number.isNaN(spend), false, 'monthSpendUsd must never be NaN');
+    assert.equal(spend, Number.POSITIVE_INFINITY, 'malformed row fails closed to +Infinity');
+
+    const db = fakeSupabase({
+      reviews: [review(1)],
+      review_points: [],
+      review_ai_extractions: [],
+      review_ai_batches: [bad],
+      products: listings,
+      master_products: masters,
+      categories,
+    });
+    const ai = fakeAi(() => []);
+    const res = await runReviewAiPointsJob(db.client, {
+      apply: true,
+      enabled: true,
+      ai: ai.client,
+      now,
+    });
+    assert.equal(res.capped, true, 'malformed batch row must cap the run');
+    assert.equal(res.sent, 0);
+    assert.equal(ai.calls.length, 0, 'capped run makes zero model calls');
+  }
+
+  assert.equal(
+    monthSpendUsd(
+      [
+        mkBatch({ id: 'b1', cost_usd: 4.5 }),
+        mkBatch({ id: 'b2', cost_usd: -10, reserved_usd: 0 }),
+        mkBatch({ id: 'b3', cost_usd: -2, reserved_usd: 0.4 }),
+      ],
+      'dos',
+      now
+    ),
+    4.9,
+    'negative cost_usd falls back to positive reserved_usd or 0 and never subtracts'
+  );
+  assert.equal(
+    monthSpendUsd(
+      [mkBatch({ model: 'dos ', submitted_at: '2026-11-01T00:00:00+00:00', cost_usd: 2.25 })],
+      'dos',
+      now
+    ),
+    2.25,
+    'PostgREST +00:00 timestamp at month start and padded model are included'
+  );
+
+  // 2) batchCostUsd rejects Infinity / -Infinity / NaN / negative token counts, prototype model
+  // keys, and does not overflow to Infinity or $0 on huge finite token counts.
+  assert.equal(
+    batchCostUsd('dos', {
+      input_tokens: Number.POSITIVE_INFINITY,
+      output_tokens: Number.NaN,
+      cache_read_input_tokens: Number.NEGATIVE_INFINITY,
+      cache_creation_input_tokens: -1000,
+    }),
+    0
+  );
+  assert.equal(batchCostUsd('toString' as never, { input_tokens: 1000 }), 0);
+  const maxValCost = batchCostUsd('qwen3.8-max', { output_tokens: Number.MAX_VALUE });
+  assert.ok(Number.isFinite(maxValCost) && maxValCost > 0);
+  const hugeCollected = collectBatch(
+    {
+      id: 'batch_huge',
+      model: 'dos',
+      prompt_version: REVIEW_AI_PROMPT_VERSION,
+      manifest: [
+        { custom_id: 'r1', category: 'smartphones', criteria_version: 1, reviews: [] },
+        { custom_id: 'r2', category: 'smartphones', criteria_version: 1, reviews: [] },
+      ],
+    },
+    [
+      { custom_id: 'r1', ...answer([], 'end_turn', { input_tokens: 1e308, output_tokens: 1e308 }) },
+      { custom_id: 'r2', ...answer([], 'end_turn', { input_tokens: 1e308, output_tokens: 1e308 }) },
+    ],
+    new Map()
+  );
+  assert.ok(Number.isFinite(hugeCollected.costUsd) && hugeCollected.costUsd > 0);
+  assert.equal(
+    batchCostUsd('dos', {
+      input_tokens: 1_000_000,
+      output_tokens: Number.POSITIVE_INFINITY,
+    }),
+    batchCostUsd('dos', { input_tokens: 1_000_000, output_tokens: 0 })
+  );
+
+  // 3) Prototype-key guards in storeAiRows and mergeAndSelectAiProductPoints (byCriterion).
+  const protoRpcPayload = JSON.parse(
+    '{"__proto__":7,"constructor":9,"toString":11,"valueOf":3,"stored":4,"empty":"Infinity","rejected":-2}'
+  ) as Record<string, unknown>;
+  const rpcClient = {
+    rpc: () => Promise.resolve({ data: protoRpcPayload, error: null }),
+  } as unknown as RateSupabaseClient;
+  const dummyRow: AiStoreRow = {
+    id: id(1),
+    text_hash: 'h1',
+    prompt_version: REVIEW_AI_PROMPT_VERSION,
+    criteria_version: 1,
+    category: 'smartphones',
+    model: 'dos',
+    batch_id: 'batch_01',
+    failed: false,
+    rejected: 0,
+    points: [],
+  };
+  const counts = await storeAiRows(rpcClient, [dummyRow]);
+  assert.equal(Object.getPrototypeOf(counts), Object.prototype);
+  assert.equal(Object.hasOwn(counts, '__proto__'), false);
+  assert.equal(Object.hasOwn(counts, 'constructor'), false);
+  assert.equal(Object.hasOwn(counts, 'toString'), false);
+  assert.equal(Object.hasOwn(counts, 'valueOf'), false);
+  assert.equal(counts.toString, Object.prototype.toString);
+  assert.equal(counts.stored, 4);
+  assert.equal(counts.empty, 0);
+  assert.equal(counts.rejected, 0);
+
+  const protoKeys = ['__proto__', 'constructor', 'toString', 'battery'] as const;
+  const pLines: PointLine[] = [];
+  const pClusters: PointCluster[] = [];
+  protoKeys.forEach((critKey, idx) => {
+    const l1 = `pl-${idx}-1`;
+    const l2 = `pl-${idx}-2`;
+    pLines.push(
+      {
+        id: l1,
+        reviewId: 'r1',
+        writerId: 'w1',
+        kind: 'pro',
+        criterionKey: critKey,
+        body: 'pin dùng bền cả ngày',
+        weight: 1,
+        isExpert: false,
+        writtenAt: now,
+        method: 'writer',
+      },
+      {
+        id: l2,
+        reviewId: 'r2',
+        writerId: 'w2',
+        kind: 'pro',
+        criterionKey: critKey,
+        body: 'pin dùng bền cả ngày',
+        weight: 1,
+        isExpert: false,
+        writtenAt: now,
+        method: 'writer',
+      }
+    );
+    pClusters.push({
+      key: `cluster-${idx}`,
+      criterionKey: critKey,
+      kind: 'pro',
+      label: 'Pin dùng bền cả ngày',
+      support: 2,
+      reviewerCount: 2,
+      aiReviewerCount: 0,
+      hasExpert: false,
+      firstSeen: now,
+      lastSeen: now,
+      lineIds: [l1, l2],
+      visible: true,
+    });
+  });
+  const merged = mergeAndSelectAiProductPoints(pClusters, pLines, [], now);
+  assert.equal(Object.getPrototypeOf(merged.byCriterion), null);
+  assert.equal(
+    (merged.byCriterion as Record<string, unknown>).valueOf,
+    undefined,
+    'unpopulated Object.prototype keys stay undefined'
+  );
+  assert.equal(({} as Record<string, unknown>).pros, undefined, 'Object.prototype untouched');
+  for (const critKey of protoKeys) {
+    assert.equal(merged.byCriterion[critKey]?.pros.length, 1, `own bucket kept for ${critKey}`);
+  }
+  assert.equal(merged.shown.length, 4);
+
+  // 4) UTF-16 surrogate safety in dosAiReviewAiClient and sanitizeAiGeneratedText.
+  const seenPaths: string[] = [];
+  const surrogateGateway = (async (url: string | URL | Request) => {
+    const path = String(url).replace('https://api.dos.me/v1', '');
+    seenPaths.push(path);
+    if (path.startsWith('/batches/') && path.endsWith('/cancel')) {
+      return new Response(JSON.stringify({ status: 'cancelling' }), { status: 200 });
+    }
+    if (path.startsWith('/batches/')) {
+      return new Response(
+        JSON.stringify({ status: 'completed', output_file_id: 'file_\uDC00_out' }),
+        { status: 200 }
+      );
+    }
+    if (path.startsWith('/files/') && path.endsWith('/content')) {
+      return new Response('', { status: 200 });
+    }
+    return new Response('missing', { status: 404 });
+  }) as typeof fetch;
+  const surrogateClient = dosAiReviewAiClient(
+    'dos_sk_test',
+    undefined,
+    surrogateGateway,
+    async () => {}
+  );
+  assert.equal(await surrogateClient.batchStatus('batch_\uD800_bad'), 'ended');
+  const drained: BatchResult[] = [];
+  for await (const item of surrogateClient.results('batch_\uD800_bad')) drained.push(item);
+  assert.equal(drained.length, 0);
+  await surrogateClient.cancelBatch('batch_\uDFFF_bad');
+  assert.deepEqual(seenPaths, [
+    '/batches/batch_%EF%BF%BD_bad',
+    '/batches/batch_%EF%BF%BD_bad',
+    '/files/file_%EF%BF%BD_out/content',
+    '/batches/batch_%EF%BF%BD_bad/cancel',
+  ]);
+  for (const badId of ['', '   ', '.', '..', 'a/b', 'a?b', 'a#b', 'a\\b', 'a\u0000b']) {
+    await assert.rejects(surrogateClient.batchStatus(badId), /Invalid dos\.ai resource identifier/);
+    await assert.rejects(surrogateClient.cancelBatch(badId), /Invalid dos\.ai resource identifier/);
+  }
+
+  const cutPair = sanitizeAiGeneratedText('abcd😀', 5);
+  assert.equal(cutPair, 'abcd');
+  assert.ok((cutPair as string & { isWellFormed(): boolean }).isWellFormed());
+  assert.ok(cutPair.length <= 5);
+
+  const cutEmojiAtOne = sanitizeAiGeneratedText('😀', 1);
+  assert.equal(cutEmojiAtOne, '');
+  assert.ok((cutEmojiAtOne as string & { isWellFormed(): boolean }).isWellFormed());
+
+  const cutSpacePair = sanitizeAiGeneratedText('abcd 😀', 6);
+  assert.equal(cutSpacePair, 'abcd');
+  assert.ok((cutSpacePair as string & { isWellFormed(): boolean }).isWellFormed());
+
+  const cutBoundedBoundary = sanitizeAiGeneratedText(`a${' '.repeat(4094)}😀`, 400);
+  assert.equal(cutBoundedBoundary, 'a');
+  assert.ok((cutBoundedBoundary as string & { isWellFormed(): boolean }).isWellFormed());
+  assert.equal(cutBoundedBoundary.includes('\uFFFD'), false);
+
+  const loneInInput = sanitizeAiGeneratedText('abcd\uD800ef\uDC00', 5);
+  assert.ok((loneInInput as string & { isWellFormed(): boolean }).isWellFormed());
+  assert.ok(loneInInput.length <= 5);
+
+  console.log('  ✅ #1853 spend-cap NaN/Infinity, prototype keys, and UTF-16 surrogates verified');
+}
+
 async function run() {
   console.log('Review AI points job');
   testPrompt();
@@ -1103,6 +1384,7 @@ async function run() {
   testCollect();
   await testJob();
   await testDosAiClient();
+  await testHardening1853();
 }
 
 run().catch(err => {

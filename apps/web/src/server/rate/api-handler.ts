@@ -870,7 +870,7 @@ export function extractClientRateLimitKey(
   return 'anon';
 }
 
-/** The 10 marketplaces and retailers Rate tracks (DOS/Rate#1308). */
+/** The 22 marketplaces and retailers Rate tracks (DOS/Rate#1308, #1850). */
 export const SUPPORTED_PLATFORM_SLUGS: ReadonlySet<string> = new Set([
   'shopee',
   'lazada',
@@ -882,6 +882,18 @@ export const SUPPORTED_PLATFORM_SLUGS: ReadonlySet<string> = new Set([
   'hoangha',
   'didongviet',
   'phongvu',
+  'dienmayxanh',
+  'topzone',
+  'gearvn',
+  'nguyenkim',
+  'shopdunk',
+  'hacom',
+  'clickbuy',
+  'viettelstore',
+  'pico',
+  'mediamart',
+  'memoryzone',
+  'anphatpc',
 ]);
 
 /**
