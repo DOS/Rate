@@ -56,11 +56,10 @@
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { reviewDepth } from '@repo/shared-data/rules';
-import { resolveBackfillSupabaseTarget } from '../paging.js';
+import { fetchByKey, resolveBackfillSupabaseTarget } from '../paging.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
 import { reviewPointWeight, type CategoryRow, type PointMasterRow } from './product-points.js';
-import { fetchByKey } from './review-values.js';
 import {
   aiCategoryOpen,
   batchCostUsd,
@@ -1229,10 +1228,95 @@ async function previousShare(
 
 // --- CLI. ---------------------------------------------------------------------------------
 
-const argValue = (name: string): string | null => {
-  const at = process.argv.indexOf(name);
-  return at >= 0 ? (process.argv[at + 1] ?? '') : null;
-};
+export interface ReviewAiPointsCliArgs {
+  readonly apply: boolean;
+  readonly purge: string | null;
+  readonly maxReviews?: number;
+  readonly waitMs?: number;
+}
+
+/**
+ * Strictly parses CLI arguments (`process.argv.slice(2)`) for `review-ai-points.ts`.
+ * Supports both `--flag <val>` and `--flag=<val>`, failing closed before any auth
+ * or DB call on missing, empty, malformed, repeated, or unknown flags.
+ */
+export function parseReviewAiPointsArgs(argv: readonly string[]): ReviewAiPointsCliArgs {
+  let apply = false;
+  let purge: string | null = null;
+  let maxRaw: string | null = null;
+  let waitRaw: string | null = null;
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]!;
+    if (arg === '--apply') {
+      if (apply) throw new Error('--apply is repeated.');
+      apply = true;
+      continue;
+    }
+    if (arg === '--purge' || arg.startsWith('--purge=')) {
+      if (purge !== null) throw new Error('--purge is repeated.');
+      const val = arg === '--purge' ? argv[++i] : arg.slice('--purge='.length);
+      if (val === undefined || val === '' || (arg === '--purge' && val.startsWith('-'))) {
+        throw new Error("--purge takes 'all' or a prompt version.");
+      }
+      if (val !== 'all' && !PROMPT_VERSION_RE.test(val)) {
+        throw new Error("--purge takes 'all' or a prompt version.");
+      }
+      purge = val;
+      continue;
+    }
+    if (arg === '--max' || arg.startsWith('--max=')) {
+      if (maxRaw !== null) throw new Error('--max is repeated.');
+      const val = arg === '--max' ? argv[++i] : arg.slice('--max='.length);
+      if (val === undefined || val === '' || (arg === '--max' && val.startsWith('-'))) {
+        throw new Error('--max must be 1 to 2000.');
+      }
+      if (!/^[1-9]\d*$/.test(val.trim())) {
+        throw new Error('--max must be 1 to 2000.');
+      }
+      maxRaw = val.trim();
+      continue;
+    }
+    if (arg === '--wait-minutes' || arg.startsWith('--wait-minutes=')) {
+      if (waitRaw !== null) throw new Error('--wait-minutes is repeated.');
+      const val = arg === '--wait-minutes' ? argv[++i] : arg.slice('--wait-minutes='.length);
+      if (val === undefined || val === '' || (arg === '--wait-minutes' && val.startsWith('-'))) {
+        throw new Error('--wait-minutes must be 0 to 1440.');
+      }
+      if (!/^\d+(?:\.\d+)?$/.test(val.trim())) {
+        throw new Error('--wait-minutes must be 0 to 1440.');
+      }
+      waitRaw = val.trim();
+      continue;
+    }
+    throw new Error(`Unknown CLI argument: ${JSON.stringify(arg)}.`);
+  }
+
+  let maxReviews: number | undefined;
+  if (maxRaw !== null) {
+    const parsedMax = Number(maxRaw);
+    if (!Number.isSafeInteger(parsedMax) || parsedMax < 1 || parsedMax > MAX_REVIEWS_PER_RUN) {
+      throw new Error('--max must be 1 to 2000.');
+    }
+    maxReviews = parsedMax;
+  }
+
+  let waitMs: number | undefined;
+  if (waitRaw !== null) {
+    const parsedMinutes = Number(waitRaw);
+    if (!Number.isFinite(parsedMinutes) || parsedMinutes < 0 || parsedMinutes > 1440) {
+      throw new Error('--wait-minutes must be 0 to 1440.');
+    }
+    waitMs = parsedMinutes * 60 * 1000;
+  }
+
+  return {
+    apply,
+    purge,
+    ...(maxReviews !== undefined ? { maxReviews } : {}),
+    ...(waitMs !== undefined ? { waitMs } : {}),
+  };
+}
 
 const isDirectExecution =
   typeof process !== 'undefined' &&
@@ -1244,6 +1328,7 @@ if (isDirectExecution) {
   dotenv.config({ quiet: true });
   dotenv.config({ path: '../../.env', quiet: true });
   (async () => {
+    const cliArgs = parseReviewAiPointsArgs(process.argv.slice(2));
     const { createClient } = await import('@supabase/supabase-js');
     const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     // The publishable key plus the worker user's sign-in: its access token
@@ -1267,10 +1352,18 @@ if (isDirectExecution) {
         `REVIEW_AI_MODEL must be one of ${Object.keys(REVIEW_AI_MODELS).join(', ')}.`
       );
     }
-    const apply = process.argv.includes('--apply');
+    const { apply } = cliArgs;
     const enabled = (process.env.REVIEW_AI_POINTS_ENABLED || '').trim() === 'true';
-    const max = argValue('--max');
-    const waitMinutes = argValue('--wait-minutes');
+    // The gateway key is read only for a run that may call it. DOS_AI_BASE_URL alone
+    // overrides the gateway (beta-api.dos.ai, say); AI_BASE_URL is the other
+    // importer jobs' and may name another provider. Validated before sign-in so an
+    // invalid URL never opens or leaks a rate_worker Auth session.
+    const apiKey = (process.env.DOS_AI_API_KEY || '').trim();
+    const baseUrl = (process.env.DOS_AI_BASE_URL || DOS_AI_DEFAULT_BASE_URL).trim();
+    if (!/^https:\/\/[^/\s]+(\/[^\s]*)?$/.test(baseUrl)) {
+      throw new Error('DOS_AI_BASE_URL must be an https URL.');
+    }
+    const ai = apply && apiKey ? dosAiReviewAiClient(apiKey, baseUrl) : null;
     const { url, host } = resolveBackfillSupabaseTarget(rawUrl);
     const client = createClient(url, key, { auth: { persistSession: false } });
     const { data: auth, error: authError } = await client.auth.signInWithPassword({
@@ -1282,33 +1375,24 @@ if (isDirectExecution) {
         `Sign-in as the rate_worker user failed: ${authError?.message ?? 'no session'}`
       );
     }
-    const role = (auth.user?.role ?? '').trim();
-    if (role !== 'rate_worker') {
-      throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
-    }
-    const supabase = scopeSupabaseToRate(client);
-    // The gateway key is read only for a run that may call it. DOS_AI_BASE_URL alone
-    // overrides the gateway (beta-api.dos.ai, say); AI_BASE_URL is the other
-    // importer jobs' and may name another provider.
-    const apiKey = (process.env.DOS_AI_API_KEY || '').trim();
-    const baseUrl = (process.env.DOS_AI_BASE_URL || DOS_AI_DEFAULT_BASE_URL).trim();
-    if (!/^https:\/\/[^/\s]+(\/[^\s]*)?$/.test(baseUrl)) {
-      throw new Error('DOS_AI_BASE_URL must be an https URL.');
-    }
-    const ai = apply && apiKey ? dosAiReviewAiClient(apiKey, baseUrl) : null;
-    logger.info(
-      'review_ai.target',
-      `Target: ${host} (${apply ? 'apply' : 'dry run'}, ${enabled ? 'enabled' : 'disabled'}, ${modelName})`,
-      { host }
-    );
     try {
+      const role = (auth.user?.role ?? '').trim();
+      if (role !== 'rate_worker') {
+        throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
+      }
+      const supabase = scopeSupabaseToRate(client);
+      logger.info(
+        'review_ai.target',
+        `Target: ${host} (${apply ? 'apply' : 'dry run'}, ${enabled ? 'enabled' : 'disabled'}, ${modelName})`,
+        { host }
+      );
       const result = await runReviewAiPointsJob(supabase, {
         apply,
         enabled,
         model: modelName,
-        purge: argValue('--purge'),
-        maxReviews: max === null ? undefined : Number(max),
-        waitMs: waitMinutes === null ? undefined : Number(waitMinutes) * 60 * 1000,
+        purge: cliArgs.purge,
+        maxReviews: cliArgs.maxReviews,
+        waitMs: cliArgs.waitMs,
         ai,
       });
       if (result.capped) process.exitCode = 3;

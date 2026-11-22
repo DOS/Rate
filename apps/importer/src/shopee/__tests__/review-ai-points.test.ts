@@ -20,6 +20,7 @@ import {
   collectBatch,
   dosAiReviewAiClient,
   fromDosAiOutputLine,
+  parseReviewAiPointsArgs,
   qualityStop,
   runReviewAiPointsJob,
   type AiMarkerRow,
@@ -732,6 +733,33 @@ async function testJob() {
     /'all' or a prompt version/
   );
   await assert.rejects(runReviewAiPointsJob(dry.client, { maxReviews: 0 }), /--max/);
+
+  // CLI flag parsing fails closed on malformed or unknown flags (#1665).
+  assert.deepEqual(parseReviewAiPointsArgs([]), { apply: false, purge: null });
+  assert.deepEqual(
+    parseReviewAiPointsArgs(['--apply', '--purge=v1', '--max=25', '--wait-minutes=10']),
+    { apply: true, purge: 'v1', maxReviews: 25, waitMs: 10 * 60 * 1000 }
+  );
+  for (const badArgv of [
+    ['--master=' + M1],
+    ['--max'],
+    ['--max='],
+    ['--max=0'],
+    ['--max=2001'],
+    ['--max', '--apply'],
+    ['--purge='],
+    ['--purge=bad version'],
+    ['--wait-minutes='],
+    ['--wait-minutes=1441'],
+    ['--apply', '--apply'],
+    ['--unknown'],
+  ]) {
+    assert.throws(
+      () => parseReviewAiPointsArgs(badArgv),
+      /--max|--purge|--wait-minutes|repeated|Unknown CLI argument/,
+      `expected fail-closed throw for ${JSON.stringify(badArgv)}`
+    );
+  }
   console.log(
     '  ✅ dry run, kill switch, apply, resume, waiting, cap, quality stop and purge verified'
   );

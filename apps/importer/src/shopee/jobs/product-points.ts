@@ -42,7 +42,12 @@
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { aggregateProductPoints, type PointCluster, type PointLine } from '@repo/shared-data/rules';
-import { fetchAllPages, resolveBackfillSupabaseTarget } from '../paging.js';
+import {
+  fetchByKey,
+  parseStrictMasterUuid,
+  resolveBackfillSupabaseTarget,
+  type KeysetFilter,
+} from '../paging.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
 
@@ -62,7 +67,14 @@ export interface ReviewPointRow {
 }
 
 const SWITCH_ON = new Set(['true', '1', 'yes', 'on']);
-const SWITCH_OFF = new Set(['', 'false', '0', 'no', 'off']);
+const SWITCH_OFF = new Set(['false', '0', 'no', 'off']);
+
+function parseBooleanSwitch(raw: string, from: string): boolean {
+  const value = raw.trim().toLowerCase();
+  if (SWITCH_ON.has(value)) return true;
+  if (SWITCH_OFF.has(value)) return false;
+  throw new Error(`${from} must be true or false, not ${JSON.stringify(raw)}.`);
+}
 
 /**
  * Whether `--hide-ai` (or `--hide-ai=<value>`) or PRODUCT_POINTS_HIDE_AI asks
@@ -73,18 +85,74 @@ export function hideAiLinesFrom(
   argv: readonly string[],
   env: Record<string, string | undefined>
 ): boolean {
-  const read = (raw: string, from: string): boolean => {
-    const value = raw.trim().toLowerCase();
-    if (SWITCH_ON.has(value)) return true;
-    if (SWITCH_OFF.has(value)) return false;
-    throw new Error(`${from} must be true or false, not ${JSON.stringify(raw)}.`);
-  };
-  let hide = read(env.PRODUCT_POINTS_HIDE_AI ?? '', 'PRODUCT_POINTS_HIDE_AI');
+  const rawEnv = (env.PRODUCT_POINTS_HIDE_AI ?? '').trim();
+  let hide = rawEnv === '' ? false : parseBooleanSwitch(rawEnv, 'PRODUCT_POINTS_HIDE_AI');
   for (const arg of argv) {
     if (arg === '--hide-ai') hide = true;
-    else if (arg.startsWith('--hide-ai=')) hide = read(arg.slice('--hide-ai='.length), '--hide-ai');
+    else if (arg.startsWith('--hide-ai=')) {
+      hide = parseBooleanSwitch(arg.slice('--hide-ai='.length), '--hide-ai');
+    }
   }
   return hide;
+}
+
+export interface ProductPointsCliArgs {
+  readonly apply: boolean;
+  readonly masterId: string | null;
+  readonly hideAiLines: boolean;
+}
+
+/**
+ * Strictly parses CLI arguments (`process.argv.slice(2)`) for `product-points.ts`.
+ * Supports both `--master <uuid>` and `--master=<uuid>`, and fails closed on
+ * missing/empty/malformed `--master` values, repeated flags, or unknown flags.
+ */
+export function parseProductPointsArgs(
+  argv: readonly string[],
+  env: Record<string, string | undefined> = process.env
+): ProductPointsCliArgs {
+  let apply = false;
+  let masterId: string | null = null;
+  let hideAiSeen = false;
+  let hideAiLines = hideAiLinesFrom([], env);
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]!;
+    if (arg === '--apply') {
+      if (apply) throw new Error('--apply is repeated.');
+      apply = true;
+      continue;
+    }
+    if (arg === '--master') {
+      if (masterId !== null) throw new Error('--master is repeated.');
+      const next = argv[i + 1];
+      if (next === undefined || next === '' || next.startsWith('-')) {
+        throw new Error('--master requires a valid UUID.');
+      }
+      masterId = parseStrictMasterUuid(next, '--master');
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--master=')) {
+      if (masterId !== null) throw new Error('--master is repeated.');
+      const raw = arg.slice('--master='.length);
+      if (!raw) throw new Error('--master requires a valid UUID.');
+      masterId = parseStrictMasterUuid(raw, '--master');
+      continue;
+    }
+    if (arg === '--hide-ai' || arg.startsWith('--hide-ai=')) {
+      if (hideAiSeen) throw new Error('--hide-ai is repeated.');
+      hideAiSeen = true;
+      hideAiLines =
+        arg === '--hide-ai'
+          ? true
+          : parseBooleanSwitch(arg.slice('--hide-ai='.length), '--hide-ai');
+      continue;
+    }
+    throw new Error(`Unknown CLI argument: ${JSON.stringify(arg)}.`);
+  }
+
+  return { apply, masterId, hideAiLines };
 }
 
 export interface PointReviewRow {
@@ -260,18 +328,20 @@ async function selectIn<T>(
   table: string,
   columns: string,
   column: string,
-  ids: readonly string[]
+  ids: readonly string[],
+  key = 'id',
+  extraFilter: KeysetFilter = query => query
 ): Promise<T[]> {
   const rows: T[] = [];
   for (const part of chunks([...new Set(ids)])) {
-    const { data, error } = await supabase.from(table).select(columns).in(column, part);
-    if (error) throw new Error(`${table}: ${error.message}`);
-    rows.push(...((data ?? []) as T[]));
+    rows.push(
+      ...(await fetchByKey<T>(supabase, table, columns, key, query =>
+        extraFilter(query.in(column, part))
+      ))
+    );
   }
   return rows;
 }
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function runProductPointsJob(
   supabase: RateSupabaseClient,
@@ -285,48 +355,104 @@ export async function runProductPointsJob(
 }> {
   const apply = options.apply === true;
   const now = options.now ?? new Date();
-  const only = options.masterId ?? null;
-  if (only !== null && !UUID.test(only)) throw new Error('--master must be a UUID.');
+  const only =
+    options.masterId === undefined || options.masterId === null
+      ? null
+      : parseStrictMasterUuid(options.masterId, '--master');
+  const allowedMethods = options.hideAiLines === true ? ['writer'] : ['writer', 'ai'];
+  const reviewColumns =
+    'id, product_id, origin, reviewer_type, helpfulness_weight, created_at, platform_created_at, review_flags(include_in_rating, verdict)';
+  const pointColumns = 'id, review_id, criterion_key, kind, body, method';
 
-  const points = await fetchAllPages<ReviewPointRow>('review_points', (from, to) =>
-    supabase
-      .from('review_points')
-      .select('id, review_id, criterion_key, kind, body, method')
-      .in('method', options.hideAiLines === true ? ['writer'] : ['writer', 'ai'])
-      .order('id')
-      .range(from, to)
-  );
-  const reviews = await selectIn<PointReviewRow>(
-    supabase,
-    'reviews',
-    'id, product_id, origin, reviewer_type, helpfulness_weight, created_at, platform_created_at, review_flags(include_in_rating, verdict)',
-    'id',
-    points.map(p => p.review_id)
-  );
-  const listings = await selectIn<PointListingRow>(
-    supabase,
-    'products',
-    'id, cluster_id, origin',
-    'id',
-    reviews.map(r => r.product_id)
-  );
-  // Masters that have 'code' rows now: they are rewritten or cleared too.
-  const existing = await fetchAllPages<{ id: string; master_id: string }>(
-    'product_points',
-    (from, to) =>
-      supabase
-        .from('product_points')
-        .select('id, master_id')
-        .eq('method', 'code')
-        .order('id')
-        .range(from, to)
-  );
+  let points: ReviewPointRow[];
+  let reviews: PointReviewRow[];
+  let listings: PointListingRow[];
+  let existing: { id: string; master_id: string }[];
+  let activeListings: PointListingRow[];
+
+  if (only !== null) {
+    listings = await fetchByKey<PointListingRow>(
+      supabase,
+      'products',
+      'id, cluster_id, origin',
+      'id',
+      query => query.eq('cluster_id', only)
+    );
+    const crawledListingIds = listings
+      .filter(l => l.origin === 'crawl' && typeof l.cluster_id === 'string' && l.cluster_id)
+      .map(l => l.id);
+    reviews = await selectIn<PointReviewRow>(
+      supabase,
+      'reviews',
+      reviewColumns,
+      'product_id',
+      crawledListingIds
+    );
+    const countedReviewIds = reviews
+      .filter(r => COUNTED_REVIEW_ORIGINS.has(r.origin ?? ''))
+      .map(r => r.id);
+    points = await selectIn<ReviewPointRow>(
+      supabase,
+      'review_points',
+      pointColumns,
+      'review_id',
+      countedReviewIds,
+      'id',
+      query => query.in('method', allowedMethods)
+    );
+    existing = await fetchByKey<{ id: string; master_id: string }>(
+      supabase,
+      'product_points',
+      'id, master_id',
+      'id',
+      query => query.eq('method', 'code').eq('master_id', only)
+    );
+    const pointReviewIds = new Set(points.map(p => p.review_id));
+    const activeProductIds = new Set(
+      reviews.filter(r => pointReviewIds.has(r.id)).map(r => r.product_id)
+    );
+    activeListings = listings.filter(l => activeProductIds.has(l.id));
+  } else {
+    points = await fetchByKey<ReviewPointRow>(
+      supabase,
+      'review_points',
+      pointColumns,
+      'id',
+      query => query.in('method', allowedMethods)
+    );
+    reviews = await selectIn<PointReviewRow>(
+      supabase,
+      'reviews',
+      reviewColumns,
+      'id',
+      points.map(p => p.review_id)
+    );
+    listings = await selectIn<PointListingRow>(
+      supabase,
+      'products',
+      'id, cluster_id, origin',
+      'id',
+      reviews.map(r => r.product_id)
+    );
+    // Masters that have 'code' rows now: they are rewritten or cleared too.
+    existing = await fetchByKey<{ id: string; master_id: string }>(
+      supabase,
+      'product_points',
+      'id, master_id',
+      'id',
+      query => query.eq('method', 'code')
+    );
+    activeListings = listings;
+  }
+
   const masterIds = [
     ...new Set([
-      ...listings.map(l => l.cluster_id).filter((id): id is string => !!id),
+      ...activeListings.map(l => l.cluster_id).filter((id): id is string => !!id),
       ...existing.map(row => row.master_id),
     ]),
-  ].filter(id => only === null || id === only);
+  ]
+    .filter(id => only === null || id === only)
+    .sort();
   const masters = await selectIn<PointMasterRow>(
     supabase,
     'master_products',
@@ -334,9 +460,10 @@ export async function runProductPointsJob(
     'id',
     masterIds
   );
-  const categories = await fetchAllPages<CategoryRow>('categories', (from, to) =>
-    supabase.from('categories').select('id, slug').order('id').range(from, to)
-  );
+  const categories =
+    masterIds.length === 0
+      ? []
+      : await fetchByKey<CategoryRow>(supabase, 'categories', 'id, slug', 'id');
 
   const built = buildProductPoints({ points, reviews, listings, masters, categories }, now, {
     hideAiLines: options.hideAiLines === true,
@@ -391,6 +518,10 @@ if (isDirectExecution) {
   dotenv.config({ quiet: true });
   dotenv.config({ path: '../../.env', quiet: true });
   (async () => {
+    const { apply, masterId, hideAiLines } = parseProductPointsArgs(
+      process.argv.slice(2),
+      process.env
+    );
     const { createClient } = await import('@supabase/supabase-js');
     const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     // The publishable key plus the worker user's sign-in: its access token
@@ -419,22 +550,22 @@ if (isDirectExecution) {
         `Sign-in as the rate_worker user failed: ${authError?.message ?? 'no session'}`
       );
     }
-    const role = (auth.user?.role ?? '').trim();
-    if (role !== 'rate_worker') {
-      throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
+    try {
+      const role = (auth.user?.role ?? '').trim();
+      if (role !== 'rate_worker') {
+        throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
+      }
+      const supabase = scopeSupabaseToRate(client);
+      // The host is not secret; it shows which project the job reads.
+      logger.info(
+        'product_points.target',
+        `Target: ${host} (${apply ? 'apply' : 'dry run'}${hideAiLines ? ', AI lines hidden' : ''})`,
+        { host, hideAiLines }
+      );
+      await runProductPointsJob(supabase, { apply, masterId, hideAiLines });
+    } finally {
+      await client.auth.signOut().catch(() => undefined);
     }
-    const supabase = scopeSupabaseToRate(client);
-    const apply = process.argv.includes('--apply');
-    const at = process.argv.indexOf('--master');
-    const masterId = at >= 0 ? (process.argv[at + 1] ?? '') : null;
-    const hideAiLines = hideAiLinesFrom(process.argv, process.env);
-    // The host is not secret; it shows which project the job reads.
-    logger.info(
-      'product_points.target',
-      `Target: ${host} (${apply ? 'apply' : 'dry run'}${hideAiLines ? ', AI lines hidden' : ''})`,
-      { host, hideAiLines }
-    );
-    await runProductPointsJob(supabase, { apply, masterId, hideAiLines });
   })().catch((err: unknown) => {
     logger.error(
       'product_points.fatal',

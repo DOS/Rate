@@ -2510,32 +2510,38 @@ async function runSuite() {
   await assert.rejects(
     () =>
       auditMasterSpecs({
-        from: () => ({
-          select: () => ({
-            order: () => ({
-              range: async (from: number) => ({
-                data:
-                  from === 0
-                    ? [
-                        {
-                          id: 'm-ws',
-                          name: 'Whitespace Cam Device',
-                          model_key: 'test:ws:128gb',
-                          specifications: {
-                            ...phoneArenaFallbackSpec.specifications,
-                            camera: {
-                              main_camera: '50 MP',
-                              second_camera: '   ',
-                            },
+        from: () => {
+          let after: string | null = null;
+          const builder = {
+            select: () => builder,
+            gt: (_col: string, val: string) => {
+              after = val;
+              return builder;
+            },
+            order: () => builder,
+            limit: async () => ({
+              data:
+                after === null
+                  ? [
+                      {
+                        id: 'm-ws',
+                        name: 'Whitespace Cam Device',
+                        model_key: 'test:ws:128gb',
+                        specifications: {
+                          ...phoneArenaFallbackSpec.specifications,
+                          camera: {
+                            main_camera: '50 MP',
+                            second_camera: '   ',
                           },
                         },
-                      ]
-                    : [],
-                error: null,
-              }),
+                      },
+                    ]
+                  : [],
+              error: null,
             }),
-          }),
-        }),
+          };
+          return builder;
+        },
       } as never),
     /missing camera\.second_camera/,
     'auditMasterSpecs must reject whitespace-only camera.second_camera (#503)'

@@ -2824,13 +2824,15 @@ async function run() {
 
   const { runReviewRiskBackfill } = await import('./jobs/backfill-review-risk.js');
   const fakeBackfillClient = {
-    from: () => ({
-      select: () => ({
-        order: () => ({
-          range: async () => ({ data: [], error: null }),
-        }),
-      }),
-    }),
+    from: () => {
+      const builder = {
+        select: () => builder,
+        gt: () => builder,
+        order: () => builder,
+        limit: async () => ({ data: [], error: null }),
+      };
+      return builder;
+    },
   };
   const backfillRes968 = await runReviewRiskBackfill(fakeBackfillClient as never, {
     apply: 'false' as unknown as boolean,

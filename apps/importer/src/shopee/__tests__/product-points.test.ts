@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   buildProductPoints,
   hideAiLinesFrom,
+  parseProductPointsArgs,
   reviewPointWeight,
   runProductPointsJob,
   type PointReviewRow,
@@ -179,22 +180,105 @@ async function run() {
   );
   assert.ok(!fake.writes.some(w => w.detail.includes('ai-1')), "'ai' rows stay");
 
-  // One master only.
+  // One master only: scopes DB reads to EARBUD and leaves PHONE's code rows untouched (#1665).
   const one = fakeSupabase({
     review_points: points,
     reviews,
     products: listings,
     master_products: masters,
     categories,
-    product_points: [],
+    product_points: [{ id: 'phone-code-keep', master_id: PHONE, method: 'code' }],
   });
-  const single = await runProductPointsJob(one.client, { apply: true, masterId: EARBUD, now: NOW });
+  const parsedEquals = parseProductPointsArgs(['--apply', `--master=${EARBUD.toUpperCase()}`], {});
+  assert.deepEqual(parsedEquals, { apply: true, masterId: EARBUD, hideAiLines: false });
+  const single = await runProductPointsJob(one.client, {
+    apply: parsedEquals.apply,
+    masterId: parsedEquals.masterId,
+    now: NOW,
+  });
   assert.equal(single.masters, 1);
   assert.deepEqual(
     one.writes.map(w => `${w.op}:${w.detail}`),
     [`insert:${EARBUD}x2`]
   );
-  await assert.rejects(runProductPointsJob(one.client, { masterId: 'not-a-uuid' }), /UUID/);
+  assert.ok(
+    one.filters.includes(`products:cluster_id=${EARBUD}`),
+    'single-master mode filters products by cluster_id'
+  );
+  assert.ok(
+    one.filters.includes(`product_points:master_id=${EARBUD}`),
+    'single-master mode filters product_points by master_id'
+  );
+  assert.ok(
+    one.filters.some(f => f.startsWith('review_points:review_id in ')),
+    'single-master mode scopes review_points to that master reviews'
+  );
+
+  // Invalid masterId fails closed before any DB read or write (#1665).
+  for (const badMaster of ['', '   ', 'not-a-uuid', ` ${EARBUD} `]) {
+    const untouched = fakeSupabase({
+      review_points: points,
+      reviews,
+      products: listings,
+      master_products: masters,
+      categories,
+      product_points: [],
+    });
+    await assert.rejects(
+      runProductPointsJob(untouched.client, { apply: true, masterId: badMaster }),
+      /UUID/
+    );
+    assert.equal(
+      untouched.reads.length,
+      0,
+      `no DB read on invalid masterId ${JSON.stringify(badMaster)}`
+    );
+    assert.equal(
+      untouched.writes.length,
+      0,
+      `no DB write on invalid masterId ${JSON.stringify(badMaster)}`
+    );
+  }
+
+  // CLI argument parsing: supports --master <uuid> and --master=<uuid>, fails closed on invalid/unknown (#1665).
+  assert.deepEqual(parseProductPointsArgs([], {}), {
+    apply: false,
+    masterId: null,
+    hideAiLines: false,
+  });
+  assert.deepEqual(parseProductPointsArgs(['--master', PHONE, '--apply', '--hide-ai=true'], {}), {
+    apply: true,
+    masterId: PHONE,
+    hideAiLines: true,
+  });
+  for (const badArgv of [
+    ['--master'],
+    ['--master='],
+    ['--master', ''],
+    ['--master', '--apply'],
+    ['--master=not-a-uuid'],
+    ['--master', '12345'],
+    ['--master', PHONE, '--master', EARBUD],
+    [`--master=${PHONE}`, `--master=${PHONE}`],
+    ['--apply', '--apply'],
+    ['--hide-ai', '--hide-ai=false'],
+    ['--hide-ai='],
+    ['--hide-ai=   '],
+    ['--master-id=' + PHONE],
+    ['--unknown-flag'],
+    ['positional'],
+  ]) {
+    assert.throws(
+      () => parseProductPointsArgs(badArgv, { PRODUCT_POINTS_HIDE_AI: 'true' }),
+      /UUID|repeated|true or false|Unknown CLI argument/,
+      `expected fail-closed throw for ${JSON.stringify(badArgv)}`
+    );
+  }
+  assert.throws(
+    () => hideAiLinesFrom(['node', 'job', '--hide-ai='], { PRODUCT_POINTS_HIDE_AI: 'true' }),
+    /true or false/
+  );
+  assert.equal(hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: '' }), false);
 
   // Lines AI extracted from marketplace reviews (DOS/Rate#1531): each review is
   // one writer at 0.5 x min(weight, 1), so three agreeing reviews show a point
@@ -274,24 +358,73 @@ async function run() {
   await runProductPointsJob(hiddenRun.client, { now: NOW, hideAiLines: true });
   assert.ok(hiddenRun.filters.includes('review_points:method in writer'));
 
+  // Multi-page keyset pagination (> 1000 rows) across review_points and product_points (#1665).
+  const pagedReviews = Array.from({ length: 1205 }, (_, i) =>
+    review(`pr-${String(i + 1).padStart(4, '0')}`, 'l-phone')
+  );
+  const pagedPoints: ReviewPointRow[] = pagedReviews.map((r, i) => ({
+    id: `pp-${String(i + 1).padStart(4, '0')}`,
+    review_id: r.id,
+    criterion_key: 'battery',
+    kind: 'pro',
+    body: 'Pin trâu dùng cả ngày',
+    method: 'writer',
+  }));
+  const pagedOldCodeRows = Array.from({ length: 1050 }, (_, i) => ({
+    id: `old-pp-${String(i + 1).padStart(4, '0')}`,
+    master_id: PHONE,
+    method: 'code',
+  }));
+  const pagedDb = fakeSupabase({
+    review_points: pagedPoints,
+    reviews: pagedReviews,
+    products: listings,
+    master_products: masters,
+    categories,
+    product_points: pagedOldCodeRows,
+  });
+  const pagedRes = await runProductPointsJob(pagedDb.client, { apply: true, now: NOW });
+  assert.equal(pagedRes.masters, 1);
+  assert.equal(pagedRes.inserted, 1);
+  assert.equal(
+    pagedRes.deleted,
+    1050,
+    'all 1050 old code rows read across keyset pages and deleted'
+  );
+  assert.ok(
+    pagedDb.filters.some(f => f.startsWith('review_points:gt(id,')),
+    'review_points paginated via keyset gt(id)'
+  );
+  assert.ok(
+    pagedDb.filters.some(f => f.startsWith('product_points:gt(id,')),
+    'product_points paginated via keyset gt(id)'
+  );
+
   console.log('  ✅ weights, aggregation per master and category, dry run and apply verified');
   console.log('  ✅ AI lines at half weight, and the switch that hides them (#1531)');
+  console.log(
+    '  ✅ --master=<uuid> fail-closed parsing, single-master scoping & keyset paging (#1665)'
+  );
 }
 
 type Row = Record<string, unknown>;
 
 /**
- * A tiny stand-in for the Supabase query builder: select with order/range,
- * in, eq, insert and delete().in(). It records writes.
+ * A tiny stand-in for the Supabase query builder: select with keyset gt/order/limit,
+ * in, eq, insert and delete().in(). Forbids OFFSET .range() and records reads & writes.
  */
 function fakeSupabase(tables: Record<string, readonly object[]>) {
   const writes: { op: string; detail: string }[] = [];
   const filters: string[] = [];
+  const reads: string[] = [];
   const query = (table: string) => {
     let rows = [...(tables[table] ?? [])] as Row[];
     const builder = {
       select: () => builder,
-      order: () => builder,
+      order: (key: string) => {
+        rows = [...rows].sort((a, b) => (String(a[key] ?? '') < String(b[key] ?? '') ? -1 : 1));
+        return builder;
+      },
       eq: (column: string, value: unknown) => {
         filters.push(`${table}:${column}=${String(value)}`);
         // Fixture rows without the column (review lines have no method) pass.
@@ -304,10 +437,22 @@ function fakeSupabase(tables: Record<string, readonly object[]>) {
         rows = rows.filter(r => r[column] === undefined || values.includes(r[column]));
         return builder;
       },
-      range: (from: number, to: number) =>
-        Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
-      then: (resolve: (value: { data: Row[]; error: null }) => unknown) =>
-        Promise.resolve({ data: rows, error: null }).then(resolve),
+      gt: (column: string, value: string) => {
+        filters.push(`${table}:gt(${column},${value})`);
+        rows = rows.filter(r => String(r[column] ?? '') > value);
+        return builder;
+      },
+      limit: (n: number) => {
+        reads.push(table);
+        return Promise.resolve({ data: rows.slice(0, Math.min(n, 1000)), error: null });
+      },
+      range: () => {
+        throw new Error(`Unexpected OFFSET .range() call on ${table}`);
+      },
+      then: (resolve: (value: { data: Row[]; error: null }) => unknown) => {
+        reads.push(table);
+        return Promise.resolve({ data: rows, error: null }).then(resolve);
+      },
     };
     return builder;
   };
@@ -326,7 +471,7 @@ function fakeSupabase(tables: Record<string, readonly object[]>) {
       }),
     }),
   };
-  return { client: client as unknown as RateSupabaseClient, writes, filters };
+  return { client: client as unknown as RateSupabaseClient, writes, filters, reads };
 }
 
 run().catch(err => {

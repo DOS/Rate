@@ -52,6 +52,8 @@ function mockClient(
           return { data: [{ id: 'cat-1', slug: 'smartphones' }], error: null };
         return { data: [], error: null };
       };
+      let gtFilter: [string, string] | null = null;
+      let orderCol: string | null = null;
       const builder = {
         select(columns: string) {
           op.columns = columns;
@@ -61,15 +63,27 @@ function mockClient(
           op.filters.push([column, value]);
           return builder;
         },
-        order() {
+        gt(column: string, value: string) {
+          gtFilter = [column, value];
+          op.filters.push([`gt:${column}`, value]);
           return builder;
         },
-        range(from: number) {
-          const rows =
-            table === 'master_products' && op.columns?.includes('key_specs') && from === 0
-              ? masters
-              : [];
-          return Promise.resolve({ data: rows, error: null });
+        order(column?: string) {
+          if (column) orderCol = column;
+          return builder;
+        },
+        limit(n: number) {
+          let rows =
+            table === 'master_products' && op.columns?.includes('key_specs') ? [...masters] : [];
+          if (gtFilter) {
+            const [col, val] = gtFilter;
+            rows = rows.filter(r => String(r[col] ?? '') > val);
+          }
+          if (orderCol) {
+            const col = orderCol;
+            rows.sort((a, b) => (String(a[col] ?? '') < String(b[col] ?? '') ? -1 : 1));
+          }
+          return Promise.resolve({ data: rows.slice(0, Math.min(n, 1000)), error: null });
         },
         maybeSingle() {
           const key = op.filters.find(([c]) => c === 'model_key')?.[1];
@@ -819,4 +833,29 @@ test('repeated or padded canonical keys plan each master once (#1804)', async ()
   });
   assert.equal(result.planned, 1);
   assert.equal(writes().length, 1);
+});
+
+test('unscoped master scan paginates past 1000 rows via keyset fetchByKey (#1665)', async () => {
+  const seeds = FLAGSHIP_DEVICES_TO_SEED.slice(0, 1);
+  const existing = { [seeds[0]!.model_key]: { id: 'seed-0', specifications: {}, key_specs: {} } };
+  const manyMasters = Array.from({ length: 1205 }, (_, i) => ({
+    id: `m-${String(i + 1).padStart(5, '0')}`,
+    name: `Master ${i + 1}`,
+    model_key: `acme:model-${i + 1}:128gb`,
+    specifications: {},
+    key_specs: {},
+  }));
+  const { client, ops } = mockClient(existing, manyMasters);
+  const enrichCalls: string[] = [];
+  const result = await runMasterSpecsBackfillWith(
+    client,
+    { ...deps(enrichCalls), enricher: { isConfigured: () => true }, seeds },
+    { apply: true }
+  );
+  assert.equal(enrichCalls.length, 1205, 'all 1205 masters across 2 keyset pages are enriched');
+  assert.equal(result.catalogUpdated, 1206);
+  assert.ok(
+    ops.some(o => o.filters.some(([col]) => col === 'gt:id')),
+    'second page queried via keyset gt(id, last)'
+  );
 });
