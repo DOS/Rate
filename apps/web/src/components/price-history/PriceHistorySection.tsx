@@ -14,7 +14,23 @@ import {
   BsExclamationTriangle,
   BsGraphUp,
   BsSearch,
+  BsShieldCheck,
 } from 'react-icons/bs';
+import {
+  evaluateOmnibusPriceAudit,
+  formatOmnibusAuditCopy,
+  type OmnibusPriceAuditResult,
+  type OmnibusReferenceOfferInput,
+  type OmnibusVerdictTranslator,
+} from '@/lib/omnibus-price-audit';
+import {
+  minimumListingPriceVnd,
+  normalizeOfferId,
+} from '@repo/shared-data/rules';
+import {
+  isOfferUnavailable,
+  type OfferAvailability,
+} from '@/lib/product-market-stats';
 import {
   MAX_VALID_VND_PRICE,
   type DiscountVerdictType,
@@ -48,6 +64,7 @@ interface PriceHistorySectionProps {
   productName: string;
   history: MasterProductPriceHistorySummary;
   radarSignal?: RadarSignal | null;
+  offers?: readonly OmnibusReferenceOfferInput[] | null;
 }
 
 type TimeRangeKey = '30d' | '90d' | 'all';
@@ -331,6 +348,7 @@ export default function PriceHistorySection({
   productName,
   history,
   radarSignal,
+  offers,
 }: PriceHistorySectionProps) {
   const t = useTranslations('productDetail');
   const tVerdict = useTranslations('priceVerdict');
@@ -648,6 +666,242 @@ export default function PriceHistorySection({
 
   const hasAuditEvidence = validPoints.length > 0 || offerAnalyses.length > 0;
 
+  const minValidPriceVnd = useMemo(
+    () => minimumListingPriceVnd([productName]),
+    [productName]
+  );
+
+  const safeCurrentMinPrice = useMemo<number | null>(() => {
+    const raw = Number(history.currentMinPrice);
+    if (!Number.isFinite(raw) || raw <= 0 || raw > MAX_VALID_VND_PRICE) {
+      return null;
+    }
+    return Math.round(raw);
+  }, [history.currentMinPrice]);
+
+  // Identify unavailable (sold-out / discontinued) offers from explicit `offers`,
+  // optional `availability` on `offerAnalyses`, prices strictly below the
+  // verified in-stock minimum (DOS/Rate#1141), or `rate-api`'s unavailable
+  // suppression signature (`normal_price` despite qualifying for `genuine_deal`).
+  const unavailableOfferIds = useMemo<Set<string>>(() => {
+    const ids = new Set<string>();
+    const addId = (rawId: string | null | undefined) => {
+      if (!rawId) return;
+      ids.add(rawId);
+      const canon = normalizeOfferId(rawId);
+      if (canon) ids.add(canon);
+    };
+
+    if (Array.isArray(offers)) {
+      for (const off of offers) {
+        if (off && isOfferUnavailable(off)) {
+          addId(off.id);
+        }
+      }
+    }
+
+    for (const oa of offerAnalyses) {
+      const maybeAvail = (oa as { availability?: OfferAvailability | null })
+        .availability;
+      if (maybeAvail && isOfferUnavailable({ availability: maybeAvail })) {
+        addId(oa.product_id);
+        continue;
+      }
+      const p = Number(oa.price_current);
+      if (
+        safeCurrentMinPrice != null &&
+        Number.isFinite(p) &&
+        p > 0 &&
+        Math.round(p) < safeCurrentMinPrice
+      ) {
+        addId(oa.product_id);
+        continue;
+      }
+      // In rate-api.ts, an offer with real_discount_vs_median_pct >= 3 (or at
+      // multi-point historical min below max) that is neither fake nor
+      // suspicious is assigned `normal_price` ONLY when `offerUnavailable` is true.
+      const claimsDiscount =
+        oa.price_original != null && oa.claimed_discount_pct >= 5;
+      const wouldBeFakeOrSuspicious =
+        claimsDiscount &&
+        oa.claimed_discount_pct - oa.real_discount_vs_median_pct >= 6;
+      const qualifiesForGenuine =
+        oa.real_discount_vs_median_pct >= 3 ||
+        (!claimsDiscount &&
+          oa.observation_count >= 2 &&
+          oa.price_current <= oa.historical_min_price &&
+          oa.historical_min_price < oa.historical_max_price) ||
+        (claimsDiscount && oa.price_current <= oa.historical_min_price);
+      if (
+        oa.verdict === 'normal_price' &&
+        !wouldBeFakeOrSuspicious &&
+        qualifiesForGenuine
+      ) {
+        addId(oa.product_id);
+      }
+    }
+    return ids;
+  }, [offerAnalyses, offers, safeCurrentMinPrice]);
+
+  const effectiveReferenceOffers = useMemo<OmnibusReferenceOfferInput[]>(() => {
+    if (Array.isArray(offers) && offers.length > 0) {
+      return [...offers];
+    }
+    return offerAnalyses.map((oa) => ({
+      id: oa.product_id,
+      price_current: oa.price_current,
+      availability:
+        unavailableOfferIds.has(oa.product_id) ||
+        unavailableOfferIds.has(normalizeOfferId(oa.product_id))
+          ? ('out_of_stock' as const)
+          : ('in_stock' as const),
+    }));
+  }, [offerAnalyses, offers, unavailableOfferIds]);
+
+  // Historical anchor excludes synthetic `live_listing` rows and unavailable offers
+  // so synthetic fallback timestamps never inflate observedSpanDays (#1863).
+  const omnibusAnchorMs = useMemo<number | null>(() => {
+    let maxMs = 0;
+    for (const pt of validPoints) {
+      if (pt.source === 'live_listing') continue;
+      if (
+        unavailableOfferIds.has(pt.product_id) ||
+        unavailableOfferIds.has(normalizeOfferId(pt.product_id))
+      ) {
+        continue;
+      }
+      const ms = new Date(pt.recorded_at).getTime();
+      if (Number.isFinite(ms) && ms > maxMs) maxMs = ms;
+    }
+    return maxMs > 0 ? maxMs : null;
+  }, [unavailableOfferIds, validPoints]);
+
+  const omnibusAudit = useMemo<OmnibusPriceAuditResult>(() => {
+    if (selectedProductId !== 'ALL') {
+      const selectedOa =
+        offerAnalyses.find((oa) => oa.product_id === selectedProductId) ?? null;
+      const selectedPts = validPoints.filter(
+        (pt) => pt.product_id === selectedProductId
+      );
+      const selectedUnavailable =
+        safeCurrentMinPrice == null ||
+        unavailableOfferIds.has(selectedProductId) ||
+        unavailableOfferIds.has(normalizeOfferId(selectedProductId));
+      return evaluateOmnibusPriceAudit({
+        points: selectedPts,
+        currentPriceVnd: selectedOa?.price_current ?? null,
+        claimedOriginalPriceVnd: selectedOa?.price_original ?? null,
+        currentInStockPriceVnd:
+          !selectedUnavailable && selectedOa ? selectedOa.price_current : null,
+        currentOfferUnavailable: selectedUnavailable,
+        mode: 'offer',
+        referenceOffers: effectiveReferenceOffers,
+        unavailableOfferIds,
+        minValidPriceVnd,
+        referenceTimestampMs: omnibusAnchorMs,
+      });
+    }
+
+    let bestClaimedOrig: number | null = null;
+    if (safeCurrentMinPrice != null) {
+      const atMinOffers = offerAnalyses.filter(
+        (oa) =>
+          Math.round(Number(oa.price_current)) === safeCurrentMinPrice &&
+          !unavailableOfferIds.has(oa.product_id) &&
+          !unavailableOfferIds.has(normalizeOfferId(oa.product_id))
+      );
+      // Prefer provably in-stock `genuine_deal` offers when tied at `safeCurrentMinPrice`.
+      const preferredOffers = atMinOffers.some(
+        (oa) => oa.verdict === 'genuine_deal'
+      )
+        ? atMinOffers.filter((oa) => oa.verdict === 'genuine_deal')
+        : atMinOffers;
+      for (const oa of preferredOffers) {
+        const orig = Number(oa.price_original);
+        if (
+          Number.isFinite(orig) &&
+          orig > safeCurrentMinPrice &&
+          orig <= MAX_VALID_VND_PRICE &&
+          (bestClaimedOrig == null || orig > bestClaimedOrig)
+        ) {
+          bestClaimedOrig = Math.round(orig);
+        }
+      }
+    }
+
+    return evaluateOmnibusPriceAudit({
+      points: validPoints,
+      currentPriceVnd: safeCurrentMinPrice,
+      claimedOriginalPriceVnd: bestClaimedOrig,
+      currentInStockPriceVnd: safeCurrentMinPrice,
+      mode: 'market',
+      referenceOffers: effectiveReferenceOffers,
+      unavailableOfferIds,
+      minValidPriceVnd,
+      referenceTimestampMs: omnibusAnchorMs,
+    });
+  }, [
+    effectiveReferenceOffers,
+    minValidPriceVnd,
+    offerAnalyses,
+    omnibusAnchorMs,
+    safeCurrentMinPrice,
+    selectedProductId,
+    unavailableOfferIds,
+    validPoints,
+  ]);
+
+  const omnibusByOffer = useMemo<Map<string, OmnibusPriceAuditResult>>(() => {
+    const map = new Map<string, OmnibusPriceAuditResult>();
+    if (validPoints.length === 0 || offerAnalyses.length === 0) return map;
+    const pointsByOfferId = new Map<string, PriceHistoryPoint[]>();
+    for (const pt of validPoints) {
+      if (pt.source === 'live_listing') continue;
+      const list = pointsByOfferId.get(pt.product_id);
+      if (list) list.push(pt);
+      else pointsByOfferId.set(pt.product_id, [pt]);
+    }
+    for (const oa of offerAnalyses) {
+      if (
+        unavailableOfferIds.has(oa.product_id) ||
+        unavailableOfferIds.has(normalizeOfferId(oa.product_id))
+      ) {
+        continue;
+      }
+      const pts = pointsByOfferId.get(oa.product_id);
+      if (!pts || pts.length < 2) continue;
+      map.set(
+        oa.product_id,
+        evaluateOmnibusPriceAudit({
+          points: pts,
+          currentPriceVnd: oa.price_current,
+          claimedOriginalPriceVnd: oa.price_original,
+          currentInStockPriceVnd: null,
+          mode: 'offer',
+          referenceOffers: effectiveReferenceOffers,
+          unavailableOfferIds,
+          minValidPriceVnd,
+          referenceTimestampMs: omnibusAnchorMs,
+        })
+      );
+    }
+    return map;
+  }, [
+    effectiveReferenceOffers,
+    minValidPriceVnd,
+    offerAnalyses,
+    omnibusAnchorMs,
+    unavailableOfferIds,
+    validPoints,
+  ]);
+
+  const tOmnibus: OmnibusVerdictTranslator = (key, values) =>
+    tVerdict(key, values);
+  const omnibusCopy =
+    validPoints.length > 0 && omnibusAudit.currentPriceVnd != null
+      ? formatOmnibusAuditCopy(omnibusAudit, tOmnibus, locale)
+      : null;
+
   const activeNode =
     chartGeometry && activePointIndex != null
       ? chartGeometry.mapped[activePointIndex] ||
@@ -823,6 +1077,121 @@ export default function PriceHistorySection({
           </div>
         </div>
       </div>
+
+      {/* 3-Column EU Omnibus 30-Day Floor Audit & 90-Day Cycle Signal (#1863) */}
+      {omnibusCopy && (
+        <div
+          className="rounded-4 bg-light p-md-4 mb-4 border p-3"
+          data-testid="omnibus-price-audit-card"
+        >
+          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h3 className="h6 fw-bold text-dark d-flex align-items-center mb-0 gap-2">
+              <BsShieldCheck aria-hidden="true" className="text-danger" />
+              <span>{omnibusCopy.cardTitle}</span>
+            </h3>
+            <span
+              data-testid="omnibus-window-badge"
+              className={`badge rounded-pill small px-3 py-2 ${
+                omnibusCopy.statusBadgeTone === 'good'
+                  ? 'bg-success-subtle text-success border-success-subtle border'
+                  : omnibusCopy.statusBadgeTone === 'bad'
+                    ? 'bg-danger-subtle text-danger border-danger-subtle border'
+                    : omnibusCopy.statusBadgeTone === 'warn'
+                      ? 'bg-warning text-dark'
+                      : 'bg-secondary-subtle text-secondary border'
+              }`}
+            >
+              {omnibusCopy.statusBadgeText}
+            </span>
+          </div>
+
+          <div className="row g-3">
+            <div className="col-lg-4 col-12">
+              <div className="rounded-4 bg-white h-100 border p-3">
+                <div className="text-muted small mb-1">
+                  {omnibusCopy.colCurrentTitle}
+                </div>
+                <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
+                  <span className="h5 fw-bold text-danger rate-tabular mb-0">
+                    {omnibusCopy.currentPriceText}
+                  </span>
+                  {omnibusCopy.claimedBadgeText && (
+                    <span className="badge bg-warning text-dark rounded-pill small">
+                      {omnibusCopy.claimedBadgeText}
+                    </span>
+                  )}
+                </div>
+                <div
+                  className={
+                    omnibusCopy.currentSubTone === 'bad'
+                      ? 'text-danger fw-semibold'
+                      : omnibusCopy.currentSubTone === 'good'
+                        ? 'text-success'
+                        : 'text-muted'
+                  }
+                  style={{ fontSize: '0.8125rem' }}
+                >
+                  {omnibusCopy.currentSubText}
+                </div>
+              </div>
+            </div>
+
+            <div className="col-lg-4 col-12">
+              <div className="rounded-4 bg-white h-100 border p-3">
+                <div className="text-muted small mb-1">
+                  {omnibusCopy.colFloorTitle}
+                </div>
+                <div className="h5 fw-bold text-dark rate-tabular mb-1">
+                  {omnibusCopy.floorPriceText}
+                </div>
+                <div
+                  className={
+                    omnibusCopy.floorDeltaTone === 'good'
+                      ? 'text-success fw-semibold'
+                      : omnibusCopy.floorDeltaTone === 'bad'
+                        ? 'text-danger fw-semibold'
+                        : 'text-secondary'
+                  }
+                  style={{ fontSize: '0.8125rem' }}
+                >
+                  {omnibusCopy.floorDeltaText}
+                </div>
+                {omnibusCopy.floorDisclaimerText && (
+                  <div
+                    className="text-muted mt-1"
+                    style={{ fontSize: '0.8125rem' }}
+                  >
+                    {omnibusCopy.floorDisclaimerText}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="col-lg-4 col-12">
+              <div className="rounded-4 bg-white h-100 border p-3">
+                <div className="text-muted small mb-1">
+                  {omnibusCopy.colCycleTitle}
+                </div>
+                <div
+                  data-testid="omnibus-cycle-signal"
+                  className={`fw-bold mb-1 ${
+                    omnibusCopy.cycleValueTone === 'good'
+                      ? 'text-success'
+                      : omnibusCopy.cycleValueTone === 'bad'
+                        ? 'text-danger'
+                        : 'text-dark'
+                  }`}
+                >
+                  {omnibusCopy.cycleValueText}
+                </div>
+                <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
+                  {omnibusCopy.cycleSubText}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Controls: Merchant Filter & Time Range. Single-select groups that
           expose the pressed choice, not only its colour (DOS/Rate#1069). */}
@@ -1276,6 +1645,34 @@ export default function PriceHistorySection({
                         {formatVnd(oa.historical_max_price, locale)}
                       </strong>
                     </span>
+                    {(() => {
+                      const offerOmnibus = omnibusByOffer.get(oa.product_id);
+                      if (
+                        !offerOmnibus ||
+                        offerOmnibus.priorFloorPriceVnd == null ||
+                        (offerOmnibus.windowStatus !==
+                          'omnibus_30d_certified' &&
+                          offerOmnibus.windowStatus !== 'partial_window')
+                      ) {
+                        return null;
+                      }
+                      const floorFormatted = formatVnd(
+                        offerOmnibus.priorFloorPriceVnd,
+                        locale
+                      );
+                      return (
+                        <span className="text-dark fw-medium">
+                          {offerOmnibus.windowStatus === 'omnibus_30d_certified'
+                            ? tOmnibus('omnibusOfferFloorCertified', {
+                                floor: floorFormatted,
+                              })
+                            : tOmnibus('omnibusOfferFloorPartial', {
+                                days: offerOmnibus.windowDaysUsed,
+                                floor: floorFormatted,
+                              })}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <p className="small text-secondary lh-sm mb-0">
