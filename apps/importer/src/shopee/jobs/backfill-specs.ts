@@ -185,7 +185,7 @@ export function specUpdateChanges(
 /**
  * The spec columns a seed writes onto its existing master: specs and key specs merged into
  * the stored ones, minus the seed's retracted paths, and for a replaced seed its variant
- * name and value columns. Shared by the full backfill and the quick sync, so neither keeps a retracted value.
+ * name and value columns. Ensures no seed update keeps a retracted value.
  */
 export function seedMasterSpecUpdate(
   existing: { specifications?: unknown; key_specs?: unknown } | null | undefined,
@@ -1252,25 +1252,27 @@ export async function runMasterSpecsBackfillWith(
   };
 }
 
+/**
+ * Read-only quick spec audit (`--audit-only`). Fails closed before loading the Supabase
+ * client if `apply` or any scoped/write flag is passed, including from delegating callers
+ * such as `test-ai-enricher.ts --audit-only`.
+ */
 export async function runQuickSpecSyncAndAudit(
   options: BackfillSpecsOptions & { readonly auditOnly?: boolean } = {}
 ): Promise<number> {
   if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
-  const apply = options.apply === true;
-  if (options.auditOnly === true) {
-    if (apply) {
-      throw new Error('--apply does not combine with --audit-only');
-    }
-    if (
-      options.only !== undefined ||
-      options.expect !== undefined ||
-      options.expectInserts !== undefined
-    ) {
-      throw new Error('--only, --expect and --expect-inserts do not combine with --audit-only');
-    }
-    if (options.insertMissing === true) {
-      throw new Error('--insert-missing does not combine with --audit-only');
-    }
+  if (options.apply) {
+    throw new Error('--apply does not combine with --audit-only');
+  }
+  if (
+    options.only !== undefined ||
+    options.expect !== undefined ||
+    options.expectInserts !== undefined
+  ) {
+    throw new Error('--only, --expect and --expect-inserts do not combine with --audit-only');
+  }
+  if (options.insertMissing) {
+    throw new Error('--insert-missing does not combine with --audit-only');
   }
   const { createClient } = await import('@supabase/supabase-js');
   const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -1290,37 +1292,11 @@ export async function runQuickSpecSyncAndAudit(
     })
   );
 
-  if (apply) {
-    for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
-      const { data: existingRow, error: lookupErr } = await supabase
-        .from('master_products')
-        .select('id, key_specs, specifications')
-        .eq('model_key', seed.model_key)
-        .maybeSingle();
-      if (lookupErr) {
-        throw new Error(`Failed to look up master product ${seed.model_key}: ${lookupErr.message}`);
-      }
-      const { error: upErr } = await supabase
-        .from('master_products')
-        .update({
-          ...seedMasterSpecUpdate(
-            existingRow as { specifications?: unknown; key_specs?: unknown } | null,
-            seed
-          ),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('model_key', seed.model_key);
-      if (upErr) {
-        throw new Error(`Failed to sync specs of ${seed.model_key}: ${upErr.message}`);
-      }
-    }
-  }
-
   const total = await auditMasterSpecs(supabase);
   logger.info(
     'backfill.audit_passed',
-    `SPEC CLOUD AUDIT PASSED [mode=${apply ? 'APPLY' : 'AUDIT-ONLY'}]: ${total}/${total} master products on Supabase Cloud verified with 10/10 Field Groups (main camera, and a second camera unless single-camera).`,
-    { apply, totalAudited: total }
+    `SPEC CLOUD AUDIT PASSED [mode=AUDIT-ONLY]: ${total}/${total} master products on Supabase Cloud verified with 10/10 Field Groups (main camera, and a second camera unless single-camera).`,
+    { apply: false, totalAudited: total }
   );
   return total;
 }

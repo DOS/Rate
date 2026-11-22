@@ -972,26 +972,45 @@ test('--audit-only rejects --apply in either order and never executes apply: tru
   const saved = Object.fromEntries(envKeys.map(k => [k, process.env[k]]));
   for (const k of envKeys) delete process.env[k];
   try {
-    await assert.rejects(
-      runQuickSpecSyncAndAudit({ auditOnly: true, apply: true }),
-      /--apply does not combine with --audit-only/
-    );
-    await assert.rejects(
-      runQuickSpecSyncAndAudit({ auditOnly: true, only: [APPROVED[0]!] }),
-      /--only, --expect and --expect-inserts do not combine with --audit-only/
-    );
-    await assert.rejects(
-      runQuickSpecSyncAndAudit({ auditOnly: true, expect: 1 }),
-      /--only, --expect and --expect-inserts do not combine with --audit-only/
-    );
-    await assert.rejects(
-      runQuickSpecSyncAndAudit({ auditOnly: true, expectInserts: 0 }),
-      /--only, --expect and --expect-inserts do not combine with --audit-only/
-    );
-    await assert.rejects(
-      runQuickSpecSyncAndAudit({ auditOnly: true, insertMissing: true }),
-      /--insert-missing does not combine with --audit-only/
-    );
+    for (const badOptions of [
+      { auditOnly: true, apply: true },
+      { apply: true },
+      { apply: true, only: [APPROVED[0]!], expect: 1 },
+      { auditOnly: 'true' as unknown as boolean, apply: true },
+      { auditOnly: true, apply: 'true' as unknown as boolean },
+      { apply: 1 as unknown as boolean },
+    ]) {
+      await assert.rejects(
+        runQuickSpecSyncAndAudit(badOptions),
+        /--apply does not combine with --audit-only/,
+        JSON.stringify(badOptions)
+      );
+    }
+    for (const badScoped of [
+      { auditOnly: true, only: [APPROVED[0]!] },
+      { only: [APPROVED[0]!] },
+      { auditOnly: true, expect: 1 },
+      { expect: 1 },
+      { auditOnly: true, expectInserts: 0 },
+      { expectInserts: 0 },
+    ]) {
+      await assert.rejects(
+        runQuickSpecSyncAndAudit(badScoped),
+        /--only, --expect and --expect-inserts do not combine with --audit-only/,
+        JSON.stringify(badScoped)
+      );
+    }
+    for (const badInsertMissing of [
+      { auditOnly: true, insertMissing: true },
+      { insertMissing: true },
+      { insertMissing: 'true' as unknown as boolean },
+    ]) {
+      await assert.rejects(
+        runQuickSpecSyncAndAudit(badInsertMissing),
+        /--insert-missing does not combine with --audit-only/,
+        JSON.stringify(badInsertMissing)
+      );
+    }
   } finally {
     for (const k of envKeys) if (saved[k] !== undefined) process.env[k] = saved[k];
   }
