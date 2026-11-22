@@ -1547,6 +1547,33 @@
       "connectivity": "Komunikace a konektivita",
       "battery": "Baterie a nabíjení",
       "misc": "Senzory, SAR a předpisy"
+    },
+    "btnMcpDocs": "MCP a /llms.txt pro AI agenty",
+    "authPublicMcp": "Veřejné pouze pro čtení (limit na IP)",
+    "cacheNoStoreMcp": "no-store (čtení přes withRateDataCache)",
+    "ep20Params": "Tělo JSON-RPC 2.0: initialize, ping, tools/list, tools/call (<= 16 KB)",
+    "ep20Summary": "Bezstavový MCP server přes HTTP s 5 čtecími nástroji napříč 22 obchody ve Vietnamu a povinnou citací rate.vn.",
+    "ep21Params": "Bez parametrů",
+    "ep21Summary": "Popisovač automatického zjištění MCP serveru (verze protokolu 2025-06-18, adresa HTTP, limity požadavků a seznam nástrojů).",
+    "ep22Params": "Bez parametrů",
+    "ep22Summary": "Stručný přehled v Markdownu (/llms.txt) pro AI asistenty a čtečky webu o 22 obchodech, 5 kategoriích, 6osém modelu důvěry recenzí a nástrojích MCP.",
+    "mcpBadge": "Protokol MCP (2025-06-18)",
+    "mcpTitle": "MCP server Rate.vn a /llms.txt pro AI agenty",
+    "mcpSubtitle": "Připojte AI asistenty, IDE agenty, ChatGPT nebo DOSClaw přímo k ověřeným cenám z 22 obchodů ve Vietnamu a 6osému hodnocení důvěry recenzí bez API klíče.",
+    "mcpBtnLlmsTxt": "Otevřít /llms.txt",
+    "mcpBtnWellKnown": "Zobrazit /.well-known/mcp.json",
+    "mcpGuardNote": "Bezpečnostní limity pouze pro čtení: JSON-RPC 2.0 přes POST /api/mcp, tělo <= 16 KB, max. 10 položek na volání, klouzavý limit podle IP (60 požadavků/min, 30 kontrol URL/min) a povinné pole canonical_citation_url s časovým razítkem observed_at u každé položky.",
+    "mcpToolsHeading": "5 čtecích nástrojů MCP",
+    "mcpReadOnlyBadge": "Pouze čtení",
+    "mcpConfigHeading": "Rychlé připojení (.mcp.json / .cursor/mcp.json / claude_desktop_config.json / DOSClaw)",
+    "mcpClientConfigLabel": ".mcp.json / .cursor/mcp.json / claude_desktop_config.json / DOSClaw",
+    "mcpCurlConfigLabel": "JSON-RPC 2.0 přes HTTP (POST /api/mcp)",
+    "mcpTools": {
+      "search_verified_catalog": "Hledání v 5 technologických kategoriích s filtry značky a ceny ve VND (max. 10 položek, bez vyprodaných a návnadových nabídek).",
+      "get_22_store_offers_and_price_truth": "Vrátí ověřené nabídky skladem z 22 obchodů, historické minimum a medián, bayesovské skóre, 6osou důvěru recenzí a příznaky falešných slev.",
+      "compare_devices_by_use_case": "Porovná 2 až 4 modely stejné kategorie v 10 skupinách parametrů, minimálních cenách a 5 kritériích s volitelnými vlastními vahami.",
+      "audit_listing_url": "Prověří URL nabídky z 22 podporovaných obchodů, spáruje katalogový model a vrátí 5stupňový verdikt ceny i riziko prodejce.",
+      "get_genuine_deals": "Vypíše ověřené nabídky pod mediánem a cenová minima napříč obchody (limit <= 10) s filtry kategorie, platformy a rozpočtu."
     }
   },
   "staticPages": {

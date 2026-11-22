@@ -94,6 +94,51 @@ const TEN_FIELD_GROUPS = [
   },
 ] as const;
 
+const MCP_TOOL_KEYS = [
+  'search_verified_catalog',
+  'get_22_store_offers_and_price_truth',
+  'compare_devices_by_use_case',
+  'audit_listing_url',
+  'get_genuine_deals',
+] as const;
+
+const MCP_CLIENT_CONFIG_SNIPPET = [
+  '// .mcp.json / .cursor/mcp.json / DOSClaw (native HTTP)',
+  JSON.stringify(
+    {
+      mcpServers: {
+        'rate-vn': {
+          type: 'streamable-http',
+          url: 'https://rate.vn/api/mcp',
+        },
+      },
+    },
+    null,
+    2
+  ),
+  '',
+  '// claude_desktop_config.json (stdio bridge)',
+  JSON.stringify(
+    {
+      mcpServers: {
+        'rate-vn': {
+          command: 'npx',
+          args: ['-y', 'mcp-remote', 'https://rate.vn/api/mcp'],
+        },
+      },
+    },
+    null,
+    2
+  ),
+].join('\n');
+
+const MCP_JSON_RPC_CURL_SNIPPET = [
+  "curl -sS -X POST 'https://rate.vn/api/mcp' \\",
+  "  -H 'Content-Type: application/json' \\",
+  "  -H 'Accept: application/json, text/event-stream' \\",
+  '  --data-raw \'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_genuine_deals","arguments":{"category":"smartphones","limit":3}}}\'',
+].join('\n');
+
 export default async function DevelopersPage({
   params,
 }: {
@@ -246,6 +291,30 @@ export default async function DevelopersPage({
     },
     {
       method: 'POST',
+      path: '/api/mcp',
+      auth: t('authPublicMcp'),
+      cache: t('cacheNoStoreMcp'),
+      queryParams: t('ep20Params'),
+      summary: t('ep20Summary'),
+    },
+    {
+      method: 'GET',
+      path: '/.well-known/mcp.json',
+      auth: t('authPublic'),
+      cache: 's-maxage=3600, stale-while-revalidate=86400',
+      queryParams: t('ep21Params'),
+      summary: t('ep21Summary'),
+    },
+    {
+      method: 'GET',
+      path: '/llms.txt',
+      auth: t('authPublic'),
+      cache: 's-maxage=3600, stale-while-revalidate=86400',
+      queryParams: t('ep22Params'),
+      summary: t('ep22Summary'),
+    },
+    {
+      method: 'POST',
       path: '/api/v1/rate/reviews',
       auth: t('authBearer'),
       cache: t('cacheNoStoreRpc'),
@@ -291,6 +360,12 @@ export default async function DevelopersPage({
                     className="btn btn-danger rounded-pill fw-semibold px-4 py-2"
                   >
                     {t('btnPlayground')}
+                  </a>
+                  <a
+                    href="#mcp"
+                    className="btn btn-outline-light rounded-pill fw-semibold px-4 py-2"
+                  >
+                    {t('btnMcpDocs')}
                   </a>
                   <a
                     href="/api/v1/rate/openapi.json"
@@ -376,6 +451,100 @@ export default async function DevelopersPage({
             </div>
 
             <ApiPlaygroundClient />
+          </div>
+        </section>
+
+        {/* Rate Shopping MCP Server & /llms.txt Section */}
+        <section className="border-top bg-white py-5" id="mcp">
+          <div className="container">
+            <div className="row align-items-end g-3 mb-4">
+              <div className="col-lg-8">
+                <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
+                  {t('mcpBadge')}
+                </span>
+                <h2 className="h3 fw-bold mb-1">{t('mcpTitle')}</h2>
+                <p className="text-muted mb-2">{t('mcpSubtitle')}</p>
+                <p className="small text-secondary mb-0">{t('mcpGuardNote')}</p>
+              </div>
+              <div className="col-lg-4 text-lg-end">
+                <div className="d-flex justify-content-lg-end flex-wrap gap-2">
+                  <a
+                    href="/llms.txt"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline-primary rounded-pill fw-medium px-3 py-2"
+                  >
+                    {t('mcpBtnLlmsTxt')}
+                  </a>
+                  <a
+                    href="/.well-known/mcp.json"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline-dark rounded-pill fw-medium px-3 py-2"
+                  >
+                    {t('mcpBtnWellKnown')}
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div className="row g-4">
+              <div className="col-lg-7">
+                <h3 className="h5 fw-bold text-dark mb-3">
+                  {t('mcpToolsHeading')}
+                </h3>
+                <div className="d-flex flex-column gap-2">
+                  {MCP_TOOL_KEYS.map((toolKey) => (
+                    <div
+                      key={toolKey}
+                      className="card rounded-4 border bg-white p-3 shadow-sm"
+                    >
+                      <div className="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-2">
+                        <code className="small text-primary fw-bold">
+                          {toolKey}
+                        </code>
+                        <span className="badge bg-dark rounded-pill">
+                          {t('mcpReadOnlyBadge')}
+                        </span>
+                      </div>
+                      <div className="small text-secondary">
+                        {t(`mcpTools.${toolKey}`)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="col-lg-5">
+                <h3 className="h5 fw-bold text-dark mb-3">
+                  {t('mcpConfigHeading')}
+                </h3>
+                <div className="d-flex flex-column gap-3">
+                  <div className="rounded-3 bg-dark p-3 text-white">
+                    <div className="small fw-semibold text-white-50 mb-2">
+                      {t('mcpClientConfigLabel')}
+                    </div>
+                    <pre
+                      className="font-monospace small text-info mb-0"
+                      style={{ whiteSpace: 'pre-wrap' }}
+                    >
+                      {MCP_CLIENT_CONFIG_SNIPPET}
+                    </pre>
+                  </div>
+                  <div className="rounded-3 bg-dark p-3 text-white">
+                    <div className="small fw-semibold text-white-50 mb-2">
+                      {t('mcpCurlConfigLabel')}
+                    </div>
+                    <pre
+                      className="font-monospace small text-warning mb-0"
+                      style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                    >
+                      {MCP_JSON_RPC_CURL_SNIPPET}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
