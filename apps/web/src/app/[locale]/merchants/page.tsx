@@ -2,15 +2,23 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { getCachedMerchantsList } from '@/server/rate';
+import { withPublicReviewRisk } from '@/server/rate/api-handler';
+import {
+  hasReviewRiskEvidence,
+  knownDosafeRiskScore,
+} from '@/lib/merchant-risk-tone';
 import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import { BsSearch, BsShieldCheck } from 'react-icons/bs';
-import MerchantDirectoryExplorer from '@/components/merchants/MerchantDirectoryExplorer';
+import MerchantDirectoryExplorer, {
+  type MerchantDirectoryExplorerPage,
+} from '@/components/merchants/MerchantDirectoryExplorer';
 import {
   DEFAULT_MERCHANT_DIRECTORY_FILTERS,
   MERCHANT_PAGE_SIZE,
   pageMerchantDirectory,
   summarizeMerchantDirectory,
+  type MerchantDirectoryPage,
 } from '@/lib/merchant-directory';
 import ClientMessages from '@/components/providers/ClientMessages';
 
@@ -37,6 +45,67 @@ export async function generateMetadata({
   };
 }
 
+function parseServerFiniteNumber(value: unknown): number | null {
+  if (
+    value == null ||
+    (typeof value !== 'number' && typeof value !== 'string')
+  ) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return null;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? (parsed === 0 ? 0 : parsed) : null;
+  }
+  return Number.isFinite(value) ? (value === 0 ? 0 : value) : null;
+}
+
+function clampServerScore100(value: number): number {
+  const clamped = Math.min(100, Math.max(0, Math.round(value)));
+  return clamped === 0 ? 0 : clamped;
+}
+
+export function toPublicMerchantDirectoryPage(
+  page: MerchantDirectoryPage
+): MerchantDirectoryExplorerPage {
+  return {
+    ...page,
+    items: page.items.map((m) => {
+      const pub = withPublicReviewRisk(m);
+      const rawDosafe =
+        m.dosafe_risk_known !== false &&
+        parseServerFiniteNumber(m.dosafe_risk_score) != null
+          ? knownDosafeRiskScore(m)
+          : null;
+      const brk = m.review_risk_breakdown as { total_reviews?: unknown } | null;
+      const parsedCount =
+        brk &&
+        typeof brk === 'object' &&
+        'total_reviews' in brk &&
+        brk.total_reviews !== undefined
+          ? parseServerFiniteNumber(brk.total_reviews)
+          : undefined;
+      const reviewKnown =
+        hasReviewRiskEvidence(brk) &&
+        (parsedCount === undefined || (parsedCount != null && parsedCount > 0));
+      const rawReview = reviewKnown
+        ? parseServerFiniteNumber(pub.review_risk_score)
+        : null;
+      return {
+        ...pub,
+        dosafe_risk_score:
+          rawDosafe == null ? null : clampServerScore100(rawDosafe),
+        review_risk_score:
+          rawReview == null ? null : clampServerScore100(rawReview),
+      };
+    }),
+  };
+}
+
 export default async function MerchantsDirectoryPage({
   params,
 }: {
@@ -49,11 +118,15 @@ export default async function MerchantsDirectoryPage({
 
   // Only the first page and whole-directory stats go to the browser; the
   // explorer fetches further pages and exports from the directory API.
-  const initialPage = pageMerchantDirectory(
-    merchants,
-    DEFAULT_MERCHANT_DIRECTORY_FILTERS,
-    0,
-    MERCHANT_PAGE_SIZE
+  // Strip internal dosafe_risk_known and baseline scores before RSC serialization
+  // (matching /api/v1/rate/merchants/directory, DOS/Rate#1465, #1821).
+  const initialPage = toPublicMerchantDirectoryPage(
+    pageMerchantDirectory(
+      merchants,
+      DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+      0,
+      MERCHANT_PAGE_SIZE
+    )
   );
   const summary = summarizeMerchantDirectory(merchants);
 

@@ -816,6 +816,156 @@ async function main() {
     );
   }
 
+  // 8. Under RATE_ITEM_MODEL, /merchants/[id] resolves variant slugs from
+  //    listings, recent reviews, and radar entries to canonical Item URLs via
+  //    getItemSlugsFor, and unmeasured baseline review_risk_score resolves to
+  //    null for audit exports (DOS/Rate#1821).
+  {
+    const prevFlag = process.env.RATE_ITEM_MODEL;
+    process.env.RATE_ITEM_MODEL = 'item';
+    const ITEM_ID = '00000000-0000-4000-b000-000000001821';
+    const VARIANT_SLUG = 'phone-1217-256gb';
+    const CANONICAL_ITEM_SLUG = 'phone-1217';
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url
+        );
+        const table = url.pathname.replace('/rest/v1/', '');
+        const query = decodeURIComponent(url.search);
+        const offset = Number(url.searchParams.get('offset') ?? 0);
+        if (offset > 0) {
+          return new Response('[]', {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        let body: unknown = [];
+        if (table === 'merchants') {
+          body = [{ ...merchantRow, review_risk_score: 5, metadata: {} }];
+        } else if (table === 'products') {
+          body = [listingRow];
+        } else if (table === 'master_products') {
+          body = query.includes('item_id')
+            ? [{ slug: VARIANT_SLUG, item_id: ITEM_ID }]
+            : [
+                {
+                  id: MASTER_ID,
+                  slug: VARIANT_SLUG,
+                  name: 'Phone 1217 256GB',
+                  brand: 'X',
+                  category_id: null,
+                  metadata: { category_slug: 'smartphones' },
+                  min_price: 9_000_000,
+                  max_price: 9_000_000,
+                  merchant_count: 1,
+                },
+              ];
+        } else if (table === 'items') {
+          body = [{ id: ITEM_ID, slug: CANONICAL_ITEM_SLUG }];
+        } else if (table === 'reviews') {
+          body = [];
+        }
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/*',
+          },
+        });
+      }) as typeof fetch;
+
+      const { getItemSlugsFor } =
+        await import('../../server/rate/item-directory');
+      const {
+        collectMerchantPageProductSlugs,
+        resolveMerchantProductHref,
+        resolveMerchantReviewRiskScore,
+      } = await import('../../app/[locale]/merchants/[id]/page');
+      const { buildMerchantAuditCsv, buildMerchantAuditJson } =
+        await import('../../components/merchants/MerchantShareAuditButton');
+
+      const base = await getMerchantProfileBase(MERCHANT_ID);
+      assert.ok(base);
+      assert.equal(
+        base.profile.listings[0]?.master_product?.slug,
+        VARIANT_SLUG
+      );
+      assert.equal(
+        resolveMerchantReviewRiskScore(base.profile),
+        null,
+        'unmeasured store (total_reviews === 0) resolves reviewRiskScore to null despite baseline 5'
+      );
+
+      const auditProps = {
+        merchantName: base.profile.name,
+        platform: base.profile.platform,
+        platformShopId: base.profile.platform_shop_id,
+        isOfficial: base.profile.is_official,
+        trustScore: base.profile.trust_score,
+        trustLevelLabel: 'Trusted',
+        dosafeRiskScore: base.profile.dosafe_risk_score,
+        reviewSeedingRiskScore: resolveMerchantReviewRiskScore(base.profile),
+        authenticReviews: base.profile.review_risk_breakdown.authentic_count,
+        totalReviews: base.profile.review_risk_breakdown.total_reviews,
+        flaggedReviews: 0,
+        productCount: base.profile.product_count,
+      };
+      assert.equal(
+        buildMerchantAuditJson(auditProps).merchant.reviewSeedingRiskScore,
+        null
+      );
+      const csvLines = buildMerchantAuditCsv(auditProps)
+        .replace(/^\uFEFF/, '')
+        .split('\n');
+      const headers = csvLines[0]!.split(',');
+      const cells = csvLines[1]!.split(',');
+      assert.equal(cells[headers.indexOf('SeedingRisk(/100)')], '');
+
+      const slugs = collectMerchantPageProductSlugs(
+        {
+          ...base.profile,
+          recent_reviews: [{ master_slug: VARIANT_SLUG }] as never,
+        },
+        [
+          {
+            productSlug: VARIANT_SLUG,
+            productHref: `/smartphones/${VARIANT_SLUG}`,
+          },
+        ]
+      );
+      const itemSlugBySlug = await getItemSlugsFor(slugs);
+      assert.deepEqual(itemSlugBySlug, { [VARIANT_SLUG]: CANONICAL_ITEM_SLUG });
+      assert.equal(
+        resolveMerchantProductHref({
+          categorySlug: 'smartphones',
+          productSlug: VARIANT_SLUG,
+          itemSlugBySlug,
+        }),
+        `/smartphones/${CANONICAL_ITEM_SLUG}`
+      );
+      assert.equal(
+        resolveMerchantProductHref({
+          categorySlug: 'smartphones',
+          productSlug: VARIANT_SLUG,
+          hash: '#jreviews-section',
+          itemSlugBySlug,
+        }),
+        `/smartphones/${CANONICAL_ITEM_SLUG}#jreviews-section`
+      );
+    } finally {
+      if (prevFlag === undefined) {
+        delete process.env.RATE_ITEM_MODEL;
+      } else {
+        process.env.RATE_ITEM_MODEL = prevFlag;
+      }
+    }
+  }
+
   console.warn('  ✅ merchant profile reads suite passed');
 }
 
