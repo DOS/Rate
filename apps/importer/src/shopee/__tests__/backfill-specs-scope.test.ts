@@ -6,11 +6,14 @@ import {
 } from '../flagship-seed-data.js';
 import {
   parseBackfillSpecsArgs,
+  runBackfillSpecsCli,
   runMasterSpecsBackfill,
   runMasterSpecsBackfillWith,
+  runQuickSpecSyncAndAudit,
   selectOnlyScope,
   selectOnlySeeds,
   type BackfillSpecsDeps,
+  type BackfillSpecsOptions,
 } from '../jobs/backfill-specs.js';
 import type { ProductSpecifications } from '@repo/shared-data';
 import type { RateSupabaseClient } from '../types.js';
@@ -858,4 +861,157 @@ test('unscoped master scan paginates past 1000 rows via keyset fetchByKey (#1665
     ops.some(o => o.filters.some(([col]) => col === 'gt:id')),
     'second page queried via keyset gt(id, last)'
   );
+});
+
+test('--audit-only rejects --apply in either order and never executes apply: true (#1854)', async () => {
+  assert.deepEqual(parseBackfillSpecsArgs([]), { apply: false, auditOnly: false });
+  assert.deepEqual(parseBackfillSpecsArgs(['--audit-only']), { apply: false, auditOnly: true });
+  assert.deepEqual(parseBackfillSpecsArgs(['--apply']), { apply: true, auditOnly: false });
+  assert.deepEqual(parseBackfillSpecsArgs(['--apply', '--only', APPROVED[0]!, '--expect', '1']), {
+    apply: true,
+    auditOnly: false,
+    only: [APPROVED[0]!],
+    expect: 1,
+  });
+
+  for (const argv of [
+    ['--audit-only', '--apply'],
+    ['--apply', '--audit-only'],
+    ['--audit-only', '--only', APPROVED[0]!, '--apply', '--expect', '1'],
+    ['--only', APPROVED[0]!, '--apply', '--expect', '1', '--audit-only'],
+  ]) {
+    assert.throws(
+      () => parseBackfillSpecsArgs(argv),
+      /--apply does not combine with --audit-only/,
+      argv.join(' ')
+    );
+  }
+  assert.throws(
+    () => parseBackfillSpecsArgs(['--audit-only', '--audit-only']),
+    /--audit-only is repeated/
+  );
+
+  // CLI dispatcher rejects both flag orders before invoking either runner.
+  for (const argv of [
+    ['--audit-only', '--apply'],
+    ['--apply', '--audit-only'],
+  ]) {
+    let called = false;
+    await assert.rejects(
+      runBackfillSpecsCli(argv, {
+        runQuickAudit: async () => {
+          called = true;
+          return 0;
+        },
+        runBackfill: async () => {
+          called = true;
+          return null;
+        },
+      }),
+      /--apply does not combine with --audit-only/,
+      argv.join(' ')
+    );
+    assert.equal(called, false, `${argv.join(' ')} never reaches a runner`);
+  }
+
+  // Defensive guard inside runBackfillSpecsCli even if parseArgs were bypassed.
+  let quickAuditCalled = false;
+  await assert.rejects(
+    runBackfillSpecsCli(['--audit-only'], {
+      parseArgs: () => ({ apply: true, auditOnly: true }),
+      runQuickAudit: async () => {
+        quickAuditCalled = true;
+        return 0;
+      },
+    }),
+    /--apply does not combine with --audit-only/
+  );
+  assert.equal(quickAuditCalled, false);
+
+  // Valid --audit-only dispatches with apply: false, auditOnly: true.
+  const quickCalls: Array<BackfillSpecsOptions & { readonly auditOnly?: boolean }> = [];
+  const backfillCalls: BackfillSpecsOptions[] = [];
+  const auditCount = await runBackfillSpecsCli(['--audit-only'], {
+    runQuickAudit: async opts => {
+      quickCalls.push(opts);
+      return 42;
+    },
+    runBackfill: async opts => {
+      backfillCalls.push(opts);
+      return null;
+    },
+  });
+  assert.equal(auditCount, 42);
+  assert.deepEqual(quickCalls, [{ apply: false, auditOnly: true }]);
+  assert.deepEqual(backfillCalls, []);
+
+  // Valid scoped --apply dispatches to runBackfill only.
+  const scopedQuickCalls: Array<BackfillSpecsOptions & { readonly auditOnly?: boolean }> = [];
+  const scopedBackfillCalls: BackfillSpecsOptions[] = [];
+  await runBackfillSpecsCli(['--apply', '--only', APPROVED[0]!, '--expect', '1'], {
+    runQuickAudit: async opts => {
+      scopedQuickCalls.push(opts);
+      return 0;
+    },
+    runBackfill: async opts => {
+      scopedBackfillCalls.push(opts);
+      return null;
+    },
+  });
+  assert.deepEqual(scopedQuickCalls, []);
+  assert.deepEqual(scopedBackfillCalls, [{ apply: true, only: [APPROVED[0]!], expect: 1 }]);
+
+  // Defensive guard at the entry of runQuickSpecSyncAndAudit fails closed before reading env/client.
+  const envKeys = [
+    'SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'SUPABASE_SECRET_KEY',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'SUPABASE_ANON_KEY',
+  ];
+  const saved = Object.fromEntries(envKeys.map(k => [k, process.env[k]]));
+  for (const k of envKeys) delete process.env[k];
+  try {
+    for (const badOptions of [
+      { auditOnly: true, apply: true },
+      { apply: true },
+      { apply: true, only: [APPROVED[0]!], expect: 1 },
+      { auditOnly: 'true' as unknown as boolean, apply: true },
+      { auditOnly: true, apply: 'true' as unknown as boolean },
+      { apply: 1 as unknown as boolean },
+    ]) {
+      await assert.rejects(
+        runQuickSpecSyncAndAudit(badOptions),
+        /--apply does not combine with --audit-only/,
+        JSON.stringify(badOptions)
+      );
+    }
+    for (const badScoped of [
+      { auditOnly: true, only: [APPROVED[0]!] },
+      { only: [APPROVED[0]!] },
+      { auditOnly: true, expect: 1 },
+      { expect: 1 },
+      { auditOnly: true, expectInserts: 0 },
+      { expectInserts: 0 },
+    ]) {
+      await assert.rejects(
+        runQuickSpecSyncAndAudit(badScoped),
+        /--only, --expect and --expect-inserts do not combine with --audit-only/,
+        JSON.stringify(badScoped)
+      );
+    }
+    for (const badInsertMissing of [
+      { auditOnly: true, insertMissing: true },
+      { insertMissing: true },
+      { insertMissing: 'true' as unknown as boolean },
+    ]) {
+      await assert.rejects(
+        runQuickSpecSyncAndAudit(badInsertMissing),
+        /--insert-missing does not combine with --audit-only/,
+        JSON.stringify(badInsertMissing)
+      );
+    }
+  } finally {
+    for (const k of envKeys) if (saved[k] !== undefined) process.env[k] = saved[k];
+  }
 });
