@@ -892,8 +892,9 @@ function main() {
       .priceVerdict;
     assert.ok(
       inspectOverpricedNewShopHtml.includes(
-        pvDict.omnibusBadgeInsufficient!.replace('<', '&lt;')
-      ),
+        pvDict.omnibusFloorInsufficientSub!
+      ) &&
+        !inspectOverpricedNewShopHtml.includes(pvDict.omnibusBadgeCertified!),
       `${locale}: 0-history matchedOffer shows insufficient history, not competitor 30d floor`
     );
     assert.ok(
