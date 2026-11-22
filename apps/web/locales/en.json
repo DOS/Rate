@@ -1558,6 +1558,33 @@
       "connectivity": "Comms & connectivity",
       "battery": "Battery & charging",
       "misc": "Sensors, SAR & regulatory"
+    },
+    "btnMcpDocs": "MCP & /llms.txt for AI agents",
+    "authPublicMcp": "Public read-only (per-IP rate limit)",
+    "cacheNoStoreMcp": "no-store (withRateDataCache BFF)",
+    "ep20Params": "Body JSON-RPC 2.0: initialize, ping, tools/list, tools/call (<= 16 KB)",
+    "ep20Summary": "Stateless streamable HTTP MCP server exposing 5 read-only tools across 22 stores in Vietnam with mandatory rate.vn citations.",
+    "ep21Params": "No parameters",
+    "ep21Summary": "Self-hosted MCP server discovery descriptor (protocol version 2025-06-18, streamable HTTP endpoint, rate limits and tool list).",
+    "ep22Params": "No parameters",
+    "ep22Summary": "Concise Markdown context guide (/llms.txt) for AI assistants and web readers covering 22 retail platforms, 5 categories, 6-axis review trust and MCP tools.",
+    "mcpBadge": "MCP protocol (2025-06-18)",
+    "mcpTitle": "Rate.vn MCP server & /llms.txt for AI agents",
+    "mcpSubtitle": "Connect AI assistants, IDE agents, ChatGPT or DOSClaw directly to verified 22-store prices in Vietnam and 6-axis review trust with zero API keys.",
+    "mcpBtnLlmsTxt": "Open /llms.txt",
+    "mcpBtnWellKnown": "View /.well-known/mcp.json",
+    "mcpGuardNote": "Read-only guardrails: JSON-RPC 2.0 over POST /api/mcp, body <= 16 KB, max 10 items per call, per-IP sliding-window rate limit (60 req/min, 30 URL audits/min), and mandatory canonical_citation_url + observed_at provenance on every item.",
+    "mcpToolsHeading": "5 read-only MCP tools",
+    "mcpReadOnlyBadge": "Read-only",
+    "mcpConfigHeading": "Quick connect (.mcp.json / .cursor/mcp.json / claude_desktop_config.json / DOSClaw)",
+    "mcpClientConfigLabel": ".mcp.json / .cursor/mcp.json / claude_desktop_config.json / DOSClaw",
+    "mcpCurlConfigLabel": "JSON-RPC 2.0 over HTTP (POST /api/mcp)",
+    "mcpTools": {
+      "search_verified_catalog": "Search across 5 tech categories with brand and VND price bounds (max 10 items, bait and sold-out listings excluded).",
+      "get_22_store_offers_and_price_truth": "Fetch verified in-stock offers across 22 stores, historical floor/median prices, Bayesian rating, 6-axis review trust and fake-sale flags.",
+      "compare_devices_by_use_case": "Compare 2 to 4 same-category slugs side-by-side across 10 spec groups, floor prices and 5 criteria with optional custom weights.",
+      "audit_listing_url": "Inspect a marketplace listing URL across the 22 supported platforms for catalog match, 5-level price verdict and seller risk scores.",
+      "get_genuine_deals": "List verified below-median and multi-store floor deals (limit <= 10) with optional category, platform and budget filters."
     }
   },
   "staticPages": {
