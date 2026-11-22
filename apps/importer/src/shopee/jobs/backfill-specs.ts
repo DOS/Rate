@@ -25,7 +25,8 @@
  *                  between the dry run and the apply cannot pass as an update (DOS/Rate#1739).
  *   A scoped run only updates existing masters: a named key with no master row stops an
  *   --apply before any write (a dry run warns). Any unknown argument, `--flag=value` or a
- *   repeated flag fails. Neither flag combines with --audit-only. The read-only catalog
+ *   repeated flag fails. None of --apply, --only, --expect, --expect-inserts or
+ *   --insert-missing combines with --audit-only. The read-only catalog
  *   audit still runs at the end, so a scoped --apply can exit 1 after its writes when an
  *   unrelated master fails the audit: read the log, not only the exit code.
  *
@@ -577,6 +578,9 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
       );
     }
     expectInserts = Number(expectInsertsRaw.trim());
+  }
+  if (auditOnly && apply) {
+    throw new Error('--apply does not combine with --audit-only');
   }
   if (auditOnly && (only !== undefined || expect !== undefined || expectInserts !== undefined)) {
     throw new Error('--only, --expect and --expect-inserts do not combine with --audit-only');
@@ -1249,10 +1253,25 @@ export async function runMasterSpecsBackfillWith(
 }
 
 export async function runQuickSpecSyncAndAudit(
-  options: BackfillSpecsOptions = {}
+  options: BackfillSpecsOptions & { readonly auditOnly?: boolean } = {}
 ): Promise<number> {
   if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
   const apply = options.apply === true;
+  if (options.auditOnly === true) {
+    if (apply) {
+      throw new Error('--apply does not combine with --audit-only');
+    }
+    if (
+      options.only !== undefined ||
+      options.expect !== undefined ||
+      options.expectInserts !== undefined
+    ) {
+      throw new Error('--only, --expect and --expect-inserts do not combine with --audit-only');
+    }
+    if (options.insertMissing === true) {
+      throw new Error('--insert-missing does not combine with --audit-only');
+    }
+  }
   const { createClient } = await import('@supabase/supabase-js');
   const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const supabaseKey = (
@@ -1306,6 +1325,47 @@ export async function runQuickSpecSyncAndAudit(
   return total;
 }
 
+export interface BackfillSpecsCliRunners {
+  readonly parseArgs?: (argv: readonly string[]) => BackfillSpecsArgs;
+  readonly runQuickAudit?: (
+    options: BackfillSpecsOptions & { readonly auditOnly?: boolean }
+  ) => Promise<unknown>;
+  readonly runBackfill?: (options: BackfillSpecsOptions) => Promise<unknown>;
+}
+
+/**
+ * Parses CLI arguments and dispatches to the read-only quick audit (`--audit-only`) or the
+ * master spec backfill. Fails closed if `auditOnly` and `apply` ever appear together.
+ */
+export async function runBackfillSpecsCli(
+  argv: readonly string[],
+  runners: BackfillSpecsCliRunners = {}
+): Promise<unknown> {
+  const parseArgs = runners.parseArgs ?? parseBackfillSpecsArgs;
+  const args = parseArgs(argv);
+  if (args.auditOnly) {
+    if (args.apply) {
+      throw new Error('--apply does not combine with --audit-only');
+    }
+    if (args.only !== undefined || args.expect !== undefined || args.expectInserts !== undefined) {
+      throw new Error('--only, --expect and --expect-inserts do not combine with --audit-only');
+    }
+    if (args.insertMissing) {
+      throw new Error('--insert-missing does not combine with --audit-only');
+    }
+    const runQuickAudit = runners.runQuickAudit ?? runQuickSpecSyncAndAudit;
+    return runQuickAudit({ apply: false, auditOnly: true });
+  }
+  const runBackfill = runners.runBackfill ?? runMasterSpecsBackfill;
+  return runBackfill({
+    apply: args.apply,
+    ...(args.only !== undefined ? { only: args.only } : {}),
+    ...(args.expect !== undefined ? { expect: args.expect } : {}),
+    ...(args.expectInserts !== undefined ? { expectInserts: args.expectInserts } : {}),
+    ...(args.insertMissing ? { insertMissing: true } : {}),
+  });
+}
+
 const isDirectExecution =
   typeof process !== 'undefined' &&
   Array.isArray(process.argv) &&
@@ -1315,24 +1375,11 @@ const isDirectExecution =
 if (isDirectExecution) {
   dotenv.config({ quiet: true });
   dotenv.config({ path: '../../.env', quiet: true });
-  Promise.resolve()
-    .then((): Promise<unknown> => {
-      const args = parseBackfillSpecsArgs(process.argv.slice(2));
-      return args.auditOnly
-        ? runQuickSpecSyncAndAudit({ apply: args.apply })
-        : runMasterSpecsBackfill({
-            apply: args.apply,
-            ...(args.only !== undefined ? { only: args.only } : {}),
-            ...(args.expect !== undefined ? { expect: args.expect } : {}),
-            ...(args.expectInserts !== undefined ? { expectInserts: args.expectInserts } : {}),
-            ...(args.insertMissing ? { insertMissing: true } : {}),
-          });
-    })
-    .catch((err: unknown) => {
-      logger.error(
-        'backfill.fatal',
-        `Spec backfill/audit execution failed: ${err instanceof Error ? err.message : String(err)}`
-      );
-      process.exit(1);
-    });
+  runBackfillSpecsCli(process.argv.slice(2)).catch((err: unknown) => {
+    logger.error(
+      'backfill.fatal',
+      `Spec backfill/audit execution failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+    process.exit(1);
+  });
 }
