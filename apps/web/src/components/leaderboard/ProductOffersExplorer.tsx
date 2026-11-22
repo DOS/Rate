@@ -40,7 +40,13 @@ import {
 import { isOfferUnavailable } from '@/lib/product-market-stats';
 import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
-import { formatPercent, formatPriceVnd } from '@/lib/locale-format';
+import {
+  collapseWhitespace,
+  formatNumber,
+  formatPercent,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 interface ProductOffersExplorerProps {
   readonly productName: string;
@@ -150,12 +156,15 @@ export function isSafeExternalOfferUrl(url: unknown): boolean {
   }
 }
 
-export function sanitizeOffersMarkdownCell(value: unknown): string {
+export function sanitizeOffersMarkdownCell(
+  value: unknown,
+  locale?: string | null
+): string {
   if (typeof value !== 'string') return '-';
-  const cleaned = value
-    .replace(/\p{Cc}+/gu, ' ')
-    .replace(/\|/g, '-')
-    .replace(/\s+/g, ' ')
+  const cleaned = collapseWhitespace(
+    value.replace(/\p{Cc}+/gu, ' ').replace(/\|/g, '-'),
+    locale
+  )
     .trim()
     .slice(0, 180);
   return cleaned || '-';
@@ -305,6 +314,139 @@ export function computeOffersPriceSpreadAudit(
   };
 }
 
+export type OffersMarkdownTranslatorKey =
+  | 'offersImplausiblyLowBadge'
+  | 'offersDiscontinuedBadge'
+  | 'offersUnavailableBadge'
+  | 'offersTrustBadgeNoData'
+  | 'offersMdRadarPrefix'
+  | 'offersMdSpreadLine';
+
+export function buildOffersMarkdown(params: {
+  readonly productName: string;
+  readonly offers: readonly MerchantOffer[];
+  readonly inStockOffers?: readonly Pick<
+    MerchantOffer,
+    'id' | 'price_current'
+  >[];
+  readonly implausibleOfferIds?: ReadonlySet<string>;
+  readonly byOffer?: MasterProductPriceHistorySummary['byOffer'] | null;
+  readonly radarSignal?: RadarSignal | null;
+  readonly priceSpreadAudit?: ReturnType<typeof computeOffersPriceSpreadAudit>;
+  readonly locale?: string | null;
+  readonly t: (
+    key: OffersMarkdownTranslatorKey,
+    values?: Record<string, string | number>
+  ) => string;
+  readonly tVerdict: VerdictTranslator;
+}): string {
+  const locale =
+    typeof params.locale === 'string' && params.locale.trim()
+      ? params.locale
+      : 'vi';
+  const safeOffers = Array.isArray(params.offers) ? params.offers : [];
+  const resolvedInStock =
+    params.inStockOffers ??
+    (() => {
+      const s = safeOffers.filter((o) => !isOfferUnavailable(o));
+      return s.length > 0 ? s : safeOffers;
+    })();
+  const resolvedImplausibleIds =
+    params.implausibleOfferIds ?? implausiblyLowOfferIds(resolvedInStock);
+  const resolvedSpreadAudit =
+    params.priceSpreadAudit === undefined
+      ? computeOffersPriceSpreadAudit(safeOffers, resolvedImplausibleIds)
+      : params.priceSpreadAudit;
+
+  const headers = [
+    'Platform',
+    'Merchant',
+    'Official Mall',
+    'Trust Score',
+    'Current Price (VND)',
+    'Original Price (VND)',
+    'Price Verdict',
+  ];
+  const sep = headers.map(() => '---');
+  const rows = safeOffers.map((o) => {
+    const trust = offerTrustScore(o.merchant.risk_score);
+    const isBait = isExplorerOfferImplausiblyLow(
+      o,
+      resolvedInStock,
+      resolvedImplausibleIds
+    );
+    const analysis = resolveExplorerOfferDiscountAnalysis(
+      o,
+      params.byOffer,
+      resolvedInStock,
+      resolvedImplausibleIds
+    );
+    const hasValidCurrentPrice = hasPositiveOfferPrice(o.price_current);
+    const hasValidOrig =
+      hasValidCurrentPrice &&
+      o.price_original != null &&
+      Number.isFinite(Number(o.price_original)) &&
+      Number(o.price_original) > Number(o.price_current) &&
+      Number(o.price_original) <= MAX_VALID_VND_PRICE;
+    const verdictCell = resolveExplorerMarkdownVerdictCell({
+      offer: o,
+      isBait,
+      analysis,
+      t: params.t,
+      tVerdict: params.tVerdict,
+      locale,
+    });
+    return [
+      sanitizeOffersMarkdownCell(o.platform.toUpperCase(), locale),
+      sanitizeOffersMarkdownCell(o.merchant.name, locale),
+      o.merchant.is_official ? 'Yes' : 'No',
+      trust == null
+        ? params.t('offersTrustBadgeNoData')
+        : formatPercent(trust, locale),
+      hasValidCurrentPrice
+        ? formatPriceVnd(Math.round(Number(o.price_current)), locale)
+        : '-',
+      hasValidOrig
+        ? formatPriceVnd(Math.round(Number(o.price_original)), locale)
+        : '-',
+      sanitizeOffersMarkdownCell(verdictCell, locale),
+    ];
+  });
+
+  const radarLine = params.radarSignal
+    ? params.t('offersMdRadarPrefix', {
+        signal: radarMarkdownCell(params.radarSignal, locale),
+      })
+    : '';
+  const spreadLine = resolvedSpreadAudit
+    ? params.t('offersMdSpreadLine', {
+        count: resolvedSpreadAudit.platformCount,
+        spreadVnd: formatNumber(resolvedSpreadAudit.spreadVnd, locale),
+        spreadPct: formatPlainNumber(resolvedSpreadAudit.spreadPct, locale),
+        cheapestPlatform: sanitizeOffersMarkdownCell(
+          resolvedSpreadAudit.cheapest.platform.toUpperCase(),
+          locale
+        ),
+        cheapestMerchant: sanitizeOffersMarkdownCell(
+          resolvedSpreadAudit.cheapest.merchant.name,
+          locale
+        ),
+        priciestPlatform: sanitizeOffersMarkdownCell(
+          resolvedSpreadAudit.priciest.platform.toUpperCase(),
+          locale
+        ),
+      })
+    : '';
+
+  return [
+    `### 🛡️ Rate.vn cross-store price check: ${sanitizeOffersMarkdownCell(params.productName, locale)}`,
+    radarLine + spreadLine,
+    `| ${headers.join(' | ')} |`,
+    `| ${sep.join(' | ')} |`,
+    ...rows.map((r) => `| ${r.join(' | ')} |`),
+  ].join('\n');
+}
+
 export default function ProductOffersExplorer({
   productName,
   productSlug,
@@ -436,88 +578,18 @@ export default function ProductOffersExplorer({
 
   const handleCopyOffersMarkdown = async () => {
     if (typeof navigator === 'undefined' || filteredOffers.length === 0) return;
-    const headers = [
-      'Platform',
-      'Merchant',
-      'Official Mall',
-      'Trust Score',
-      'Current Price (VND)',
-      'Original Price (VND)',
-      'Price Verdict',
-    ];
-    const sep = headers.map(() => '---');
-    const rows = filteredOffers.map((o) => {
-      const trust = offerTrustScore(o.merchant.risk_score);
-      const isBait = isExplorerOfferImplausiblyLow(
-        o,
-        inStockOffers,
-        implausibleOfferIds
-      );
-      const analysis = resolveExplorerOfferDiscountAnalysis(
-        o,
-        byOffer,
-        inStockOffers,
-        implausibleOfferIds
-      );
-      const hasValidCurrentPrice = hasPositiveOfferPrice(o.price_current);
-      const hasValidOrig =
-        hasValidCurrentPrice &&
-        o.price_original != null &&
-        Number.isFinite(Number(o.price_original)) &&
-        Number(o.price_original) > Number(o.price_current) &&
-        Number(o.price_original) <= MAX_VALID_VND_PRICE;
-      const verdictCell = resolveExplorerMarkdownVerdictCell({
-        offer: o,
-        isBait,
-        analysis,
-        t,
-        tVerdict,
-        locale,
-      });
-      return [
-        sanitizeOffersMarkdownCell(o.platform.toUpperCase()),
-        sanitizeOffersMarkdownCell(o.merchant.name),
-        o.merchant.is_official ? 'Yes' : 'No',
-        trust == null ? t('offersTrustBadgeNoData') : `${trust}%`,
-        hasValidCurrentPrice
-          ? `${Math.round(Number(o.price_current)).toLocaleString('vi-VN')} ₫`
-          : '-',
-        hasValidOrig
-          ? `${Math.round(Number(o.price_original)).toLocaleString('vi-VN')} ₫`
-          : '-',
-        sanitizeOffersMarkdownCell(verdictCell),
-      ];
+    const md = buildOffersMarkdown({
+      productName,
+      offers: filteredOffers,
+      inStockOffers,
+      implausibleOfferIds,
+      byOffer,
+      radarSignal,
+      priceSpreadAudit,
+      locale,
+      t,
+      tVerdict,
     });
-
-    const radarLine = radarSignal
-      ? t('offersMdRadarPrefix', {
-          signal: radarMarkdownCell(radarSignal, locale),
-        })
-      : '';
-    const spreadLine = priceSpreadAudit
-      ? t('offersMdSpreadLine', {
-          count: priceSpreadAudit.platformCount,
-          spreadVnd: priceSpreadAudit.spreadVnd.toLocaleString('vi-VN'),
-          spreadPct: priceSpreadAudit.spreadPct,
-          cheapestPlatform: sanitizeOffersMarkdownCell(
-            priceSpreadAudit.cheapest.platform.toUpperCase()
-          ),
-          cheapestMerchant: sanitizeOffersMarkdownCell(
-            priceSpreadAudit.cheapest.merchant.name
-          ),
-          priciestPlatform: sanitizeOffersMarkdownCell(
-            priceSpreadAudit.priciest.platform.toUpperCase()
-          ),
-        })
-      : '';
-
-    const md = [
-      `### 🛡️ Rate.vn cross-store price check: ${sanitizeOffersMarkdownCell(productName)}`,
-      radarLine + spreadLine,
-      `| ${headers.join(' | ')} |`,
-      `| ${sep.join(' | ')} |`,
-      ...rows.map((r) => `| ${r.join(' | ')} |`),
-    ].join('\n');
 
     try {
       await navigator.clipboard.writeText(md);
