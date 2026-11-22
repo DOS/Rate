@@ -1078,7 +1078,20 @@
     "listingUnavailableBadge": "Hết hàng",
     "listingUnavailableTitle": "Gian hàng báo hết hàng hoặc ngừng bán. Giá là giá ghi nhận lần cuối, không phải giá đang bán.",
     "listingUnavailableAudit": "Hết hàng, không xét khuyến mãi",
-    "listingDiscontinuedBadge": "Ngừng bán"
+    "listingDiscontinuedBadge": "Ngừng bán",
+    "dirMdHeading": "### 🛡️ Danh bạ độ tin cậy gian hàng Rate.vn ({count} gian hàng)",
+    "dirMdColMerchant": "Gian hàng",
+    "dirMdColPlatform": "Sàn",
+    "dirMdColOfficialMall": "Gian hàng chính hãng",
+    "dirMdColTrustScore": "Điểm tin cậy (/100)",
+    "dirMdColReviewRisk": "Rủi ro đánh giá (/100)",
+    "dirMdColGenuineDeals": "Tin bán dưới trung vị",
+    "dirMdColFakeTraps": "Cảnh báo giảm giá ảo",
+    "dirMdColAuthenticReviews": "Đánh giá thực chất",
+    "dirMdColTrackedProducts": "Sản phẩm theo dõi",
+    "dirMdYes": "Có",
+    "dirMdNo": "Không",
+    "dirMdUnknownMerchant": "Gian hàng trên sàn"
   },
   "productDetail": {
     "jumpNavAria": "Đi tới mục trên trang",
@@ -1300,7 +1313,20 @@
     "unknownSizeNote": "Người bán không ghi rõ dung lượng, nên các giá này không tính vào giá \"từ\" của sản phẩm.",
     "sizePanelLoading": "Đang tải phiên bản này…",
     "sizePanelLoadFailed": "Không tải được phiên bản này.",
-    "sizePanelRetry": "Thử lại"
+    "sizePanelRetry": "Thử lại",
+    "priceHistoryMdHeading": "### 📈 Lịch sử giá và kiểm tra giảm giá ảo trên Rate.vn: {name}",
+    "priceHistoryMdCurrentLowest": "Giá thấp nhất hiện tại",
+    "priceHistoryMdAllTimeLowest": "Giá thấp nhất từng ghi nhận",
+    "priceHistoryMdFakeAlerts": "Cảnh báo giảm giá ảo",
+    "priceHistoryMdGenuineDeals": "Giá tốt thật",
+    "priceHistoryMdPriceSignal": "Tín hiệu giá",
+    "priceHistoryMdColMerchant": "Gian hàng",
+    "priceHistoryMdColPlatform": "Sàn",
+    "priceHistoryMdColCurrentPrice": "Giá hiện tại (VND)",
+    "priceHistoryMdColOriginalPrice": "Giá gốc (VND)",
+    "priceHistoryMdColMedian90d": "Trung vị 90 ngày (VND)",
+    "priceHistoryMdColLow90d": "Thấp nhất 90 ngày (VND)",
+    "priceHistoryMdColVerdict": "Kết luận giá"
   },
   "homePage": {
     "catDescSmartphones": "Lọc theo chipset, RAM/ROM, tần số quét Hz, pin mAh & sạc nhanh W",

@@ -51,7 +51,10 @@ test('merchant CSV export covers every matching store', async ({
     page.getByTestId('download-merchants-csv-btn').click(),
   ]);
   const csv = await readFile((await download.path())!, 'utf8');
-  const rows = csv.replace(/^\uFEFF/, '').trim().split(/\r\n/);
+  const rows = csv
+    .replace(/^\uFEFF/, '')
+    .trim()
+    .split(/\r\n/);
   expect(rows.length - 1).toBe(total);
 });
 
@@ -71,7 +74,7 @@ test('merchant Markdown copy covers every matching store', async ({
     .poll(() => page.evaluate(() => navigator.clipboard.readText()), {
       timeout: 30_000,
     })
-    .toContain(`(${total} merchants)`);
+    .toContain(`(${total} gian hàng)`);
   const md = await page.evaluate(() => navigator.clipboard.readText());
   // Title, blank line, header and separator, then one row per store.
   expect(md.trim().split('\n').length - 4).toBe(total);

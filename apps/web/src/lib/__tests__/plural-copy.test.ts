@@ -402,6 +402,35 @@ function main() {
   for (const key of ['priceHistoryGenuineDealBadge']) {
     assert.doesNotMatch(viMessages.productDetail[key], /plural/, `vi ${key}`);
   }
+  assert.doesNotMatch(
+    viMessages.merchants.dirMdHeading,
+    /plural/,
+    'vi merchants.dirMdHeading'
+  );
+  assert.equal(
+    vi('merchants.dirMdHeading' as never, { count: 2 } as never),
+    '### 🛡️ Danh bạ độ tin cậy gian hàng Rate.vn (2 gian hàng)'
+  );
+  assert.equal(
+    en('merchants.dirMdHeading' as never, { count: 1 } as never),
+    '### 🛡️ Rate.vn merchant trust directory (1 merchant)'
+  );
+  assert.equal(
+    en('merchants.dirMdHeading' as never, { count: 1250 } as never),
+    '### 🛡️ Rate.vn merchant trust directory (1,250 merchants)'
+  );
+  assert.equal(
+    cs('merchants.dirMdHeading' as never, { count: 1 } as never),
+    '### 🛡️ Adresář důvěryhodnosti obchodů Rate.vn (1 obchod)'
+  );
+  assert.equal(
+    cs('merchants.dirMdHeading' as never, { count: 3 } as never),
+    '### 🛡️ Adresář důvěryhodnosti obchodů Rate.vn (3 obchody)'
+  );
+  assert.equal(
+    cs('merchants.dirMdHeading' as never, { count: 1250 } as never),
+    '### 🛡️ Adresář důvěryhodnosti obchodů Rate.vn (1\u00a0250 obchodů)'
+  );
   assert.ok(
     vi(
       'inspect.verifiedReviewsCount' as never,

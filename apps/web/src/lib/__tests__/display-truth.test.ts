@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { NextIntlClientProvider } from 'next-intl';
+import { createTranslator, NextIntlClientProvider } from 'next-intl';
 import {
   AppRouterContext,
   type AppRouterInstance,
@@ -26,12 +26,20 @@ import {
   computeBayesianRatingSummary,
   computeCombinedDualScore,
 } from '../rate-domain-core';
-import { merchantDirectoryDosafeDisplay } from '../../components/merchants/MerchantDirectoryExplorer';
-import { formatPercent, formatPriceVnd } from '../locale-format';
+import {
+  buildMerchantsDirectoryMarkdown,
+  merchantDirectoryDosafeDisplay,
+} from '../../components/merchants/MerchantDirectoryExplorer';
+import {
+  buildPriceHistoryMarkdown,
+  sanitizePriceHistoryMarkdownCell,
+} from '../../components/price-history/PriceHistorySection';
+import { formatPercent, formatPriceVnd, NBSP } from '../locale-format';
 import { parseEcommerceUrlOrQuery } from '../rate-domain';
 import type { VerdictTranslator } from '../discount-verdict-copy';
 import type { OfferDiscountAnalysis, UrlInspectionResult } from '../rate-api';
 import DeepInspectWorkspace, {
+  buildInspectAuditMarkdown,
   buildInspectMarkdownPriceLines,
   filterInspectOfferDiscount,
   formatInspectPriceVndOrDash,
@@ -1575,6 +1583,487 @@ for (const locale of LOCALES) {
         `>Priced Phone (${formatPriceVnd(22_990_000, locale)})<`
       ),
     `${locale}: not-found suggestions must omit (0 VND)/(NaN VND) while formatting positive prices`
+  );
+}
+
+// DOS/Rate#1842: localize DeepInspectWorkspace, PriceHistorySection, and
+// MerchantDirectoryExplorer Copy Markdown exports across vi, en, and cs.
+assert.deepEqual(
+  buildInspectMarkdownPriceLines({
+    currentListedPrice: 25_000_000,
+    claimedOrigPrice: 29_990_000,
+    histLow: 23_500_000,
+    histHigh: 28_000_000,
+    locale: 'cs',
+    labels: mdPriceLabels1726,
+  }),
+  [
+    `- **Current price:** 25${NBSP}000${NBSP}000${NBSP}₫ | Strikethrough: 29${NBSP}990${NBSP}000${NBSP}₫`,
+    `- **Low / High:** 23${NBSP}500${NBSP}000${NBSP}₫ - 28${NBSP}000${NBSP}000${NBSP}₫`,
+  ]
+);
+
+for (const locale of LOCALES) {
+  const fullMessages = readLocale(locale) as unknown as Record<string, unknown>;
+  for (const ns of ['inspect', 'merchants', 'productDetail'] as const) {
+    for (const [k, v] of Object.entries(readLocale(locale)[ns]!)) {
+      assert.ok(
+        !/[\u2013\u2014]/.test(String(v)),
+        `${locale}.${ns}.${k} must not contain en-dash or em-dash`
+      );
+    }
+  }
+
+  // 1. DeepInspectWorkspace Copy Audit Markdown across vi, en, cs
+  const inspectScoped = pickClientMessages(fullMessages, 'inspect');
+  const tInspect = createTranslator({
+    locale,
+    messages: inspectScoped,
+    namespace: 'inspect',
+  });
+  const tVerdictScoped = createTranslator({
+    locale,
+    messages: inspectScoped,
+    namespace: 'priceVerdict',
+  });
+  const tOffersScoped = createTranslator({
+    locale,
+    messages: inspectScoped,
+    namespace: 'productDetail',
+  });
+  const inspectSignal1842 = {
+    verdict: 'genuine_deal' as const,
+    savingsPct: 13.1,
+    fakeMarkupPct: 24.5,
+    spreadPct: 18.25,
+    genuineDeal: {
+      id: 'gd-1842',
+      verdict: 'genuine_all_time_low' as const,
+      verdictBadgeVi: 'Đáy giá',
+      productSlug: 'iphone-16-pro',
+      productName: 'iPhone 16 Pro',
+      brand: 'Apple',
+      categorySlug: 'smartphones' as const,
+      productHref: '/smartphones/iphone-16-pro',
+      imageUrl: null,
+      platform: 'shopee',
+      merchantId: 'm-1842',
+      merchantName: 'Apple Flagship Store',
+      isOfficialMall: true,
+      merchantRiskScore: 4,
+      offerUrl: 'https://shopee.vn/p',
+      priceCurrent: 25_000_000,
+      priceOriginal: null,
+      marketMedianPrice: 28_770_000,
+      marketMinPrice: 25_000_000,
+      marketMaxPrice: 29_580_000,
+      savingsVsMedianVnd: 3_770_000,
+      savingsVsMedianPct: 13.1,
+      marketOfferCount: 4,
+      claimedDiscountPct: 0,
+      fakeMarkupPct: 0,
+      jreviewsScore10: 8.5,
+      explanationVi: 'Tốt',
+    },
+    fakeSaleTrap: {
+      id: 'ft-1842',
+      verdict: 'fake_sale_trap' as const,
+      verdictBadgeVi: 'Giảm ảo',
+      productSlug: 'iphone-16-pro',
+      productName: 'iPhone 16 Pro',
+      brand: 'Apple',
+      categorySlug: 'smartphones' as const,
+      productHref: '/smartphones/iphone-16-pro',
+      imageUrl: null,
+      platform: 'lazada',
+      merchantId: 'm-trap',
+      merchantName: 'Trap Shop',
+      isOfficialMall: false,
+      merchantRiskScore: 60,
+      offerUrl: 'https://lazada.vn/p',
+      priceCurrent: 29_580_000,
+      priceOriginal: 35_800_000,
+      marketMedianPrice: 28_770_000,
+      marketMinPrice: 25_000_000,
+      marketMaxPrice: 29_580_000,
+      savingsVsMedianVnd: 0,
+      savingsVsMedianPct: 0,
+      marketOfferCount: 4,
+      claimedDiscountPct: 17.4,
+      fakeMarkupPct: 24.5,
+      jreviewsScore10: 8.5,
+      explanationVi: 'Kê giá',
+    },
+    priceSpread: {
+      productSlug: 'iphone-16-pro',
+      productName: 'iPhone 16 Pro',
+      brand: 'Apple',
+      categorySlug: 'smartphones' as const,
+      productHref: '/smartphones/iphone-16-pro',
+      imageUrl: null,
+      offerCount: 4,
+      minPriceVnd: 25_000_000,
+      maxPriceVnd: 29_562_500,
+      spreadVnd: 4_562_500,
+      spreadPct: 18.25,
+      cheapestPlatform: 'shopee',
+      cheapestMerchant: 'Apple Flagship Store',
+      cheapestUrl: 'https://shopee.vn/p',
+      priciestPlatform: 'lazada',
+      priciestMerchant: 'Trap Shop',
+    },
+  };
+  const inspectMd = buildInspectAuditMarkdown({
+    queryInput: 'https://shopee.vn/iphone-16-pro',
+    origin: 'https://rate.vn',
+    locale,
+    t: (key, values) => tInspect(key as never, values as never),
+    tVerdict: (key, values) => tVerdictScoped(key as never, values as never),
+    tOffers: (key) => tOffersScoped(key as never),
+    master: {
+      id: 'mp-1842',
+      slug: 'iphone-16-pro',
+      name: 'iPhone 16 Pro',
+      brand: 'Apple',
+      model: 'iPhone 16 Pro',
+      model_key: 'apple_iphone_16_pro',
+      min_price: 25_000_000,
+      max_price: 29_580_000,
+      authentic_review_count: 12,
+      total_reviews: 15,
+      merchant_count: 4,
+      status: 'published',
+    } as never,
+    masterUserRating: 4.345,
+    masterExpertRating10: 8.45,
+    radarSignal: inspectSignal1842 as never,
+    offerImplausiblyLow: false,
+    matchedOfferUnavailable: false,
+    discount: fakeDiscount1711,
+    verdictPrices: {
+      currentPriceVnd: 25_000_000,
+      claimedOriginalVnd: 29_990_000,
+      historicalLowVnd: 24_500_000,
+      historicalHighVnd: 29_580_000,
+    },
+    merchant: {
+      id: 'm-1842',
+      name: 'Apple Flagship Store',
+      platform: 'shopee',
+      platform_shop_id: 'shop_1842',
+      is_official: true,
+    } as never,
+    safeMerchantTrust: 94,
+    dosafeDisplay: inspectDosafeDisplay({
+      dosafe_risk_score: 4,
+      dosafe_risk_known: true,
+    }),
+    reviewRiskDisplay: inspectReviewRiskDisplay({
+      review_risk_score: 8,
+      review_risk_breakdown: { total_reviews: 15 },
+    }),
+  });
+
+  if (locale === 'cs') {
+    assert.ok(inspectMd.includes('★ 4,35/5,0'));
+    assert.ok(inspectMd.includes('8,5/10'));
+    assert.ok(inspectMd.includes(`25${NBSP}000${NBSP}000${NBSP}₫`));
+    assert.ok(inspectMd.includes(`29${NBSP}990${NBSP}000${NBSP}₫`));
+    assert.ok(inspectMd.includes(`4${NBSP}562${NBSP}500${NBSP}₫`));
+    assert.ok(inspectMd.includes(`-13,1${NBSP}%`));
+    assert.ok(inspectMd.includes(`+24,5${NBSP}%`));
+    assert.ok(inspectMd.includes(`+18,25${NBSP}%`));
+    assert.ok(!inspectMd.includes('/5.0'));
+    assert.ok(!/\d\.\d{3}\.\d{3}/.test(inspectMd));
+  } else {
+    assert.ok(inspectMd.includes('★ 4.35/5.0'));
+    assert.ok(inspectMd.includes('8.5/10'));
+    assert.ok(inspectMd.includes('25.000.000 ₫'));
+    assert.ok(inspectMd.includes('29.990.000 ₫'));
+    assert.ok(inspectMd.includes('4.562.500 ₫'));
+    assert.ok(inspectMd.includes('-13.1%'));
+    assert.ok(inspectMd.includes('+24.5%'));
+    assert.ok(inspectMd.includes('+18.25%'));
+  }
+
+  // 2. PriceHistorySection Copy Markdown across vi, en, cs
+  const detailScoped = pickClientMessages(fullMessages, 'productDetail');
+  const tDetail = createTranslator({
+    locale,
+    messages: detailScoped,
+    namespace: 'productDetail',
+  });
+  const tDetailVerdict = createTranslator({
+    locale,
+    messages: detailScoped,
+    namespace: 'priceVerdict',
+  });
+  const historyInput1842 = {
+    points: [],
+    lowestEverPrice: 24_500_000,
+    lowestEverDate: '2026-10-15T00:00:00Z',
+    lowestEverMerchant: 'Apple Flagship Store',
+    highestEverPrice: 29_580_000,
+    currentMinPrice: 25_000_000,
+    byOffer: {},
+    fakeDiscountCount: 1,
+    genuineDealCount: 2,
+  };
+  const historyMdWithTranslator = buildPriceHistoryMarkdown({
+    productName: 'iPhone 16 Pro',
+    history: historyInput1842,
+    offerAnalyses: [fakeDiscount1711],
+    radarSignal: inspectSignal1842 as never,
+    t: (key, values) => tDetail(key as never, values as never),
+    tVerdict: (key, values) => tDetailVerdict(key as never, values as never),
+    locale,
+  });
+  const historyMdFallback = buildPriceHistoryMarkdown({
+    productName: 'iPhone 16 Pro',
+    history: historyInput1842,
+    offerAnalyses: [fakeDiscount1711],
+    radarSignal: inspectSignal1842 as never,
+    tVerdict: (key, values) => tDetailVerdict(key as never, values as never),
+    locale,
+  });
+  assert.equal(
+    historyMdFallback,
+    historyMdWithTranslator,
+    `${locale}: PriceHistorySection fallback copy matches productDetail catalog`
+  );
+  assert.ok(
+    historyMdWithTranslator.includes(formatPriceVnd(25_000_000, locale)) &&
+      historyMdWithTranslator.includes(formatPriceVnd(24_500_000, locale)) &&
+      historyMdWithTranslator.includes(formatPriceVnd(9_000_000, locale)) &&
+      historyMdWithTranslator.includes(formatPriceVnd(15_000_000, locale)),
+    `${locale}: PriceHistorySection Markdown formats every VND price for locale`
+  );
+  if (locale !== 'en') {
+    for (const leakedEn of [
+      'Rate.vn price history and fake',
+      'Current lowest price',
+      'Current Lowest Price',
+      'All-Time Lowest Recorded',
+      'Fake Sale Alerts',
+      'Current Price (VND)',
+      'Current price (VND)',
+      '90d Median (VND)',
+      'Price verdict',
+    ]) {
+      assert.ok(
+        !historyMdWithTranslator.includes(leakedEn),
+        `${locale}: PriceHistorySection Markdown must not leak English "${leakedEn}"`
+      );
+    }
+  }
+  if (locale === 'cs') {
+    assert.ok(!/\d\.\d{3}\.\d{3}/.test(historyMdWithTranslator));
+  }
+
+  // 3. MerchantDirectoryExplorer Copy Markdown across vi, en, cs
+  const merchantsScoped = pickClientMessages(fullMessages, 'merchants');
+  const tMerchants = createTranslator({
+    locale,
+    messages: merchantsScoped,
+    namespace: 'merchants',
+  });
+  const directoryMerchants1842 = [
+    {
+      id: 'm-1842',
+      name: 'Apple Flagship Store',
+      platform: 'shopee',
+      platform_shop_id: 'shop_1842',
+      is_official: true,
+      trust_score: 94,
+      dosafe_risk_score: 4,
+      dosafe_risk_known: true,
+      review_risk_score: 8,
+      review_risk_breakdown: { total_reviews: 1500, authentic_count: 1250 },
+      rating_star: 4.9,
+      follower_count: 50000,
+      product_count: 45,
+      min_price: 25_000_000,
+      max_price: 35_000_000,
+      url: 'https://shopee.vn/apple',
+    },
+    {
+      id: 'm-unscored',
+      name: '',
+      platform: 'lazada',
+      platform_shop_id: 'shop_unscored',
+      is_official: false,
+      trust_score: null,
+      dosafe_risk_score: null,
+      dosafe_risk_known: false,
+      review_risk_score: null,
+      review_risk_breakdown: null,
+      rating_star: 0,
+      follower_count: 0,
+      product_count: 1120,
+      min_price: null,
+      max_price: null,
+      url: null,
+    },
+  ];
+  const directoryMd = buildMerchantsDirectoryMarkdown({
+    merchants: directoryMerchants1842 as never,
+    radarPayload: {
+      generatedAt: '2026-10-15T00:00:00Z',
+      categoryFilter: 'all',
+      totalClustersAnalyzed: 1,
+      totalOffersAnalyzed: 4,
+      totalMerchantsAnalyzed: 2,
+      genuineDeals: [inspectSignal1842.genuineDeal],
+      fakeSaleTraps: [],
+      priceSpreadLeaders: [],
+    },
+    t: (key, values) => tMerchants(key as never, values as never),
+    locale,
+  });
+  const merchantLocaleMsgs = readLocale(locale).merchants!;
+  assert.ok(
+    directoryMd.includes(`| ${merchantLocaleMsgs.dirMdYes} | 94/100 | 8/100 |`)
+  );
+  assert.ok(
+    directoryMd.includes(
+      `| ${merchantLocaleMsgs.dirMdUnknownMerchant} | LAZADA | ${merchantLocaleMsgs.dirMdNo} | ${merchantLocaleMsgs.trustNoData} | ${merchantLocaleMsgs.reviewRiskNoDataShort} |`
+    )
+  );
+  if (locale === 'cs') {
+    assert.ok(directoryMd.includes(`1${NBSP}250`));
+    assert.ok(directoryMd.includes(`1${NBSP}120`));
+    assert.ok(!directoryMd.includes('1.250'));
+  } else {
+    assert.ok(directoryMd.includes('1.250'));
+    assert.ok(directoryMd.includes('1.120'));
+  }
+  if (locale !== 'en') {
+    for (const leakedEn of [
+      'Merchant Trust Directory',
+      'merchant trust directory',
+      '| Official Mall |',
+      'Trust Score (/100)',
+      'Trust score (/100)',
+      'Genuine Deals',
+      'Fake Sale Traps',
+      'Authentic Reviews',
+      'Tracked Products',
+      '| Yes |',
+      '| No |',
+      '| Unknown |',
+    ]) {
+      assert.ok(
+        !directoryMd.includes(leakedEn),
+        `${locale}: MerchantDirectoryExplorer Markdown must not leak English "${leakedEn}"`
+      );
+    }
+  }
+}
+
+// Round-1 hardening (#1842): sanitize control chars, pipes, backticks, empty
+// merchant names, non-finite scores/trust, and Czech NBSP in Markdown cells.
+assert.equal(
+  sanitizePriceHistoryMarkdownCell(
+    `Sleva${NBSP}10${NBSP}% | test\nline`,
+    '-',
+    'cs'
+  ),
+  `Sleva${NBSP}10${NBSP}% - test line`
+);
+assert.equal(
+  sanitizePriceHistoryMarkdownCell(`Sleva${NBSP}10${NBSP}%`, '-'),
+  'Sleva 10 %'
+);
+assert.equal(sanitizePriceHistoryMarkdownCell(null, '-', 'cs'), '-');
+
+{
+  const csScoped = pickClientMessages(
+    readLocale('cs') as unknown as Record<string, unknown>,
+    'inspect'
+  );
+  const tInspectCs = createTranslator({
+    locale: 'cs',
+    messages: csScoped,
+    namespace: 'inspect',
+  });
+  const tVerdictCsScoped = createTranslator({
+    locale: 'cs',
+    messages: csScoped,
+    namespace: 'priceVerdict',
+  });
+  const tOffersCsScoped = createTranslator({
+    locale: 'cs',
+    messages: csScoped,
+    namespace: 'productDetail',
+  });
+  const hardenedInspectMd = buildInspectAuditMarkdown({
+    queryInput: 'test',
+    origin: '  https://rate.vn///  ',
+    locale: 'cs',
+    t: (key, values) => tInspectCs(key as never, values as never),
+    tVerdict: (key, values) => tVerdictCsScoped(key as never, values as never),
+    tOffers: (key) => tOffersCsScoped(key as never),
+    master: {
+      id: 'mp-edge',
+      slug: 'edge',
+      name: `iPhone\n16 | Pro${NBSP}Max`,
+      brand: 'Apple',
+      model: 'iPhone 16',
+      model_key: 'apple`inject\nkey',
+      authentic_review_count: 0,
+      total_reviews: 0,
+      status: 'published',
+    } as never,
+    masterUserRating: Number.POSITIVE_INFINITY,
+    masterExpertRating10: 0.001,
+    radarSignal: {
+      verdict: 'none',
+      savingsPct: 0,
+      fakeMarkupPct: 0,
+      spreadPct: 0,
+      genuineDeal: null,
+      fakeSaleTrap: null,
+      priceSpread: null,
+    },
+    offerImplausiblyLow: false,
+    matchedOfferUnavailable: false,
+    discount: null,
+    verdictPrices: {
+      currentPriceVnd: 0,
+      claimedOriginalVnd: 0,
+      historicalLowVnd: 0,
+      historicalHighVnd: 0,
+    },
+    merchant: {
+      id: 'm-edge',
+      name: '   \n  ',
+      platform: '  \t ',
+      platform_shop_id: 's',
+      is_official: false,
+    } as never,
+    safeMerchantTrust: Number.NaN,
+    dosafeDisplay: { score: 150 } as never,
+    reviewRiskDisplay: { score: Number.POSITIVE_INFINITY } as never,
+  });
+  assert.ok(
+    hardenedInspectMd.includes(
+      `iPhone 16 - Pro${NBSP}Max (\`apple'inject key\`)`
+    )
+  );
+  assert.ok(hardenedInspectMd.includes(readLocale('cs').inspect!.userNoScore!));
+  assert.ok(!hardenedInspectMd.includes('0,00/5,0'));
+  assert.ok(!hardenedInspectMd.includes('0,0/10'));
+  assert.ok(!hardenedInspectMd.includes('NaN'));
+  assert.ok(!hardenedInspectMd.includes('Infinity'));
+  assert.ok(
+    hardenedInspectMd.includes(
+      `${readLocale('cs').inspect!.unknownShop} (SHOPEE)`
+    )
+  );
+  assert.ok(hardenedInspectMd.includes('100/100'));
+  assert.ok(
+    hardenedInspectMd.includes('https://rate.vn/inspect?q=test') &&
+      !hardenedInspectMd.includes('rate.vn//')
   );
 }
 

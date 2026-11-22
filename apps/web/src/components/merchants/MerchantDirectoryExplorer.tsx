@@ -53,6 +53,7 @@ import {
   sanitizeMerchantCount,
 } from '@/components/merchants/MerchantShareAuditButton';
 import {
+  collapseWhitespace,
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
@@ -234,6 +235,142 @@ export interface MerchantDirectoryExplorerPage {
   /** Stores matching the filters, across all pages. */
   matched: number;
   offset: number;
+}
+
+export type MerchantDirectoryMarkdownKey =
+  | 'dirMdHeading'
+  | 'dirMdColMerchant'
+  | 'dirMdColPlatform'
+  | 'dirMdColOfficialMall'
+  | 'dirMdColTrustScore'
+  | 'dirMdColReviewRisk'
+  | 'dirMdColGenuineDeals'
+  | 'dirMdColFakeTraps'
+  | 'dirMdColAuthenticReviews'
+  | 'dirMdColTrackedProducts'
+  | 'dirMdYes'
+  | 'dirMdNo'
+  | 'dirMdUnknownMerchant'
+  | 'trustNoData'
+  | 'reviewRiskNoDataShort';
+
+export type MerchantDirectoryMarkdownTranslator = (
+  key: MerchantDirectoryMarkdownKey,
+  values?: Record<string, string | number>
+) => string;
+
+const DIRECTORY_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+function sanitizeMerchantDirectoryMarkdownCell(
+  value: unknown,
+  fallback = '-',
+  locale?: string | null,
+  maxLen = 160
+): string {
+  if (typeof value !== 'string') return fallback;
+  const cleaned = collapseWhitespace(
+    value.replace(DIRECTORY_CONTROL_CHARS_RE, ' ').replace(/\|/g, '-'),
+    locale
+  )
+    .trim()
+    .slice(0, maxLen);
+  return cleaned || fallback;
+}
+
+export function buildMerchantsDirectoryMarkdown(params: {
+  merchants: readonly MerchantDirectoryExplorerItem[];
+  radarPayload?: Parameters<typeof selectMerchantRadar>[0];
+  t: MerchantDirectoryMarkdownTranslator;
+  locale: string;
+}): string {
+  const { merchants, radarPayload, t, locale } = params;
+  const headers = [
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColMerchant'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColPlatform'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColOfficialMall'),
+      '-',
+      locale
+    ),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColTrustScore'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColReviewRisk'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColGenuineDeals'),
+      '-',
+      locale
+    ),
+    sanitizeMerchantDirectoryMarkdownCell(t('dirMdColFakeTraps'), '-', locale),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColAuthenticReviews'),
+      '-',
+      locale
+    ),
+    sanitizeMerchantDirectoryMarkdownCell(
+      t('dirMdColTrackedProducts'),
+      '-',
+      locale
+    ),
+  ];
+  const sep = headers.map(() => '---');
+  const yesCell = sanitizeMerchantDirectoryMarkdownCell(
+    t('dirMdYes'),
+    '-',
+    locale
+  );
+  const noCell = sanitizeMerchantDirectoryMarkdownCell(
+    t('dirMdNo'),
+    '-',
+    locale
+  );
+  const unknownMerchant = sanitizeMerchantDirectoryMarkdownCell(
+    t('dirMdUnknownMerchant'),
+    '-',
+    locale
+  );
+  const trustNoData = sanitizeMerchantDirectoryMarkdownCell(
+    t('trustNoData'),
+    '-',
+    locale
+  );
+  const reviewNoData = sanitizeMerchantDirectoryMarkdownCell(
+    t('reviewRiskNoDataShort'),
+    '-',
+    locale
+  );
+  const rows = merchants.map((m) => {
+    const rStats = selectMerchantRadar(radarPayload, m);
+    const trust = merchantDirectoryTrustDisplay(m.trust_score);
+    const review = merchantDirectoryReviewRiskDisplay(m);
+    return [
+      sanitizeMerchantDirectoryMarkdownCell(m.name, unknownMerchant, locale),
+      sanitizeMerchantDirectoryMarkdownCell(
+        m.platform,
+        'shopee',
+        locale,
+        32
+      ).toUpperCase(),
+      m.is_official ? yesCell : noCell,
+      // No trust score: no number (DOS/Rate#1484).
+      trust == null ? trustNoData : `${formatNumber(trust.score, locale)}/100`,
+      review == null
+        ? reviewNoData
+        : `${formatNumber(review.score, locale)}/100`,
+      formatNumber(sanitizeMerchantCount(rStats.genuineDealCount), locale),
+      formatNumber(sanitizeMerchantCount(rStats.fakeTrapCount), locale),
+      formatNumber(
+        sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count),
+        locale
+      ),
+      formatNumber(sanitizeMerchantCount(m.product_count), locale),
+    ];
+  });
+  return [
+    t('dirMdHeading', { count: merchants.length }),
+    '',
+    `| ${headers.join(' | ')} |`,
+    `| ${sep.join(' | ')} |`,
+    ...rows.map((r) => `| ${r.join(' | ')} |`),
+  ].join('\n');
 }
 
 interface MerchantDirectoryExplorerProps {
@@ -519,45 +656,13 @@ export default function MerchantDirectoryExplorer({
 
   const buildMerchantsMarkdown = (
     filteredMerchants: MerchantDirectoryExplorerItem[]
-  ) => {
-    const headers = [
-      'Merchant',
-      'Platform',
-      'Official Mall',
-      'Trust Score (/100)',
-      'Review risk (/100)',
-      'Genuine Deals',
-      'Fake Sale Traps',
-      'Authentic Reviews',
-      'Tracked Products',
-    ];
-    const sep = headers.map(() => '---');
-    const rows = filteredMerchants.map((m) => {
-      const rStats = getMerchantRadarStats(m);
-      const trust = merchantDirectoryTrustDisplay(m.trust_score);
-      const review = merchantDirectoryReviewRiskDisplay(m);
-      return [
-        sanitizeMerchantAuditText(m.name, 'Unknown'),
-        sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
-        m.is_official ? 'Yes' : 'No',
-        // No trust score: no number (DOS/Rate#1484).
-        trust == null ? labels.trustNoData : `${trust.score}/100`,
-        review == null ? labels.reviewRiskNoData : `${review.score}/100`,
-        String(sanitizeMerchantCount(rStats.genuineDealCount)),
-        String(sanitizeMerchantCount(rStats.fakeTrapCount)),
-        String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
-        String(sanitizeMerchantCount(m.product_count)),
-      ];
+  ) =>
+    buildMerchantsDirectoryMarkdown({
+      merchants: filteredMerchants,
+      radarPayload,
+      t: (key, values) => t(key, values),
+      locale,
     });
-    const md = [
-      `### 🛡️ Rate.vn Merchant Trust Directory (${filteredMerchants.length} merchants)`,
-      '',
-      `| ${headers.join(' | ')} |`,
-      `| ${sep.join(' | ')} |`,
-      ...rows.map((r) => `| ${r.join(' | ')} |`),
-    ].join('\n');
-    return md;
-  };
 
   const handleCopyMerchantsMarkdown = async () => {
     if (typeof navigator === 'undefined' || matchedCount === 0) return;
