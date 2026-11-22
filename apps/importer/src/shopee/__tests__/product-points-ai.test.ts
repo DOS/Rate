@@ -9,6 +9,7 @@ import {
 } from '../product-points-ai-prompt.js';
 import {
   isMasterDueForAiPoints,
+  parseProductPointsAiArgs,
   runProductPointsAiJob,
   type StoredProductPointRow,
 } from '../jobs/product-points-ai.js';
@@ -352,9 +353,11 @@ test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skip
           rows = [...rows].sort((a, b) => String(a[col] ?? '').localeCompare(String(b[col] ?? '')));
           return builder;
         },
-        limit: (n: number) => Promise.resolve({ data: rows.slice(0, n), error: null }),
-        range: (from: number, to: number) =>
-          Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
+        limit: (n: number) =>
+          Promise.resolve({ data: rows.slice(0, Math.min(n, 1000)), error: null }),
+        range: () => {
+          throw new Error(`Unexpected OFFSET .range() call on ${table}`);
+        },
         insert: (payload: Record<string, unknown>[]) => {
           inserts.push(payload);
           const created = payload.map((item, idx) => ({
@@ -552,4 +555,155 @@ test('formatGroundedProductVerdict runs in linear O(n) time (<10ms) on 20,000 re
     tooManySentences,
     'Điểm cộng: Pin dùng lâu sạc nhanh. Điểm trừ: Máy nóng. Cập nhật 14/11/2026 - Tóm tắt từ 4 review'
   );
+});
+
+test('parseProductPointsAiArgs & runProductPointsAiJob fail closed on --master=, scope single-master DB reads, and keyset-page (#1665)', async () => {
+  const M_ONE = '11111111-1111-4111-8111-111111111111';
+  const M_OTHER = '22222222-2222-4222-8222-222222222222';
+
+  assert.deepEqual(parseProductPointsAiArgs([], {}), {
+    apply: false,
+    force: false,
+    masterId: null,
+    hideAiLines: false,
+    waitMinutes: 30,
+  });
+  assert.deepEqual(
+    parseProductPointsAiArgs(
+      ['--apply', '--force', `--master=${M_ONE.toUpperCase()}`, '--wait-minutes=15', '--hide-ai'],
+      {}
+    ),
+    {
+      apply: true,
+      force: true,
+      masterId: M_ONE,
+      hideAiLines: true,
+      waitMinutes: 15,
+    }
+  );
+  assert.deepEqual(parseProductPointsAiArgs(['--master', M_ONE, '--wait-minutes', '45'], {}), {
+    apply: false,
+    force: false,
+    masterId: M_ONE,
+    hideAiLines: false,
+    waitMinutes: 45,
+  });
+
+  for (const badArgv of [
+    ['--master'],
+    ['--master='],
+    ['--master', '--apply'],
+    ['--master=not-a-uuid'],
+    ['--master', M_ONE, '--master', M_OTHER],
+    ['--wait-minutes'],
+    ['--wait-minutes='],
+    ['--wait-minutes=0'],
+    ['--wait-minutes=abc'],
+    ['--wait-minutes', '--apply'],
+    ['--force', '--force'],
+    ['--unknown-flag'],
+  ]) {
+    assert.throws(
+      () => parseProductPointsAiArgs(badArgv, {}),
+      /UUID|wait-minutes|repeated|Unknown CLI argument/,
+      `expected fail-closed throw for ${JSON.stringify(badArgv)}`
+    );
+  }
+
+  // Multi-page product_points (> 1000 rows) + single-master query scoping
+  const storedPoints: StoredProductPointRow[] = [
+    ...Array.from({ length: 1100 }, (_, i) => ({
+      id: `pp-${String(i + 1).padStart(5, '0')}`,
+      master_id: M_OTHER,
+      criterion_key: 'battery',
+      kind: 'pro' as const,
+      label: 'Pin khác',
+      support: 2,
+      reviewer_count: 2,
+      has_expert: false,
+      first_seen: '2026-11-10T00:00:00Z',
+      last_seen: '2026-11-12T00:00:00Z',
+      method: 'ai' as const,
+      updated_at: '2026-11-13T09:00:00Z',
+    })),
+    {
+      id: 'pp-99999',
+      master_id: M_ONE,
+      criterion_key: 'battery',
+      kind: 'pro',
+      label: 'Pin mục tiêu cũ',
+      support: 2,
+      reviewer_count: 2,
+      has_expert: false,
+      first_seen: '2026-11-10T00:00:00Z',
+      last_seen: '2026-11-12T00:00:00Z',
+      method: 'ai',
+      updated_at: '2026-11-13T09:00:00Z',
+    },
+  ];
+
+  const filters: string[] = [];
+  const reads: string[] = [];
+  const deletes: string[][] = [];
+  const fakeClient = {
+    from(table: string) {
+      let rows = [...(table === 'product_points' ? storedPoints : [])] as unknown as Record<
+        string,
+        unknown
+      >[];
+      const builder = {
+        select: () => builder,
+        eq: (col: string, val: unknown) => {
+          filters.push(`${table}:${col}=${String(val)}`);
+          rows = rows.filter(r => r[col] === val);
+          return builder;
+        },
+        in: (col: string, vals: readonly unknown[]) => {
+          rows = rows.filter(r => vals.includes(r[col]));
+          return builder;
+        },
+        gt: (col: string, val: string) => {
+          filters.push(`${table}:gt(${col},${val})`);
+          rows = rows.filter(r => String(r[col] ?? '') > val);
+          return builder;
+        },
+        order: (col: string) => {
+          rows = [...rows].sort((a, b) => (String(a[col] ?? '') < String(b[col] ?? '') ? -1 : 1));
+          return builder;
+        },
+        limit: (n: number) => {
+          reads.push(table);
+          return Promise.resolve({ data: rows.slice(0, Math.min(n, 1000)), error: null });
+        },
+        delete: () => ({
+          in: (_col: string, vals: string[]) => {
+            deletes.push(vals);
+            return Promise.resolve({ error: null });
+          },
+        }),
+      };
+      return builder;
+    },
+  } as unknown as RateSupabaseClient;
+
+  // Invalid masterId fails closed before any DB query
+  await assert.rejects(runProductPointsAiJob(fakeClient, { apply: true, masterId: '' }), /UUID/);
+  assert.equal(reads.length, 0, 'invalid masterId must fail before any DB read');
+
+  // Single-master mode scopes product_points read to master_id=M_ONE (leaves M_OTHER's 1100 stale AI rows untouched!)
+  const scopedRes = await runProductPointsAiJob(fakeClient, {
+    apply: true,
+    masterId: M_ONE,
+    now: NOW,
+  });
+  assert.ok(filters.includes(`product_points:master_id=${M_ONE}`));
+  assert.equal(scopedRes.staleClearedMasters, 1);
+  assert.deepEqual(deletes, [['pp-99999']]);
+
+  // Full-catalog mode paginates past 1000 rows via keyset gt(id)
+  filters.length = 0;
+  deletes.length = 0;
+  const fullDry = await runProductPointsAiJob(fakeClient, { apply: false, now: NOW });
+  assert.equal(fullDry.staleClearedMasters, 2, 'both M_OTHER (page 1+2) and M_ONE (page 2) read');
+  assert.ok(filters.some(f => f.startsWith('product_points:gt(id,')));
 });

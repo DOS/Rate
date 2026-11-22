@@ -5,6 +5,8 @@ import {
   itemKeyOf,
   itemNameOf,
   itemSlugOf,
+  loadInventory,
+  parseItemInventoryArgs,
   type InventoryListing,
   type InventoryMaster,
 } from '../jobs/item-inventory-report.js';
@@ -156,7 +158,54 @@ function run() {
   );
   assert.equal(report.multi_sku_listings.length, 1);
 
+  parseItemInventoryArgs([]);
+  assert.throws(() => parseItemInventoryArgs(['--unknown']), /Unknown CLI argument/);
+}
+
+async function runAsync() {
+  run();
+  const manyMasters = Array.from({ length: 1050 }, (_, i) =>
+    master(
+      `m-${String(i + 1).padStart(5, '0')}`,
+      `apple:iphone-${i + 1}:128gb`,
+      `apple-iphone-${i + 1}-128gb`,
+      `Apple iPhone ${i + 1} 128GB`
+    )
+  );
+  const gtCalls: string[] = [];
+  const fakeClient = {
+    from(table: string) {
+      let rows = (table === 'master_products' ? [...manyMasters] : []) as unknown as Record<
+        string,
+        unknown
+      >[];
+      const builder = {
+        select: () => builder,
+        gt: (col: string, val: string) => {
+          gtCalls.push(`${table}:${col}>${val}`);
+          rows = rows.filter(r => String(r[col] ?? '') > val);
+          return builder;
+        },
+        order: (col: string) => {
+          rows.sort((a, b) => (String(a[col] ?? '') < String(b[col] ?? '') ? -1 : 1));
+          return builder;
+        },
+        limit: (n: number) =>
+          Promise.resolve({ data: rows.slice(0, Math.min(n, 1000)), error: null }),
+        range: () => {
+          throw new Error(`Unexpected OFFSET .range() on ${table}`);
+        },
+      };
+      return builder;
+    },
+  };
+  const loaded = await loadInventory(fakeClient as never);
+  assert.equal(loaded.masters.length, 1050);
+  assert.ok(gtCalls.some(c => c.startsWith('master_products:id>')));
   console.log('item-inventory-report tests passed');
 }
 
-run();
+runAsync().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

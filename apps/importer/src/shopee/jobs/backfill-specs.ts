@@ -52,7 +52,7 @@ import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, type ProductSpecifications } from '@repo/shared-data';
 import { getCategorySpecTemplate } from '@repo/shared-data/rules';
 import { AiSpecEnricher, mergeProductSpecifications } from '../ai-spec-enricher.js';
-import { fetchAllPages, resolveBackfillSupabaseTarget } from '../paging.js';
+import { fetchByKey, resolveBackfillSupabaseTarget } from '../paging.js';
 import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
@@ -345,23 +345,17 @@ export function statesRearCamera(
  * Deliberately asserts nothing about offers, reviews or ratings.
  */
 export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<number> {
-  // Paged: an unpaged read stops at PostgREST's 1000-row cap and would skip
-  // the rest of the catalog silently.
-  const rows = await fetchAllPages('Final audit query failed', (from, to) =>
-    supabase
-      .from('master_products')
-      .select('id, name, model_key, specifications')
-      .order('id')
-      .range(from, to)
-  );
-
-  const failures: string[] = [];
-  for (const row of rows as Array<{
+  // Paged by keyset: an unpaged read stops at PostgREST's 1000-row cap, and OFFSET
+  // would skip or duplicate rows under concurrent crawl writes.
+  const rows = await fetchByKey<{
     id: string;
     name: string;
     model_key: string;
     specifications?: ProductSpecifications | null;
-  }>) {
+  }>(supabase, 'master_products', 'id, name, model_key, specifications', 'id');
+
+  const failures: string[] = [];
+  for (const row of rows) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
     const safeName =
       stripKeySpecControlChars(String(row.name ?? ''))
@@ -984,14 +978,13 @@ export async function runMasterSpecsBackfillWith(
   // Unnamed canonical and AI masters: never in a scoped run.
   let skipped = 0;
   if (!scoped) {
-    const masters = await fetchAllPages('Failed to fetch master_products', (from, to) =>
-      supabase
-        .from('master_products')
-        .select('id, name, model_key, key_specs, specifications')
-        .order('created_at', { ascending: false })
-        .order('id')
-        .range(from, to)
-    );
+    const masters = await fetchByKey<{
+      id?: unknown;
+      name?: unknown;
+      model_key?: unknown;
+      key_specs?: unknown;
+      specifications?: unknown;
+    }>(supabase, 'master_products', 'id, name, model_key, key_specs, specifications', 'id');
 
     for (const m of masters || []) {
       if (!m || typeof m !== 'object' || Array.isArray(m)) continue;

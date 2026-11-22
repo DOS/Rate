@@ -21,6 +21,7 @@ import {
 import { mergeKeySpecs } from '../jobs/backfill-specs.js';
 import {
   mapStoredReview,
+  parseReviewRiskBackfillArgs,
   REVIEW_RISK_OWNER_MESSAGE,
   runReviewRiskBackfill,
   scoreMerchants,
@@ -158,20 +159,41 @@ async function run() {
   // The job only reports: Rate Services' MerchantRiskAuditor is the single
   // writer of the merchant review risk (DOS/Rate#1341). --apply is refused.
   const updates: Array<{ id: string; patch: Record<string, unknown> }> = [];
-  const table = (rows: unknown[]) => ({
-    select: () => ({
-      order: () => ({
-        range: (from: number, to: number) =>
-          Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
-      }),
-    }),
-    update: (patch: Record<string, unknown>) => ({
-      eq: (_col: string, id: string) => {
-        updates.push({ id, patch });
-        return Promise.resolve({ error: null });
+  const table = (rows: unknown[]) => {
+    let current = [...rows];
+    const builder = {
+      select: () => builder,
+      gt: (col: string, val: string) => {
+        current = current.filter(r => {
+          const rec = r && typeof r === 'object' ? (r as Record<string, unknown>) : null;
+          return String(rec?.[col] ?? '') > val;
+        });
+        return builder;
       },
-    }),
-  });
+      order: (col: string) => {
+        current = [...current].sort((a, b) => {
+          const ak =
+            a && typeof a === 'object' ? String((a as Record<string, unknown>)[col] ?? '') : '';
+          const bk =
+            b && typeof b === 'object' ? String((b as Record<string, unknown>)[col] ?? '') : '';
+          return ak < bk ? -1 : ak > bk ? 1 : 0;
+        });
+        return builder;
+      },
+      limit: (n: number) =>
+        Promise.resolve({ data: current.slice(0, Math.min(n, 1000)), error: null }),
+      range: () => {
+        throw new Error('Unexpected OFFSET .range() call in backfill-review-risk');
+      },
+      update: (patch: Record<string, unknown>) => ({
+        eq: (_col: string, id: string) => {
+          updates.push({ id, patch });
+          return Promise.resolve({ error: null });
+        },
+      }),
+    };
+    return builder;
+  };
   const tables: Record<string, unknown[]> = {
     merchants,
     products,
@@ -228,12 +250,9 @@ async function run() {
   assert.equal(full.get('m-seed')!.risk.price_anomaly_detected, true);
 
   // A PostgREST stand-in for the filters the scoped read uses. It embeds
-  // `merchants(is_official)` like PostgREST, caps each response at `maxRows`
-  // (a lowered max-rows), and records every read so an unfiltered one shows.
-  const makeScopedClient = (
-    tables: Record<string, ReadonlyArray<Record<string, unknown>>>,
-    maxRows = 1000
-  ) => {
+  // `merchants(is_official)` like PostgREST, caps each response at 1000 rows
+  // via keyset gt/order/limit, and records every read so an unfiltered one shows.
+  const makeScopedClient = (tables: Record<string, ReadonlyArray<Record<string, unknown>>>) => {
     const reads: string[] = [];
     const writes: Array<{ id: string; patch: Record<string, unknown> }> = [];
     const query = (name: string) => {
@@ -260,11 +279,21 @@ async function run() {
           rows = rows.filter(r => vals.includes(r[col]));
           return builder;
         },
-        order: () => builder,
-        range: (from: number, to: number) => {
+        gt: (col: string, val: string) => {
+          filters.push(`gt(${col})`);
+          rows = rows.filter(r => String(r[col] ?? '') > val);
+          return builder;
+        },
+        order: (col: string) => {
+          rows.sort((a, b) => (String(a[col] ?? '') < String(b[col] ?? '') ? -1 : 1));
+          return builder;
+        },
+        limit: (n: number) => {
           reads.push(`${name}[${filters.join(',')}]`);
-          const end = Math.min(to + 1, from + maxRows);
-          return Promise.resolve({ data: rows.slice(from, end), error: null });
+          return Promise.resolve({ data: rows.slice(0, Math.min(n, 1000)), error: null });
+        },
+        range: () => {
+          throw new Error(`Unexpected OFFSET .range() call on ${name}`);
         },
         maybeSingle: () => {
           reads.push(`${name}[${filters.join(',')}]`);
@@ -318,9 +347,9 @@ async function run() {
   assert.equal(await scoreSellerReviewRisk(scoped.client, new AiReviewAnalyzer(), 'm-none'), null);
   assert.equal(scoped.writes.length, 0, 'scoring a seller writes nothing');
 
-  // A large seller: 230 listings over 120 clusters (several in() chunks), a
-  // peer without a merchant, an official peer setting one cluster's floor,
-  // and responses capped at 37 rows so every read pages.
+  // A large seller: 230 listings over 120 clusters (several in() chunks), 6 reviews
+  // per listing (1,380 reviews total -> multi-page keyset fetchByKey past 1,000 rows),
+  // a peer without a merchant, and an official peer setting one cluster's floor (#1665).
   const bigMerchants: MerchantRow[] = [
     { id: 'm-big', platform: 'shopee', is_official: false, follower_count: 1200 },
     { id: 'm-mall', platform: 'shopee', is_official: true, follower_count: 0 },
@@ -332,20 +361,30 @@ async function run() {
     const cluster = `bc${String(i % 120).padStart(3, '0')}`;
     const id = `bp${String(i).padStart(3, '0')}`;
     bigProducts.push({ id, merchant_id: 'm-big', cluster_id: cluster, price_current: 3_000_000 });
-    bigReviews.push(
-      review(
-        `br${i}a`,
-        id,
-        i % 7 === 0 ? { verdict: 'fake', flag_category: 'seeding_fake' } : null
-      ),
-      review(`br${i}b`, id, null, i % 5 === 0 ? 1 : 5, i % 5 === 0 ? 'Hàng lỗi' : 'Tốt')
-    );
+    for (let k = 0; k < 6; k += 1) {
+      const idx = String(i).padStart(3, '0');
+      bigReviews.push(
+        k % 2 === 0
+          ? review(
+              `br-${idx}-${k}`,
+              id,
+              i % 7 === 0 ? { verdict: 'fake', flag_category: 'seeding_fake' } : null
+            )
+          : review(
+              `br-${idx}-${k}`,
+              id,
+              null,
+              i % 5 === 0 ? 1 : 5,
+              i % 5 === 0 ? 'Hàng lỗi' : 'Tốt'
+            )
+      );
+    }
   }
   for (let c = 0; c < 120; c += 1) {
     const cluster = `bc${String(c).padStart(3, '0')}`;
     bigMasters.push({ id: cluster, min_price: 3_100_000 });
     bigProducts.push({
-      id: `peer${c}`,
+      id: `peer${String(c).padStart(3, '0')}`,
       merchant_id: c === 7 ? null : 'm-mall',
       cluster_id: cluster,
       price_current: c === 99 ? 9_000_000 : 3_200_000,
@@ -360,21 +399,33 @@ async function run() {
   ).find(s => s.merchantId === 'm-big')!;
   // 3M against the official 9M peer of cluster bc099: price anomaly.
   assert.equal(bigFull.risk.price_anomaly_detected, true);
-  assert.equal(bigFull.risk.total_reviews, 460);
-  const big = makeScopedClient(
-    {
-      merchants: bigMerchants as unknown as Array<Record<string, unknown>>,
-      products: bigProducts as unknown as Array<Record<string, unknown>>,
-      reviews: bigReviews as unknown as Array<Record<string, unknown>>,
-      master_products: bigMasters,
-    },
-    37
-  );
+  assert.equal(bigFull.risk.total_reviews, 1380);
+  const big = makeScopedClient({
+    merchants: bigMerchants as unknown as Array<Record<string, unknown>>,
+    products: bigProducts as unknown as Array<Record<string, unknown>>,
+    reviews: bigReviews as unknown as Array<Record<string, unknown>>,
+    master_products: bigMasters,
+  });
   assert.deepEqual(
     await loadAndScoreMerchant(big.client, new AiReviewAnalyzer(), 'm-big'),
     bigFull,
-    'large seller: scoped == full-table score across chunks and pages'
+    'large seller: scoped == full-table score across chunks and keyset pages'
   );
+  // Also verify full-table backfill-review-risk keyset pagination across > 1,000 reviews (#1665)
+  const bigBackfillTables: Record<string, unknown[]> = {
+    merchants: bigMerchants,
+    products: bigProducts,
+    reviews: bigReviews,
+    master_products: bigMasters,
+  };
+  const bigBackfillRes = await runReviewRiskBackfill(
+    { from: (name: string) => table(bigBackfillTables[name] ?? []) } as never,
+    {}
+  );
+  assert.equal(bigBackfillRes.scored, 1);
+  assert.deepEqual(parseReviewRiskBackfillArgs([]), { apply: false });
+  assert.deepEqual(parseReviewRiskBackfillArgs(['--apply']), { apply: true });
+  assert.throws(() => parseReviewRiskBackfillArgs(['--unknown']), /Unknown CLI argument/);
 
   // The pipeline awaits the rescore for the product's seller after the
   // per-product analysis (comments stripped, so a commented-out call fails).

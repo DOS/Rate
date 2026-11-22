@@ -17,7 +17,7 @@ import {
   type ReviewInputItem,
 } from './ai-review-analyzer.js';
 import { resolveClusterPeerFloorPrice } from './cluster-peer-floor.js';
-import { fetchAllPages } from './paging.js';
+import { fetchByKey } from './paging.js';
 import type { RateSupabaseClient } from './types.js';
 
 export const MERCHANT_RISK_SELECT = 'id, platform, is_official, follower_count, review_risk_score';
@@ -369,7 +369,7 @@ export function normalizeSafeId(raw: unknown): string | null {
 
 const ID_CHUNK = 100;
 
-/** Pages through `table` rows whose `column` is one of `ids`, in id chunks. */
+/** Pages through `table` rows whose `column` is one of `ids`, in id chunks via keyset `fetchByKey`. */
 async function fetchAllByIds<T>(
   supabase: RateSupabaseClient,
   table: string,
@@ -381,20 +381,7 @@ async function fetchAllByIds<T>(
   for (let i = 0; i < ids.length; i += ID_CHUNK) {
     const chunk = ids.slice(i, i + ID_CHUNK);
     rows.push(
-      ...(await fetchAllPages<T>(
-        table,
-        (from, to) =>
-          // A runtime select string gives no row type; T is the caller's shape.
-          supabase
-            .from(table)
-            .select(select)
-            .in(column, chunk)
-            .order('id')
-            .range(from, to) as unknown as PromiseLike<{
-            data: T[] | null;
-            error: { message: string } | null;
-          }>
-      ))
+      ...(await fetchByKey<T>(supabase, table, select, 'id', query => query.in(column, chunk)))
     );
   }
   return rows;

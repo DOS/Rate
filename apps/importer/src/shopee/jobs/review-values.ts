@@ -56,17 +56,22 @@ import {
   type ReviewValue,
   type ReviewValuePoint,
 } from '@repo/shared-data/rules';
-import { resolveBackfillSupabaseTarget } from '../paging.js';
+import {
+  fetchByKey,
+  PAGE_ROWS,
+  parseStrictMasterUuid,
+  resolveBackfillSupabaseTarget,
+} from '../paging.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
 import { reviewPointWeight, type CategoryRow, type PointMasterRow } from './product-points.js';
+
+export { fetchByKey, PAGE_ROWS };
 
 const logger = createImporterLogger('ReviewValuesJob');
 
 /** IDs per `in` filter, so a request URL stays short. */
 const IN_CHUNK = 150;
-/** Rows per read; PostgREST returns at most 1000. */
-export const PAGE_ROWS = 1000;
 /** Rows per writer call; the writer takes 1000. */
 export const BATCH_ROWS = 500;
 /** Bytes per writer call; the writer takes 2 MB. */
@@ -468,37 +473,6 @@ function chunks<T>(items: readonly T[], size = IN_CHUNK): T[][] {
   return out;
 }
 
-type Filter = (query: ReturnType<ReturnType<RateSupabaseClient['from']>['select']>) => unknown;
-
-/**
- * Every row of a table, or of a filter on it, in pages of PAGE_ROWS keyed on
- * `key` (keyset, not OFFSET): each page costs the same however deep it is,
- * a row written during the read never shifts the next page, and there is no
- * page cap. `columns` must include `key`.
- */
-export async function fetchByKey<T>(
-  supabase: RateSupabaseClient,
-  table: string,
-  columns: string,
-  key: string,
-  filter: Filter = query => query
-): Promise<T[]> {
-  const rows: T[] = [];
-  let last: string | null = null;
-  for (;;) {
-    let query = filter(supabase.from(table).select(columns)) as ReturnType<
-      ReturnType<RateSupabaseClient['from']>['select']
-    >;
-    if (last !== null) query = query.gt(key, last);
-    const { data, error } = await query.order(key).limit(PAGE_ROWS);
-    if (error) throw new Error(`${table}: ${error.message}`);
-    const page = (data ?? []) as unknown as T[];
-    rows.push(...page);
-    if (page.length < PAGE_ROWS) return rows;
-    last = String((page[page.length - 1] as Record<string, unknown>)[key]);
-  }
-}
-
 /** The rows whose `column` is one of `ids`, every page of each chunk. */
 async function selectIn<T>(
   supabase: RateSupabaseClient,
@@ -515,6 +489,48 @@ async function selectIn<T>(
     );
   }
   return rows;
+}
+
+export interface ReviewValuesCliArgs {
+  readonly apply: boolean;
+  readonly masterId: string | null;
+}
+
+/**
+ * Strictly parses CLI arguments (`process.argv.slice(2)`) for `review-values.ts`.
+ * Supports `--master <uuid>` and `--master=<uuid>`, failing closed on missing,
+ * empty, malformed, repeated, or unknown flags before any auth or DB call.
+ */
+export function parseReviewValuesArgs(argv: readonly string[]): ReviewValuesCliArgs {
+  let apply = false;
+  let masterId: string | null = null;
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]!;
+    if (arg === '--apply') {
+      if (apply) throw new Error('--apply is repeated.');
+      apply = true;
+      continue;
+    }
+    if (arg === '--master') {
+      if (masterId !== null) throw new Error('--master is repeated.');
+      const next = argv[i + 1];
+      if (next === undefined || next === '' || next.startsWith('-')) {
+        throw new Error('--master requires a valid UUID.');
+      }
+      masterId = parseStrictMasterUuid(next, '--master');
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--master=')) {
+      if (masterId !== null) throw new Error('--master is repeated.');
+      const raw = arg.slice('--master='.length);
+      if (!raw) throw new Error('--master requires a valid UUID.');
+      masterId = parseStrictMasterUuid(raw, '--master');
+      continue;
+    }
+    throw new Error(`Unknown CLI argument: ${JSON.stringify(arg)}.`);
+  }
+  return { apply, masterId };
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -542,8 +558,6 @@ export async function storeBatch(
     throw new Error(`store_review_values (${error.code ?? 'no code'}): ${error.message}`);
   }
 }
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The rows a master's rating reads, read again on their own. */
 async function loadMasterRating(
@@ -613,8 +627,10 @@ export async function runReviewValuesJob(
   } = {}
 ): Promise<ReviewValuesResult> {
   const apply = options.apply === true;
-  const only = options.masterId ?? null;
-  if (only !== null && !UUID.test(only)) throw new Error('--master must be a UUID.');
+  const only =
+    options.masterId === undefined || options.masterId === null
+      ? null
+      : parseStrictMasterUuid(options.masterId, '--master');
 
   // One master: its listings first, then their reviews. Otherwise every scored review.
   const scopedListings =
@@ -787,6 +803,7 @@ if (isDirectExecution) {
   dotenv.config({ quiet: true });
   dotenv.config({ path: '../../.env', quiet: true });
   (async () => {
+    const { apply, masterId } = parseReviewValuesArgs(process.argv.slice(2));
     const { createClient } = await import('@supabase/supabase-js');
     const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     // The publishable key plus the worker user's sign-in: its access token
@@ -817,12 +834,10 @@ if (isDirectExecution) {
     }
     const role = (auth.user?.role ?? '').trim();
     if (role !== 'rate_worker') {
+      await client.auth.signOut().catch(() => undefined);
       throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
     }
     const supabase = scopeSupabaseToRate(client);
-    const apply = process.argv.includes('--apply');
-    const at = process.argv.indexOf('--master');
-    const masterId = at >= 0 ? (process.argv[at + 1] ?? '') : null;
     // The host is not secret; it shows which project the job reads.
     logger.info('review_values.target', `Target: ${host} (${apply ? 'apply' : 'dry run'})`, {
       host,

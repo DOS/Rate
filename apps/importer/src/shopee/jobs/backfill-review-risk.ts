@@ -16,7 +16,7 @@
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
-import { fetchAllPages, resolveBackfillSupabaseTarget } from '../paging.js';
+import { fetchByKey, resolveBackfillSupabaseTarget } from '../paging.js';
 import {
   MERCHANT_RISK_SELECT,
   PRODUCT_RISK_SELECT,
@@ -46,20 +46,33 @@ const logger = createImporterLogger('BackfillReviewRiskJob');
 export const REVIEW_RISK_OWNER_MESSAGE =
   "Merchant review risk is written by Rate Services' MerchantRiskAuditor (DOS/Rate#1341); this job only reports.";
 
+export function parseReviewRiskBackfillArgs(argv: readonly string[]): { apply: boolean } {
+  let apply = false;
+  for (const arg of argv) {
+    if (arg === '--apply') {
+      if (apply) throw new Error('--apply is repeated.');
+      apply = true;
+      continue;
+    }
+    throw new Error(`Unknown CLI argument: ${JSON.stringify(arg)}.`);
+  }
+  return { apply };
+}
+
 export async function loadAndScore(supabase: RateSupabaseClient): Promise<MerchantScore[]> {
-  const merchants = await fetchAllPages<MerchantRow>('merchants', (from, to) =>
-    supabase.from('merchants').select(MERCHANT_RISK_SELECT).order('id').range(from, to)
+  const merchants = await fetchByKey<MerchantRow>(
+    supabase,
+    'merchants',
+    MERCHANT_RISK_SELECT,
+    'id'
   );
-  const products = await fetchAllPages<ProductRow>('products', (from, to) =>
-    supabase.from('products').select(PRODUCT_RISK_SELECT).order('id').range(from, to)
-  );
-  const reviews = await fetchAllPages<ReviewRow>('reviews', (from, to) =>
-    supabase.from('reviews').select(REVIEW_RISK_SELECT).order('id').range(from, to)
-  );
-  const masters = await fetchAllPages<{ id: string; min_price: number | string | null }>(
+  const products = await fetchByKey<ProductRow>(supabase, 'products', PRODUCT_RISK_SELECT, 'id');
+  const reviews = await fetchByKey<ReviewRow>(supabase, 'reviews', REVIEW_RISK_SELECT, 'id');
+  const masters = await fetchByKey<{ id: string; min_price: number | string | null }>(
+    supabase,
     'master_products',
-    (from, to) =>
-      supabase.from('master_products').select('id, min_price').order('id').range(from, to)
+    'id, min_price',
+    'id'
   );
   const masterMinByCluster = new Map<string, number>();
   for (const m of masters) {
@@ -116,6 +129,10 @@ if (isDirectExecution) {
   dotenv.config({ quiet: true });
   dotenv.config({ path: '../../.env', quiet: true });
   (async () => {
+    const { apply } = parseReviewRiskBackfillArgs(process.argv.slice(2));
+    if (apply) {
+      throw new Error(REVIEW_RISK_OWNER_MESSAGE);
+    }
     const { createClient } = await import('@supabase/supabase-js');
     const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const key = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_KEY || '').trim();
@@ -128,7 +145,7 @@ if (isDirectExecution) {
     );
     // The host is not secret; it shows which project the report reads.
     logger.info('backfill.target', `Target: ${host} (read-only)`, { host });
-    await runReviewRiskBackfill(supabase, { apply: process.argv.includes('--apply') });
+    await runReviewRiskBackfill(supabase, { apply });
   })().catch((err: unknown) => {
     logger.error(
       'backfill.fatal',

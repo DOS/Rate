@@ -221,28 +221,32 @@ test('an auto-created master passes the spec audit when the AI answer omits grou
   for (const row of rows) {
     assert.deepEqual((row.specifications as Record<string, unknown>).battery, {}, `${row.name}`);
   }
-  const client = {
-    from: () => ({
-      select: () => ({
-        order: () => ({
-          range: async (from: number) => ({ data: from === 0 ? rows : [], error: null }),
-        }),
-      }),
-    }),
-  };
+  const keysetClient = (seedRows: Array<Record<string, unknown>>) => ({
+    from: () => {
+      let current = [...seedRows];
+      const builder = {
+        select: () => builder,
+        gt: (col: string, val: string) => {
+          current = current.filter(r => String(r[col] ?? '') > val);
+          return builder;
+        },
+        order: (col: string) => {
+          current = [...current].sort((a, b) =>
+            String(a[col] ?? '').localeCompare(String(b[col] ?? ''))
+          );
+          return builder;
+        },
+        limit: async (n: number) => ({ data: current.slice(0, n), error: null }),
+      };
+      return builder;
+    },
+  });
+  const client = keysetClient(rows);
   assert.equal(await auditMasterSpecs(client as never), rows.length);
   // A master that has lost a group its category has still fails.
   const broken = structuredClone(rows[0]!);
   delete (broken.specifications as Record<string, unknown>).battery;
-  const brokenClient = {
-    from: () => ({
-      select: () => ({
-        order: () => ({
-          range: async (from: number) => ({ data: from === 0 ? [broken] : [], error: null }),
-        }),
-      }),
-    }),
-  };
+  const brokenClient = keysetClient([broken]);
   await assert.rejects(
     auditMasterSpecs(brokenClient as never),
     /missing specification group "battery"/

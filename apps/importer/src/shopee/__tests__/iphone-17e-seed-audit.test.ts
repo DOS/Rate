@@ -74,6 +74,8 @@ function tableClient(rows: Array<Record<string, unknown>>) {
         }
         return { data: [], error: null };
       };
+      let gtKey: [string, string] | null = null;
+      let orderKey: string | null = null;
       const builder = {
         select() {
           return builder;
@@ -82,12 +84,25 @@ function tableClient(rows: Array<Record<string, unknown>>) {
           filters.push([column, value]);
           return builder;
         },
-        order() {
+        gt(column: string, value: string) {
+          gtKey = [column, value];
           return builder;
         },
-        range(from: number, to: number) {
-          const data = table === 'master_products' ? rows.slice(from, to + 1) : [];
-          return Promise.resolve({ data: structuredClone(data), error: null });
+        order(column: string) {
+          orderKey = column;
+          return builder;
+        },
+        limit(n: number) {
+          let data = table === 'master_products' ? [...rows] : [];
+          if (gtKey) {
+            const [col, val] = gtKey;
+            data = data.filter(r => String(r[col] ?? '') > val);
+          }
+          if (orderKey) {
+            const col = orderKey;
+            data.sort((a, b) => String(a[col] ?? '').localeCompare(String(b[col] ?? '')));
+          }
+          return Promise.resolve({ data: structuredClone(data.slice(0, n)), error: null });
         },
         maybeSingle() {
           const [column, value] = filters.find(([c]) => c === 'model_key' || c === 'slug') ?? [];
