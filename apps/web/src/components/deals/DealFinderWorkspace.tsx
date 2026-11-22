@@ -35,6 +35,11 @@ import {
 } from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
+import {
+  countSeasonalSaleCampaignDeals,
+  matchesSeasonalSaleFilter,
+  type SeasonalSaleFilterMode,
+} from '@/lib/omnibus-price-audit';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   formatDecimal,
@@ -569,10 +574,13 @@ export default function DealFinderWorkspace({
   const locale = useLocale();
   const categoryLabelId = useId();
   const personaLabelId = useId();
+  const campaignLabelId = useId();
   const [categoryFilter, setCategoryFilter] = useState<
     CanonicalCategorySlug | 'all'
   >(initialCategory);
   const [chosenPersona, setPersona] = useState<PersonaKey>('value_hunter');
+  const [campaignFilter, setCampaignFilter] =
+    useState<SeasonalSaleFilterMode>('all');
   const [maxBudgetVnd, setMaxBudgetVnd] = useState<number>(65_000_000);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [copiedMarkdown, setCopiedMarkdown] = useState<boolean>(false);
@@ -588,7 +596,7 @@ export default function DealFinderWorkspace({
     ? chosenPersona
     : 'default';
   // Paging restarts whenever a filter changes the ranking.
-  const filterKey = `${categoryFilter}|${persona}|${maxBudgetVnd}|${searchQuery}`;
+  const filterKey = `${categoryFilter}|${persona}|${campaignFilter}|${maxBudgetVnd}|${searchQuery}`;
   const [paging, setPaging] = useState({
     key: filterKey,
     count: DEALS_PAGE_SIZE,
@@ -611,7 +619,7 @@ export default function DealFinderWorkspace({
       .querySelectorAll<HTMLElement>('#rate-ranked-deals > div')
       [index]?.querySelector<HTMLElement>('a[href]')
       ?.focus();
-  }, [visibleCount]);
+  }, [visibleCount, filterKey]);
 
   const categoryOptions: Array<{
     slug: CanonicalCategorySlug | 'all';
@@ -739,7 +747,7 @@ export default function DealFinderWorkspace({
     URL.revokeObjectURL(url);
   };
 
-  const rankedDeals = useMemo(
+  const baseRankedDeals = useMemo(
     () =>
       rankProductsForDealFinder(products, {
         categoryFilter,
@@ -749,6 +757,29 @@ export default function DealFinderWorkspace({
       }),
     [products, categoryFilter, persona, maxBudgetVnd, searchQuery]
   );
+
+  const seasonalCampaignCounts = useMemo(
+    () =>
+      countSeasonalSaleCampaignDeals(baseRankedDeals, (slug) =>
+        getRadarSignal(radarIndex, slug)
+      ),
+    [baseRankedDeals, radarIndex]
+  );
+
+  const rankedDeals = useMemo(() => {
+    if (campaignFilter === 'all') return baseRankedDeals;
+    return baseRankedDeals
+      .filter((d) =>
+        matchesSeasonalSaleFilter(
+          getRadarSignal(radarIndex, d.slug),
+          campaignFilter
+        )
+      )
+      .map((d, idx) => ({
+        ...d,
+        rank: idx + 1,
+      }));
+  }, [baseRankedDeals, campaignFilter, radarIndex]);
 
   const handleCopyDealsMarkdown = async () => {
     if (typeof window === 'undefined' || rankedDeals.length === 0) return;
@@ -951,6 +982,56 @@ export default function DealFinderWorkspace({
           </div>
         )}
 
+        {/* Seasonal Sale Campaign Filter Chips (#1863) */}
+        <div
+          data-testid="deals-seasonal-campaign-filter"
+          className="d-flex align-items-center mb-3 flex-wrap gap-2"
+          role="group"
+          aria-labelledby={campaignLabelId}
+        >
+          <span
+            id={campaignLabelId}
+            className="small text-secondary fw-semibold me-1"
+          >
+            {t('campaignFilterLabel')}
+          </span>
+          {(
+            [
+              {
+                key: 'all',
+                label: t('campaignAll'),
+              },
+              {
+                key: 'genuine_sale_drops',
+                label: t('campaignGenuineDrops', {
+                  count: seasonalCampaignCounts.genuineSaleCount,
+                }),
+              },
+              {
+                key: 'inflated_presale_warnings',
+                label: t('campaignInflatedTraps', {
+                  count: seasonalCampaignCounts.inflatedWarningCount,
+                }),
+              },
+            ] as const
+          ).map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              data-testid={`deals-campaign-chip-${chip.key}`}
+              aria-pressed={campaignFilter === chip.key}
+              onClick={() => setCampaignFilter(chip.key)}
+              className={`btn btn-sm rounded-pill px-3 py-1 ${
+                campaignFilter === chip.key
+                  ? 'btn-dark fw-bold text-white'
+                  : 'btn-light text-secondary border'
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+
         {/* Budget Slider & Search */}
         <div className="row g-3 align-items-center">
           <div className="col-md-6">
@@ -1035,133 +1116,152 @@ export default function DealFinderWorkspace({
             </div>
 
             <div className="row g-4">
-              <div className="col-lg-6">
-                <h3 className="rate-radar-list-title is-good">
-                  <BsGraphDownArrow aria-hidden="true" />
-                  {t('genuineDealsHeader', {
-                    count: filteredGenuineDeals.length,
-                  })}
-                </h3>
-                {filteredGenuineDeals.length > 0 ? (
-                  <ul className="rate-radar-list">
-                    {filteredGenuineDeals.slice(0, 6).map((g) => {
-                      const safeMedian = sanitizeDealRadarPriceVnd(
-                        g.marketMedianPrice
-                      );
-                      return (
-                        <li key={g.id}>
-                          <div className="rate-radar-item-main">
-                            <Link
-                              href={g.productHref}
-                              className="text-truncate"
-                            >
-                              {g.productName}
-                            </Link>
-                            <span className="rate-radar-item-meta text-truncate">
-                              <span className="rate-radar-platform">
-                                {g.platform}
-                              </span>
-                              <ContentText
-                                text={g.merchantName}
-                                locale={locale}
-                              />
-                              {safeMedian != null && (
-                                <>
-                                  {' '}
-                                  ·{' '}
-                                  {t('medianPriceLabel', {
-                                    price: formatNumber(safeMedian, locale),
-                                  })}
-                                </>
-                              )}
-                            </span>
-                          </div>
-                          <div className="rate-radar-item-side">
-                            <span className="rate-radar-price">
-                              {formatDealRadarPriceVnd(g.priceCurrent, locale)}
-                            </span>
-                            <span className="rate-radar-tag is-good">
-                              {t('savingsVsMedianBadge', {
-                                pct: formatPlainNumber(
-                                  g.savingsVsMedianPct,
-                                  locale
-                                ),
-                              })}
-                            </span>
-                          </div>
-                        </li>
-                      );
+              {campaignFilter !== 'inflated_presale_warnings' && (
+                <div
+                  className={
+                    campaignFilter === 'genuine_sale_drops'
+                      ? 'col-12'
+                      : 'col-lg-6'
+                  }
+                >
+                  <h3 className="rate-radar-list-title is-good">
+                    <BsGraphDownArrow aria-hidden="true" />
+                    {t('genuineDealsHeader', {
+                      count: filteredGenuineDeals.length,
                     })}
-                  </ul>
-                ) : (
-                  <p className="rate-radar-empty">{t('radarNoGenuine')}</p>
-                )}
-              </div>
+                  </h3>
+                  {filteredGenuineDeals.length > 0 ? (
+                    <ul className="rate-radar-list">
+                      {filteredGenuineDeals.slice(0, 6).map((g) => {
+                        const safeMedian = sanitizeDealRadarPriceVnd(
+                          g.marketMedianPrice
+                        );
+                        return (
+                          <li key={g.id}>
+                            <div className="rate-radar-item-main">
+                              <Link
+                                href={g.productHref}
+                                className="text-truncate"
+                              >
+                                {g.productName}
+                              </Link>
+                              <span className="rate-radar-item-meta text-truncate">
+                                <span className="rate-radar-platform">
+                                  {g.platform}
+                                </span>
+                                <ContentText
+                                  text={g.merchantName}
+                                  locale={locale}
+                                />
+                                {safeMedian != null && (
+                                  <>
+                                    {' '}
+                                    ·{' '}
+                                    {t('medianPriceLabel', {
+                                      price: formatNumber(safeMedian, locale),
+                                    })}
+                                  </>
+                                )}
+                              </span>
+                            </div>
+                            <div className="rate-radar-item-side">
+                              <span className="rate-radar-price">
+                                {formatDealRadarPriceVnd(
+                                  g.priceCurrent,
+                                  locale
+                                )}
+                              </span>
+                              <span className="rate-radar-tag is-good">
+                                {t('savingsVsMedianBadge', {
+                                  pct: formatPlainNumber(
+                                    g.savingsVsMedianPct,
+                                    locale
+                                  ),
+                                })}
+                              </span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="rate-radar-empty">{t('radarNoGenuine')}</p>
+                  )}
+                </div>
+              )}
 
-              <div className="col-lg-6">
-                <h3 className="rate-radar-list-title is-bad">
-                  <BsExclamationTriangle aria-hidden="true" />
-                  {t('fakeTrapsHeader', {
-                    count: filteredFakeSaleTraps.length,
-                  })}
-                </h3>
-                {filteredFakeSaleTraps.length > 0 ? (
-                  <ul className="rate-radar-list">
-                    {filteredFakeSaleTraps.slice(0, 6).map((trap) => {
-                      const claimedOrig = resolveClaimedOriginalPriceVnd(
-                        trap.priceOriginal,
-                        trap.priceCurrent
-                      );
-                      return (
-                        <li key={trap.id}>
-                          <div className="rate-radar-item-main">
-                            <Link
-                              href={trap.productHref}
-                              className="text-truncate"
-                            >
-                              {trap.productName}
-                            </Link>
-                            <span className="rate-radar-item-meta text-truncate">
-                              <span className="rate-radar-platform">
-                                {trap.platform}
-                              </span>
-                              <ContentText
-                                text={trap.merchantName}
-                                locale={locale}
-                              />
-                              {claimedOrig != null && (
-                                <>
-                                  {' '}
-                                  · {t('claimedOrigLabel')}{' '}
-                                  <s>{formatPriceVnd(claimedOrig, locale)}</s>
-                                </>
-                              )}
-                            </span>
-                          </div>
-                          <div className="rate-radar-item-side">
-                            <span className="rate-radar-price">
-                              {formatDealRadarPriceVnd(
-                                trap.priceCurrent,
-                                locale
-                              )}
-                            </span>
-                            <span className="rate-radar-tag is-bad">
-                              {t('fakeMarkupBadge', {
-                                pct: formatPlainNumber(
-                                  trap.fakeMarkupPct,
-                                  locale
-                                ),
-                              })}
-                            </span>
-                          </div>
-                        </li>
-                      );
+              {campaignFilter !== 'genuine_sale_drops' && (
+                <div
+                  className={
+                    campaignFilter === 'inflated_presale_warnings'
+                      ? 'col-12'
+                      : 'col-lg-6'
+                  }
+                >
+                  <h3 className="rate-radar-list-title is-bad">
+                    <BsExclamationTriangle aria-hidden="true" />
+                    {t('fakeTrapsHeader', {
+                      count: filteredFakeSaleTraps.length,
                     })}
-                  </ul>
-                ) : (
-                  <p className="rate-radar-empty">{t('radarNoTraps')}</p>
-                )}
-              </div>
+                  </h3>
+                  {filteredFakeSaleTraps.length > 0 ? (
+                    <ul className="rate-radar-list">
+                      {filteredFakeSaleTraps.slice(0, 6).map((trap) => {
+                        const claimedOrig = resolveClaimedOriginalPriceVnd(
+                          trap.priceOriginal,
+                          trap.priceCurrent
+                        );
+                        return (
+                          <li key={trap.id}>
+                            <div className="rate-radar-item-main">
+                              <Link
+                                href={trap.productHref}
+                                className="text-truncate"
+                              >
+                                {trap.productName}
+                              </Link>
+                              <span className="rate-radar-item-meta text-truncate">
+                                <span className="rate-radar-platform">
+                                  {trap.platform}
+                                </span>
+                                <ContentText
+                                  text={trap.merchantName}
+                                  locale={locale}
+                                />
+                                {claimedOrig != null && (
+                                  <>
+                                    {' '}
+                                    · {t('claimedOrigLabel')}{' '}
+                                    <s>{formatPriceVnd(claimedOrig, locale)}</s>
+                                  </>
+                                )}
+                              </span>
+                            </div>
+                            <div className="rate-radar-item-side">
+                              <span className="rate-radar-price">
+                                {formatDealRadarPriceVnd(
+                                  trap.priceCurrent,
+                                  locale
+                                )}
+                              </span>
+                              <span className="rate-radar-tag is-bad">
+                                {t('fakeMarkupBadge', {
+                                  pct: formatPlainNumber(
+                                    trap.fakeMarkupPct,
+                                    locale
+                                  ),
+                                })}
+                              </span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="rate-radar-empty">{t('radarNoTraps')}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {filteredPriceSpreadLeaders.length > 0 && (
@@ -1216,114 +1316,190 @@ export default function DealFinderWorkspace({
       {rankedDeals.length === 0 ? (
         <div className="rate-card p-5 text-center">
           <p className="text-secondary mb-3">
-            {t('emptyBudgetText', {
-              budget: formatNumber(maxBudgetVnd, locale),
-            })}
+            {campaignFilter === 'genuine_sale_drops' &&
+            baseRankedDeals.length > 0
+              ? t('campaignEmptyGenuine')
+              : campaignFilter === 'inflated_presale_warnings' &&
+                  baseRankedDeals.length > 0
+                ? t('campaignEmptyTraps')
+                : t('emptyBudgetText', {
+                    budget: formatNumber(maxBudgetVnd, locale),
+                  })}
           </p>
           <button
             type="button"
             onClick={() => {
+              focusCardIndex.current = 0;
+              if (campaignFilter !== 'all' && baseRankedDeals.length > 0) {
+                setCampaignFilter('all');
+                return;
+              }
               setMaxBudgetVnd(65_000_000);
               setCategoryFilter('all');
+              setCampaignFilter('all');
               setSearchQuery('');
             }}
             className="btn btn-sm btn-dark rounded-pill px-4"
           >
-            {t('resetBudgetBtn')}
+            {campaignFilter !== 'all' && baseRankedDeals.length > 0
+              ? t('campaignResetBtn')
+              : t('resetBudgetBtn')}
           </button>
         </div>
       ) : (
         <>
           <div className="row g-3" id="rate-ranked-deals">
-            {rankedDeals.slice(0, visibleCount).map((deal) => (
-              <div key={deal.slug} className="col-lg-6">
-                <div className="rate-card d-flex flex-column justify-content-between h-100 p-3">
-                  <div>
-                    <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-                      <div className="d-flex align-items-center flex-wrap gap-2">
-                        <span className="badge bg-dark rounded-pill text-white">
-                          {t('rankDealBadge', { rank: deal.rank })}
-                        </span>
-                        <span className="rate-spec-pill">{deal.brand}</span>
-                        <StarRating
-                          value={deal.personaScore5}
-                          digits={persona === 'default' ? 1 : 2}
-                          size="sm"
-                          emptyLabel={t('noScore')}
-                        />
-                        <span className="rate-score-badge-expert">
-                          {deal.expertScore10 != null
-                            ? `Lab ${formatDecimal(deal.expertScore10, locale, 1)}/10`
-                            : t('labNoScore')}
-                        </span>
-                        <RadarBadge
-                          signal={getRadarSignal(radarIndex, deal.slug)}
-                          minSpreadPct={Infinity}
-                        />
+            {rankedDeals.slice(0, visibleCount).map((deal) => {
+              const dealSignal = getRadarSignal(radarIndex, deal.slug);
+              const trapOrig = dealSignal.fakeSaleTrap
+                ? resolveClaimedOriginalPriceVnd(
+                    dealSignal.fakeSaleTrap.priceOriginal,
+                    dealSignal.fakeSaleTrap.priceCurrent
+                  )
+                : null;
+              const genuineSavingsVnd = dealSignal.genuineDeal
+                ? sanitizeDealRadarPriceVnd(
+                    dealSignal.genuineDeal.savingsVsMedianVnd
+                  )
+                : null;
+              return (
+                <div key={deal.slug} className="col-lg-6">
+                  <div className="rate-card d-flex flex-column justify-content-between h-100 p-3">
+                    <div>
+                      <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <div className="d-flex align-items-center flex-wrap gap-2">
+                          <span className="badge bg-dark rounded-pill text-white">
+                            {t('rankDealBadge', { rank: deal.rank })}
+                          </span>
+                          <span className="rate-spec-pill">{deal.brand}</span>
+                          <StarRating
+                            value={deal.personaScore5}
+                            digits={persona === 'default' ? 1 : 2}
+                            size="sm"
+                            emptyLabel={t('noScore')}
+                          />
+                          <span className="rate-score-badge-expert">
+                            {deal.expertScore10 != null
+                              ? `Lab ${formatDecimal(deal.expertScore10, locale, 1)}/10`
+                              : t('labNoScore')}
+                          </span>
+                          <RadarBadge
+                            signal={dealSignal}
+                            minSpreadPct={Infinity}
+                          />
+                        </div>
+                        {deal.spreadSavingsVnd > 0 && (
+                          <span className="badge bg-success-subtle text-success rounded-pill rate-tabular">
+                            {t('spreadSavingsBadge', {
+                              amount: formatNumber(
+                                deal.spreadSavingsVnd,
+                                locale
+                              ),
+                            })}
+                          </span>
+                        )}
                       </div>
-                      {deal.spreadSavingsVnd > 0 && (
-                        <span className="badge bg-success-subtle text-success rounded-pill rate-tabular">
-                          {t('spreadSavingsBadge', {
-                            amount: formatNumber(deal.spreadSavingsVnd, locale),
-                          })}
-                        </span>
-                      )}
-                    </div>
 
-                    <div className="d-flex align-items-center my-2 gap-3">
-                      <img
-                        loading="lazy"
-                        decoding="async"
-                        src={deal.thumbnail}
-                        alt={deal.name}
-                        className="rounded-3 flex-shrink-0 border bg-white p-1"
-                        style={{ width: 64, height: 64, objectFit: 'contain' }}
-                      />
-                      <div className="overflow-hidden">
-                        <Link
-                          href={deal.productHref}
-                          className="fw-bold text-dark text-decoration-none d-block text-truncate"
-                        >
-                          {deal.name}
-                        </Link>
-                        <div className="text-danger fw-bold rate-tabular mt-1">
-                          {formatPriceVnd(deal.minPrice, locale)}{' '}
-                          {deal.costPerPointVnd > 0 && (
-                            <span className="text-secondary small fw-normal">
-                              {t('costPerPointSub', {
-                                cost: formatNumber(
-                                  deal.costPerPointVnd,
-                                  locale
-                                ),
-                              })}
-                            </span>
-                          )}
+                      <div className="d-flex align-items-center my-2 gap-3">
+                        <img
+                          loading="lazy"
+                          decoding="async"
+                          src={deal.thumbnail}
+                          alt={deal.name}
+                          className="rounded-3 flex-shrink-0 border bg-white p-1"
+                          style={{
+                            width: 64,
+                            height: 64,
+                            objectFit: 'contain',
+                          }}
+                        />
+                        <div className="overflow-hidden">
+                          <Link
+                            href={deal.productHref}
+                            className="fw-bold text-dark text-decoration-none d-block text-truncate"
+                          >
+                            {deal.name}
+                          </Link>
+                          <div className="text-danger fw-bold rate-tabular mt-1">
+                            {formatPriceVnd(deal.minPrice, locale)}{' '}
+                            {deal.costPerPointVnd > 0 && (
+                              <span className="text-secondary small fw-normal">
+                                {t('costPerPointSub', {
+                                  cost: formatNumber(
+                                    deal.costPerPointVnd,
+                                    locale
+                                  ),
+                                })}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
+
+                      {campaignFilter === 'inflated_presale_warnings' &&
+                        dealSignal.fakeSaleTrap &&
+                        trapOrig != null && (
+                          <div
+                            className="rounded-3 bg-danger-subtle text-danger border-danger-subtle small mt-2 border p-2"
+                            data-testid="deals-card-trap-callout"
+                          >
+                            {t('campaignCardTrapNote', {
+                              platform:
+                                dealSignal.fakeSaleTrap.platform.toUpperCase(),
+                              claimed: formatPriceVnd(trapOrig, locale),
+                              pct: formatPlainNumber(
+                                dealSignal.fakeSaleTrap.fakeMarkupPct,
+                                locale
+                              ),
+                            })}
+                          </div>
+                        )}
+
+                      {campaignFilter === 'genuine_sale_drops' &&
+                        dealSignal.genuineDeal &&
+                        genuineSavingsVnd != null && (
+                          <div
+                            className="rounded-3 bg-success-subtle text-success border-success-subtle small mt-2 border p-2"
+                            data-testid="deals-card-genuine-callout"
+                          >
+                            {t('campaignCardGenuineNote', {
+                              platform:
+                                dealSignal.genuineDeal.platform.toUpperCase(),
+                              savings: formatPriceVnd(
+                                genuineSavingsVnd,
+                                locale
+                              ),
+                              pct: formatPlainNumber(
+                                dealSignal.genuineDeal.savingsVsMedianPct,
+                                locale
+                              ),
+                            })}
+                          </div>
+                        )}
+                    </div>
+
+                    <div className="d-flex justify-content-between align-items-center border-top mt-2 flex-wrap gap-2 pt-2">
+                      <CompareQuickToggle
+                        item={{
+                          slug: deal.slug,
+                          name: deal.name,
+                          brand: deal.brand,
+                          thumbnail: deal.thumbnail,
+                          min_price: deal.minPrice,
+                          categoryPath: deal.categoryPath,
+                        }}
+                      />
+                      <Link
+                        href={deal.productHref}
+                        className="btn btn-sm btn-dark rounded-pill fw-semibold px-3"
+                      >
+                        {t('audit10PlatformsLink')}
+                      </Link>
                     </div>
                   </div>
-
-                  <div className="d-flex justify-content-between align-items-center border-top mt-2 flex-wrap gap-2 pt-2">
-                    <CompareQuickToggle
-                      item={{
-                        slug: deal.slug,
-                        name: deal.name,
-                        brand: deal.brand,
-                        thumbnail: deal.thumbnail,
-                        min_price: deal.minPrice,
-                        categoryPath: deal.categoryPath,
-                      }}
-                    />
-                    <Link
-                      href={deal.productHref}
-                      className="btn btn-sm btn-dark rounded-pill fw-semibold px-3"
-                    >
-                      {t('audit10PlatformsLink')}
-                    </Link>
-                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {rankedDeals.length > visibleCount && (
             <div className="mt-4 text-center">

@@ -16,6 +16,22 @@ import {
   BsSearch,
 } from 'react-icons/bs';
 import {
+  evaluateOmnibusPriceAudit,
+  formatOmnibusAuditCopy,
+  resolveOmnibusReferenceAnchorMs,
+  type OmnibusPriceAuditResult,
+  type OmnibusReferenceOfferInput,
+  type OmnibusVerdictTranslator,
+} from '@/lib/omnibus-price-audit';
+import {
+  minimumListingPriceVnd,
+  normalizeOfferId,
+} from '@repo/shared-data/rules';
+import {
+  isOfferUnavailable,
+  type OfferAvailability,
+} from '@/lib/product-market-stats';
+import {
   MAX_VALID_VND_PRICE,
   type DiscountVerdictType,
   type MasterProductPriceHistorySummary,
@@ -48,6 +64,7 @@ interface PriceHistorySectionProps {
   productName: string;
   history: MasterProductPriceHistorySummary;
   radarSignal?: RadarSignal | null;
+  offers?: readonly OmnibusReferenceOfferInput[] | null;
 }
 
 type TimeRangeKey = '30d' | '90d' | 'all';
@@ -331,6 +348,7 @@ export default function PriceHistorySection({
   productName,
   history,
   radarSignal,
+  offers,
 }: PriceHistorySectionProps) {
   const t = useTranslations('productDetail');
   const tVerdict = useTranslations('priceVerdict');
@@ -648,6 +666,243 @@ export default function PriceHistorySection({
 
   const hasAuditEvidence = validPoints.length > 0 || offerAnalyses.length > 0;
 
+  const minValidPriceVnd = useMemo(
+    () => minimumListingPriceVnd([productName]),
+    [productName]
+  );
+
+  const safeCurrentMinPrice = useMemo<number | null>(() => {
+    const raw = Number(history.currentMinPrice);
+    if (!Number.isFinite(raw) || raw <= 0 || raw > MAX_VALID_VND_PRICE) {
+      return null;
+    }
+    return Math.round(raw);
+  }, [history.currentMinPrice]);
+
+  // Identify unavailable (sold-out / discontinued) offers from explicit `offers`,
+  // optional `availability` on `offerAnalyses`, prices strictly below the
+  // verified in-stock minimum (DOS/Rate#1141), or `rate-api`'s unavailable
+  // suppression signature (`normal_price` despite qualifying for `genuine_deal`).
+  const unavailableOfferIds = useMemo<Set<string>>(() => {
+    const ids = new Set<string>();
+    const addId = (rawId: string | null | undefined) => {
+      if (!rawId) return;
+      ids.add(rawId);
+      const canon = normalizeOfferId(rawId);
+      if (canon) ids.add(canon);
+    };
+
+    if (Array.isArray(offers)) {
+      for (const off of offers) {
+        if (off && isOfferUnavailable(off)) {
+          addId(off.id);
+        }
+      }
+    }
+
+    for (const oa of offerAnalyses) {
+      const maybeAvail = (oa as { availability?: OfferAvailability | null })
+        .availability;
+      if (maybeAvail && isOfferUnavailable({ availability: maybeAvail })) {
+        addId(oa.product_id);
+        continue;
+      }
+      const p = Number(oa.price_current);
+      if (
+        safeCurrentMinPrice != null &&
+        Number.isFinite(p) &&
+        p > 0 &&
+        Math.round(p) < safeCurrentMinPrice
+      ) {
+        addId(oa.product_id);
+        continue;
+      }
+      // In rate-api.ts, an offer with real_discount_vs_median_pct >= 3 (or at
+      // multi-point historical min below max) that is neither fake nor
+      // suspicious is assigned `normal_price` ONLY when `offerUnavailable` is true.
+      const claimsDiscount =
+        oa.price_original != null && oa.claimed_discount_pct >= 5;
+      const wouldBeFakeOrSuspicious =
+        claimsDiscount &&
+        oa.claimed_discount_pct - oa.real_discount_vs_median_pct >= 6;
+      const qualifiesForGenuine =
+        oa.real_discount_vs_median_pct >= 3 ||
+        (!claimsDiscount &&
+          oa.observation_count >= 2 &&
+          oa.price_current <= oa.historical_min_price &&
+          oa.historical_min_price < oa.historical_max_price) ||
+        (claimsDiscount && oa.price_current <= oa.historical_min_price);
+      if (
+        oa.verdict === 'normal_price' &&
+        !wouldBeFakeOrSuspicious &&
+        qualifiesForGenuine
+      ) {
+        addId(oa.product_id);
+      }
+    }
+    return ids;
+  }, [offerAnalyses, offers, safeCurrentMinPrice]);
+
+  const isUnavailId = useCallback(
+    (id: string) =>
+      unavailableOfferIds.has(id) ||
+      unavailableOfferIds.has(normalizeOfferId(id)),
+    [unavailableOfferIds]
+  );
+
+  const effectiveReferenceOffers = useMemo<OmnibusReferenceOfferInput[]>(
+    () =>
+      Array.isArray(offers) && offers.length > 0
+        ? [...offers]
+        : offerAnalyses.map((oa) => ({
+            id: oa.product_id,
+            price_current: oa.price_current,
+            availability: isUnavailId(oa.product_id)
+              ? ('out_of_stock' as const)
+              : ('in_stock' as const),
+          })),
+    [isUnavailId, offerAnalyses, offers]
+  );
+
+  // Historical anchor uses the exact same evidence-eligibility rules as the
+  // Omnibus evaluator so rows below `minValidPriceVnd`, `live_listing` rows,
+  // bait listings, and unavailable offers never advance the anchor (#1863).
+  const omnibusAnchorMs = useMemo<number | null>(
+    () =>
+      resolveOmnibusReferenceAnchorMs({
+        points: validPoints,
+        referenceOffers: effectiveReferenceOffers,
+        unavailableOfferIds,
+        minValidPriceVnd,
+      }),
+    [
+      effectiveReferenceOffers,
+      minValidPriceVnd,
+      unavailableOfferIds,
+      validPoints,
+    ]
+  );
+
+  const omnibusSharedOpts = useMemo(
+    () => ({
+      referenceOffers: effectiveReferenceOffers,
+      unavailableOfferIds,
+      minValidPriceVnd,
+      referenceTimestampMs: omnibusAnchorMs,
+    }),
+    [
+      effectiveReferenceOffers,
+      minValidPriceVnd,
+      omnibusAnchorMs,
+      unavailableOfferIds,
+    ]
+  );
+
+  const omnibusByOffer = useMemo<Map<string, OmnibusPriceAuditResult>>(() => {
+    const map = new Map<string, OmnibusPriceAuditResult>();
+    if (
+      validPoints.length === 0 ||
+      offerAnalyses.length === 0 ||
+      safeCurrentMinPrice == null
+    ) {
+      return map;
+    }
+    const pointsByOfferId = new Map<string, PriceHistoryPoint[]>();
+    for (const pt of validPoints) {
+      if (pt.source === 'live_listing') continue;
+      const list = pointsByOfferId.get(pt.product_id);
+      if (list) list.push(pt);
+      else pointsByOfferId.set(pt.product_id, [pt]);
+    }
+    for (const oa of offerAnalyses) {
+      if (isUnavailId(oa.product_id)) continue;
+      const pts = pointsByOfferId.get(oa.product_id);
+      if (!pts) continue;
+      map.set(
+        oa.product_id,
+        evaluateOmnibusPriceAudit({
+          ...omnibusSharedOpts,
+          points: pts,
+          currentPriceVnd: oa.price_current,
+          claimedOriginalPriceVnd: oa.price_original,
+          currentInStockPriceVnd: oa.price_current,
+          mode: 'offer',
+        })
+      );
+    }
+    return map;
+  }, [
+    isUnavailId,
+    offerAnalyses,
+    omnibusSharedOpts,
+    safeCurrentMinPrice,
+    validPoints,
+  ]);
+
+  const omnibusAudit = useMemo<OmnibusPriceAuditResult>(() => {
+    if (selectedProductId !== 'ALL') {
+      const cached = omnibusByOffer.get(selectedProductId);
+      if (cached) return cached;
+      const selectedOa = offerAnalyses.find(
+        (oa) => oa.product_id === selectedProductId
+      );
+      return evaluateOmnibusPriceAudit({
+        ...omnibusSharedOpts,
+        points: validPoints.filter((pt) => pt.product_id === selectedProductId),
+        currentPriceVnd: selectedOa?.price_current ?? null,
+        claimedOriginalPriceVnd: selectedOa?.price_original ?? null,
+        currentInStockPriceVnd: null,
+        currentOfferUnavailable: true,
+        mode: 'offer',
+      });
+    }
+
+    let bestClaimedOrig: number | null = null;
+    if (safeCurrentMinPrice != null) {
+      const atMin = offerAnalyses.filter(
+        (oa) =>
+          Math.round(Number(oa.price_current)) === safeCurrentMinPrice &&
+          !isUnavailId(oa.product_id)
+      );
+      const genuines = atMin.filter((oa) => oa.verdict === 'genuine_deal');
+      for (const oa of genuines.length > 0 ? genuines : atMin) {
+        const orig = Number(oa.price_original);
+        if (
+          Number.isFinite(orig) &&
+          orig > safeCurrentMinPrice &&
+          orig <= MAX_VALID_VND_PRICE &&
+          (bestClaimedOrig == null || orig > bestClaimedOrig)
+        ) {
+          bestClaimedOrig = Math.round(orig);
+        }
+      }
+    }
+
+    return evaluateOmnibusPriceAudit({
+      ...omnibusSharedOpts,
+      points: validPoints,
+      currentPriceVnd: safeCurrentMinPrice,
+      claimedOriginalPriceVnd: bestClaimedOrig,
+      currentInStockPriceVnd: safeCurrentMinPrice,
+      mode: 'market',
+    });
+  }, [
+    isUnavailId,
+    offerAnalyses,
+    omnibusByOffer,
+    omnibusSharedOpts,
+    safeCurrentMinPrice,
+    selectedProductId,
+    validPoints,
+  ]);
+
+  const tOmnibus: OmnibusVerdictTranslator = (key, values) =>
+    tVerdict(key, values);
+  const omnibusCopy =
+    validPoints.length > 0 && omnibusAudit.currentPriceVnd != null
+      ? formatOmnibusAuditCopy(omnibusAudit, tOmnibus, locale)
+      : null;
+
   const activeNode =
     chartGeometry && activePointIndex != null
       ? chartGeometry.mapped[activePointIndex] ||
@@ -823,6 +1078,111 @@ export default function PriceHistorySection({
           </div>
         </div>
       </div>
+
+      {/* 3-Column EU Omnibus 30-Day Floor Audit & 90-Day Cycle Signal (#1863) */}
+      {omnibusCopy && (
+        <div
+          className="rounded-4 bg-light p-md-4 mb-4 border p-3"
+          data-testid="omnibus-price-audit-card"
+        >
+          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h3 className="h6 fw-bold text-dark d-flex align-items-center mb-0 gap-2">
+              <BsCheckCircle aria-hidden="true" className="text-danger" />
+              <span>{omnibusCopy.cardTitle}</span>
+            </h3>
+            <span
+              data-testid="omnibus-window-badge"
+              className={`badge rounded-pill small px-3 py-2 ${
+                omnibusCopy.statusBadgeTone === 'good'
+                  ? 'bg-success-subtle text-success border-success-subtle border'
+                  : omnibusCopy.statusBadgeTone === 'bad'
+                    ? 'bg-danger-subtle text-danger border-danger-subtle border'
+                    : omnibusCopy.statusBadgeTone === 'warn'
+                      ? 'bg-warning text-dark'
+                      : 'bg-secondary-subtle text-secondary border'
+              }`}
+            >
+              {omnibusCopy.statusBadgeText}
+            </span>
+          </div>
+
+          <div className="row g-3">
+            {[
+              {
+                k: 'cur',
+                title: omnibusCopy.colCurrentTitle,
+                val: omnibusCopy.currentPriceText,
+                valCls: 'h5 fw-bold text-danger rate-tabular mb-0',
+                badge: omnibusCopy.claimedBadgeText,
+                sub: omnibusCopy.currentSubText,
+                subCls:
+                  omnibusCopy.currentSubTone === 'bad'
+                    ? 'text-danger fw-semibold'
+                    : omnibusCopy.currentSubTone === 'good'
+                      ? 'text-success'
+                      : 'text-muted',
+                note: null,
+                testId: undefined,
+              },
+              {
+                k: 'flr',
+                title: omnibusCopy.colFloorTitle,
+                val: omnibusCopy.floorPriceText,
+                valCls: 'h5 fw-bold text-dark rate-tabular mb-1',
+                badge: null,
+                sub: omnibusCopy.floorDeltaText,
+                subCls:
+                  omnibusCopy.floorDeltaTone === 'good'
+                    ? 'text-success fw-semibold'
+                    : omnibusCopy.floorDeltaTone === 'bad'
+                      ? 'text-danger fw-semibold'
+                      : 'text-secondary',
+                note: omnibusCopy.floorDisclaimerText,
+                testId: undefined,
+              },
+              {
+                k: 'cyc',
+                title: omnibusCopy.colCycleTitle,
+                val: omnibusCopy.cycleValueText,
+                valCls: `fw-bold mb-1 ${
+                  omnibusCopy.cycleValueTone === 'good'
+                    ? 'text-success'
+                    : omnibusCopy.cycleValueTone === 'bad'
+                      ? 'text-danger'
+                      : 'text-dark'
+                }`,
+                badge: null,
+                sub: omnibusCopy.cycleSubText,
+                subCls: 'text-muted',
+                note: null,
+                testId: 'omnibus-cycle-signal',
+              },
+            ].map((col) => (
+              <div key={col.k} className="col-lg-4 col-12">
+                <div className="rounded-4 bg-white h-100 border p-3">
+                  <div className="text-muted small mb-1">{col.title}</div>
+                  {col.badge ? (
+                    <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
+                      <span className={col.valCls}>{col.val}</span>
+                      <span className="badge bg-warning text-dark rounded-pill small">
+                        {col.badge}
+                      </span>
+                    </div>
+                  ) : (
+                    <div data-testid={col.testId} className={col.valCls}>
+                      {col.val}
+                    </div>
+                  )}
+                  <div className={`small ${col.subCls}`}>{col.sub}</div>
+                  {col.note && (
+                    <div className="small text-muted mt-1">{col.note}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Controls: Merchant Filter & Time Range. Single-select groups that
           expose the pressed choice, not only its colour (DOS/Rate#1069). */}
@@ -1276,6 +1636,33 @@ export default function PriceHistorySection({
                         {formatVnd(oa.historical_max_price, locale)}
                       </strong>
                     </span>
+                    {(() => {
+                      const offerOmnibus = omnibusByOffer.get(oa.product_id);
+                      if (
+                        !offerOmnibus ||
+                        offerOmnibus.priorFloorPriceVnd == null ||
+                        (offerOmnibus.windowStatus !==
+                          'omnibus_30d_certified' &&
+                          offerOmnibus.windowStatus !== 'partial_window')
+                      ) {
+                        return null;
+                      }
+                      const floorFormatted = formatVnd(
+                        offerOmnibus.priorFloorPriceVnd,
+                        locale
+                      );
+                      return (
+                        <span className="text-dark fw-medium">
+                          {offerOmnibus.windowStatus === 'omnibus_30d_certified'
+                            ? tOmnibus('oOk')
+                            : tOmnibus('oPart', {
+                                days: offerOmnibus.windowDaysUsed,
+                              })}
+                          {': '}
+                          <strong>{floorFormatted}</strong>
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <p className="small text-secondary lh-sm mb-0">
