@@ -640,18 +640,17 @@ if (isDirectExecution) {
         `Sign-in as the rate_worker user failed: ${authError?.message ?? 'no session'}`
       );
     }
-    const role = (auth.user?.role ?? '').trim();
-    if (role !== 'rate_worker') {
-      await client.auth.signOut().catch(() => undefined);
-      throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
-    }
-
-    logger.info(
-      'product_points_ai.target',
-      `Target: ${host} (${apply ? 'apply' : 'dry run'}${force ? ', force' : ''}${hideAiLines ? ', AI lines hidden' : ''})`,
-      { host, apply, force, hideAiLines, model: rawModel }
-    );
     try {
+      const role = (auth.user?.role ?? '').trim();
+      if (role !== 'rate_worker') {
+        throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
+      }
+
+      logger.info(
+        'product_points_ai.target',
+        `Target: ${host} (${apply ? 'apply' : 'dry run'}${force ? ', force' : ''}${hideAiLines ? ', AI lines hidden' : ''})`,
+        { host, apply, force, hideAiLines, model: rawModel }
+      );
       await runProductPointsAiJob(scopeSupabaseToRate(client), {
         apply,
         force,

@@ -832,17 +832,16 @@ if (isDirectExecution) {
         `Sign-in as the rate_worker user failed: ${authError?.message ?? 'no session'}`
       );
     }
-    const role = (auth.user?.role ?? '').trim();
-    if (role !== 'rate_worker') {
-      await client.auth.signOut().catch(() => undefined);
-      throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
-    }
-    const supabase = scopeSupabaseToRate(client);
-    // The host is not secret; it shows which project the job reads.
-    logger.info('review_values.target', `Target: ${host} (${apply ? 'apply' : 'dry run'})`, {
-      host,
-    });
     try {
+      const role = (auth.user?.role ?? '').trim();
+      if (role !== 'rate_worker') {
+        throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
+      }
+      const supabase = scopeSupabaseToRate(client);
+      // The host is not secret; it shows which project the job reads.
+      logger.info('review_values.target', `Target: ${host} (${apply ? 'apply' : 'dry run'})`, {
+        host,
+      });
       const result = await runReviewValuesJob(supabase, { apply, masterId });
       if (result.staleMasters.length > 0) process.exitCode = 2;
     } finally {

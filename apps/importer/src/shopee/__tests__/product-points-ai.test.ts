@@ -350,7 +350,11 @@ test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skip
           return builder;
         },
         order: (col: string) => {
-          rows = [...rows].sort((a, b) => String(a[col] ?? '').localeCompare(String(b[col] ?? '')));
+          rows = [...rows].sort((a, b) => {
+            const av = String(a[col] ?? '');
+            const bv = String(b[col] ?? '');
+            return av < bv ? -1 : av > bv ? 1 : 0;
+          });
           return builder;
         },
         limit: (n: number) =>
@@ -601,11 +605,13 @@ test('parseProductPointsAiArgs & runProductPointsAiJob fail closed on --master=,
     ['--wait-minutes=abc'],
     ['--wait-minutes', '--apply'],
     ['--force', '--force'],
+    ['--hide-ai='],
+    ['--hide-ai=   '],
     ['--unknown-flag'],
   ]) {
     assert.throws(
-      () => parseProductPointsAiArgs(badArgv, {}),
-      /UUID|wait-minutes|repeated|Unknown CLI argument/,
+      () => parseProductPointsAiArgs(badArgv, { PRODUCT_POINTS_HIDE_AI: 'true' }),
+      /UUID|wait-minutes|repeated|true or false|Unknown CLI argument/,
       `expected fail-closed throw for ${JSON.stringify(badArgv)}`
     );
   }

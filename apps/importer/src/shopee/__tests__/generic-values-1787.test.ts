@@ -282,11 +282,11 @@ test('the spec audit accepts a master whose camera group states no rear camera',
           return builder;
         },
         order: (col: string) => {
-          current = [...current].sort((a, b) =>
-            String((a as Record<string, unknown>)[col] ?? '').localeCompare(
-              String((b as Record<string, unknown>)[col] ?? '')
-            )
-          );
+          current = [...current].sort((a, b) => {
+            const av = String((a as Record<string, unknown>)[col] ?? '');
+            const bv = String((b as Record<string, unknown>)[col] ?? '');
+            return av < bv ? -1 : av > bv ? 1 : 0;
+          });
           return builder;
         },
         limit: async (n: number) => ({ data: current.slice(0, n), error: null }),

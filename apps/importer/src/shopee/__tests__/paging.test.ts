@@ -328,8 +328,38 @@ async function run() {
       'id'
     );
     assert.equal(fetched.length, 2350, 'keyset reads all 2350 rows without duplicating row-01000');
-    assert.deepEqual(cursors, [null, 'row-01000', 'row-02000']);
+    assert.deepEqual(cursors, [null, 'row-01000', 'row-02000', 'row-02350']);
     assert.equal(new Set(fetched.map(r => r.id)).size, 2350);
+
+    // Lowered PostgREST max-rows (500 < pageSize 1000) still reads all 1200 rows without truncation
+    const loweredRows = Array.from({ length: 1200 }, (_, i) => ({
+      id: `lr-${String(i + 1).padStart(5, '0')}`,
+    }));
+    const loweredClient = {
+      from: () => {
+        let current = [...loweredRows];
+        const builder = {
+          select: () => builder,
+          gt: (_col: string, val: string) => {
+            current = current.filter(r => r.id > val);
+            return builder;
+          },
+          order: () => builder,
+          limit: (n: number) =>
+            Promise.resolve({ data: current.slice(0, Math.min(n, 500)), error: null }),
+        };
+        return builder;
+      },
+    };
+    const loweredFetched = await fetchByKey<{ id: string }>(
+      loweredClient as never,
+      'lowered_table',
+      'id',
+      'id',
+      q => q,
+      1000
+    );
+    assert.equal(loweredFetched.length, 1200, 'fetchByKey handles max-rows < pageSize cleanly');
 
     // Exceeds the old 500-page OFFSET ceiling cleanly (550 keyset pages at pageSize=2)
     const manyPagesRows = Array.from({ length: 1101 }, (_, i) => ({
@@ -360,20 +390,20 @@ async function run() {
     );
     assert.equal(over500Pages.length, 1101, 'fetchByKey has no 500-page ceiling');
 
-    // Fails closed if tail row lacks key or cursor fails to advance
+    // Fails closed if tail row lacks key (even on a 1-row response at default pageSize=1000) or cursor fails to advance
     const missingKeyClient = {
       from: () => {
         const builder = {
           select: () => builder,
           gt: () => builder,
           order: () => builder,
-          limit: () => Promise.resolve({ data: [{ other: 'a' }, { other: 'b' }], error: null }),
+          limit: () => Promise.resolve({ data: [{ other: 'a' }], error: null }),
         };
         return builder;
       },
     };
     await assert.rejects(
-      fetchByKey(missingKeyClient as never, 'bad_cols', 'other', 'id', q => q, 2),
+      fetchByKey(missingKeyClient as never, 'bad_cols', 'other', 'id'),
       /bad_cols: missing key "id" on page tail row/
     );
 

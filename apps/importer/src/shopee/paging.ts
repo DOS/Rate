@@ -128,6 +128,9 @@ export async function fetchByKey<T>(
   if (!safeKey || /[\s\p{Cc}]/u.test(safeKey)) {
     throw new Error(`${safeTable}: key must be a non-empty column name`);
   }
+  if (typeof columns !== 'string' || !columns.trim()) {
+    throw new Error(`${safeTable}: columns must be a non-empty string`);
+  }
   if (typeof filter !== 'function') {
     throw new Error(`${safeTable}: filter must be a function`);
   }
@@ -153,8 +156,8 @@ export async function fetchByKey<T>(
       throw new Error(`${safeTable}: ${safeMsg}`);
     }
     const page = Array.isArray(pageRes?.data) ? (pageRes.data as unknown as T[]) : [];
+    if (page.length === 0) return rows;
     rows.push(...page);
-    if (page.length < safePageSize) return rows;
     const tail = page[page.length - 1];
     const rawCursor =
       tail && typeof tail === 'object' && !Array.isArray(tail)

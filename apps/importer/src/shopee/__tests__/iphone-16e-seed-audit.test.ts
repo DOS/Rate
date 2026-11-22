@@ -132,7 +132,11 @@ function tableClient(rows: Array<Record<string, unknown>>) {
           }
           if (orderKey) {
             const col = orderKey;
-            data.sort((a, b) => String(a[col] ?? '').localeCompare(String(b[col] ?? '')));
+            data.sort((a, b) => {
+              const av = String(a[col] ?? '');
+              const bv = String(b[col] ?? '');
+              return av < bv ? -1 : av > bv ? 1 : 0;
+            });
           }
           return Promise.resolve({ data: structuredClone(data.slice(0, n)), error: null });
         },

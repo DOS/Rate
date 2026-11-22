@@ -67,7 +67,7 @@ export interface ReviewPointRow {
 }
 
 const SWITCH_ON = new Set(['true', '1', 'yes', 'on']);
-const SWITCH_OFF = new Set(['', 'false', '0', 'no', 'off']);
+const SWITCH_OFF = new Set(['false', '0', 'no', 'off']);
 
 function parseBooleanSwitch(raw: string, from: string): boolean {
   const value = raw.trim().toLowerCase();
@@ -85,7 +85,8 @@ export function hideAiLinesFrom(
   argv: readonly string[],
   env: Record<string, string | undefined>
 ): boolean {
-  let hide = parseBooleanSwitch(env.PRODUCT_POINTS_HIDE_AI ?? '', 'PRODUCT_POINTS_HIDE_AI');
+  const rawEnv = (env.PRODUCT_POINTS_HIDE_AI ?? '').trim();
+  let hide = rawEnv === '' ? false : parseBooleanSwitch(rawEnv, 'PRODUCT_POINTS_HIDE_AI');
   for (const arg of argv) {
     if (arg === '--hide-ai') hide = true;
     else if (arg.startsWith('--hide-ai=')) {
@@ -113,7 +114,7 @@ export function parseProductPointsArgs(
   let apply = false;
   let masterId: string | null = null;
   let hideAiSeen = false;
-  let hideAiLines = parseBooleanSwitch(env.PRODUCT_POINTS_HIDE_AI ?? '', 'PRODUCT_POINTS_HIDE_AI');
+  let hideAiLines = hideAiLinesFrom([], env);
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]!;
@@ -549,19 +550,18 @@ if (isDirectExecution) {
         `Sign-in as the rate_worker user failed: ${authError?.message ?? 'no session'}`
       );
     }
-    const role = (auth.user?.role ?? '').trim();
-    if (role !== 'rate_worker') {
-      await client.auth.signOut().catch(() => undefined);
-      throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
-    }
-    const supabase = scopeSupabaseToRate(client);
-    // The host is not secret; it shows which project the job reads.
-    logger.info(
-      'product_points.target',
-      `Target: ${host} (${apply ? 'apply' : 'dry run'}${hideAiLines ? ', AI lines hidden' : ''})`,
-      { host, hideAiLines }
-    );
     try {
+      const role = (auth.user?.role ?? '').trim();
+      if (role !== 'rate_worker') {
+        throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
+      }
+      const supabase = scopeSupabaseToRate(client);
+      // The host is not secret; it shows which project the job reads.
+      logger.info(
+        'product_points.target',
+        `Target: ${host} (${apply ? 'apply' : 'dry run'}${hideAiLines ? ', AI lines hidden' : ''})`,
+        { host, hideAiLines }
+      );
       await runProductPointsJob(supabase, { apply, masterId, hideAiLines });
     } finally {
       await client.auth.signOut().catch(() => undefined);

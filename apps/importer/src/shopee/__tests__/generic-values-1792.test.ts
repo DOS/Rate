@@ -231,9 +231,11 @@ test('an auto-created master passes the spec audit when the AI answer omits grou
           return builder;
         },
         order: (col: string) => {
-          current = [...current].sort((a, b) =>
-            String(a[col] ?? '').localeCompare(String(b[col] ?? ''))
-          );
+          current = [...current].sort((a, b) => {
+            const av = String(a[col] ?? '');
+            const bv = String(b[col] ?? '');
+            return av < bv ? -1 : av > bv ? 1 : 0;
+          });
           return builder;
         },
         limit: async (n: number) => ({ data: current.slice(0, n), error: null }),

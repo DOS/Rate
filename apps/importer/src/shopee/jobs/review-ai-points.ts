@@ -1354,6 +1354,16 @@ if (isDirectExecution) {
     }
     const { apply } = cliArgs;
     const enabled = (process.env.REVIEW_AI_POINTS_ENABLED || '').trim() === 'true';
+    // The gateway key is read only for a run that may call it. DOS_AI_BASE_URL alone
+    // overrides the gateway (beta-api.dos.ai, say); AI_BASE_URL is the other
+    // importer jobs' and may name another provider. Validated before sign-in so an
+    // invalid URL never opens or leaks a rate_worker Auth session.
+    const apiKey = (process.env.DOS_AI_API_KEY || '').trim();
+    const baseUrl = (process.env.DOS_AI_BASE_URL || DOS_AI_DEFAULT_BASE_URL).trim();
+    if (!/^https:\/\/[^/\s]+(\/[^\s]*)?$/.test(baseUrl)) {
+      throw new Error('DOS_AI_BASE_URL must be an https URL.');
+    }
+    const ai = apply && apiKey ? dosAiReviewAiClient(apiKey, baseUrl) : null;
     const { url, host } = resolveBackfillSupabaseTarget(rawUrl);
     const client = createClient(url, key, { auth: { persistSession: false } });
     const { data: auth, error: authError } = await client.auth.signInWithPassword({
@@ -1365,27 +1375,17 @@ if (isDirectExecution) {
         `Sign-in as the rate_worker user failed: ${authError?.message ?? 'no session'}`
       );
     }
-    const role = (auth.user?.role ?? '').trim();
-    if (role !== 'rate_worker') {
-      await client.auth.signOut().catch(() => undefined);
-      throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
-    }
-    const supabase = scopeSupabaseToRate(client);
-    // The gateway key is read only for a run that may call it. DOS_AI_BASE_URL alone
-    // overrides the gateway (beta-api.dos.ai, say); AI_BASE_URL is the other
-    // importer jobs' and may name another provider.
-    const apiKey = (process.env.DOS_AI_API_KEY || '').trim();
-    const baseUrl = (process.env.DOS_AI_BASE_URL || DOS_AI_DEFAULT_BASE_URL).trim();
-    if (!/^https:\/\/[^/\s]+(\/[^\s]*)?$/.test(baseUrl)) {
-      throw new Error('DOS_AI_BASE_URL must be an https URL.');
-    }
-    const ai = apply && apiKey ? dosAiReviewAiClient(apiKey, baseUrl) : null;
-    logger.info(
-      'review_ai.target',
-      `Target: ${host} (${apply ? 'apply' : 'dry run'}, ${enabled ? 'enabled' : 'disabled'}, ${modelName})`,
-      { host }
-    );
     try {
+      const role = (auth.user?.role ?? '').trim();
+      if (role !== 'rate_worker') {
+        throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
+      }
+      const supabase = scopeSupabaseToRate(client);
+      logger.info(
+        'review_ai.target',
+        `Target: ${host} (${apply ? 'apply' : 'dry run'}, ${enabled ? 'enabled' : 'disabled'}, ${modelName})`,
+        { host }
+      );
       const result = await runReviewAiPointsJob(supabase, {
         apply,
         enabled,

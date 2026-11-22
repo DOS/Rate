@@ -250,9 +250,12 @@ async function run() {
   assert.equal(full.get('m-seed')!.risk.price_anomaly_detected, true);
 
   // A PostgREST stand-in for the filters the scoped read uses. It embeds
-  // `merchants(is_official)` like PostgREST, caps each response at 1000 rows
+  // `merchants(is_official)` like PostgREST, caps each response at `maxRows`
   // via keyset gt/order/limit, and records every read so an unfiltered one shows.
-  const makeScopedClient = (tables: Record<string, ReadonlyArray<Record<string, unknown>>>) => {
+  const makeScopedClient = (
+    tables: Record<string, ReadonlyArray<Record<string, unknown>>>,
+    maxRows = 1000
+  ) => {
     const reads: string[] = [];
     const writes: Array<{ id: string; patch: Record<string, unknown> }> = [];
     const query = (name: string) => {
@@ -290,7 +293,7 @@ async function run() {
         },
         limit: (n: number) => {
           reads.push(`${name}[${filters.join(',')}]`);
-          return Promise.resolve({ data: rows.slice(0, Math.min(n, 1000)), error: null });
+          return Promise.resolve({ data: rows.slice(0, Math.min(n, maxRows)), error: null });
         },
         range: () => {
           throw new Error(`Unexpected OFFSET .range() call on ${name}`);
@@ -400,16 +403,23 @@ async function run() {
   // 3M against the official 9M peer of cluster bc099: price anomaly.
   assert.equal(bigFull.risk.price_anomaly_detected, true);
   assert.equal(bigFull.risk.total_reviews, 1380);
-  const big = makeScopedClient({
-    merchants: bigMerchants as unknown as Array<Record<string, unknown>>,
-    products: bigProducts as unknown as Array<Record<string, unknown>>,
-    reviews: bigReviews as unknown as Array<Record<string, unknown>>,
-    master_products: bigMasters,
-  });
+  const big = makeScopedClient(
+    {
+      merchants: bigMerchants as unknown as Array<Record<string, unknown>>,
+      products: bigProducts as unknown as Array<Record<string, unknown>>,
+      reviews: bigReviews as unknown as Array<Record<string, unknown>>,
+      master_products: bigMasters,
+    },
+    37
+  );
   assert.deepEqual(
     await loadAndScoreMerchant(big.client, new AiReviewAnalyzer(), 'm-big'),
     bigFull,
     'large seller: scoped == full-table score across chunks and keyset pages'
+  );
+  assert.ok(
+    big.reads.some(r => r.includes('gt(id)')),
+    'loadAndScoreMerchant paginates chunks via keyset gt(id) when max-rows < chunk rows'
   );
   // Also verify full-table backfill-review-risk keyset pagination across > 1,000 reviews (#1665)
   const bigBackfillTables: Record<string, unknown[]> = {

@@ -262,16 +262,23 @@ async function run() {
     [`--master=${PHONE}`, `--master=${PHONE}`],
     ['--apply', '--apply'],
     ['--hide-ai', '--hide-ai=false'],
+    ['--hide-ai='],
+    ['--hide-ai=   '],
     ['--master-id=' + PHONE],
     ['--unknown-flag'],
     ['positional'],
   ]) {
     assert.throws(
-      () => parseProductPointsArgs(badArgv, {}),
-      /UUID|repeated|Unknown CLI argument/,
+      () => parseProductPointsArgs(badArgv, { PRODUCT_POINTS_HIDE_AI: 'true' }),
+      /UUID|repeated|true or false|Unknown CLI argument/,
       `expected fail-closed throw for ${JSON.stringify(badArgv)}`
     );
   }
+  assert.throws(
+    () => hideAiLinesFrom(['node', 'job', '--hide-ai='], { PRODUCT_POINTS_HIDE_AI: 'true' }),
+    /true or false/
+  );
+  assert.equal(hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: '' }), false);
 
   // Lines AI extracted from marketplace reviews (DOS/Rate#1531): each review is
   // one writer at 0.5 x min(weight, 1), so three agreeing reviews show a point
