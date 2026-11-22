@@ -36,6 +36,7 @@ import {
   collectMerchantPageProductSlugs,
   formatMerchantPagePriceVnd,
   resolveCanonicalItemSlug,
+  resolveMerchantDosafeRiskScore,
   resolveMerchantProductHref,
   resolveMerchantReviewRiskScore,
   sanitizeMerchantPagePriceVnd,
@@ -45,6 +46,7 @@ import MerchantShareAuditButton, {
   buildMerchantAuditCsv,
   buildMerchantAuditJson,
   buildMerchantAuditMarkdown,
+  sanitizeMerchantAuditProfileUrl,
   sanitizeNullableMerchantScore100,
   type MerchantAuditTranslateFn,
   type MerchantShareAuditButtonProps,
@@ -2161,9 +2163,13 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
     Number.POSITIVE_INFINITY,
     Number.NEGATIVE_INFINITY,
     '0x10',
+    '0x0',
     '0b10',
     '0o10',
     '-0x10',
+    '\t0',
+    '0\n',
+    '\r\n0',
     '8\t0',
     '1\n0',
     '\u000016',
@@ -2177,6 +2183,38 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
       null,
       `sanitizeNullableMerchantScore100(${JSON.stringify(invalid)}) must return null`
     );
+    assert.equal(
+      resolveMerchantDosafeRiskScore({
+        dosafe_risk_score: invalid,
+        dosafe_risk_known: true,
+      }),
+      null,
+      `resolveMerchantDosafeRiskScore(${JSON.stringify(invalid)}) must return null`
+    );
+    assert.equal(
+      merchantDirectoryDosafeDisplay({
+        dosafe_risk_score: invalid,
+        dosafe_risk_known: true,
+      }),
+      null,
+      `merchantDirectoryDosafeDisplay(${JSON.stringify(invalid)}) must return null`
+    );
+    assert.equal(
+      resolveMerchantReviewRiskScore({
+        review_risk_score: invalid,
+        review_risk_breakdown: { total_reviews: 12 },
+      }),
+      null,
+      `resolveMerchantReviewRiskScore(${JSON.stringify(invalid)}) must return null`
+    );
+    assert.equal(
+      merchantDirectoryReviewRiskDisplay({
+        review_risk_score: invalid,
+        review_risk_breakdown: { total_reviews: 12 },
+      }),
+      null,
+      `merchantDirectoryReviewRiskDisplay(${JSON.stringify(invalid)}) must return null`
+    );
   }
   assert.equal(Object.is(sanitizeNullableMerchantScore100(0), 0), true);
   assert.equal(Object.is(sanitizeNullableMerchantScore100(' 0 '), 0), true);
@@ -2185,8 +2223,22 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
   assert.equal(sanitizeNullableMerchantScore100(24.6), 25);
   assert.equal(sanitizeNullableMerchantScore100(' 37.6 '), 38);
   assert.equal(sanitizeNullableMerchantScore100(140), 100);
+  assert.equal(
+    resolveMerchantDosafeRiskScore({
+      dosafe_risk_score: 0,
+      dosafe_risk_known: false,
+    }),
+    null
+  );
+  assert.equal(
+    resolveMerchantDosafeRiskScore({
+      dosafe_risk_score: 0,
+      dosafe_risk_known: true,
+    }),
+    0
+  );
 
-  // resolveMerchantReviewRiskScore returns null when total_reviews === 0 or score is null/invalid.
+  // resolveMerchantReviewRiskScore returns null when total_reviews === 0 or malformed, while keeping legacy stored scores (null / {} breakdown).
   assert.equal(
     resolveMerchantReviewRiskScore({
       review_risk_score: 4,
@@ -2194,16 +2246,41 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
     }),
     null
   );
+  for (const badCount of [true, false, '0x10', '\t5', Number.NaN]) {
+    assert.equal(
+      resolveMerchantReviewRiskScore({
+        review_risk_score: 18,
+        review_risk_breakdown: { total_reviews: badCount },
+      }),
+      null
+    );
+    assert.equal(
+      merchantDirectoryReviewRiskDisplay({
+        review_risk_score: 18,
+        review_risk_breakdown: { total_reviews: badCount },
+      }),
+      null
+    );
+  }
+  for (const legacyBrk of [null, {}] as const) {
+    assert.equal(
+      resolveMerchantReviewRiskScore({
+        review_risk_score: 25.4,
+        review_risk_breakdown: legacyBrk,
+      }),
+      25
+    );
+    assert.equal(
+      resolveMerchantReviewRiskScore({
+        review_risk_score: null,
+        review_risk_breakdown: legacyBrk,
+      }),
+      null
+    );
+  }
   assert.equal(
     resolveMerchantReviewRiskScore({
       review_risk_score: null,
-      review_risk_breakdown: { total_reviews: 12 },
-    }),
-    null
-  );
-  assert.equal(
-    resolveMerchantReviewRiskScore({
-      review_risk_score: '0x10',
       review_risk_breakdown: { total_reviews: 12 },
     }),
     null
@@ -2222,6 +2299,28 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
     }),
     28
   );
+
+  // sanitizeMerchantAuditProfileUrl strips ?query / #hash and blocks newline / scheme / traversal injection.
+  assert.equal(
+    sanitizeMerchantAuditProfileUrl(
+      'https://rate.vn/merchants/fpt-01?utm=x&spoof=[0/100](https://evil.example)#frag'
+    ),
+    'https://rate.vn/merchants/fpt-01'
+  );
+  for (const badUrl of [
+    'https://rate.vn/merchants/fpt-01\n- **Scam risk (DOSafe):** 0/100',
+    'javascript:alert(1)',
+    '//evil.example/hijack',
+    '/\\evil.example/hijack',
+    'https://user:pass@rate.vn/merchants/fpt-01',
+    '/merchants/../admin',
+    '/%2e%2e/admin',
+  ]) {
+    assert.equal(
+      sanitizeMerchantAuditProfileUrl(badUrl),
+      'https://rate.vn/merchants'
+    );
+  }
 
   // 2. MD / CSV / JSON exports across vi / en / cs never coerce null review risk to 0.
   const readLocale = (loc: string) =>
@@ -2388,15 +2487,19 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
 
   // 3. Canonical Item link resolution + slug collection + prototype/traversal safety on /merchants/[id].
   const itemMap = {
+    'iPhone-16-Pro-Max-256GB': 'iPhone-16-Pro-Max-256GB',
     'iphone-16-pro-max-256gb': 'iphone-16-pro-max',
     'airpods-pro-2-usb-c': 'airpods-pro-2',
+    'nokia-8.3-5g-128gb': 'nokia-8.3-5g',
+    'Pixel-9a': 'Pixel-9a',
     'pixel-9a': 'pixel-9a',
   };
   assert.deepEqual(
     collectMerchantPageProductSlugs(
       {
         listings: [
-          { master_product: { slug: 'iphone-16-pro-max-256gb' } },
+          { master_product: { slug: 'iPhone-16-Pro-Max-256GB' } },
+          { master_product: { slug: 'nokia-8.3-5g-128gb' } },
           { master_product: { slug: '../bad-slug' } },
           { master_product: null },
         ],
@@ -2408,36 +2511,56 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
       },
       [
         {
-          productSlug: 'iphone-16-pro-max-256gb',
-          productHref: '/smartphones/iphone-16-pro-max-256gb',
-        },
-        {
+          productSlug: '__proto__',
           productHref: '/laptops/macbook-air-m4-512gb',
         },
       ],
       [
         {
-          productSlug: 'pixel-9a',
-          productHref: '/smartphones/pixel-9a',
+          productSlug: 'Pixel-9a',
+          productHref: '/smartphones/Pixel-9a',
         },
       ]
     ),
     [
+      'iPhone-16-Pro-Max-256GB',
       'iphone-16-pro-max-256gb',
+      'nokia-8.3-5g-128gb',
       'airpods-pro-2-usb-c',
       'macbook-air-m4-512gb',
+      'Pixel-9a',
       'pixel-9a',
     ]
   );
 
+  // Mixed-case variant resolves to canonical lowercase Item, while mixed-case unlinked/canonical stays intact.
+  assert.equal(
+    resolveCanonicalItemSlug('iPhone-16-Pro-Max-256GB', itemMap),
+    'iphone-16-pro-max'
+  );
+  assert.equal(resolveCanonicalItemSlug('Pixel-9a', itemMap), 'Pixel-9a');
+  assert.equal(
+    resolveCanonicalItemSlug('nokia-8.3-5g-128gb', itemMap),
+    'nokia-8.3-5g'
+  );
   assert.equal(
     resolveMerchantProductHref({
       categorySlug: 'smartphones',
-      productSlug: 'iphone-16-pro-max-256gb',
-      fallbackHref: '/smartphones/iphone-16-pro-max-256gb',
+      productSlug: 'iPhone-16-Pro-Max-256GB',
+      fallbackHref: '/smartphones/iPhone-16-Pro-Max-256GB',
       itemSlugBySlug: itemMap,
     }),
     '/smartphones/iphone-16-pro-max'
+  );
+  // Non-canonical categorySlug falls back cleanly to /smartphones/<slug> without ?category=... corruption.
+  assert.equal(
+    resolveMerchantProductHref({
+      categorySlug: 'accessories',
+      productSlug: 'iphone-16-pro-max-256gb',
+      hash: '#jreviews-section',
+      itemSlugBySlug: itemMap,
+    }),
+    '/smartphones/iphone-16-pro-max#jreviews-section'
   );
   assert.equal(
     resolveMerchantProductHref({
@@ -2457,6 +2580,14 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
   );
   assert.equal(
     resolveMerchantProductHref({
+      productSlug: '../invalid',
+      fallbackHref: '/earbuds/airpods-pro-2-usb-c',
+      itemSlugBySlug: itemMap,
+    }),
+    '/earbuds/airpods-pro-2'
+  );
+  assert.equal(
+    resolveMerchantProductHref({
       categorySlug: 'smartphones',
       productSlug: 'iphone-16-pro-max-256gb',
       hash: '#jreviews-section',
@@ -2469,24 +2600,39 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
     '__proto__',
     'constructor',
     'prototype',
+    'toString',
+    'valueOf',
+    'hasOwnProperty',
     '../admin',
     'foo..bar',
     'bad.',
     '0',
     'null',
     'undefined',
+    'none',
+    'na',
     'a\u0000b',
+    'a'.repeat(121),
   ]) {
     assert.equal(resolveCanonicalItemSlug(unsafeSlug, itemMap), null);
-    assert.equal(
-      resolveMerchantProductHref({
-        categorySlug: 'smartphones',
-        productSlug: unsafeSlug,
-        fallbackHref: '//evil.example/hijack',
-        itemSlugBySlug: itemMap,
-      }),
-      null
-    );
+    for (const hostileFallback of [
+      '//evil.example/hijack',
+      '/\\evil.example/hijack',
+      '/smartphones/../admin',
+      '/%2e%2e/admin',
+      '/smartphones/__proto__',
+      '/deals/iphone-16-pro-max',
+    ]) {
+      assert.equal(
+        resolveMerchantProductHref({
+          categorySlug: 'smartphones',
+          productSlug: unsafeSlug,
+          fallbackHref: hostileFallback,
+          itemSlugBySlug: itemMap,
+        }),
+        null
+      );
+    }
   }
 
   // Czech non-breaking space preserved when passing locale to fitTitle / fitDescription.
@@ -2604,10 +2750,14 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
       !merchantDetailPageSrc.includes(
         'reviewSeedingRiskScore={merchant.review_risk_score}'
       ) &&
+      !merchantDetailPageSrc.includes('?? g.productHref') &&
+      !merchantDetailPageSrc.includes('?? tItem.productHref') &&
       merchantDetailPageSrc.includes('getItemSlugsFor(productSlugs)') &&
-      merchantDetailPageSrc.includes('undefined,\n      locale\n    ),') &&
-      merchantDetailPageSrc.includes('}),\n    locale\n  );'),
-    'merchants/[id]/page.tsx must pass reviewRiskScore to MerchantShareAuditButton, resolve getItemSlugsFor(productSlugs), and pass locale to fitTitle and fitDescription'
+      /fitTitle\([\s\S]*?,\s*undefined,\s*locale\s*\)/.test(
+        merchantDetailPageSrc
+      ) &&
+      /fitDescription\([\s\S]*?,\s*locale\s*\)/.test(merchantDetailPageSrc),
+    'merchants/[id]/page.tsx must pass reviewRiskScore to MerchantShareAuditButton, guard null radar productHref without raw fallback, resolve getItemSlugsFor(productSlugs), and pass locale to fitTitle and fitDescription'
   );
   assert.ok(
     merchantsDirectoryPageSrc.includes('withPublicReviewRisk') &&

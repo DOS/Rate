@@ -37,8 +37,8 @@ export function sanitizeNullableMerchantScore100(
     return null;
   }
   if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return null;
     const trimmed = value.trim();
-    if (/\p{Cc}/u.test(trimmed)) return null;
     if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
       return null;
     }
@@ -50,6 +50,42 @@ export function sanitizeNullableMerchantScore100(
   if (!Number.isFinite(value)) return null;
   const clamped = Math.min(100, Math.max(0, Math.round(value)));
   return clamped === 0 ? 0 : clamped;
+}
+
+const DEFAULT_MERCHANT_AUDIT_URL = 'https://rate.vn/merchants';
+
+export function sanitizeMerchantAuditProfileUrl(rawUrl: unknown): string {
+  if (typeof rawUrl !== 'string' || /[\s\p{Cc}\\]/u.test(rawUrl)) {
+    return DEFAULT_MERCHANT_AUDIT_URL;
+  }
+  const trimmed = rawUrl.trim();
+  if (
+    !trimmed ||
+    trimmed.length > 2048 ||
+    trimmed.startsWith('//') ||
+    /(?:^|\/)\.\.(?:\/|$|[?#])/i.test(trimmed) ||
+    /%2e%2e|%5c/i.test(trimmed)
+  ) {
+    return DEFAULT_MERCHANT_AUDIT_URL;
+  }
+  try {
+    const isAbsolute = /^https?:\/\//i.test(trimmed);
+    if (!isAbsolute && !trimmed.startsWith('/')) {
+      return DEFAULT_MERCHANT_AUDIT_URL;
+    }
+    const parsed = isAbsolute
+      ? new URL(trimmed)
+      : new URL(trimmed, 'https://rate.vn');
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return DEFAULT_MERCHANT_AUDIT_URL;
+    }
+    if (parsed.username || parsed.password || !parsed.hostname) {
+      return DEFAULT_MERCHANT_AUDIT_URL;
+    }
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return DEFAULT_MERCHANT_AUDIT_URL;
+  }
 }
 
 export function sanitizeMerchantCount(value: unknown): number {
@@ -202,6 +238,7 @@ export function buildMerchantAuditMarkdown(
   profileUrl: string
 ): string {
   const f = sanitizeMerchantAuditFields(props);
+  const safeProfileUrl = sanitizeMerchantAuditProfileUrl(profileUrl);
   const authenticPct = computeAuthenticReviewPercentage(
     f.safeAuthenticReviews,
     f.safeTotalReviews
@@ -243,7 +280,7 @@ export function buildMerchantAuditMarkdown(
         })
       : t('mdAuthenticLineNoReviews'),
     t('mdProductsLine', { count: f.safeProductCount }),
-    t('mdUrlLine', { url: profileUrl }),
+    t('mdUrlLine', { url: safeProfileUrl }),
   ];
   return lines.join('\n');
 }
@@ -338,7 +375,7 @@ export default function MerchantShareAuditButton(
       const md = buildMerchantAuditMarkdown(
         props,
         (key, values) => t(key, values),
-        window.location.href
+        `${window.location.origin}${window.location.pathname}`
       );
       await navigator.clipboard.writeText(md);
       setCopiedMd(true);
@@ -351,7 +388,11 @@ export default function MerchantShareAuditButton(
   const handleCopyMerchantUrl = async () => {
     if (typeof window === 'undefined') return;
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(
+        sanitizeMerchantAuditProfileUrl(
+          `${window.location.origin}${window.location.pathname}`
+        )
+      );
       setCopiedUrl(true);
       setTimeout(() => setCopiedUrl(false), 2000);
     } catch {

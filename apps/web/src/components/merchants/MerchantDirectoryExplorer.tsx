@@ -27,7 +27,6 @@ import {
   hasReviewRiskEvidence,
   knownDosafeRiskScore,
   merchantRiskTone,
-  reviewRiskScoreOrNull,
   type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import { selectMerchantRadar } from '@/lib/deal-radar';
@@ -72,28 +71,43 @@ function parseFiniteDirectoryNumber(value: unknown): number | null {
     return null;
   }
   if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return null;
     const trimmed = value.trim();
-    if (/\p{Cc}/u.test(trimmed)) return null;
     if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
       return null;
     }
     const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
+    if (!Number.isFinite(parsed)) return null;
+    return parsed === 0 ? 0 : parsed;
   }
-  return Number.isFinite(value) ? value : null;
+  if (!Number.isFinite(value)) return null;
+  return value === 0 ? 0 : value;
 }
 
 export function merchantDirectoryDosafeDisplay(
-  merchant: Parameters<typeof knownDosafeRiskScore>[0]
+  merchant:
+    | {
+        dosafe_risk_score?: unknown;
+        dosafe_risk_known?: boolean;
+      }
+    | null
+    | undefined
 ): {
   score: number;
   tone: MerchantRiskTone;
   badgeClass: string;
   statusKey: 'scamStatusClean' | 'scamStatusCaution' | 'scamStatusAlert';
 } | null {
-  const rawDosafeScore = knownDosafeRiskScore(merchant);
+  if (!merchant || merchant.dosafe_risk_known === false) return null;
+  const parsedScore = parseFiniteDirectoryNumber(merchant.dosafe_risk_score);
+  if (parsedScore == null) return null;
+  const rawDosafeScore = knownDosafeRiskScore({
+    dosafe_risk_score: parsedScore,
+    dosafe_risk_known: merchant.dosafe_risk_known,
+  });
   if (rawDosafeScore == null) return null;
-  const dosafeScore = Math.min(100, Math.max(0, Math.round(rawDosafeScore)));
+  const clamped = Math.min(100, Math.max(0, Math.round(rawDosafeScore)));
+  const dosafeScore = clamped === 0 ? 0 : clamped;
   const tone = merchantRiskTone(dosafeScore);
   return {
     score: dosafeScore,
@@ -129,9 +143,20 @@ export function merchantDirectoryReviewRiskDisplay(
   if (!merchant || !hasReviewRiskEvidence(merchant.review_risk_breakdown)) {
     return null;
   }
+  const brk = merchant.review_risk_breakdown;
+  if (
+    brk &&
+    typeof brk === 'object' &&
+    'total_reviews' in brk &&
+    brk.total_reviews !== undefined
+  ) {
+    const count = parseFiniteDirectoryNumber(brk.total_reviews);
+    if (count == null || count <= 0) return null;
+  }
   const rawScore = parseFiniteDirectoryNumber(merchant.review_risk_score);
   if (rawScore == null) return null;
-  const reviewScore = Math.min(100, Math.max(0, Math.round(rawScore)));
+  const clamped = Math.min(100, Math.max(0, Math.round(rawScore)));
+  const reviewScore = clamped === 0 ? 0 : clamped;
   const tone = merchantRiskTone(reviewScore);
   return {
     score: reviewScore,
@@ -640,14 +665,20 @@ export default function MerchantDirectoryExplorer({
       source: 'Rate.vn Merchant Trust Directory',
       exportedAt: new Date().toISOString(),
       merchantCount: filteredMerchants.length,
-      merchants: filteredMerchants.map((m) => ({
-        ...m,
-        min_price: sanitizeMerchantDirectoryPriceVnd(m.min_price),
-        max_price: sanitizeMerchantDirectoryPriceVnd(m.max_price),
-        // Null without analysed reviews (DOS/Rate#1258).
-        review_risk_score: reviewRiskScoreOrNull(m),
-        dealRadarStats: getMerchantRadarStats(m),
-      })),
+      merchants: filteredMerchants.map((m) => {
+        const { dosafe_risk_known: _dosafeKnown, ...rest } = m;
+        void _dosafeKnown;
+        return {
+          ...rest,
+          min_price: sanitizeMerchantDirectoryPriceVnd(m.min_price),
+          max_price: sanitizeMerchantDirectoryPriceVnd(m.max_price),
+          dosafe_risk_score: merchantDirectoryDosafeDisplay(m)?.score ?? null,
+          // Null without analysed reviews (DOS/Rate#1258, #1821).
+          review_risk_score:
+            merchantDirectoryReviewRiskDisplay(m)?.score ?? null,
+          dealRadarStats: getMerchantRadarStats(m),
+        };
+      }),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8;',

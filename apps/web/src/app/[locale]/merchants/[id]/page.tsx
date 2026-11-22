@@ -7,7 +7,10 @@ import { formatSoldCount, hasSoldCount } from '@/lib/sold-count';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
 import { IntentLink } from '@/components/elementary/IntentLink';
-import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
+import {
+  isCanonicalCategorySlug,
+  resolveProductImageUrl,
+} from '@/lib/rate-api';
 import {
   MAX_VALID_VND_PRICE,
   sizedStoreImageUrl,
@@ -80,15 +83,17 @@ function parseFiniteNumber(value: unknown): number | null {
     return null;
   }
   if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return null;
     const trimmed = value.trim();
-    if (/\p{Cc}/u.test(trimmed)) return null;
     if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
       return null;
     }
     const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
+    if (!Number.isFinite(parsed)) return null;
+    return parsed === 0 ? 0 : parsed;
   }
-  return Number.isFinite(value) ? value : null;
+  if (!Number.isFinite(value)) return null;
+  return value === 0 ? 0 : value;
 }
 
 export function sanitizeMerchantPagePriceVnd(value: unknown): number | null {
@@ -152,11 +157,37 @@ function normalizeMerchantTrustScore(value: unknown): number | null {
   return Math.min(100, Math.max(0, Math.round(raw)));
 }
 
+export function resolveMerchantDosafeRiskScore(merchant: {
+  dosafe_risk_score?: unknown;
+  dosafe_risk_known?: boolean;
+}): number | null {
+  if (merchant.dosafe_risk_known === false) return null;
+  const parsed = parseFiniteNumber(merchant.dosafe_risk_score);
+  if (parsed == null) return null;
+  const known = knownDosafeRiskScore({
+    dosafe_risk_score: parsed,
+    dosafe_risk_known: merchant.dosafe_risk_known,
+  });
+  if (known == null) return null;
+  const clamped = Math.min(100, Math.max(0, Math.round(known)));
+  return clamped === 0 ? 0 : clamped;
+}
+
 export function resolveMerchantReviewRiskScore(merchant: {
   review_risk_score?: unknown;
   review_risk_breakdown?: { total_reviews?: unknown } | null;
 }): number | null {
   if (!hasReviewRiskEvidence(merchant.review_risk_breakdown)) return null;
+  const brk = merchant.review_risk_breakdown;
+  if (
+    brk &&
+    typeof brk === 'object' &&
+    'total_reviews' in brk &&
+    brk.total_reviews !== undefined
+  ) {
+    const count = parseFiniteNumber(brk.total_reviews);
+    if (count == null || count <= 0) return null;
+  }
   const raw = parseFiniteNumber(merchant.review_risk_score);
   if (raw == null) return null;
   return reviewRiskScoreOrNull({
@@ -165,16 +196,19 @@ export function resolveMerchantReviewRiskScore(merchant: {
   });
 }
 
-const SAFE_ROUTE_SLUG_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/;
+const SAFE_ROUTE_SLUG_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/;
+const SAFE_HASH_FRAGMENT_RE = /^#[a-zA-Z0-9_-]{1,80}$/;
 const PRODUCT_ROUTE_HREF_RE =
-  /^(?:\/(?:vi|en|cs))?\/([a-z0-9-]+)\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,199})([?#].*)?$/i;
+  /^(?:\/(?:vi|en|cs))?\/(smartphones|tablets|laptops|smartwatches|earbuds)\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,119})(?:[?#].*)?$/i;
 
 function isSafeRouteSlug(slug: string): boolean {
   return (
     SAFE_ROUTE_SLUG_RE.test(slug) &&
     !slug.endsWith('.') &&
     !slug.includes('..') &&
-    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i.test(
+    !(slug in Object.prototype) &&
+    !(slug.toLowerCase() in Object.prototype) &&
+    !/^(?:0+|null|undefined|nan|none|na|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i.test(
       slug
     )
   );
@@ -188,21 +222,28 @@ export function resolveCanonicalItemSlug(
   const cleaned = slug.trim();
   if (!isSafeRouteSlug(cleaned)) return null;
   if (itemSlugBySlug && typeof itemSlugBySlug === 'object') {
+    let exactValid: string | null = null;
     if (Object.hasOwn(itemSlugBySlug, cleaned)) {
       const mapped = itemSlugBySlug[cleaned];
       if (typeof mapped === 'string' && !/\p{Cc}/u.test(mapped)) {
         const cleanMapped = mapped.trim();
-        if (isSafeRouteSlug(cleanMapped)) return cleanMapped;
+        if (isSafeRouteSlug(cleanMapped)) {
+          if (cleanMapped !== cleaned) return cleanMapped;
+          exactValid = cleanMapped;
+        }
       }
     }
     const lower = cleaned.toLowerCase();
     if (lower !== cleaned && Object.hasOwn(itemSlugBySlug, lower)) {
       const mapped = itemSlugBySlug[lower];
       if (typeof mapped === 'string' && !/\p{Cc}/u.test(mapped)) {
-        const cleanMapped = mapped.trim();
-        if (isSafeRouteSlug(cleanMapped)) return cleanMapped;
+        const cleanLowerMapped = mapped.trim();
+        if (isSafeRouteSlug(cleanLowerMapped) && cleanLowerMapped !== lower) {
+          return cleanLowerMapped;
+        }
       }
     }
+    if (exactValid) return exactValid;
   }
   return cleaned;
 }
@@ -221,36 +262,41 @@ export function resolveMerchantProductHref({
   readonly itemSlugBySlug?: Readonly<Record<string, string>> | null;
 }): string | null {
   const cleanFallback =
-    typeof fallbackHref === 'string' && !/\p{Cc}/u.test(fallbackHref)
+    typeof fallbackHref === 'string' &&
+    !/[\s\p{Cc}\\]/u.test(fallbackHref) &&
+    !fallbackHref.includes('..') &&
+    !/%2e%2e|%5c/i.test(fallbackHref)
       ? fallbackHref.trim()
       : '';
   const parsedFallback = cleanFallback
     ? PRODUCT_ROUTE_HREF_RE.exec(cleanFallback)
     : null;
-  const rawSlug =
-    (typeof productSlug === 'string' && productSlug.trim()
-      ? productSlug
-      : parsedFallback?.[2]) ?? null;
-  const canonicalSlug = resolveCanonicalItemSlug(rawSlug, itemSlugBySlug);
-  const suffix =
-    typeof hash === 'string' && !/\p{Cc}/u.test(hash) && hash.trim()
-      ? hash.trim().startsWith('#')
-        ? hash.trim()
-        : `#${hash.trim()}`
-      : (parsedFallback?.[3] ?? '');
+  const canonicalSlug =
+    resolveCanonicalItemSlug(productSlug, itemSlugBySlug) ??
+    resolveCanonicalItemSlug(parsedFallback?.[2], itemSlugBySlug);
   if (!canonicalSlug) {
-    return cleanFallback.startsWith('/') && !cleanFallback.startsWith('//')
-      ? cleanFallback
-      : null;
+    return null;
   }
-  const effectiveCategory =
-    (typeof categorySlug === 'string' &&
-    !/\p{Cc}/u.test(categorySlug) &&
-    categorySlug.trim()
-      ? categorySlug.trim()
-      : parsedFallback?.[1]) || 'smartphones';
-  const baseHref = getCategoryRouteHref(effectiveCategory);
-  return `${baseHref}/${canonicalSlug}${suffix}`;
+  let safeHash = '';
+  if (typeof hash === 'string' && !/\p{Cc}/u.test(hash) && hash.trim()) {
+    const candidateHash = hash.trim().startsWith('#')
+      ? hash.trim()
+      : `#${hash.trim()}`;
+    if (SAFE_HASH_FRAGMENT_RE.test(candidateHash)) {
+      safeHash = candidateHash;
+    }
+  }
+  const rawCategory =
+    typeof categorySlug === 'string' && !/\p{Cc}/u.test(categorySlug)
+      ? categorySlug.trim().toLowerCase()
+      : '';
+  const fallbackCategory = parsedFallback?.[1]?.toLowerCase() ?? '';
+  const canonicalCategory = isCanonicalCategorySlug(rawCategory)
+    ? rawCategory
+    : isCanonicalCategorySlug(fallbackCategory)
+      ? fallbackCategory
+      : 'smartphones';
+  return `/${canonicalCategory}/${canonicalSlug}${safeHash}`;
 }
 
 export function collectMerchantPageProductSlugs(
@@ -270,13 +316,14 @@ export function collectMerchantPageProductSlugs(
   }> = []
 ): string[] {
   const slugs = new Set<string>();
-  const add = (raw: string | null | undefined) => {
-    if (typeof raw !== 'string' || /\p{Cc}/u.test(raw)) return;
+  const add = (raw: string | null | undefined): boolean => {
+    if (typeof raw !== 'string' || /\p{Cc}/u.test(raw)) return false;
     const cleaned = raw.trim();
-    if (!isSafeRouteSlug(cleaned)) return;
+    if (!isSafeRouteSlug(cleaned)) return false;
     slugs.add(cleaned);
     const lower = cleaned.toLowerCase();
     if (lower !== cleaned) slugs.add(lower);
+    return true;
   };
   for (const item of merchant.listings ?? []) {
     add(item?.master_product?.slug);
@@ -285,11 +332,10 @@ export function collectMerchantPageProductSlugs(
     add(rev?.master_slug);
   }
   for (const entry of [...genuineDeals, ...fakeSaleTraps]) {
-    if (typeof entry?.productSlug === 'string' && entry.productSlug.trim()) {
-      add(entry.productSlug);
-    } else if (
+    if (add(entry?.productSlug)) continue;
+    if (
       typeof entry?.productHref === 'string' &&
-      !/\p{Cc}/u.test(entry.productHref)
+      !/[\s\p{Cc}\\]/u.test(entry.productHref)
     ) {
       const m = PRODUCT_ROUTE_HREF_RE.exec(entry.productHref.trim());
       if (m?.[2]) add(m[2]);
@@ -334,11 +380,7 @@ export async function generateMetadata({
         });
   // No review risk number without analysed reviews (DOS/Rate#1249), and no
   // DOSafe number without a DOSafe score (DOS/Rate#1479).
-  const rawMetaDosafe = knownDosafeRiskScore(merchant);
-  const dosafeScore =
-    rawMetaDosafe == null
-      ? null
-      : Math.min(100, Math.max(0, Math.round(rawMetaDosafe)));
+  const dosafeScore = resolveMerchantDosafeRiskScore(merchant);
   const reviewRiskScore = resolveMerchantReviewRiskScore(merchant);
   const hasReviews = reviewRiskScore != null;
   const description = fitDescription(
@@ -471,11 +513,7 @@ export default async function MerchantProfilePage({
       : null;
   // Same cut-offs as the home merchant cards (DOS/Rate#1140). A seller with
   // no DOSafe score has no tone: neither clean nor an alert (DOS/Rate#1479).
-  const rawDosafeScore = knownDosafeRiskScore(merchant);
-  const dosafeScore =
-    rawDosafeScore == null
-      ? null
-      : Math.min(100, Math.max(0, Math.round(rawDosafeScore)));
+  const dosafeScore = resolveMerchantDosafeRiskScore(merchant);
   const scamTone: MerchantRiskTone | 'unknown' =
     dosafeScore == null ? 'unknown' : merchantRiskTone(dosafeScore);
   const reviewRiskScore = resolveMerchantReviewRiskScore(merchant);
@@ -970,27 +1008,36 @@ export default async function MerchantProfilePage({
                   const gMedianPrice = sanitizeMerchantPagePriceVnd(
                     g.marketMedianPrice
                   );
-                  const dealProductHref =
-                    resolveMerchantProductHref({
-                      categorySlug: g.categorySlug,
-                      productSlug: g.productSlug,
-                      fallbackHref: g.productHref,
-                      itemSlugBySlug,
-                    }) ?? g.productHref;
+                  const dealProductHref = resolveMerchantProductHref({
+                    categorySlug: g.categorySlug,
+                    productSlug: g.productSlug,
+                    fallbackHref: g.productHref,
+                    itemSlugBySlug,
+                  });
                   return (
                     <div key={g.id} className="col-md-6">
                       <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
                         <div className="overflow-hidden pe-2">
-                          <Link
-                            href={dealProductHref}
-                            className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                          >
-                            <BsArrowDownCircle
-                              aria-hidden="true"
-                              className="text-success me-1"
-                            />
-                            {g.productName}
-                          </Link>
+                          {dealProductHref ? (
+                            <Link
+                              href={dealProductHref}
+                              className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                            >
+                              <BsArrowDownCircle
+                                aria-hidden="true"
+                                className="text-success me-1"
+                              />
+                              {g.productName}
+                            </Link>
+                          ) : (
+                            <span className="fw-bold text-dark d-block text-truncate small">
+                              <BsArrowDownCircle
+                                aria-hidden="true"
+                                className="text-success me-1"
+                              />
+                              {g.productName}
+                            </span>
+                          )}
                           {gMinPrice != null && gMedianPrice != null && (
                             <div className="text-secondary small">
                               {t('low60dAndMedian', {
@@ -1021,27 +1068,36 @@ export default async function MerchantProfilePage({
                   const trapOrigPrice = sanitizeMerchantPagePriceVnd(
                     tItem.priceOriginal
                   );
-                  const trapProductHref =
-                    resolveMerchantProductHref({
-                      categorySlug: tItem.categorySlug,
-                      productSlug: tItem.productSlug,
-                      fallbackHref: tItem.productHref,
-                      itemSlugBySlug,
-                    }) ?? tItem.productHref;
+                  const trapProductHref = resolveMerchantProductHref({
+                    categorySlug: tItem.categorySlug,
+                    productSlug: tItem.productSlug,
+                    fallbackHref: tItem.productHref,
+                    itemSlugBySlug,
+                  });
                   return (
                     <div key={tItem.id} className="col-md-6">
                       <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
                         <div className="overflow-hidden pe-2">
-                          <Link
-                            href={trapProductHref}
-                            className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                          >
-                            <BsExclamationTriangle
-                              aria-hidden="true"
-                              className="text-danger me-1"
-                            />
-                            {tItem.productName}
-                          </Link>
+                          {trapProductHref ? (
+                            <Link
+                              href={trapProductHref}
+                              className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                            >
+                              <BsExclamationTriangle
+                                aria-hidden="true"
+                                className="text-danger me-1"
+                              />
+                              {tItem.productName}
+                            </Link>
+                          ) : (
+                            <span className="fw-bold text-dark d-block text-truncate small">
+                              <BsExclamationTriangle
+                                aria-hidden="true"
+                                className="text-danger me-1"
+                              />
+                              {tItem.productName}
+                            </span>
+                          )}
                           {trapOrigPrice != null && (
                             <div className="text-secondary small">
                               {t('inflatedOriginalPrice', {

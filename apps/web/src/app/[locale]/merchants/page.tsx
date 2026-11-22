@@ -7,6 +7,8 @@ import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import { BsSearch, BsShieldCheck } from 'react-icons/bs';
 import MerchantDirectoryExplorer, {
+  merchantDirectoryDosafeDisplay,
+  merchantDirectoryReviewRiskDisplay,
   type MerchantDirectoryExplorerPage,
 } from '@/components/merchants/MerchantDirectoryExplorer';
 import {
@@ -46,7 +48,14 @@ export function toPublicMerchantDirectoryPage(
 ): MerchantDirectoryExplorerPage {
   return {
     ...page,
-    items: page.items.map(withPublicReviewRisk),
+    items: page.items.map((m) => {
+      const pub = withPublicReviewRisk(m);
+      return {
+        ...pub,
+        dosafe_risk_score: merchantDirectoryDosafeDisplay(m)?.score ?? null,
+        review_risk_score: merchantDirectoryReviewRiskDisplay(m)?.score ?? null,
+      };
+    }),
   };
 }
 
