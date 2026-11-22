@@ -17,8 +17,9 @@ import {
 } from '@/server/rate/item-page';
 import {
   buildItemProductGroupNode,
-  buildPeerCompareHref,
+  buildPeerCompareLink,
   buildPeerItemSlugMap,
+  isPeerItemGroupingDegraded,
   itemVariantLabel,
   itemFromStats,
   resolveCanonicalPeerSlug,
@@ -41,7 +42,7 @@ import {
   getCachedMasterProductReviewSummary,
   getCachedMasterProductSiblings,
   getCachedMasterProducts,
-  groupCatalogRowsByItem,
+  groupCatalogRowsByItemWithStatus,
   computeProductRadarSignal,
 } from '@/server/rate';
 import { computeBayesianRatingSummary } from '@/lib/rate-api';
@@ -144,7 +145,7 @@ import {
 } from '@/lib/locale-format';
 import { displayedScore5, formatRatingValue } from '@/lib/rating-display';
 import { catalogRowSlug } from '@/lib/item-directory';
-import { isParseableVersusPair, versusHref } from '@/lib/item-compare';
+import { isParseableVersusPair } from '@/lib/item-compare';
 import StarRating from '@/components/elementary/StarRating';
 
 // Cached after the first request, refreshed every 5 minutes or when the
@@ -477,8 +478,18 @@ export async function ProductDetailView({
   const competitorsRead = peersRead.then(async (storedCategoryPeers) => {
     // RATE_ITEM_MODEL on: group category peers into one row per Item and drop
     // the current Item's sizes before standing and competitor rankings (#1819).
-    const groupedCategoryPeers =
-      await groupCatalogRowsByItem(storedCategoryPeers);
+    // Preserve degraded status when peer Item links fail so mixed Item-vs-raw
+    // 1v1 links are suppressed (#1834).
+    const {
+      rows: groupedCategoryPeers,
+      itemModelActive: peerItemModelActive,
+      degraded: peerGroupingDegraded,
+    } = await groupCatalogRowsByItemWithStatus(storedCategoryPeers);
+    const peerItemLinksDegraded = isPeerItemGroupingDegraded({
+      currentItemSlug,
+      itemModelActive: peerItemModelActive,
+      degraded: peerGroupingDegraded,
+    });
     const categoryPeers = withoutCurrentItemPeers(
       groupedCategoryPeers.map((peer) =>
         applyCategorySpecTemplate(categorySlug, peer)
@@ -506,7 +517,12 @@ export async function ProductDetailView({
         relatedCompetitors.map((peer) => getCachedMasterProductOffers(peer.id))
       )
     );
-    return { categoryPeers, relatedCompetitors, competitorOffers };
+    return {
+      categoryPeers,
+      relatedCompetitors,
+      competitorOffers,
+      peerItemLinksDegraded,
+    };
   });
   const [
     offers,
@@ -514,7 +530,12 @@ export async function ProductDetailView({
     productPointsData,
     priceHistory,
     reviewSummary,
-    { categoryPeers, relatedCompetitors, competitorOffers },
+    {
+      categoryPeers,
+      relatedCompetitors,
+      competitorOffers,
+      peerItemLinksDegraded,
+    },
     siblings,
   ] = await Promise.all([
     offersRead,
@@ -977,17 +998,17 @@ export async function ProductDetailView({
       ? { variant_key: defaultVariantKey }
       : {}),
   };
-  const singleCompareHref = buildPeerCompareHref(
-    categorySlug,
-    [currentCompareRow],
-    1
-  );
-  const compareAllHref = buildPeerCompareHref(
+  const { href: rawSingleCompareHref, count: currentCompareCount } =
+    buildPeerCompareLink(categorySlug, [currentCompareRow], 1);
+  const singleCompareHref =
+    currentCompareCount > 0
+      ? rawSingleCompareHref
+      : `/compare?cat=${encodeURIComponent(categorySlug)}`;
+  const { href: compareAllHref, count: compareAllCount } = buildPeerCompareLink(
     categorySlug,
     [currentCompareRow, ...relatedCompetitors],
     4
   );
-  const compareAllCount = Math.min(4, relatedCompetitors.length + 1);
 
   return (
     <ClientMessages scope="productDetail">
@@ -1697,14 +1718,16 @@ export async function ProductDetailView({
                   >
                     {t('dealHub10PlatformsBtn')}
                   </Link>
-                  <Link
-                    href={compareAllHref}
-                    className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
-                  >
-                    {t('compareAllPeersBtn', {
-                      count: compareAllCount,
-                    })}
-                  </Link>
+                  {currentCompareCount > 0 && compareAllCount >= 2 && (
+                    <Link
+                      href={compareAllHref}
+                      className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
+                    >
+                      {t('compareAllPeersBtn', {
+                        count: compareAllCount,
+                      })}
+                    </Link>
+                  )}
                 </div>
               </div>
 
@@ -1720,27 +1743,22 @@ export async function ProductDetailView({
                   const peerDetailHref = peerCanonicalSlug
                     ? `${categoryBasePath}/${encodeURIComponent(peerCanonicalSlug)}`
                     : categoryBasePath;
+                  // Canonical 1v1 pair URL (`versusHref(product.slug, peer.slug)` when
+                  // ungrouped), guarded by `resolvePeerVersusHref` and suppressed when
+                  // peer Item link grouping degraded (#1367, #1819, #1834).
                   const resolvedVersusHref = resolvePeerVersusHref(
                     product.slug,
                     peer.slug,
-                    peerItemSlugMap
+                    peerItemSlugMap,
+                    { degraded: peerItemLinksDegraded }
                   );
-                  const fallbackVersusHref = peerItemSlugMap
-                    ? versusHref(product.slug, peer.slug, peerItemSlugMap)
-                    : versusHref(product.slug, peer.slug);
-                  const candidateVersusHref =
-                    resolvedVersusHref ??
-                    (peerItemSlugMap ? null : fallbackVersusHref);
-                  const candidateVersusSides = (candidateVersusHref ?? '')
+                  const versusSides = (resolvedVersusHref ?? '')
                     .replace(/^\/compare\//, '')
                     .split('-vs-');
                   const peerVersusHref =
                     resolvedVersusHref &&
-                    candidateVersusSides.length === 2 &&
-                    isParseableVersusPair(
-                      candidateVersusSides[0]!,
-                      candidateVersusSides[1]!
-                    )
+                    versusSides.length === 2 &&
+                    isParseableVersusPair(versusSides[0]!, versusSides[1]!)
                       ? resolvedVersusHref
                       : null;
                   const peerPrice = Number(peer.min_price || 0);

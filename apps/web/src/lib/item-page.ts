@@ -143,6 +143,22 @@ function isValidVersusSlugToken(slug: string): boolean {
   );
 }
 
+// Dotted dynamic page slugs in `proxy.ts` / `next.config.mjs` require a leading
+// ASCII alphanumeric character (`DOS/Rate#1807`); undotted detail slugs also
+// allow leading `_` or `-` matching `resolveCatalogSlug` (#1834).
+function isRoutableDetailSlugToken(slug: string): boolean {
+  return (
+    isSafeCatalogSlugToken(slug) &&
+    (!slug.includes('.') || /^[a-zA-Z0-9]/.test(slug))
+  );
+}
+
+// `/compare` tokens must satisfy both `SLUG_REGEX` / `PIN_REGEX` (leading
+// `[a-zA-Z0-9]`) and `isSafeCatalogSlugToken` sentinel bounds (#1834).
+function isValidCompareSlugToken(slug: string): boolean {
+  return isSafeCatalogSlugToken(slug) && isValidVersusSlugToken(slug);
+}
+
 function setOwnSlugEntry(
   map: Record<string, string>,
   key: string,
@@ -173,16 +189,19 @@ function getOwnSlugEntry(
 
 /**
  * The canonical slug a catalogue row links to under `/{category}/{slug}`:
- * its Item slug when valid (preserving mixed case, dots and underscores),
- * falling back to the validated variant slug when unlinked or malformed,
- * or `''` when neither is a safe catalogue slug (DOS/Rate#1819).
+ * its Item slug when valid for detail routes (preserving mixed case, dots and
+ * leading underscores, matching `resolveCatalogSlug`), falling back to the
+ * validated variant slug when unlinked or malformed, or `''` when neither is a
+ * safe catalogue slug (DOS/Rate#1819, #1834).
  */
 export function resolveCanonicalPeerSlug(row: {
   slug: string;
   item_slug?: string | null;
 }): string {
   const rawFallback = stripControlAndTrim(row?.slug);
-  const safeFallback = isSafeCatalogSlugToken(rawFallback) ? rawFallback : '';
+  const safeFallback = isRoutableDetailSlugToken(rawFallback)
+    ? rawFallback
+    : '';
   const rawItemSlug = stripControlAndTrim(row?.item_slug);
   const candidate = stripControlAndTrim(
     catalogRowSlug({
@@ -190,7 +209,7 @@ export function resolveCanonicalPeerSlug(row: {
       ...(rawItemSlug ? { item_slug: rawItemSlug } : {}),
     })
   );
-  if (candidate && isValidVersusSlugToken(candidate)) {
+  if (candidate && isRoutableDetailSlugToken(candidate)) {
     return candidate;
   }
   return safeFallback;
@@ -298,16 +317,47 @@ export function buildPeerItemSlugMap(
   return count > 0 ? map : null;
 }
 
+export interface ResolvePeerVersusOptions {
+  /**
+   * True when peer Item link grouping fell back to ungrouped master rows, so a
+   * missing entry in `itemSlugBySlug` may hide an unresolvable `-vs-` Item or
+   * a same-Item sibling (#1834).
+   */
+  degraded?: boolean;
+}
+
+/**
+ * True when peer Item link grouping fell back to ungrouped master rows, or
+ * when an Item detail route has no active peer Item grouping, so 1v1 links
+ * cannot assume a raw peer row is genuinely unlinked (#1834).
+ */
+export function isPeerItemGroupingDegraded(input: {
+  currentItemSlug?: string | null;
+  itemModelActive: boolean;
+  degraded: boolean;
+}): boolean {
+  return (
+    Boolean(input.degraded) ||
+    (Boolean(stripControlAndTrim(input.currentItemSlug)) &&
+      !input.itemModelActive)
+  );
+}
+
 /**
  * Canonical, guarded `/compare/<a-vs-b>` link for two catalogue rows, or null
- * when the pair names the same Item, either Item slug holds `-vs-`, or the
- * resulting pair would not round-trip `/compare/[versus]` parsing (#1819).
+ * when peer Item grouping is degraded, the pair names the same Item, either
+ * Item slug holds `-vs-`, or the resulting pair would not round-trip
+ * `/compare/[versus]` parsing (#1819, #1834).
  */
 export function resolvePeerVersusHref(
   slugA: string,
   slugB: string,
-  itemSlugBySlug?: Readonly<Record<string, string>> | null
+  itemSlugBySlug?: Readonly<Record<string, string>> | null,
+  options?: ResolvePeerVersusOptions
 ): string | null {
+  if (options?.degraded) {
+    return null;
+  }
   const cleanA = stripControlAndTrim(slugA);
   const cleanB = stripControlAndTrim(slugB);
   if (!cleanA || !cleanB || cleanA.toLowerCase() === cleanB.toLowerCase()) {
@@ -371,19 +421,18 @@ export interface PeerCompareRowInput {
 /**
  * Multi-item `/compare?slugs=` token for a product or grouped Item row: pins
  * multi-size Items (including shared-slug Items) as `itemSlug@variantKey` so
- * compare resolves the exact standing size (#1819).
+ * compare resolves the exact standing size, falling back to the safe variant
+ * slug when an Item slug (e.g. leading underscore) is outside `/compare` token
+ * syntax (#1819, #1834).
  */
 export function resolvePeerCompareToken(row: PeerCompareRowInput): string {
   const rawSlug = stripControlAndTrim(row?.slug);
-  const safeSlug = isSafeCatalogSlugToken(rawSlug) ? rawSlug : '';
+  const safeCompareSlug = isValidCompareSlugToken(rawSlug) ? rawSlug : '';
   const rawItemSlug = stripControlAndTrim(row?.item_slug);
-  const hasValidItem = Boolean(
-    rawItemSlug && isValidVersusSlugToken(rawItemSlug)
-  );
-  const canonical = resolveCanonicalPeerSlug(row);
+  const compareItemSlug =
+    rawItemSlug && isValidCompareSlugToken(rawItemSlug) ? rawItemSlug : '';
   if (
-    hasValidItem &&
-    canonical &&
+    compareItemSlug &&
     ((Array.isArray(row.item_variants) && row.item_variants.length > 1) ||
       Boolean(cleanVariantKey(row.variant_key)))
   ) {
@@ -396,23 +445,30 @@ export function resolvePeerCompareToken(row: PeerCompareRowInput): string {
               ?.variant_key
           : null
       );
-    const pinned = matchedKey ? `${canonical}@${matchedKey}` : '';
-    return pinned && COMPARE_PIN_TOKEN_REGEX.test(pinned) ? pinned : safeSlug;
+    const pinned = matchedKey ? `${compareItemSlug}@${matchedKey}` : '';
+    return pinned && COMPARE_PIN_TOKEN_REGEX.test(pinned)
+      ? pinned
+      : safeCompareSlug;
   }
-  return canonical || safeSlug;
+  return compareItemSlug || safeCompareSlug;
+}
+
+export interface PeerCompareLink {
+  href: string;
+  count: number;
+  tokens: readonly string[];
 }
 
 /**
- * Multi-item `/compare` link with `cat=<categorySlug>` and `variant.<token>`
- * fallback hints when `legacyTarget` would not directly infer `variantSlug`
- * (e.g. `1024gb` -> `-1tb`, `standard`, shared-slug multi-size Items, or
- * single-size retail aliases; DOS/Rate#1782, #1819).
+ * Multi-item `/compare` link with `cat=<categorySlug>`, `variant.<token>`
+ * fallback hints, and the exact filtered token count so button labels never
+ * diverge from emitted `slugs=` entries (DOS/Rate#1782, #1819, #1834).
  */
-export function buildPeerCompareHref(
+export function buildPeerCompareLink(
   categorySlug: string,
   rows: readonly PeerCompareRowInput[],
   limit = 4
-): string {
+): PeerCompareLink {
   const safeCategory = stripControlAndTrim(categorySlug) || 'smartphones';
   const safeLimit =
     typeof limit === 'number' && Number.isFinite(limit) && limit > 0
@@ -437,8 +493,9 @@ export function buildPeerCompareHref(
       if (entries.length >= safeLimit) break;
     }
   }
-  const slugs = entries
-    .map(({ token }) => encodeURIComponent(token).replace(/%40/gi, '@'))
+  const tokens = entries.map(({ token }) => token);
+  const slugs = tokens
+    .map((token) => encodeURIComponent(token).replace(/%40/gi, '@'))
     .join(',');
   const fallbacks = new URLSearchParams();
   const needsFallback = entries.some(({ token, variantSlug }) => {
@@ -459,7 +516,26 @@ export function buildPeerCompareHref(
     }
   }
   const baseHref = `/compare?cat=${encodeURIComponent(safeCategory)}&slugs=${slugs}`;
-  return fallbacks.size > 0 ? `${baseHref}&${fallbacks}` : baseHref;
+  const href = fallbacks.size > 0 ? `${baseHref}&${fallbacks}` : baseHref;
+  return {
+    href,
+    count: tokens.length,
+    tokens,
+  };
+}
+
+/**
+ * Multi-item `/compare` link with `cat=<categorySlug>` and `variant.<token>`
+ * fallback hints when `legacyTarget` would not directly infer `variantSlug`
+ * (e.g. `1024gb` -> `-1tb`, `standard`, shared-slug multi-size Items, or
+ * single-size retail aliases; DOS/Rate#1782, #1819, #1834).
+ */
+export function buildPeerCompareHref(
+  categorySlug: string,
+  rows: readonly PeerCompareRowInput[],
+  limit = 4
+): string {
+  return buildPeerCompareLink(categorySlug, rows, limit).href;
 }
 
 export type ItemJsonLdImage = string | Record<string, unknown>;
