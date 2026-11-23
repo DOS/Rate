@@ -71,6 +71,89 @@ import StarRating from '@/components/elementary/StarRating';
 const EXPORT_PAGE_SIZE = 500;
 export const MAX_MERCHANT_EXPORT_PAGES = 20;
 
+export function updateOpenSafeDetailsIds(
+  prev: Set<string>,
+  merchantId: string,
+  isOpen: boolean
+): Set<string> {
+  if (prev.has(merchantId) === isOpen) {
+    return prev;
+  }
+  const next = new Set(prev);
+  if (isOpen) {
+    next.add(merchantId);
+  } else {
+    next.delete(merchantId);
+  }
+  return next;
+}
+
+class EmptyMerchantExportError extends Error {
+  constructor() {
+    super('No merchants match export filters');
+    this.name = 'EmptyMerchantExportError';
+  }
+}
+
+export interface MerchantClipboardTarget<TItem = ClipboardItem> {
+  readonly write?: (items: TItem[]) => Promise<void>;
+  readonly writeText?: (text: string) => Promise<void>;
+}
+
+export async function copyMerchantsMarkdownWithClipboard<
+  TItem = ClipboardItem,
+>(params: {
+  readonly matchedCount: number;
+  readonly fetchAllMatching: () => Promise<
+    readonly MerchantDirectoryExplorerItem[]
+  >;
+  readonly buildMarkdown: (
+    rows: readonly MerchantDirectoryExplorerItem[]
+  ) => string;
+  readonly clipboard?: MerchantClipboardTarget<TItem>;
+  readonly createClipboardItem?: (blobPromise: Promise<Blob>) => TItem;
+}): Promise<boolean> {
+  const {
+    matchedCount,
+    fetchAllMatching,
+    buildMarkdown,
+    clipboard,
+    createClipboardItem,
+  } = params;
+  if (!clipboard || matchedCount === 0) return false;
+  // The rows are fetched first, but Safari only lets the clipboard be written
+  // during the click: hand it a promise via ClipboardItem so the write starts
+  // inside the gesture. Browsers without ClipboardItem fall back to
+  // writeText after the fetch.
+  const markdown = fetchAllMatching().then((rowsToExport) => {
+    if (rowsToExport.length === 0) {
+      throw new EmptyMerchantExportError();
+    }
+    return buildMarkdown(rowsToExport);
+  });
+  // Handled below through the clipboard call; this only keeps an early
+  // clipboard refusal from leaving the promise unobserved.
+  markdown.catch(() => {});
+  try {
+    if (createClipboardItem && typeof clipboard.write === 'function') {
+      const blobPromise = markdown.then(
+        (md) => new Blob([md], { type: 'text/plain' })
+      );
+      blobPromise.catch(() => {});
+      await clipboard.write([createClipboardItem(blobPromise)]);
+      return true;
+    }
+    if (typeof clipboard.writeText === 'function') {
+      await clipboard.writeText(await markdown);
+      return true;
+    }
+    return false;
+  } catch {
+    // Clipboard refused, fetch failed, or filtered rows were empty: nothing copied.
+    return false;
+  }
+}
+
 function parseFiniteDirectoryNumber(value: unknown): number | null {
   if (
     value == null ||
@@ -533,8 +616,8 @@ export default function MerchantDirectoryExplorer({
     setSortBy(next.sortBy);
   }, []);
   const [copiedMerchantsMd, setCopiedMerchantsMd] = useState(false);
-  const [openSafeDetailsId, setOpenSafeDetailsId] = useState<string | null>(
-    null
+  const [openSafeDetailsIds, setOpenSafeDetailsIds] = useState<Set<string>>(
+    () => new Set<string>()
   );
   // The server filters and pages the directory (DOS/Rate#452): only the
   // stores on screen are in the browser. Exports fetch every matching store.
@@ -784,7 +867,7 @@ export default function MerchantDirectoryExplorer({
   };
 
   const buildMerchantsMarkdown = (
-    filteredMerchants: MerchantDirectoryExplorerItem[]
+    filteredMerchants: readonly MerchantDirectoryExplorerItem[]
   ) =>
     buildMerchantsDirectoryMarkdown({
       merchants: filteredMerchants,
@@ -794,31 +877,20 @@ export default function MerchantDirectoryExplorer({
     });
 
   const handleCopyMerchantsMarkdown = async () => {
-    if (typeof navigator === 'undefined' || matchedCount === 0) return;
-    // The rows are fetched first, but Safari only lets the clipboard be written
-    // during the click: hand it a promise via ClipboardItem so the write starts
-    // inside the gesture. Browsers without ClipboardItem fall back to
-    // writeText after the fetch.
-    const markdown = fetchAllMatching().then(buildMerchantsMarkdown);
-    // Handled below through the clipboard call; this only keeps an early
-    // clipboard refusal from leaving the promise unobserved.
-    markdown.catch(() => {});
-    try {
-      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            'text/plain': markdown.then(
-              (md) => new Blob([md], { type: 'text/plain' })
-            ),
-          }),
-        ]);
-      } else {
-        await navigator.clipboard.writeText(await markdown);
-      }
+    if (typeof navigator === 'undefined') return;
+    const copied = await copyMerchantsMarkdownWithClipboard({
+      matchedCount,
+      fetchAllMatching,
+      buildMarkdown: buildMerchantsMarkdown,
+      clipboard: navigator.clipboard,
+      createClipboardItem:
+        typeof ClipboardItem !== 'undefined'
+          ? (blobPromise) => new ClipboardItem({ 'text/plain': blobPromise })
+          : undefined,
+    });
+    if (copied) {
       setCopiedMerchantsMd(true);
       setTimeout(() => setCopiedMerchantsMd(false), 2500);
-    } catch {
-      // Clipboard refused or fetch failed: nothing was copied.
     }
   };
 
@@ -1495,20 +1567,21 @@ export default function MerchantDirectoryExplorer({
                         >
                           {trustBadge?.verifiedSafe && (
                             <details
+                              open={openSafeDetailsIds.has(merchant.id)}
                               className={
-                                openSafeDetailsId === merchant.id
+                                openSafeDetailsIds.has(merchant.id)
                                   ? 'w-100'
                                   : 'd-inline-block'
                               }
                               data-testid="merchant-verified-safe-details"
                               onToggle={(e) => {
                                 const isOpen = e.currentTarget.open;
-                                setOpenSafeDetailsId((prev) =>
-                                  isOpen
-                                    ? merchant.id
-                                    : prev === merchant.id
-                                      ? null
-                                      : prev
+                                setOpenSafeDetailsIds((prev) =>
+                                  updateOpenSafeDetailsIds(
+                                    prev,
+                                    merchant.id,
+                                    isOpen
+                                  )
                                 );
                               }}
                             >
