@@ -719,5 +719,89 @@
   },
   "observationFieldNetwork": {
     "message": "otisk rozsahu vaší sítě (ne IP adresa)"
+  },
+  "checkoutGuardRegionAria": {
+    "message": "Cenové upozornění v košíku Rate.vn"
+  },
+  "checkoutGuardTitle": {
+    "message": "Hlídač cen v košíku"
+  },
+  "checkoutGuardDismiss": {
+    "message": "Zavřít"
+  },
+  "checkoutGuardCheaperOfficial": {
+    "message": "Oficiální obchod $STORE$ má zboží skladem levněji o $SAVINGS$ (-$PCT$ %).",
+    "placeholders": {
+      "store": {
+        "content": "$1"
+      },
+      "savings": {
+        "content": "$2"
+      },
+      "pct": {
+        "content": "$3"
+      }
+    }
+  },
+  "checkoutGuardMarkupTrap": {
+    "message": "Cena v košíku je o +$PCT$ % vyšší než ověřená referenční cena na Rate.vn ($MEDIAN$).",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
+  },
+  "checkoutGuardCompareCta": {
+    "message": "Porovnat na Rate.vn"
+  },
+  "checkoutGuardToggleTitle": {
+    "message": "Hlídač cenových pastí v košíku (22 obchodů):"
+  },
+  "checkoutGuardToggleBody": {
+    "message": "Čte pouze názvy a jednotkové ceny nejvýše 5 položek v košíku a u pokladny, aby upozornil na levnější oficiální obchod nebo neobvykle vysokou cenu. Nikdy nečte formulářová pole, adresy, telefonní čísla, kupóny ani platební údaje."
+  },
+  "pinAlertBtn": {
+    "message": "Připnout hlídání ceny ($TARGET$)",
+    "placeholders": {
+      "target": {
+        "content": "$1"
+      }
+    }
+  },
+  "unpinAlertBtn": {
+    "message": "Hlídání připnuto ($TARGET$) - Odepnout",
+    "placeholders": {
+      "target": {
+        "content": "$1"
+      }
+    }
+  },
+  "pinnedAlertsTitle": {
+    "message": "Připnutá hlídání cen ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "pinnedAlertTargetVsLive": {
+    "message": "Cíl: $TARGET$ | Nejlepší cena: $LIVE$",
+    "placeholders": {
+      "target": {
+        "content": "$1"
+      },
+      "live": {
+        "content": "$2"
+      }
+    }
+  },
+  "pinnedAlertEmailCta": {
+    "message": "E-mailové upozornění na Rate.vn"
+  },
+  "pinnedAlertUnpinShort": {
+    "message": "Odepnout"
   }
 }

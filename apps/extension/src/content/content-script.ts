@@ -3,15 +3,25 @@ import {
   sanitizeProductUrl,
 } from '../extractors/ecommerce-detector.js';
 import {
+  buildCartItemsSignature,
+  extractCartLineItems,
+  isCheckoutOrCartUrl,
+  sanitizeRateComparisonUrl,
+} from '../extractors/checkout-detector.js';
+import {
   buildProductSignalSignature,
   formatSafeExtensionVnd,
   formatSafeNumber,
   MAX_VALID_EXTENSION_VND_PRICE,
   resolveExtensionMasterRating,
   shouldRenderTrustPill,
+  stripLoneSurrogates,
 } from '../security-guards.js';
-import { escapeHtml, t } from '../i18n.js';
-import type { ExtensionLookupData } from '../types.js';
+import { escapeHtml, isForeignVietnamese, t } from '../i18n.js';
+import type {
+  CheckoutPriceTrapWarning,
+  ExtensionLookupData,
+} from '../types.js';
 import { RateLimitRetry } from '../rate-limit.js';
 import {
   buildPillAriaLabel,
@@ -20,9 +30,15 @@ import {
 } from '../verdict-display.js';
 
 const HOST_ID = 'rate-vn-trust-pill-host';
+const CHECKOUT_GUARD_HOST_ID = 'rate-vn-checkout-guard-host';
 
 function removeTrustPillHost(): void {
   const existing = document.getElementById(HOST_ID);
+  if (existing) existing.remove();
+}
+
+function removeCheckoutGuardHost(): void {
+  const existing = document.getElementById(CHECKOUT_GUARD_HOST_ID);
   if (existing) existing.remove();
 }
 
@@ -328,9 +344,363 @@ let detectGeneration = 0;
 let lastProcessedSignature = '';
 let hasDetectedProduct = false;
 let prerenderListenerAttached = false;
+let checkoutGeneration = 0;
+let lastCheckoutSignature = '';
+let dismissedCheckoutSignature = '';
+let localCheckoutGuardEnabled = true;
 // After a rate limit the same product is looked up again once the wait is over
 // (DOS/Rate#1466).
 const rateLimitRetry = new RateLimitRetry();
+
+const CHECKOUT_GUARD_STYLES = `
+  :host {
+    all: initial;
+    position: fixed;
+    right: 20px;
+    bottom: 24px;
+    z-index: 2147483646;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .guard-card {
+    background: #12151a;
+    color: #f3f4f6;
+    border: 1.5px solid #d83030;
+    border-radius: 14px;
+    padding: 12px 14px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.62);
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .guard-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .guard-brand-wrap {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+  .brand-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #ff2e29;
+    box-shadow: 0 0 9px #ff2e29;
+    flex-shrink: 0;
+  }
+  .guard-brand {
+    font-size: 13px;
+    font-weight: 800;
+    color: #ffffff;
+  }
+  .guard-badge {
+    background: rgba(216, 48, 48, 0.22);
+    color: #fca5a5;
+    border: 1px solid rgba(216, 48, 48, 0.45);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .dismiss-btn {
+    background: #1c2027;
+    color: #d1d5db;
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    padding: 4px 9px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .dismiss-btn:hover {
+    color: #ffffff;
+    border-color: #4b5563;
+  }
+  .guard-item {
+    border-top: 1px solid #232833;
+    padding-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .guard-item-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.35;
+  }
+  .guard-item-body {
+    font-size: 12.5px;
+    color: #d1d5db;
+    line-height: 1.45;
+  }
+  .guard-cta-link {
+    align-self: flex-start;
+    margin-top: 2px;
+    background: #d83030;
+    color: #ffffff;
+    text-decoration: none;
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+`;
+
+function clearShadowChildren(shadow: ShadowRoot): void {
+  const candidate = shadow as ShadowRoot & {
+    replaceChildren?: () => void;
+    firstChild?: ChildNode | null;
+    removeChild?: (child: ChildNode) => ChildNode;
+  };
+  if (typeof candidate.replaceChildren === 'function') {
+    candidate.replaceChildren();
+    return;
+  }
+  while (candidate.firstChild && typeof candidate.removeChild === 'function') {
+    candidate.removeChild(candidate.firstChild);
+  }
+}
+
+/**
+ * Renders an accessible, Shadow-DOM-isolated, dismissible checkout warning banner
+ * built strictly with safe DOM APIs (`createElement` + `textContent`) and a
+ * strict `https://rate.vn` comparison URL guard.
+ */
+function renderShadowCheckoutGuardBanner(
+  warnings: readonly CheckoutPriceTrapWarning[],
+  expectedGeneration: number,
+  expectedSignature: string
+): void {
+  if (!warnings || warnings.length === 0 || !localCheckoutGuardEnabled) {
+    removeCheckoutGuardHost();
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    if (
+      expectedGeneration !== checkoutGeneration ||
+      !localCheckoutGuardEnabled ||
+      dismissedCheckoutSignature === expectedSignature ||
+      !isCheckoutOrCartUrl(window.location.href)
+    ) {
+      return;
+    }
+
+    let host = document.getElementById(CHECKOUT_GUARD_HOST_ID);
+    if (!host) {
+      host = document.createElement('div');
+      host.id = CHECKOUT_GUARD_HOST_ID;
+      document.body.appendChild(host);
+    }
+
+    const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    clearShadowChildren(shadow);
+
+    const styleEl = document.createElement('style');
+    styleEl.textContent = CHECKOUT_GUARD_STYLES;
+    shadow.appendChild(styleEl);
+
+    const uiLocale = t('langCode');
+    const card = document.createElement('div');
+    card.className = 'guard-card';
+    card.setAttribute('role', 'region');
+    card.setAttribute('aria-label', t('checkoutGuardRegionAria'));
+
+    const dismiss = () => {
+      dismissedCheckoutSignature = expectedSignature;
+      removeCheckoutGuardHost();
+    };
+    if (typeof card.addEventListener === 'function') {
+      card.addEventListener('keydown', (ev: KeyboardEvent) => {
+        if (ev.key === 'Escape') {
+          ev.preventDefault();
+          dismiss();
+        }
+      });
+    }
+
+    const header = document.createElement('div');
+    header.className = 'guard-header';
+
+    const brandWrap = document.createElement('div');
+    brandWrap.className = 'guard-brand-wrap';
+
+    const dot = document.createElement('span');
+    dot.className = 'brand-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    brandWrap.appendChild(dot);
+
+    const brand = document.createElement('span');
+    brand.className = 'guard-brand';
+    brand.textContent = 'Rate.vn';
+    brandWrap.appendChild(brand);
+
+    const badge = document.createElement('span');
+    badge.className = 'guard-badge';
+    badge.textContent = t('checkoutGuardTitle');
+    brandWrap.appendChild(badge);
+
+    const dismissBtn = document.createElement('button');
+    dismissBtn.type = 'button';
+    dismissBtn.id = 'rate-checkout-guard-dismiss';
+    dismissBtn.className = 'dismiss-btn';
+    dismissBtn.textContent = t('checkoutGuardDismiss');
+    if (typeof dismissBtn.addEventListener === 'function') {
+      dismissBtn.addEventListener('click', dismiss);
+    }
+
+    header.appendChild(brandWrap);
+    header.appendChild(dismissBtn);
+    card.appendChild(header);
+
+    for (const warning of warnings.slice(0, 3)) {
+      const row = document.createElement('div');
+      row.className = 'guard-item';
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'guard-item-title';
+      const cleanTitle = stripLoneSurrogates(
+        String(warning.itemTitle ?? '')
+      ).trim();
+      titleEl.textContent = cleanTitle;
+      if (isForeignVietnamese(cleanTitle)) {
+        titleEl.setAttribute('lang', 'vi');
+      }
+      row.appendChild(titleEl);
+
+      const bodyEl = document.createElement('div');
+      bodyEl.className = 'guard-item-body';
+      if (warning.reason === 'cheaper_official') {
+        const storeLabel =
+          stripLoneSurrogates(
+            String(
+              warning.cheaperMerchantName ||
+                warning.cheaperPlatform ||
+                'Rate.vn'
+            )
+          ).trim() || 'Rate.vn';
+        bodyEl.textContent = t('checkoutGuardCheaperOfficial', [
+          storeLabel,
+          formatCurrencyVnd(warning.savingsVnd, uiLocale),
+          formatSafeNumber(
+            warning.savingsPct,
+            { min: 1, max: 99, decimals: 1 },
+            uiLocale
+          ),
+        ]);
+      } else {
+        bodyEl.textContent = t('checkoutGuardMarkupTrap', [
+          formatSafeNumber(
+            warning.markupPct,
+            { min: 1, max: 10000, decimals: 1 },
+            uiLocale
+          ),
+          formatCurrencyVnd(warning.referencePriceVnd, uiLocale),
+        ]);
+      }
+      row.appendChild(bodyEl);
+
+      const linkEl = document.createElement('a');
+      linkEl.className = 'guard-cta-link';
+      linkEl.href = sanitizeRateComparisonUrl(warning.comparisonUrl, {
+        strictProdHttpsOnly: true,
+      });
+      linkEl.target = '_blank';
+      linkEl.rel = 'noopener noreferrer';
+      linkEl.textContent = t('checkoutGuardCompareCta');
+      row.appendChild(linkEl);
+
+      card.appendChild(row);
+    }
+
+    shadow.appendChild(card);
+  });
+}
+
+async function inspectCheckoutCartPage(currentUrl: string): Promise<void> {
+  const items = extractCartLineItems(document, currentUrl);
+  if (items.length === 0) {
+    ++checkoutGeneration;
+    lastCheckoutSignature = '';
+    removeCheckoutGuardHost();
+    return;
+  }
+
+  if (
+    typeof chrome !== 'undefined' &&
+    typeof chrome.storage?.local?.get === 'function'
+  ) {
+    try {
+      const stored = await chrome.storage.local.get('checkoutGuardEnabled');
+      localCheckoutGuardEnabled = stored?.checkoutGuardEnabled !== false;
+    } catch {
+      // Fall through to service worker settings check
+    }
+  }
+
+  if (!localCheckoutGuardEnabled) {
+    ++checkoutGeneration;
+    lastCheckoutSignature = '';
+    removeCheckoutGuardHost();
+    return;
+  }
+
+  const signature = buildCartItemsSignature(currentUrl, items);
+  if (
+    signature === dismissedCheckoutSignature ||
+    signature === lastCheckoutSignature
+  ) {
+    return;
+  }
+
+  lastCheckoutSignature = signature;
+  const generation = ++checkoutGeneration;
+
+  try {
+    const response = (await chrome.runtime.sendMessage({
+      type: 'RATE_CHECKOUT_GUARD_LOOKUP',
+      pageUrl: currentUrl,
+      items,
+    })) as {
+      ok?: boolean;
+      enabled?: boolean;
+      stale?: boolean;
+      warnings?: CheckoutPriceTrapWarning[];
+    };
+
+    if (generation !== checkoutGeneration || response?.stale === true) return;
+    if (!isCheckoutOrCartUrl(window.location.href)) {
+      removeCheckoutGuardHost();
+      return;
+    }
+    if (response?.enabled === false) {
+      localCheckoutGuardEnabled = false;
+      lastCheckoutSignature = '';
+      removeCheckoutGuardHost();
+      return;
+    }
+    if (
+      response?.ok &&
+      Array.isArray(response.warnings) &&
+      response.warnings.length > 0
+    ) {
+      renderShadowCheckoutGuardBanner(response.warnings, generation, signature);
+    } else {
+      removeCheckoutGuardHost();
+    }
+  } catch {
+    if (generation === checkoutGeneration) {
+      removeCheckoutGuardHost();
+    }
+  }
+}
 
 function deferWhilePrerendering(): boolean {
   const prerenderingDoc = document as Document & {
@@ -365,7 +735,11 @@ async function inspectCurrentPage(): Promise<void> {
   if (deferWhilePrerendering()) return;
   requestAnimationFrame(async () => {
     if (deferWhilePrerendering()) return;
-    const signal = extractProductSignalFromDom(document, window.location.href);
+    const currentUrl = window.location.href;
+    const isCheckoutRoute = isCheckoutOrCartUrl(currentUrl);
+    const signal = isCheckoutRoute
+      ? null
+      : extractProductSignalFromDom(document, currentUrl);
     if (!signal) {
       ++detectGeneration;
       const shouldNotifyCleared = hasDetectedProduct;
@@ -376,8 +750,19 @@ async function inspectCurrentPage(): Promise<void> {
       if (shouldNotifyCleared) {
         sendRuntimeMessageFireAndForget({ type: 'RATE_PRODUCT_CLEARED' });
       }
+      if (isCheckoutRoute) {
+        await inspectCheckoutCartPage(currentUrl);
+      } else {
+        ++checkoutGeneration;
+        lastCheckoutSignature = '';
+        removeCheckoutGuardHost();
+      }
       return;
     }
+
+    ++checkoutGeneration;
+    lastCheckoutSignature = '';
+    removeCheckoutGuardHost();
 
     const signature = buildProductSignalSignature(signal);
     if (signature === lastProcessedSignature) return;
@@ -471,5 +856,27 @@ if (document.body) {
   observer.observe(document.body, {
     childList: true,
     subtree: true,
+  });
+}
+
+if (typeof chrome !== 'undefined') {
+  chrome.storage?.onChanged?.addListener((changes, areaName) => {
+    if (areaName !== 'local') return;
+    if (
+      !Object.prototype.hasOwnProperty.call(changes, 'checkoutGuardEnabled')
+    ) {
+      return;
+    }
+    const enabled = changes.checkoutGuardEnabled?.newValue !== false;
+    localCheckoutGuardEnabled = enabled;
+    if (!enabled) {
+      ++checkoutGeneration;
+      lastCheckoutSignature = '';
+      removeCheckoutGuardHost();
+    } else if (isCheckoutOrCartUrl(window.location.href)) {
+      lastCheckoutSignature = '';
+      dismissedCheckoutSignature = '';
+      void inspectCurrentPage();
+    }
   });
 }
