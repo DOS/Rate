@@ -1351,23 +1351,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               'string' && String((sender.tab as { url: string }).url).trim()
           ? String((sender.tab as { url: string }).url).trim()
           : '';
-    if (senderUrlCandidate) {
-      const senderCheckoutPlatform = detectCheckoutPlatform(senderUrlCandidate);
-      const pageIdentity = resolveMarketplaceFromHttpsUrl(rawPageUrl);
-      const senderIdentity = resolveMarketplaceFromHttpsUrl(senderUrlCandidate);
-      if (
-        !senderCheckoutPlatform ||
-        senderCheckoutPlatform !== pagePlatform ||
-        !pageIdentity ||
-        !senderIdentity ||
-        pageIdentity.origin !== senderIdentity.origin
-      ) {
-        sendResponse({
-          ok: false,
-          error: 'Sender URL does not match declared checkout page',
-        });
-        return false;
-      }
+    if (!senderUrlCandidate) {
+      sendResponse({
+        ok: false,
+        error: 'Sender URL is required for checkout lookup',
+      });
+      return false;
+    }
+    const senderCheckoutPlatform = detectCheckoutPlatform(senderUrlCandidate);
+    const pageIdentity = resolveMarketplaceFromHttpsUrl(rawPageUrl);
+    const senderIdentity = resolveMarketplaceFromHttpsUrl(senderUrlCandidate);
+    const rawSenderOrigin =
+      typeof (sender as { origin?: unknown }).origin === 'string'
+        ? (sender as { origin: string }).origin.trim()
+        : '';
+    const senderOriginIdentity = rawSenderOrigin
+      ? resolveMarketplaceFromHttpsUrl(rawSenderOrigin)
+      : null;
+    if (
+      !senderCheckoutPlatform ||
+      senderCheckoutPlatform !== pagePlatform ||
+      !pageIdentity ||
+      !senderIdentity ||
+      pageIdentity.origin !== senderIdentity.origin ||
+      (rawSenderOrigin !== '' &&
+        senderOriginIdentity?.origin !== pageIdentity.origin)
+    ) {
+      sendResponse({
+        ok: false,
+        error: 'Sender URL does not match declared checkout page',
+      });
+      return false;
     }
 
     const reqSeq = ++checkoutRequestCounter;
@@ -1383,8 +1397,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ ok: true, enabled: false, warnings: [] });
           return;
         }
-        if ((await lookupCooldown.secondsLeft()) > 0) {
-          sendResponse({ ok: false, status: 429, warnings: [] });
+        const initialWait = await lookupCooldown.secondsLeft();
+        if (initialWait > 0) {
+          sendResponse({
+            ok: false,
+            status: 429,
+            retryAfterSeconds: initialWait,
+            warnings: [],
+          });
           return;
         }
         const items = sanitizeCartLineItems(
@@ -1398,6 +1418,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         // Read-only GET /api/v1/rate/extension/lookup only (TTL-cached, <= 3
         // concurrent requests). Cart items are NEVER sent to M2 observation ingest.
+        let anyLookupFailed = false;
         const evaluated = await Promise.all(
           items.map(async (item) => {
             const cacheKey = buildCartLookupCacheKey(
@@ -1418,7 +1439,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                   : { ok: false, data: null };
               }
             );
-            if (!res.ok || !res.data) return null;
+            if (!res.ok) {
+              anyLookupFailed = true;
+              return null;
+            }
+            if (!res.data) return null;
             return evaluateCheckoutItemTrap(item, res.data, {
               currentPlatform: pagePlatform,
               apiBaseUrl: settings.apiBaseUrl,
@@ -1436,6 +1461,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           .sort(
             (a, b) => b.savingsVnd - a.savingsVnd || b.markupPct - a.markupPct
           );
+
+        if (warnings.length === 0 && anyLookupFailed) {
+          const cooldownWait = await lookupCooldown.secondsLeft();
+          sendResponse({
+            ok: false,
+            status: cooldownWait > 0 ? 429 : 503,
+            ...(cooldownWait > 0 ? { retryAfterSeconds: cooldownWait } : {}),
+            warnings: [],
+          });
+          return;
+        }
 
         sendResponse({
           ok: true,

@@ -661,6 +661,7 @@ async function inspectCheckoutCartPage(currentUrl: string): Promise<void> {
   }
 
   lastCheckoutSignature = signature;
+  rateLimitRetry.track(signature);
   const generation = ++checkoutGeneration;
 
   try {
@@ -672,6 +673,8 @@ async function inspectCheckoutCartPage(currentUrl: string): Promise<void> {
       ok?: boolean;
       enabled?: boolean;
       stale?: boolean;
+      status?: number | null;
+      retryAfterSeconds?: number;
       warnings?: CheckoutPriceTrapWarning[];
     };
 
@@ -686,6 +689,18 @@ async function inspectCheckoutCartPage(currentUrl: string): Promise<void> {
       removeCheckoutGuardHost();
       return;
     }
+    if (response?.ok === false) {
+      if (response.status === 429) {
+        rateLimitRetry.after(signature, response, () => {
+          lastCheckoutSignature = '';
+          void inspectCurrentPage();
+        });
+      } else {
+        lastCheckoutSignature = '';
+      }
+      removeCheckoutGuardHost();
+      return;
+    }
     if (
       response?.ok &&
       Array.isArray(response.warnings) &&
@@ -697,6 +712,7 @@ async function inspectCheckoutCartPage(currentUrl: string): Promise<void> {
     }
   } catch {
     if (generation === checkoutGeneration) {
+      lastCheckoutSignature = '';
       removeCheckoutGuardHost();
     }
   }

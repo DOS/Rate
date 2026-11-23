@@ -12695,6 +12695,7 @@ async function runTests() {
       evaluateCheckoutItemTrap,
       extractCartLineItems,
       isCheckoutOrCartUrl,
+      looksLikePiiText,
       sanitizeCartLineItems,
       sanitizeRateComparisonUrl,
     } = await import('./extractors/checkout-detector.js');
@@ -13416,6 +13417,34 @@ async function runTests() {
         }
       );
       assert.equal(mismatchBlocked.ok, false);
+
+      const missingSenderUrlBlocked = await callSw(
+        {
+          type: 'RATE_CHECKOUT_GUARD_LOOKUP',
+          pageUrl: 'https://shopee.vn/cart',
+          items: extractedItems,
+        },
+        {
+          id: 'rate-ext-1876-sw',
+          tab: { id: 10, active: true },
+        }
+      );
+      assert.equal(missingSenderUrlBlocked.ok, false);
+
+      const mismatchOriginBlocked = await callSw(
+        {
+          type: 'RATE_CHECKOUT_GUARD_LOOKUP',
+          pageUrl: 'https://shopee.vn/cart',
+          items: extractedItems,
+        },
+        {
+          id: 'rate-ext-1876-sw',
+          tab: { id: 10, active: true },
+          url: 'https://shopee.vn/cart',
+          origin: 'https://tiki.vn',
+        }
+      );
+      assert.equal(mismatchOriginBlocked.ok, false);
 
       // 5 distinct cart items -> bounded to <= 3 concurrent lookups, zero M2 ingest calls!
       const fiveItemLookupPromise = callSw(
@@ -14196,6 +14225,258 @@ async function runTests() {
         Object.keys(allCats.cs[key]?.placeholders ?? {}).sort(),
         `placeholder parity vi vs cs on ${key}`
       );
+    }
+
+    // 9. Round-1 Adversarial Security & Race Regression Coverage (P1-1..3, P2-1..2, P3-1..3).
+    // (a) looksLikePiiText catches word-adjacent VN phones, punctuated/2nd-@ emails, and cards while sparing Dell SKUs, EAN-13, and CPU GHz.
+    for (const piiSample of [
+      'Nguyen Van A - 0912 345 678',
+      'Lien he 0912345678',
+      '0912 345 678 Nguyen Van A',
+      '(+84) 912.345.678',
+      '+84 28 3822 1234',
+      'Mua tai @Shopee - (buyer@example.com),',
+      'Email:buyer@example.co.vn.',
+      'Visa 4111 1111 1111 9999',
+      'Amex 3782-822463-10005',
+      '4111222233334444',
+    ]) {
+      assert.equal(
+        looksLikePiiText(piiSample),
+        true,
+        `looksLikePiiText must flag PII sample: ${piiSample}`
+      );
+    }
+    for (const benignProductSample of [
+      'Laptop Dell Inspiron 15 3520 71027003',
+      'Laptop Dell Vostro 15 3530 71043885',
+      'Sony WH-1000XM5 (4548736132610)',
+      'Laptop Intel Core i5-1235U@4.4GHz',
+      'iPhone 16 Pro Max 256GB',
+    ]) {
+      assert.equal(
+        looksLikePiiText(benignProductSample),
+        false,
+        `looksLikePiiText must spare legitimate product title: ${benignProductSample}`
+      );
+    }
+
+    // (b) >256-char Shopee Vietnamese percent-encoded href, >256-char Tailwind line-through class,
+    //     smartPhoneItem camelCase, promo aria-label, Comment node (nodeType 8), and nested .cart-item.recommend.
+    const longPercentSlug = `/Dien-thoai-${'%E1%BB%87'.repeat(35)}-iPhone-16-Pro-Max-i.888999.777666`;
+    assert.ok(longPercentSlug.length > 320);
+    const longTailwindStrikeClass = `${'flex items-center justify-between text-xs font-medium '.repeat(6)}line-through`;
+    assert.ok(longTailwindStrikeClass.length > 300);
+
+    const commentNode = {
+      nodeType: 8,
+      nodeName: '#comment',
+      textContent: ' 9 ',
+    };
+    const activePriceTextNode = {
+      nodeType: 3,
+      nodeValue: '27.990.000₫',
+    };
+    const crossedOutTailwindPrice = {
+      tagName: 'SPAN',
+      className: longTailwindStrikeClass,
+      textContent: '34.990.000₫',
+    };
+    const validPriceWithComment = {
+      tagName: 'SPAN',
+      className: 'item-price',
+      childNodes: [commentNode, activePriceTextNode],
+    };
+    const promoAnchor = {
+      tagName: 'A',
+      className: 'smartPhoneItemTitle',
+      textContent: 'Laptop Dell Inspiron 15 3520 71027003',
+      getAttribute: (n: string) => {
+        if (n === 'href') return longPercentSlug;
+        if (n === 'aria-label') return '[Tra gop 0%] Laptop Dell Inspiron 15';
+        if (n === 'class') return 'smartPhoneItemTitle';
+        return null;
+      },
+    };
+    const outerValidRow: Record<string, unknown> = {
+      tagName: 'DIV',
+      className: 'cart-item smartPhoneItemCard',
+    };
+    const nestedUpsellChild = {
+      tagName: 'DIV',
+      className: 'cart-item recommend',
+      parentElement: outerValidRow,
+      querySelectorAll: () => [],
+    };
+    outerValidRow.querySelectorAll = (sel: string) => {
+      if (sel === 'a[href]') return [promoAnchor];
+      if (sel === '.item-price') {
+        return [crossedOutTailwindPrice, validPriceWithComment];
+      }
+      return [];
+    };
+
+    const longTailwindPiiRow = {
+      tagName: 'DIV',
+      className: `${'px-4 py-2 border rounded-lg bg-white '.repeat(8)}shipping-address`,
+      querySelectorAll: () => [promoAnchor, validPriceWithComment],
+    };
+
+    const edgeCartDoc = {
+      querySelectorAll: (sel: string) =>
+        sel === '.cart-item'
+          ? [longTailwindPiiRow, outerValidRow, nestedUpsellChild]
+          : [],
+    } as unknown as Document;
+
+    const edgeExtracted = extractCartLineItems(
+      edgeCartDoc,
+      'https://shopee.vn/cart'
+    );
+    assert.equal(edgeExtracted.length, 1);
+    assert.equal(
+      edgeExtracted[0]?.title,
+      'Laptop Dell Inspiron 15 3520 71027003'
+    );
+    assert.ok(
+      edgeExtracted[0]?.productUrl?.endsWith('-i.888999.777666'),
+      'Shopee >256-char percent-encoded href must keep trailing -i.<shop>.<item>'
+    );
+    assert.equal(
+      edgeExtracted[0]?.unitPriceVnd,
+      27_990_000,
+      'Tailwind >256-char line-through price and HTML Comment node must be ignored'
+    );
+
+    // (c) Side Panel pre-hydration Pin click preserves existing stored pinnedAlerts (zero data loss).
+    const savedPreHydrateGlobals = ['chrome', 'document', 'fetch'].map(
+      (k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const
+    );
+    try {
+      let preDomReady: (() => void) | undefined;
+      let resolveDelayedLocalGet!: (val: Record<string, unknown>) => void;
+      const delayedLocalGet = new Promise<Record<string, unknown>>((r) => {
+        resolveDelayedLocalGet = r;
+      });
+      const preStoredLocal: Record<string, unknown> = {
+        apiBaseUrl: 'https://rate.vn',
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 0,
+        checkoutGuardEnabled: true,
+        [PINNED_ALERTS_STORAGE_KEY]: [
+          {
+            slug: 'galaxy-s25-ultra',
+            productName: 'Galaxy S25 Ultra',
+            categorySlug: 'smartphones',
+            targetPriceVnd: 27_500_000,
+            bestPriceAtPinVnd: 29_000_000,
+            pinnedAt: '2026-11-23T00:00:00.000Z',
+          },
+        ],
+      };
+      let prePinClickCb: (() => void) | undefined;
+      const prePinBtn = {
+        className: '',
+        innerHTML: '',
+        setAttribute() {},
+        addEventListener(ev: string, cb: () => void) {
+          if (ev === 'click') prePinClickCb = cb;
+        },
+      };
+      const preRoot = {
+        innerHTML: '',
+        querySelector: () => null,
+        querySelectorAll: (sel: string) =>
+          sel === '[data-pin-alert-toggle="true"]' ? [prePinBtn] : [],
+      };
+      const preSlot = { innerHTML: '', querySelectorAll: () => [] };
+
+      g.fetch = async () => ({
+        ok: true,
+        json: async () => ({ ok: true, data: [] }),
+      });
+      g.chrome = {
+        runtime: {
+          sendMessage: async () => ({
+            ok: true,
+            settings: {
+              apiBaseUrl: 'https://rate.vn',
+              crowdContributeOptIn: false,
+              checkoutGuardEnabled: true,
+            },
+            signal: {
+              platform: 'shopee',
+              canonicalUrl: 'https://shopee.vn/iPhone-16-Pro-i.1.2',
+              externalItemId: '2',
+              externalShopId: '1',
+              title: 'iPhone 16 Pro 256GB',
+              selectedVariant: null,
+              price: 25_990_000,
+              originalPrice: null,
+              ratingStar: null,
+              ratingCount: null,
+            },
+            data: baseLookupFixture({
+              masterProduct: {
+                ...baseLookupFixture({}).masterProduct!,
+                slug: 'iphone-16-pro-256gb',
+              },
+            }),
+          }),
+        },
+        storage: {
+          local: {
+            get: () => delayedLocalGet,
+            set: async (obj: Record<string, unknown>) => {
+              Object.assign(preStoredLocal, obj);
+            },
+          },
+          onChanged: { addListener() {} },
+        },
+      };
+      g.document = {
+        documentElement: {},
+        title: '',
+        querySelectorAll: () => [],
+        getElementById: (id: string) => {
+          if (id === 'panel-root') return preRoot;
+          if (id === 'pinned-alerts-slot') return preSlot;
+          return null;
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'DOMContentLoaded') preDomReady = cb;
+        },
+      };
+
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1876prehydrate', import.meta.url)
+          .href
+      );
+      preDomReady!();
+      await new Promise((r) => setTimeout(r, 15));
+      assert.ok(
+        prePinClickCb,
+        'panel rendered before storage.local.get resolved'
+      );
+
+      // User clicks Pin BEFORE storage.local.get resolves!
+      prePinClickCb!();
+      resolveDelayedLocalGet({ ...preStoredLocal });
+      await new Promise((r) => setTimeout(r, 20));
+
+      const mergedPins = preStoredLocal[PINNED_ALERTS_STORAGE_KEY] as Array<{
+        slug: string;
+      }>;
+      assert.deepEqual(
+        mergedPins.map((p) => p.slug),
+        ['iphone-16-pro-256gb', 'galaxy-s25-ultra'],
+        'pre-hydration Pin click must merge onto hydrated pinnedAlerts without wiping stored alerts'
+      );
+    } finally {
+      for (const [key, desc] of savedPreHydrateGlobals) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
     }
 
     console.log(

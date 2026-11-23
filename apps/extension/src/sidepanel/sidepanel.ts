@@ -349,9 +349,11 @@ async function fetchAndRenderMerchantTrustDirectory(
 }
 
 let currentPinnedAlerts: PinnedPriceAlert[] = [];
+let lastConfirmedPinnedAlerts: PinnedPriceAlert[] = [];
 let pinnedAlertsHydrated = false;
 let pinnedAlertsMutationSeq = 0;
 let pinnedAlertsSaveInFlight = 0;
+let pinnedAlertsHydrationPromise: Promise<void> = Promise.resolve();
 let pinnedAlertsSaveChain: Promise<void> = Promise.resolve();
 let currentRenderedSignal: ExtractedPageProductSignal | null = null;
 let currentRenderedLookup: ExtensionLookupData | null = null;
@@ -408,28 +410,40 @@ function refreshActivePinButtonInRoot(): void {
     });
 }
 
-function persistPinnedAlerts(
-  nextAlerts: PinnedPriceAlert[],
-  previousAlerts: PinnedPriceAlert[]
+function mutatePinnedAlerts(
+  applyFn: (base: PinnedPriceAlert[]) => PinnedPriceAlert[]
 ): Promise<void> {
+  pinnedAlertsMutationSeq += 1;
+  pinnedAlertsSaveInFlight += 1;
+  currentPinnedAlerts = applyFn(currentPinnedAlerts);
+  renderPinnedAlertsSlot();
+  refreshActivePinButtonInRoot();
+
   const runWrite = async (): Promise<void> => {
-    if (
-      typeof chrome === 'undefined' ||
-      typeof chrome.storage?.local?.set !== 'function'
-    ) {
-      return;
-    }
-    pinnedAlertsSaveInFlight += 1;
     try {
-      await chrome.storage.local.set({
-        [PINNED_ALERTS_STORAGE_KEY]: nextAlerts,
-      });
+      if (!pinnedAlertsHydrated) {
+        await pinnedAlertsHydrationPromise;
+      }
+      const nextAlerts = applyFn(lastConfirmedPinnedAlerts);
+      if (
+        typeof chrome !== 'undefined' &&
+        typeof chrome.storage?.local?.set === 'function'
+      ) {
+        await chrome.storage.local.set({
+          [PINNED_ALERTS_STORAGE_KEY]: nextAlerts,
+        });
+      }
+      lastConfirmedPinnedAlerts = nextAlerts;
+      currentPinnedAlerts = nextAlerts;
     } catch {
-      currentPinnedAlerts = previousAlerts;
-      renderPinnedAlertsSlot();
-      refreshActivePinButtonInRoot();
+      // Reconciled against lastConfirmedPinnedAlerts in finally once in-flight saves settle.
     } finally {
       pinnedAlertsSaveInFlight = Math.max(0, pinnedAlertsSaveInFlight - 1);
+      if (pinnedAlertsSaveInFlight === 0) {
+        currentPinnedAlerts = lastConfirmedPinnedAlerts;
+        renderPinnedAlertsSlot();
+        refreshActivePinButtonInRoot();
+      }
     }
   };
   pinnedAlertsSaveChain = pinnedAlertsSaveChain.then(runWrite, runWrite);
@@ -470,14 +484,9 @@ function renderPinnedAlertsSlot(): void {
         btn.addEventListener('click', () => {
           const slugToRemove = btn.getAttribute('data-unpin-slug');
           if (!slugToRemove) return;
-          pinnedAlertsMutationSeq += 1;
-          pinnedAlertsHydrated = true;
-          const prev = currentPinnedAlerts;
-          const next = removePinnedAlertBySlug(prev, slugToRemove);
-          currentPinnedAlerts = next;
-          renderPinnedAlertsSlot();
-          refreshActivePinButtonInRoot();
-          void persistPinnedAlerts(next, prev);
+          void mutatePinnedAlerts((base) =>
+            removePinnedAlertBySlug(base, slugToRemove)
+          );
         });
       });
   }
@@ -833,17 +842,19 @@ function renderPanelContent(
       .querySelectorAll<HTMLButtonElement>('[data-pin-alert-toggle="true"]')
       .forEach((btn) => {
         btn.addEventListener('click', () => {
-          pinnedAlertsMutationSeq += 1;
-          pinnedAlertsHydrated = true;
+          const existingNow =
+            currentPinnedAlerts.find(
+              (a) => a.slug.toLowerCase() === pinSlug.toLowerCase()
+            ) ?? null;
           const latestBest =
             resolveLookupBestPriceVnd(lookup, signal) ??
-            existingPin?.bestPriceAtPinVnd ??
+            existingNow?.bestPriceAtPinVnd ??
             defaultTargetVnd ??
             10_000;
           const targetVnd =
             computeDefaultAlertTargetVnd(latestBest) ??
             defaultTargetVnd ??
-            existingPin?.targetPriceVnd ??
+            existingNow?.targetPriceVnd ??
             10_000;
           const candidate: PinnedPriceAlert = {
             slug: pinSlug,
@@ -854,12 +865,10 @@ function renderPanelContent(
             bestPriceAtPinVnd: latestBest,
             pinnedAt: new Date().toISOString(),
           };
-          const prev = currentPinnedAlerts;
-          const { alerts: next } = togglePinnedAlert(prev, candidate);
-          currentPinnedAlerts = next;
+          void mutatePinnedAlerts(
+            (base) => togglePinnedAlert(base, candidate).alerts
+          );
           syncPinToggleButtonElement(btn, pinSlug, targetVnd);
-          renderPinnedAlertsSlot();
-          void persistPinnedAlerts(next, prev);
         });
       });
   }
@@ -1165,9 +1174,11 @@ document.addEventListener('DOMContentLoaded', () => {
     typeof chrome.storage?.local?.get === 'function';
 
   currentPinnedAlerts = [];
+  lastConfirmedPinnedAlerts = [];
   pinnedAlertsHydrated = !hasLocalStorageGet;
   pinnedAlertsMutationSeq = 0;
   pinnedAlertsSaveInFlight = 0;
+  pinnedAlertsHydrationPromise = Promise.resolve();
 
   consentHydrated = !hasLocalStorageGet;
   apiBaseHydrated = !hasLocalStorageGet;
@@ -1220,10 +1231,11 @@ document.addEventListener('DOMContentLoaded', () => {
   ) => {
     if (!pinnedAlertsHydrated) {
       pinnedAlertsHydrated = true;
+      lastConfirmedPinnedAlerts = sanitizePinnedAlerts(
+        stored?.[PINNED_ALERTS_STORAGE_KEY]
+      );
       if (pinnedAlertsMutationSeq === 0 && pinnedAlertsSaveInFlight === 0) {
-        currentPinnedAlerts = sanitizePinnedAlerts(
-          stored?.[PINNED_ALERTS_STORAGE_KEY]
-        );
+        currentPinnedAlerts = lastConfirmedPinnedAlerts;
         renderPinnedAlertsSlot();
         refreshActivePinButtonInRoot();
       }
@@ -1278,7 +1290,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   if (hasLocalStorageGet) {
-    void Promise.resolve(
+    pinnedAlertsHydrationPromise = Promise.resolve(
       chrome.storage.local.get([
         'crowdContributeOptIn',
         'crowdConsentVersion',
@@ -1327,12 +1339,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (
       Object.prototype.hasOwnProperty.call(changes, PINNED_ALERTS_STORAGE_KEY)
     ) {
+      const incomingPins = sanitizePinnedAlerts(
+        changes[PINNED_ALERTS_STORAGE_KEY]?.newValue
+      );
       pinnedAlertsHydrated = true;
       if (pinnedAlertsSaveInFlight === 0) {
         pinnedAlertsMutationSeq += 1;
-        currentPinnedAlerts = sanitizePinnedAlerts(
-          changes[PINNED_ALERTS_STORAGE_KEY]?.newValue
-        );
+        lastConfirmedPinnedAlerts = incomingPins;
+        currentPinnedAlerts = incomingPins;
         renderPinnedAlertsSlot();
         refreshActivePinButtonInRoot();
       }

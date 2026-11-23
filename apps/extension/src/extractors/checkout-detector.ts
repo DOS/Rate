@@ -432,13 +432,29 @@ const PRICE_EXCLUDE_TOKENS = new Set([
   'discount',
   'save',
   'saving',
+  'giacu',
+  'giagoc',
 ]);
+
+const PRICE_EXCLUDE_SUBSTRINGS = [
+  'line-through',
+  'gia-cu',
+  'gia-goc',
+  'gia-niem-yet',
+  'list-price',
+  'compare-price',
+  'was-price',
+] as const;
+
+const PROMO_ARIA_SUBSTRINGS = new Set(['tra-gop', 'mua-kem']);
 
 const FORBIDDEN_DESCENDANT_SELECTOR =
   'input, textarea, select, option, form, button, [contenteditable]:not([contenteditable="false"]), [autocomplete]';
 
 const FORBIDDEN_CLOSEST_SELECTOR =
   'input, textarea, select, option, form, button, [hidden], [aria-hidden="true"], [contenteditable]:not([contenteditable="false"]), [autocomplete], header, footer, nav, aside';
+
+const MAX_SAFE_ATTR_CHARS = 2048;
 
 type DomLikeElement = {
   nodeType?: number;
@@ -463,13 +479,13 @@ type DomLikeElement = {
 function getSafeAttr(el: DomLikeElement, name: string): string {
   if (typeof el.getAttribute === 'function') {
     const val = el.getAttribute(name);
-    if (typeof val === 'string') return val.slice(0, 256);
+    if (typeof val === 'string') return val.slice(0, MAX_SAFE_ATTR_CHARS);
   }
   if (name === 'id' && typeof el.id === 'string') {
-    return el.id.slice(0, 256);
+    return el.id.slice(0, MAX_SAFE_ATTR_CHARS);
   }
   if (name === 'class' && typeof el.className === 'string') {
-    return el.className.slice(0, 256);
+    return el.className.slice(0, MAX_SAFE_ATTR_CHARS);
   }
   return '';
 }
@@ -486,16 +502,26 @@ function hasSafeAttr(el: DomLikeElement, name: string): boolean {
 
 function normalizeAttrForTokenScan(raw: string): string {
   if (!raw) return '';
-  // Split camelCase only when left side has >= 2 lowercase letters so `iPhone`/`iPad` stay intact.
-  const decamelized = raw.slice(0, 256).replace(/([a-z]{2,})([A-Z])/g, '$1-$2');
+  // Preserve device compound words (`smartPhone`, `headPhone`, `cellPhone`, etc.)
+  // before O(N) fixed-window camelCase splitting (`[a-z]{2}[A-Z]` keeps `iPhone`/`iPad` intact).
+  const deviceSafe = raw
+    .slice(0, MAX_SAFE_ATTR_CHARS)
+    .replace(/(?:smart|cell|head|ear|micro|mobile)phones?/gi, 'deviceunit');
+  const decamelized = deviceSafe.replace(/([a-z]{2})([A-Z])/g, '$1-$2');
   return foldCheckoutAscii(decamelized).replace(/[^a-z0-9]+/g, '-');
 }
 
-function hasForbiddenPiiOrPaymentCue(rawAttrValue: string): boolean {
+function hasForbiddenPiiOrPaymentCue(
+  rawAttrValue: string,
+  options?: { allowPromoAriaCues?: boolean }
+): boolean {
   if (!rawAttrValue) return false;
   const normalized = normalizeAttrForTokenScan(rawAttrValue);
   if (!normalized) return false;
   for (const sub of FORBIDDEN_ATTR_SUBSTRINGS) {
+    if (options?.allowPromoAriaCues && PROMO_ARIA_SUBSTRINGS.has(sub)) {
+      continue;
+    }
     if (normalized.includes(sub)) return true;
   }
   const tokens = normalized.split('-').filter(Boolean);
@@ -522,6 +548,14 @@ export function isForbiddenCheckoutNode(
   if (!node || typeof node !== 'object') return true;
   const el = node as DomLikeElement;
   if (el.nodeType === 3) return false;
+  if (typeof el.nodeType === 'number' && el.nodeType !== 1) return true;
+  if (
+    typeof el.nodeName === 'string' &&
+    el.nodeName.startsWith('#') &&
+    el.nodeName !== '#text'
+  ) {
+    return true;
+  }
 
   const tag = resolveUpperTag(el);
   if (tag && FORBIDDEN_CHECKOUT_TAGS.has(tag)) return true;
@@ -562,9 +596,19 @@ export function isForbiddenCheckoutNode(
     'aria-label',
   ]) {
     const val = getSafeAttr(el, attrName);
-    if (hasForbiddenPiiOrPaymentCue(val)) return true;
-    if (options?.skipPriceExcludeTokens && val) {
+    if (!val) continue;
+    if (
+      hasForbiddenPiiOrPaymentCue(val, {
+        allowPromoAriaCues: attrName === 'aria-label',
+      })
+    ) {
+      return true;
+    }
+    if (options?.skipPriceExcludeTokens) {
       const normalized = normalizeAttrForTokenScan(val);
+      if (PRICE_EXCLUDE_SUBSTRINGS.some((sub) => normalized.includes(sub))) {
+        return true;
+      }
       const tokens = normalized.split('-').filter(Boolean);
       if (tokens.some((tok) => PRICE_EXCLUDE_TOKENS.has(tok))) {
         return true;
@@ -588,11 +632,12 @@ function isForbiddenCheckoutSubtree(node: unknown): boolean {
   }
   let ancestor = el.parentElement ?? null;
   let depth = 0;
-  while (ancestor && depth < 24) {
+  while (ancestor && depth < 64) {
     if (isForbiddenCheckoutNode(ancestor)) return true;
     ancestor = ancestor.parentElement ?? null;
     depth += 1;
   }
+  if (ancestor) return true;
   return false;
 }
 
@@ -615,6 +660,21 @@ function readSafeNodeText(
   const walk = (node: DomLikeElement, depth: number): void => {
     if (visited >= maxVisited || depth > 12) return;
     visited += 1;
+
+    if (
+      typeof node.nodeType === 'number' &&
+      node.nodeType !== 1 &&
+      node.nodeType !== 3
+    ) {
+      return;
+    }
+    if (
+      typeof node.nodeName === 'string' &&
+      node.nodeName.startsWith('#') &&
+      node.nodeName !== '#text'
+    ) {
+      return;
+    }
 
     const isTextNode =
       node.nodeType === 3 ||
@@ -664,46 +724,119 @@ function readSafeNodeText(
     .trim();
 }
 
-function hasLongDigitRun(text: string, minDigits = 13): boolean {
-  let run = 0;
+/**
+ * Linear O(N) payment card / bank account detector:
+ * - Flags contiguous digit runs of 14..19 digits (sparing 13-digit EAN-13 barcodes
+ *   and <= 10-digit model/SKU codes), OR
+ * - Flags 3..5 space/hyphen-separated digit groups of 3..6 digits each whose
+ *   combined digit count is 13..19 (catches `4111 1111 1111 9999` and
+ *   `3782-822463-10005` while sparing `Dell Inspiron 15 3520 71027003`).
+ */
+function hasCardLikeDigitSequence(text: string): boolean {
+  let contiguousDigits = 0;
+  const groups: number[] = [];
+  let currentGroup = 0;
+  let sepCount = 0;
+
+  const checkWindow = (grpList: readonly number[]): boolean => {
+    for (let start = 0; start < grpList.length; start += 1) {
+      let sum = 0;
+      for (let end = start; end < grpList.length && end - start < 5; end += 1) {
+        sum += grpList[end]!;
+        const count = end - start + 1;
+        if (count >= 3 && sum >= 13 && sum <= 19) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
   for (let i = 0; i < text.length; i += 1) {
     const code = text.charCodeAt(i);
     if (code >= 48 && code <= 57) {
-      run += 1;
-      if (run >= minDigits) return true;
-    } else if (code !== 32 && code !== 45 && code !== 46) {
-      run = 0;
+      contiguousDigits += 1;
+      if (contiguousDigits >= 14 && contiguousDigits <= 19) {
+        const nextCode = i + 1 < text.length ? text.charCodeAt(i + 1) : 0;
+        if (nextCode < 48 || nextCode > 57) return true;
+      }
+      currentGroup += 1;
+      sepCount = 0;
+    } else if (
+      currentGroup > 0 &&
+      (code === 32 || code === 45) &&
+      sepCount < 2
+    ) {
+      if (currentGroup >= 3 && currentGroup <= 6) {
+        groups.push(currentGroup);
+        if (checkWindow(groups)) return true;
+      } else {
+        groups.length = 0;
+      }
+      currentGroup = 0;
+      contiguousDigits = 0;
+      sepCount += 1;
+    } else if (
+      (code === 32 || code === 45) &&
+      groups.length > 0 &&
+      sepCount < 2
+    ) {
+      sepCount += 1;
+      contiguousDigits = 0;
+    } else {
+      if (currentGroup >= 3 && currentGroup <= 6) {
+        groups.push(currentGroup);
+        if (checkWindow(groups)) return true;
+      }
+      groups.length = 0;
+      currentGroup = 0;
+      contiguousDigits = 0;
+      sepCount = 0;
     }
+  }
+
+  if (currentGroup >= 3 && currentGroup <= 6) {
+    groups.push(currentGroup);
+    if (checkWindow(groups)) return true;
   }
   return false;
 }
 
-function looksLikePiiText(raw: string): boolean {
-  const bounded = raw.slice(0, 500);
-  // Email address check (bounded, linear scan around '@').
-  const atIdx = bounded.indexOf('@');
-  if (atIdx > 0 && atIdx < bounded.length - 3) {
-    const left = bounded.slice(0, atIdx).split(/\s+/).pop() ?? '';
-    const right = bounded.slice(atIdx + 1).split(/\s+/)[0] ?? '';
-    if (
-      left.length >= 1 &&
-      left.length <= 64 &&
-      /^[a-z0-9._+-]+$/i.test(left) &&
-      /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(right)
-    ) {
-      return true;
-    }
-  }
-  // Card/account digit run check (O(N), zero regex backtracking).
-  if (hasLongDigitRun(bounded, 13)) return true;
+const VN_PHONE_IN_TEXT_REGEX =
+  /(?:^|[^\p{L}\p{N}])(?:\(\s*\+84\s*\)[\s.-]{0,2}0?[235789]|\+84[\s.-]{0,2}0?[235789]|0[235789])[\s.-]{0,2}(?:\d[\s.-]{0,2}){7,8}\d(?![\p{L}\p{N}])/u;
 
-  // Vietnamese mobile/landline phone pattern (`09xxxxxxxx`, `+84 9xx xxx xxx`).
-  const compactPhoneScan = bounded.replace(/[\s.-]+/g, '');
-  if (
-    /(?:^|[^\p{L}\p{N}])(?:\+84|0[235789])\d{8,9}(?![\p{L}\p{N}])/u.test(
-      compactPhoneScan
-    )
-  ) {
+export function looksLikePiiText(raw: string): boolean {
+  const bounded = raw.slice(0, 500);
+  // Email address check: scan every '@' occurrence, strip surrounding punctuation,
+  // and require an alphabetic TLD so CPU specs like `i5-1235U@4.4GHz` are spared.
+  let atIdx = bounded.indexOf('@');
+  while (atIdx !== -1) {
+    if (atIdx > 0 && atIdx < bounded.length - 3) {
+      const rawLeft = bounded.slice(0, atIdx).split(/\s+/).pop() ?? '';
+      const left = rawLeft
+        .replace(/^[()<>[\]{}"',;:]+/, '')
+        .replace(/^(?:e-?mail|mail):/i, '');
+      const rawRight = bounded.slice(atIdx + 1).split(/\s+/)[0] ?? '';
+      const right = rawRight.replace(/[()<>[\]{}"',;:.!?]+$/, '');
+      if (
+        left.length >= 1 &&
+        left.length <= 64 &&
+        right.length >= 4 &&
+        right.length <= 253 &&
+        /^[a-z0-9._+-]+$/i.test(left) &&
+        /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,24}$/i.test(right)
+      ) {
+        return true;
+      }
+    }
+    atIdx = bounded.indexOf('@', atIdx + 1);
+  }
+
+  // Card/account digit run check (O(N), zero regex backtracking).
+  if (hasCardLikeDigitSequence(bounded)) return true;
+
+  // Vietnamese mobile/landline phone pattern (`0912 345 678`, `(+84) 912.345.678`).
+  if (VN_PHONE_IN_TEXT_REGEX.test(bounded)) {
     return true;
   }
   return false;
@@ -897,6 +1030,7 @@ export function extractCartLineItems(
     for (const node of matched) {
       if (candidateRows.length >= 40) break;
       if (!node || seenRowRefs.has(node)) continue;
+      if (isForbiddenCheckoutSubtree(node)) continue;
       seenRowRefs.add(node);
       candidateRows.push(node);
     }
