@@ -5,7 +5,10 @@ import {
   type KeySpecs,
   type VariantSource,
 } from '@repo/shared-data';
+import { detectProductOrigin, type ProductOrigin } from '@repo/shared-data/rules';
 import type { ShopeeProduct } from './types.js';
+
+export { detectProductOrigin, type ProductOrigin };
 
 export const MAX_VALID_RAM_GB = 2048;
 export const MAX_VALID_STORAGE_GB = 65536;
@@ -57,7 +60,6 @@ export type CanonicalCategorySlug =
   'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
 
 export type ProductCondition = 'new' | 'like_new_99' | 'used' | 'refurbished';
-export type ProductOrigin = 'official_vna' | 'imported' | 'unknown';
 
 export interface NormalizedProductCandidate {
   category_slug: CanonicalCategorySlug;
@@ -236,30 +238,6 @@ export function detectProductCondition(title: string, description?: string): Pro
   }
 
   return 'new';
-}
-
-/**
- * Detect product distribution origin (official VN/A vs parallel import vs unknown) (Audit C6).
- */
-export function detectProductOrigin(title: string, description?: string): ProductOrigin {
-  const safeTitle = typeof title === 'string' ? title : '';
-  const safeDesc = typeof description === 'string' ? description : '';
-  const combined = `${safeTitle} ${safeDesc}`;
-  if (
-    /(?:xách\s*tay|bản\s*mỹ|\bll\/a\b|\bzp\/a\b|\bza\/a\b|\bch\/a\b|\bkh\/a\b|\bj\/a\b|bản\s*hàn|bản\s*nhật|bản\s*trung|nội\s*địa(?:\s*trung|\s*nhật|\s*hàn)?|quốc\s*tế\s*mỹ)/i.test(
-      combined
-    )
-  ) {
-    return 'imported';
-  }
-  if (
-    /(?:\bvn\/a\b|\bvna\b|chính\s*hãng|phân\s*phối\s*chính\s*hãng|apple\s*việt\s*nam)/i.test(
-      combined
-    )
-  ) {
-    return 'official_vna';
-  }
-  return 'unknown';
 }
 
 /** Apple apps and services a device can support or run. */
