@@ -81,21 +81,32 @@ prices, products or ratings. Corroboration and promotion are M3/M4, in DOS/Rate-
        - So an observation committed during the purge is never cascaded away.
      - It returns the four counts.
 
-Marketplace ids are the platform ids of the extension and the crawl: `shopee`, `lazada`, `tiki`,
-`tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`. The host table:
+Marketplace ids are the 22 platform ids of the extension and the crawl (expanded from the initial 10 in `20261201130000_rate_extension_observations_22_platforms.sql`, `DOS/Rate#1762`, `DOS/Rate#1850`): `shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`, `dienmayxanh`, `topzone`, `gearvn`, `nguyenkim`, `shopdunk`, `hacom`, `clickbuy`, `viettelstore`, `pico`, `mediamart`, `memoryzone`, `anphatpc`. The host table:
 
-| marketplace | hosts                            |
-| ----------- | -------------------------------- |
-| shopee      | shopee.vn                        |
-| lazada      | lazada.vn and subdomains         |
-| tiki        | tiki.vn                          |
-| tiktok      | www.tiktok.com, shop.tiktok.com  |
-| cellphones  | cellphones.com.vn                |
-| tgdd        | thegioididong.com and subdomains |
-| fptshop     | fptshop.com.vn                   |
-| hoangha     | hoanghamobile.com                |
-| didongviet  | didongviet.vn                    |
-| phongvu     | phongvu.vn                       |
+| marketplace  | hosts                            |
+| ------------ | -------------------------------- |
+| shopee       | shopee.vn                        |
+| lazada       | lazada.vn and subdomains         |
+| tiki         | tiki.vn                          |
+| tiktok       | www.tiktok.com, shop.tiktok.com  |
+| cellphones   | cellphones.com.vn                |
+| tgdd         | thegioididong.com and subdomains |
+| fptshop      | fptshop.com.vn                   |
+| hoangha      | hoanghamobile.com                |
+| didongviet   | didongviet.vn                    |
+| phongvu      | phongvu.vn                       |
+| dienmayxanh  | dienmayxanh.com and subdomains   |
+| topzone      | topzone.vn and subdomains        |
+| gearvn       | gearvn.com and subdomains        |
+| nguyenkim    | nguyenkim.com and subdomains     |
+| shopdunk     | shopdunk.com and subdomains      |
+| hacom        | hacom.vn and subdomains          |
+| clickbuy     | clickbuy.com.vn and subdomains   |
+| viettelstore | viettelstore.vn and subdomains   |
+| pico         | pico.vn and subdomains           |
+| mediamart    | mediamart.vn and subdomains      |
+| memoryzone   | memoryzone.com.vn and subdomains |
+| anphatpc     | anphatpc.com.vn and subdomains   |
 
 A listing URL is https, at most 2048 characters. It has no `?`, `#` or `;`, no space and no
 control character. Its host is lowercase, with no user and no port.
@@ -157,7 +168,7 @@ control character. Its host is lowercase, with no user and no port.
    (10 minutes ahead, 24 hours behind), not to `now()`.
 4. **A change to the payload needs a migration.** The SQL repeats the rules of the shared
    validator, which is plain functions. A drift fails closed, and the replay compares both
-   over 167 payloads.
+   over 233 payloads.
    - `observed_at` takes seconds 00 to 59 (no leap second) and an offset up to 15:59, which is
      what Postgres parses.
 5. **Where the RPC and the validator differ on purpose:**
@@ -207,7 +218,7 @@ observation and submitter id is lost, and the key row with them.
   a 31-character key is refused even when its hash is stored; the empty key's hash cannot be
   stored; the right key passes; the table holds one row;
 - a required network hash in register and submit;
-- 39 valid and 128 refused payloads, each with the same verdict and field from the RPC and from
+- valid and refused payloads across all 22 platforms, each with the same verdict and field from the RPC and from
   `parseExtensionObservationV1`, URL and time edges included;
 - an unknown or null submitter (P0002), and nothing written by a refused call;
 - the limits at their exact thresholds: the 120th per submitter, the 600th per network (with

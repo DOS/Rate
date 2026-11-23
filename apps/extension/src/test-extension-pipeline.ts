@@ -893,6 +893,52 @@ async function runTests() {
         `tgdd observation must reject ${disallowedForTgddUrl}`
       );
     }
+    for (const [platform, url] of [
+      ['dienmayxanh', 'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max'],
+      ['topzone', 'https://www.topzone.vn/iphone/iphone-16-pro-max'],
+      ['gearvn', 'https://gearvn.com/products/asus-rog-strix'],
+      ['anphatpc', 'https://www.anphatpc.com.vn/macbook-air-m3_id49201.html'],
+    ] as const) {
+      const waveObs = buildExtensionObservationV1(
+        {
+          platform,
+          canonicalUrl: url,
+          externalItemId: 'item-1',
+          externalShopId: null,
+          title: 'Sample Product',
+          selectedVariant: null,
+          price: 29_990_000,
+          originalPrice: null,
+          ratingStar: null,
+          ratingCount: null,
+        },
+        new Date(),
+        '2.1.0'
+      );
+      assert.ok(waveObs, `${platform} observation must accept ${url}`);
+      assert.equal(waveObs.marketplace, platform);
+      assert.equal(waveObs.listing_url, url);
+    }
+    assert.equal(
+      buildExtensionObservationV1(
+        {
+          platform: 'topzone',
+          canonicalUrl: 'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
+          externalItemId: 'iphone-16-pro-max',
+          externalShopId: null,
+          title: 'iPhone 16 Pro Max',
+          selectedVariant: null,
+          price: 29_990_000,
+          originalPrice: null,
+          ratingStar: null,
+          ratingCount: null,
+        },
+        new Date(),
+        '2.1.0'
+      ),
+      null,
+      'topzone observation must reject thegioididong.com'
+    );
     assert.deepEqual(
       Object.keys(sample).sort(),
       [...Object.keys(OBSERVATION_FIELD_LABELS), 'schema_version'].sort()
@@ -12173,7 +12219,7 @@ async function runTests() {
       }).includes('nk-iphone_5f16')
     );
 
-    // 6. Service-worker sender validation & DOS-Me SQL boundary (crowd observation skipped for Wave 1-3)
+    // 6. Service-worker sender validation & M2 crowd observation across all 12 Wave 1-3 platforms (#1762)
     const g1850 = globalThis as Record<string, unknown>;
     const savedChrome1850 = Object.getOwnPropertyDescriptor(g1850, 'chrome');
     const savedFetch1850 = Object.getOwnPropertyDescriptor(g1850, 'fetch');
@@ -12185,6 +12231,10 @@ async function runTests() {
       ]);
       const session1850 = new Map<string, unknown>();
       const swFetchCalls1850: string[] = [];
+      const swObservationPayloads1850: Array<{
+        submitterId: string;
+        observation: Record<string, unknown>;
+      }> = [];
       let swHandler1850:
         | ((
             msg: Record<string, unknown>,
@@ -12273,7 +12323,7 @@ async function runTests() {
       Object.defineProperty(g1850, 'fetch', {
         configurable: true,
         writable: true,
-        value: async (input: string | URL) => {
+        value: async (input: string | URL, init?: RequestInit) => {
           const href = String(input);
           swFetchCalls1850.push(href);
           if (href.includes('/api/v1/rate/extension/submitter')) {
@@ -12286,6 +12336,14 @@ async function runTests() {
             );
           }
           if (href.includes('/api/v1/rate/extension/observation')) {
+            if (typeof init?.body === 'string') {
+              swObservationPayloads1850.push(
+                JSON.parse(init.body) as {
+                  submitterId: string;
+                  observation: Record<string, unknown>;
+                }
+              );
+            }
             return new Response(JSON.stringify({ ok: true }), {
               status: 200,
               headers: { 'Content-Type': 'application/json' },
@@ -12351,7 +12409,7 @@ async function runTests() {
           }
         });
 
-      for (const [platform, pageUrl, itemId] of [
+      const wave1To3Cases1850 = [
         [
           'dienmayxanh',
           'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
@@ -12408,7 +12466,9 @@ async function runTests() {
           'https://www.anphatpc.com.vn/macbook-air-m3_id49201.html',
           'macbook-air-m3_id49201',
         ],
-      ] as const) {
+      ] as const;
+
+      for (const [platform, pageUrl, itemId] of wave1To3Cases1850) {
         const res = await callSw1850(
           {
             type: 'RATE_PRODUCT_DETECTED',
@@ -12437,16 +12497,42 @@ async function runTests() {
           `Wave 1-3 lookup must succeed for ${platform}`
         );
       }
-      await new Promise((r) => setTimeout(r, 30));
+      const obsDeadline1850 = Date.now() + 2_000;
+      while (
+        swObservationPayloads1850.length < wave1To3Cases1850.length &&
+        Date.now() < obsDeadline1850
+      ) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
       assert.equal(
-        swFetchCalls1850.some(
-          (u) => u.includes('/submitter') || u.includes('/observation')
-        ),
-        false,
-        'Wave 1-3 detections must NOT hit extension observation endpoints before DOS-Me SQL migration'
+        swFetchCalls1850.filter((u) =>
+          u.includes('/api/v1/rate/extension/submitter')
+        ).length,
+        1,
+        'Wave 1-3 opt-in detections must register one submitter id'
       );
+      assert.equal(
+        swObservationPayloads1850.length,
+        wave1To3Cases1850.length,
+        'Wave 1-3 detections must emit M2 observations for all 12 platforms'
+      );
+      for (const [platform, pageUrl, itemId] of wave1To3Cases1850) {
+        const emitted = swObservationPayloads1850.find(
+          (entry) => entry.observation.marketplace === platform
+        );
+        assert.ok(emitted, `M2 observation must be emitted for ${platform}`);
+        assert.equal(
+          emitted.submitterId,
+          '11111111-1111-4111-8111-111111111111'
+        );
+        assert.equal(emitted.observation.schema_version, 1);
+        assert.equal(emitted.observation.listing_url, pageUrl);
+        assert.equal(emitted.observation.external_item_id, itemId);
+        assert.equal(emitted.observation.price_vnd, 28_990_000);
+        assert.equal(emitted.observation.list_price_vnd, 32_990_000);
+      }
 
-      // Cross-store sender spoofing on Wave 1-3 origins must be rejected
+      // Cross-store sender spoofing on Wave 1-3 origins must be rejected without emitting observations
       const spoofRes = await callSw1850(
         {
           type: 'RATE_PRODUCT_DETECTED',
@@ -12470,6 +12556,12 @@ async function runTests() {
         }
       );
       assert.equal(spoofRes.ok, false, 'cross-store sender spoofing must fail');
+      await new Promise((r) => setTimeout(r, 20));
+      assert.equal(
+        swObservationPayloads1850.length,
+        wave1To3Cases1850.length,
+        'rejected spoofed sender must not emit M2 observation'
+      );
     } finally {
       if (savedChrome1850)
         Object.defineProperty(g1850, 'chrome', savedChrome1850);
@@ -12479,7 +12571,7 @@ async function runTests() {
     }
 
     console.log(
-      '  ✅ [Wave 1-3 12 retail platforms across detector, lookup & SQL boundary (#1850)] Verified'
+      '  ✅ [Wave 1-3 12 retail platforms across detector, lookup & M2 observations (#1850, #1762)] Verified'
     );
 
     // Round 1 review hardening (#1850): An Phat multi-segment Apple URLs + SHA-1 truncation,

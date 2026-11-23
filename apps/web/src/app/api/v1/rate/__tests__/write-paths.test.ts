@@ -1530,7 +1530,37 @@ async function testExtensionObservations() {
       'the raw IP is never sent on'
     );
 
-    // Bad input is refused before the database.
+    // Wave 1-3 retail observations pass parseExtensionObservationV1 and reach the RPC (#1762).
+    const waveObservation = {
+      ...observation,
+      marketplace: 'topzone',
+      listing_url: 'https://www.topzone.vn/iphone/iphone-16-pro-max',
+      external_item_id: 'iphone-16-pro-max',
+      external_shop_id: null,
+    };
+    calls = [];
+    res = await observationRoute.POST(
+      withIp(
+        post('/api/v1/rate/extension/observation', {
+          submitterId: SUBMITTER,
+          observation: waveObservation,
+        }),
+        '203.0.113.77'
+      )
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true, status: 'quarantined' });
+    const [waveCall] = rpcCalls('submit_extension_observation');
+    assert.ok(
+      waveCall,
+      'Wave 1-3 observation must call submit_extension_observation'
+    );
+    assert.deepEqual(
+      (waveCall.body as Record<string, unknown>).p_observation,
+      waveObservation
+    );
+
+    // Bad input is refused before the database (including tgdd/topzone host isolation).
     for (const [body, code, field] of [
       [{ submitterId: 'x', observation }, 'INVALID_SUBMITTER', undefined],
       [
@@ -1545,6 +1575,18 @@ async function testExtensionObservations() {
         {
           submitterId: SUBMITTER,
           observation: { ...observation, listing_url: 'https://evil.com/x' },
+        },
+        'INVALID_OBSERVATION',
+        'listing_url',
+      ],
+      [
+        {
+          submitterId: SUBMITTER,
+          observation: {
+            ...observation,
+            marketplace: 'tgdd',
+            listing_url: 'https://www.topzone.vn/iphone/iphone-16-pro-max',
+          },
         },
         'INVALID_OBSERVATION',
         'listing_url',
