@@ -12682,6 +12682,1807 @@ async function runTests() {
       'related-product .pro-price-del must not replace JSON-LD originalPrice'
     );
   }
+
+  // --- DOS/Rate#1876: MV3 22-Store Checkout Price-Trap Guard & 1-Click Side Panel Alert Pin ---
+  {
+    const {
+      CHECKOUT_MIN_MARKUP_PCT,
+      CHECKOUT_MIN_SAVINGS_PCT,
+      CHECKOUT_MIN_SAVINGS_VND,
+      CheckoutLookupCoordinator,
+      MAX_CART_LINE_ITEMS,
+      detectCheckoutPlatform,
+      evaluateCheckoutItemTrap,
+      extractCartLineItems,
+      isCheckoutOrCartUrl,
+      looksLikePiiText,
+      sanitizeCartLineItems,
+      sanitizeRateComparisonUrl,
+    } = await import('./extractors/checkout-detector.js');
+    const {
+      MAX_PINNED_ALERTS,
+      PINNED_ALERTS_STORAGE_KEY,
+      buildWatchlistEmailAlertUrl,
+      computeDefaultAlertTargetVnd,
+      renderPinnedAlertsCardHtml,
+      sanitizePinnedAlerts,
+      togglePinnedAlert,
+    } = await import('./sidepanel/panel-view.js');
+    const { DEFAULT_API_BASE_URL } = await import('./security-guards.js');
+
+    // 1. Zero manifest.json permission expansion & PDP /cart cancellation preserved.
+    const manifestJson = JSON.parse(
+      fs.readFileSync(path.resolve(__dirname, '../manifest.json'), 'utf8')
+    ) as {
+      permissions: string[];
+      content_scripts: Array<{ matches: string[] }>;
+    };
+    assert.deepEqual(
+      manifestJson.permissions,
+      ['storage', 'sidePanel'],
+      'manifest.json permissions must remain strictly storage + sidePanel'
+    );
+    const csMatches = manifestJson.content_scripts[0]?.matches ?? [];
+    assert.equal(
+      csMatches.includes('https://www.tiktok.com/*'),
+      false,
+      'www.tiktok.com wildcard must never be added to content_scripts (#1601)'
+    );
+    assert.equal(csMatches.includes('https://shop.tiktok.com/*'), true);
+
+    for (const cartPdpCheckUrl of [
+      'https://shopee.vn/cart',
+      'https://cellphones.com.vn/cart',
+      'https://www.thegioididong.com/cart',
+      'https://fptshop.com.vn/gio-hang',
+      'https://gearvn.com/cart',
+      'https://hacom.vn/gio-hang',
+      'https://www.anphatpc.com.vn/send-order',
+    ]) {
+      const emptyCartDoc = {
+        title: 'iPhone 16 Pro 256GB',
+        querySelectorAll: () => [],
+        querySelector: () => ({ textContent: '28.990.000₫' }),
+      } as unknown as Document;
+      assert.equal(
+        extractProductSignalFromDom(emptyCartDoc, cartPdpCheckUrl),
+        null,
+        `PDP extractor must keep returning null on cart/checkout route: ${cartPdpCheckUrl}`
+      );
+    }
+
+    // 2. 22-platform cart/checkout URL detection + www.tiktok.com exclusion (#1601).
+    const positiveCheckoutCases: ReadonlyArray<
+      readonly [SupportedEcommercePlatform, string]
+    > = [
+      ['shopee', 'https://shopee.vn/cart'],
+      ['shopee', 'https://shopee.vn/checkout'],
+      ['lazada', 'https://cart.lazada.vn/cart'],
+      ['lazada', 'https://checkout.lazada.vn/shipping'],
+      ['lazada', 'https://www.lazada.vn/checkout'],
+      ['tiki', 'https://tiki.vn/checkout/cart'],
+      ['tiki', 'https://tiki.vn/checkout/payment'],
+      ['tiktok', 'https://shop.tiktok.com/view/cart'],
+      ['tiktok', 'https://shop.tiktok.com/checkout'],
+      ['cellphones', 'https://cellphones.com.vn/cart'],
+      ['cellphones', 'https://cellphones.com.vn/checkout'],
+      ['tgdd', 'https://www.thegioididong.com/cart'],
+      ['dienmayxanh', 'https://www.dienmayxanh.com/gio-hang'],
+      ['topzone', 'https://www.topzone.vn/cart'],
+      ['fptshop', 'https://fptshop.com.vn/gio-hang'],
+      ['hoangha', 'https://hoanghamobile.com/gio-hang'],
+      ['didongviet', 'https://didongviet.vn/checkout'],
+      ['phongvu', 'https://phongvu.vn/cart'],
+      ['gearvn', 'https://gearvn.com/cart'],
+      ['nguyenkim', 'https://www.nguyenkim.com/gio-hang.html'],
+      ['shopdunk', 'https://shopdunk.com/onepagecheckout'],
+      ['hacom', 'https://hacom.vn/gio-hang'],
+      ['clickbuy', 'https://clickbuy.com.vn/thanh-toan'],
+      ['viettelstore', 'https://viettelstore.vn/gio-hang'],
+      ['pico', 'https://pico.vn/cart'],
+      ['mediamart', 'https://mediamart.vn/gio-hang'],
+      ['memoryzone', 'https://memoryzone.com.vn/cart'],
+      ['anphatpc', 'https://www.anphatpc.com.vn/send-order'],
+    ];
+    const coveredPlatforms = new Set<SupportedEcommercePlatform>();
+    for (const [expectedPlatform, url] of positiveCheckoutCases) {
+      assert.equal(
+        detectCheckoutPlatform(url),
+        expectedPlatform,
+        `expected ${expectedPlatform} on ${url}`
+      );
+      assert.equal(isCheckoutOrCartUrl(url), true, url);
+      coveredPlatforms.add(expectedPlatform);
+    }
+    assert.equal(
+      coveredPlatforms.size,
+      22,
+      'all 22 supported platforms must be covered by cart/checkout URL detection'
+    );
+
+    for (const negativeUrl of [
+      // #1601: www.tiktok.com only matches PDP paths and must NEVER trigger cart/checkout guard
+      'https://www.tiktok.com/cart',
+      'https://www.tiktok.com/checkout',
+      'https://www.tiktok.com/view/cart',
+      'https://www.tiktok.com/view/product/1729384950',
+      // Valid PDPs across platforms
+      'https://shopee.vn/iPhone-16-Pro-i.101.202',
+      'https://cellphones.com.vn/iphone-16-pro.html',
+      'https://hacom.vn/laptop-asus-vivobook-x1407ca-ly008w-ltau1066',
+      // Order history, tracking, confirmation, login, non-HTTPS, lookalike origins, static assets
+      'https://shopee.vn/user/account/profile',
+      'https://tiki.vn/order/history',
+      'https://cellphones.com.vn/checkout/success',
+      'https://fptshop.com.vn/kiem-tra-don-hang',
+      'http://shopee.vn/cart',
+      'https://shopee.vn:8443/cart',
+      'https://user:pass@shopee.vn/cart',
+      'https://evilshopee.vn/cart',
+      'https://shopee.vn/cart/bundle.js',
+    ]) {
+      assert.equal(
+        isCheckoutOrCartUrl(negativeUrl),
+        false,
+        `must reject non-checkout or excluded URL: ${negativeUrl}`
+      );
+    }
+
+    // 3. Privacy-first cart extraction: zero .value reads, zero PII/form/payment leaks, <= 5 items cap.
+    assert.equal(MAX_CART_LINE_ITEMS, 5);
+    let piiValueAccessed = false;
+    const makePoisonedInput = (tagName: string) => {
+      const node: Record<string, unknown> = {
+        tagName,
+        textContent: 'Nguyen Van A 0912345678 secret@example.com 29.990.000₫',
+      };
+      Object.defineProperty(node, 'value', {
+        get() {
+          piiValueAccessed = true;
+          throw new Error('PII input.value must NEVER be accessed');
+        },
+      });
+      return node;
+    };
+
+    const poisonedCouponForm = {
+      tagName: 'FORM',
+      className: 'cart-item coupon-form',
+      querySelectorAll: () => [makePoisonedInput('INPUT')],
+    };
+    const poisonedAddressRow = {
+      tagName: 'DIV',
+      className: 'cart-item shipping-address',
+      querySelectorAll: (sel: string) =>
+        sel.includes('item-name')
+          ? [{ tagName: 'DIV', textContent: '123 Le Loi, Quan 1, TP HCM' }]
+          : sel.includes('item-price')
+            ? [{ tagName: 'SPAN', textContent: '25.000.000₫' }]
+            : [],
+    };
+    const poisonedPaymentRow = {
+      tagName: 'DIV',
+      className: 'cart-item payment-method',
+      querySelectorAll: (sel: string) =>
+        sel.includes('item-name')
+          ? [{ tagName: 'DIV', textContent: 'Visa 4111 1111 1111 9999' }]
+          : sel.includes('item-price')
+            ? [{ tagName: 'SPAN', textContent: '25.000.000₫' }]
+            : [],
+    };
+    const poisonedPiiTextRow = {
+      tagName: 'DIV',
+      className: 'cart-item',
+      querySelectorAll: (sel: string) =>
+        sel.includes('item-name')
+          ? [
+              {
+                tagName: 'DIV',
+                textContent: 'Lien he buyer@example.com 0912345678',
+              },
+            ]
+          : sel.includes('item-price')
+            ? [{ tagName: 'SPAN', textContent: '25.000.000₫' }]
+            : [],
+    };
+
+    const makeValidCartRow = (
+      idx: number,
+      title: string,
+      url: string,
+      unitPriceText: string
+    ) => {
+      const anchor = {
+        tagName: 'A',
+        textContent: title,
+        getAttribute: (n: string) => (n === 'href' ? url : null),
+      };
+      const qtyInput = makePoisonedInput('INPUT');
+      const strikeOldPrice = {
+        tagName: 'DEL',
+        className: 'old-price',
+        textContent: '39.990.000₫',
+      };
+      const unitPriceSpan = {
+        tagName: 'SPAN',
+        className: 'unit-price',
+        textContent: unitPriceText,
+      };
+      const priceWrap = {
+        tagName: 'DIV',
+        className: 'cart-item-price',
+        childNodes: [strikeOldPrice, unitPriceSpan, qtyInput],
+      };
+      return {
+        tagName: 'DIV',
+        className: 'cart-item',
+        id: `row-${idx}`,
+        querySelectorAll: (sel: string) => {
+          if (sel === 'a[href]') return [anchor];
+          if (sel === '.cart-item-price') return [priceWrap];
+          return [];
+        },
+      };
+    };
+
+    const cartRows = [
+      poisonedCouponForm,
+      poisonedAddressRow,
+      poisonedPaymentRow,
+      poisonedPiiTextRow,
+      makeValidCartRow(
+        1,
+        'iPhone 16 Pro 256GB',
+        '/iPhone-16-Pro-256GB-i.100.201',
+        '28.990.000₫'
+      ),
+      // Duplicate product URL must be deduplicated
+      makeValidCartRow(
+        2,
+        'iPhone 16 Pro 256GB',
+        'https://shopee.vn/iPhone-16-Pro-256GB-i.100.201?sp_atk=xyz',
+        '28.990.000₫'
+      ),
+      makeValidCartRow(
+        3,
+        'Samsung Galaxy S25 Ultra 256GB',
+        '/Samsung-Galaxy-S25-Ultra-i.100.202',
+        '29.490.000₫'
+      ),
+      makeValidCartRow(
+        4,
+        'Xiaomi 15 Ultra 512GB',
+        '/Xiaomi-15-Ultra-i.100.203',
+        '26.990.000₫'
+      ),
+      makeValidCartRow(
+        5,
+        'MacBook Air M3 13 inch 16GB 256GB',
+        '/MacBook-Air-M3-i.100.204',
+        '25.490.000₫'
+      ),
+      makeValidCartRow(
+        6,
+        'iPad Air M2 11 inch WiFi 128GB',
+        '/iPad-Air-M2-i.100.205',
+        '15.990.000₫'
+      ),
+      makeValidCartRow(
+        7,
+        'Sony WH-1000XM5 Wireless',
+        '/Sony-WH-1000XM5-i.100.206',
+        '6.990.000₫'
+      ),
+    ];
+    const mockCartDoc = {
+      querySelectorAll: (sel: string) => (sel === '.cart-item' ? cartRows : []),
+    } as unknown as Document;
+
+    const extractedItems = extractCartLineItems(
+      mockCartDoc,
+      'https://shopee.vn/cart'
+    );
+    assert.equal(piiValueAccessed, false, 'input.value must never be touched');
+    assert.equal(
+      extractedItems.length,
+      5,
+      'cart extraction must deduplicate and cap at <= 5 distinct items'
+    );
+    assert.equal(extractedItems[0]?.title, 'iPhone 16 Pro 256GB');
+    assert.equal(
+      extractedItems[0]?.productUrl,
+      'https://shopee.vn/iPhone-16-Pro-256GB-i.100.201'
+    );
+    assert.equal(
+      extractedItems[0]?.unitPriceVnd,
+      28_990_000,
+      'strikethrough <del> price and input subtree must be ignored in favor of active unit price'
+    );
+    assert.equal(
+      extractCartLineItems(mockCartDoc, 'https://www.tiktok.com/cart').length,
+      0,
+      'www.tiktok.com must never extract cart items'
+    );
+    assert.equal(
+      sanitizeCartLineItems(extractedItems, 'https://shopee.vn/cart').length,
+      5
+    );
+
+    // 4. Savings (>= 5% AND >= 200k VND official in_stock) & markup (>= 15% vs median) thresholds + URL guard.
+    assert.equal(CHECKOUT_MIN_SAVINGS_PCT, 5);
+    assert.equal(CHECKOUT_MIN_SAVINGS_VND, 200_000);
+    assert.equal(CHECKOUT_MIN_MARKUP_PCT, 15);
+
+    assert.equal(
+      sanitizeRateComparisonUrl('/smartphones/iphone-16-pro', {
+        strictProdHttpsOnly: true,
+      }),
+      'https://rate.vn/smartphones/iphone-16-pro'
+    );
+    assert.equal(
+      sanitizeRateComparisonUrl('https://www.rate.vn/laptops/macbook-air-m3', {
+        strictProdHttpsOnly: true,
+      }),
+      'https://www.rate.vn/laptops/macbook-air-m3'
+    );
+    for (const unsafeUrl of [
+      'https://evil.example/smartphones/iphone-16-pro',
+      'http://rate.vn/smartphones/iphone-16-pro',
+      'javascript:alert(1)',
+      '//evil.example/phish',
+      '/\\evil.example',
+      'https://user:pw@rate.vn/smartphones/iphone-16-pro',
+    ]) {
+      assert.equal(
+        sanitizeRateComparisonUrl(unsafeUrl, { strictProdHttpsOnly: true }),
+        'https://rate.vn',
+        `URL guard must neutralize ${unsafeUrl}`
+      );
+    }
+
+    const baseLookupFixture = (
+      overrides: Partial<ExtensionLookupData>
+    ): ExtensionLookupData => ({
+      matchStatus: 'exact_listing',
+      platform: 'shopee',
+      canonicalUrl: null,
+      detectedStorageGb: 256,
+      isAccessoryOrPart: false,
+      accessoryReason: null,
+      variantCandidates: [],
+      masterProduct: {
+        id: 'mp-1876',
+        slug: 'iphone-16-pro-256gb\uD800',
+        name: 'iPhone 16 Pro 256GB',
+        brand: 'Apple',
+        model: 'iPhone 16 Pro',
+        storage_gb: 256,
+        ram_gb: 8,
+        min_price: 25_000_000,
+        max_price: 29_000_000,
+        merchant_count: 3,
+        average_rating: 4.9,
+        user_rating_weighted: 4.9,
+        expert_rating: null,
+        authentic_review_count: 10,
+        total_reviews: 12,
+      },
+      matchedOffer: null,
+      topCheaperOffers: [],
+      allOffers: [],
+      merchantProfile: null,
+      reviewSummary: null,
+      priceHistory: null,
+      categorySlug: 'smartphones',
+      compareUrl: '/compare?category=smartphones',
+      productDetailUrl: '',
+      priceAssessment: {
+        verdict: 'fair_market',
+        badgeLabel: 'Fair',
+        explanation: 'Fair',
+        observedPrice: 20_000_000,
+        observedOriginalPrice: null,
+        claimedDiscountPct: null,
+        vsMarketMedianPct: 0,
+        marketMinPrice: 19_000_000,
+        marketMedianPrice: 20_000_000,
+        marketMaxPrice: 21_000_000,
+        historicalMinPrice: 19_000_000,
+        historicalMaxPrice: 21_000_000,
+        cheaperOfferCount: 1,
+        maxSavingsAmount: 1_000_000,
+      },
+      ...overrides,
+    });
+
+    const makeOffer = (
+      overrides: Partial<ExtensionLookupData['allOffers'][number]>
+    ): ExtensionLookupData['allOffers'][number] => ({
+      id: 'off-1',
+      platform: 'cellphones',
+      url: 'https://cellphones.com.vn/iphone-16-pro.html',
+      affiliate_url: null,
+      price_current: 19_000_000,
+      price_original: 20_990_000,
+      discount_percent: 9,
+      availability: 'in_stock',
+      merchant: {
+        id: 'm-cps',
+        name: 'CellphoneS Official',
+        platform: 'cellphones',
+        is_official: true,
+        trust_score: 95,
+        risk_score: 4,
+        dosafe_risk_score: 3,
+        review_risk_score: 5,
+      },
+      ...overrides,
+    });
+
+    // Exact boundary hit: 20,000,000 vs 19,000,000 -> 1,000,000 VND (5.0%) official in_stock
+    const cheaperHit = evaluateCheckoutItemTrap(
+      {
+        title: 'iPhone 16 Pro 256GB',
+        productUrl: 'https://shopee.vn/iPhone-16-Pro-i.1.2',
+        unitPriceVnd: 20_000_000,
+      },
+      baseLookupFixture({ allOffers: [makeOffer({})] }),
+      { currentPlatform: 'shopee' }
+    );
+    assert.ok(cheaperHit);
+    assert.equal(cheaperHit.reason, 'cheaper_official');
+    assert.equal(cheaperHit.savingsVnd, 1_000_000);
+    assert.equal(cheaperHit.savingsPct, 5);
+    assert.equal(
+      cheaperHit.comparisonUrl,
+      'https://rate.vn/smartphones/iphone-16-pro-256gb',
+      'lone surrogate in fallback slug must be stripped without throwing URIError'
+    );
+
+    // Below 200,000 VND threshold (6% on 3,000,000 = 180,000 VND) -> null
+    assert.equal(
+      evaluateCheckoutItemTrap(
+        { title: 'Earbuds Pro', productUrl: null, unitPriceVnd: 3_000_000 },
+        baseLookupFixture({
+          allOffers: [makeOffer({ price_current: 2_820_000 })],
+          priceAssessment: {
+            ...baseLookupFixture({}).priceAssessment,
+            marketMedianPrice: 3_000_000,
+          },
+        }),
+        { currentPlatform: 'shopee' }
+      ),
+      null,
+      'savings < 200,000 VND must not warn even when >= 5%'
+    );
+
+    // Below 5% threshold (900,000 VND on 20,000,000 = 4.5%) -> null
+    assert.equal(
+      evaluateCheckoutItemTrap(
+        {
+          title: 'iPhone 16 Pro 256GB',
+          productUrl: null,
+          unitPriceVnd: 20_000_000,
+        },
+        baseLookupFixture({
+          allOffers: [makeOffer({ price_current: 19_100_000 })],
+        }),
+        { currentPlatform: 'shopee' }
+      ),
+      null,
+      'savings < 5% must not warn even when >= 200,000 VND'
+    );
+
+    // Non-official, out_of_stock, or implausiblyLow offers must never trigger cheaper_official
+    for (const disqualifiedOffer of [
+      makeOffer({
+        merchant: { ...makeOffer({}).merchant!, is_official: false },
+      }),
+      makeOffer({ availability: 'out_of_stock' }),
+      makeOffer({ implausiblyLow: true }),
+    ]) {
+      assert.equal(
+        evaluateCheckoutItemTrap(
+          {
+            title: 'iPhone 16 Pro 256GB',
+            productUrl: null,
+            unitPriceVnd: 20_000_000,
+          },
+          baseLookupFixture({ allOffers: [disqualifiedOffer] }),
+          { currentPlatform: 'shopee' }
+        ),
+        null
+      );
+    }
+
+    // Markup trap: exact +15.0% over verified median triggers markup_trap; +14.9% stays silent
+    const markupHit = evaluateCheckoutItemTrap(
+      {
+        title: 'iPhone 16 Pro 256GB',
+        productUrl: null,
+        unitPriceVnd: 23_000_000,
+      },
+      baseLookupFixture({ allOffers: [] }),
+      { currentPlatform: 'shopee' }
+    );
+    assert.ok(markupHit);
+    assert.equal(markupHit.reason, 'markup_trap');
+    assert.equal(markupHit.markupPct, 15);
+    assert.equal(markupHit.referencePriceVnd, 20_000_000);
+
+    assert.equal(
+      evaluateCheckoutItemTrap(
+        {
+          title: 'iPhone 16 Pro 256GB',
+          productUrl: null,
+          unitPriceVnd: 22_980_000,
+        },
+        baseLookupFixture({ allOffers: [] }),
+        { currentPlatform: 'shopee' }
+      ),
+      null,
+      '14.9% above median must not trigger markup_trap'
+    );
+
+    // Coordinator unit check: TTL expiration & maxConcurrency <= 3
+    let fakeClock = 1_000;
+    const coord = new CheckoutLookupCoordinator({
+      ttlMs: 10_000,
+      maxConcurrency: 3,
+      now: () => fakeClock,
+    });
+    let coordCalls = 0;
+    const firstCoord = await coord.lookupItem('k1', async () => {
+      coordCalls += 1;
+      return { ok: true, data: baseLookupFixture({}) };
+    });
+    assert.equal(firstCoord.cached, false);
+    const secondCoord = await coord.lookupItem('k1', async () => {
+      coordCalls += 1;
+      return { ok: true, data: baseLookupFixture({}) };
+    });
+    assert.equal(secondCoord.cached, true);
+    assert.equal(coordCalls, 1);
+    fakeClock += 11_000;
+    const expiredCoord = await coord.lookupItem('k1', async () => {
+      coordCalls += 1;
+      return { ok: true, data: baseLookupFixture({}) };
+    });
+    assert.equal(expiredCoord.cached, false);
+    assert.equal(coordCalls, 2);
+
+    // 5. Service worker RATE_CHECKOUT_GUARD_LOOKUP: <= 3 concurrency, TTL cache, opt-out, zero M2 ingest.
+    const g = globalThis as Record<string, unknown>;
+    const savedSwGlobals = ['chrome', 'fetch'].map(
+      (k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const
+    );
+    try {
+      let swHandler:
+        | ((
+            m: Record<string, unknown>,
+            s: Record<string, unknown>,
+            cb: (r: unknown) => void
+          ) => boolean | void)
+        | undefined;
+      const swLocalMap = new Map<string, unknown>([
+        ['apiBaseUrl', DEFAULT_API_BASE_URL],
+        ['crowdContributeOptIn', true],
+        ['crowdConsentVersion', 2],
+        ['checkoutGuardEnabled', true],
+      ]);
+      const swSessionMap = new Map<string, unknown>();
+      let inFlightFetches = 0;
+      let peakConcurrentFetches = 0;
+      let lookupFetchCount = 0;
+      const allFetchedUrls: string[] = [];
+      let releaseBarrier!: () => void;
+      const barrier = new Promise<void>((r) => {
+        releaseBarrier = r;
+      });
+      let notifyThreeInFlight: (() => void) | null = null;
+      const threeInFlightReady = new Promise<void>((r) => {
+        notifyThreeInFlight = r;
+      });
+
+      g.chrome = {
+        runtime: {
+          id: 'rate-ext-1876-sw',
+          getManifest: () => ({ version: '2.0.0' }),
+          getURL: (p: string) => `chrome-extension://rate-ext-1876-sw/${p}`,
+          onInstalled: { addListener() {} },
+          onMessage: {
+            addListener(fn: NonNullable<typeof swHandler>) {
+              swHandler = fn;
+            },
+          },
+        },
+        storage: {
+          local: {
+            get: async (keys?: string | string[]) => {
+              const ks = Array.isArray(keys)
+                ? keys
+                : typeof keys === 'string'
+                  ? [keys]
+                  : [...swLocalMap.keys()];
+              return Object.fromEntries(ks.map((k) => [k, swLocalMap.get(k)]));
+            },
+            set: async (obj: Record<string, unknown>) => {
+              for (const [k, v] of Object.entries(obj)) swLocalMap.set(k, v);
+            },
+            remove: async (keys: string | string[]) => {
+              for (const k of Array.isArray(keys) ? keys : [keys]) {
+                swLocalMap.delete(k);
+              }
+            },
+          },
+          session: {
+            get: async (keys?: string | string[]) => {
+              const ks = Array.isArray(keys)
+                ? keys
+                : typeof keys === 'string'
+                  ? [keys]
+                  : [...swSessionMap.keys()];
+              return Object.fromEntries(
+                ks.map((k) => [k, swSessionMap.get(k)])
+              );
+            },
+            set: async (obj: Record<string, unknown>) => {
+              for (const [k, v] of Object.entries(obj)) swSessionMap.set(k, v);
+            },
+            remove: async (keys: string | string[]) => {
+              for (const k of Array.isArray(keys) ? keys : [keys]) {
+                swSessionMap.delete(k);
+              }
+            },
+          },
+        },
+        sidePanel: { setPanelBehavior: async () => {}, open: async () => {} },
+        action: {
+          setBadgeText: async () => {},
+          setBadgeBackgroundColor: async () => {},
+          setTitle: async () => {},
+          onClicked: { addListener() {} },
+        },
+        tabs: {
+          query: async () => [{ id: 10, active: true }],
+          create: async () => ({ id: 11 }),
+        },
+      };
+
+      g.fetch = async (input: unknown) => {
+        const urlStr = String(input);
+        allFetchedUrls.push(urlStr);
+        if (urlStr.includes('/api/v1/rate/extension/lookup')) {
+          lookupFetchCount += 1;
+          inFlightFetches += 1;
+          if (inFlightFetches > peakConcurrentFetches) {
+            peakConcurrentFetches = inFlightFetches;
+          }
+          if (inFlightFetches === 3 && notifyThreeInFlight) {
+            const fn = notifyThreeInFlight;
+            notifyThreeInFlight = null;
+            fn();
+          }
+          await barrier;
+          inFlightFetches -= 1;
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: baseLookupFixture({ allOffers: [makeOffer({})] }),
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response(JSON.stringify({ ok: false }), { status: 404 });
+      };
+
+      await import(
+        new URL('./background/service-worker.js?case=1876sw', import.meta.url)
+          .href
+      );
+
+      const callSw = (
+        msg: Record<string, unknown>,
+        sender: Record<string, unknown>
+      ) =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          swHandler!(msg, sender, (r) => resolve(r as Record<string, unknown>));
+        });
+
+      // Spoofed www.tiktok.com/cart or mismatched sender.url must be rejected immediately.
+      const tiktokBlocked = await callSw(
+        {
+          type: 'RATE_CHECKOUT_GUARD_LOOKUP',
+          pageUrl: 'https://www.tiktok.com/cart',
+          items: extractedItems,
+        },
+        {
+          id: 'rate-ext-1876-sw',
+          tab: { id: 10, active: true },
+          url: 'https://www.tiktok.com/cart',
+        }
+      );
+      assert.equal(tiktokBlocked.ok, false);
+
+      const mismatchBlocked = await callSw(
+        {
+          type: 'RATE_CHECKOUT_GUARD_LOOKUP',
+          pageUrl: 'https://shopee.vn/cart',
+          items: extractedItems,
+        },
+        {
+          id: 'rate-ext-1876-sw',
+          tab: { id: 10, active: true },
+          url: 'https://shopee.vn/iPhone-16-Pro-i.100.201',
+        }
+      );
+      assert.equal(mismatchBlocked.ok, false);
+
+      const missingSenderUrlBlocked = await callSw(
+        {
+          type: 'RATE_CHECKOUT_GUARD_LOOKUP',
+          pageUrl: 'https://shopee.vn/cart',
+          items: extractedItems,
+        },
+        {
+          id: 'rate-ext-1876-sw',
+          tab: { id: 10, active: true },
+        }
+      );
+      assert.equal(missingSenderUrlBlocked.ok, false);
+
+      const mismatchOriginBlocked = await callSw(
+        {
+          type: 'RATE_CHECKOUT_GUARD_LOOKUP',
+          pageUrl: 'https://shopee.vn/cart',
+          items: extractedItems,
+        },
+        {
+          id: 'rate-ext-1876-sw',
+          tab: { id: 10, active: true },
+          url: 'https://shopee.vn/cart',
+          origin: 'https://tiki.vn',
+        }
+      );
+      assert.equal(mismatchOriginBlocked.ok, false);
+
+      // 5 distinct cart items -> bounded to <= 3 concurrent lookups, zero M2 ingest calls!
+      const fiveItemLookupPromise = callSw(
+        {
+          type: 'RATE_CHECKOUT_GUARD_LOOKUP',
+          pageUrl: 'https://shopee.vn/cart',
+          items: extractedItems,
+        },
+        {
+          id: 'rate-ext-1876-sw',
+          tab: { id: 10, active: true },
+          url: 'https://shopee.vn/cart',
+        }
+      );
+      await threeInFlightReady;
+      await new Promise((r) => setTimeout(r, 15));
+      assert.equal(
+        inFlightFetches,
+        3,
+        'at most 3 cart lookups may run concurrently while 2 wait in queue'
+      );
+      releaseBarrier();
+      const fiveItemRes = await fiveItemLookupPromise;
+      assert.equal(fiveItemRes.ok, true);
+      assert.equal(peakConcurrentFetches, 3);
+      assert.equal(lookupFetchCount, 5);
+      assert.equal(
+        (fiveItemRes.warnings as unknown[]).length,
+        4,
+        '4 overpriced items warn while the 15.99M bargain item (< 19M official offer) stays silent'
+      );
+      assert.equal(
+        allFetchedUrls.some(
+          (u) => u.includes('/submitter') || u.includes('/observation')
+        ),
+        false,
+        'cart lookups must NEVER touch M2 submitter or observation ingest endpoints'
+      );
+
+      // Repeat identical cart lookup -> 100% served from in-memory TTL cache (0 new fetches).
+      const cachedRes = await callSw(
+        {
+          type: 'RATE_CHECKOUT_GUARD_LOOKUP',
+          pageUrl: 'https://shopee.vn/cart',
+          items: extractedItems,
+        },
+        {
+          id: 'rate-ext-1876-sw',
+          tab: { id: 10, active: true },
+          url: 'https://shopee.vn/cart',
+        }
+      );
+      assert.equal(cachedRes.ok, true);
+      assert.equal(
+        lookupFetchCount,
+        5,
+        'TTL cache must prevent duplicate network lookups for identical cart items'
+      );
+
+      // Opting out via RATE_UPDATE_SETTINGS disables checkout guard lookups.
+      const optOutRes = await callSw(
+        {
+          type: 'RATE_UPDATE_SETTINGS',
+          checkoutGuardEnabled: false,
+        },
+        {
+          id: 'rate-ext-1876-sw',
+          tab: undefined,
+          url: 'chrome-extension://rate-ext-1876-sw/sidepanel/sidepanel.html',
+        }
+      );
+      assert.equal(optOutRes.ok, true);
+      assert.equal(swLocalMap.get('checkoutGuardEnabled'), false);
+
+      const disabledGuardRes = await callSw(
+        {
+          type: 'RATE_CHECKOUT_GUARD_LOOKUP',
+          pageUrl: 'https://shopee.vn/cart',
+          items: extractedItems,
+        },
+        {
+          id: 'rate-ext-1876-sw',
+          tab: { id: 10, active: true },
+          url: 'https://shopee.vn/cart',
+        }
+      );
+      assert.equal(disabledGuardRes.ok, true);
+      assert.equal(disabledGuardRes.enabled, false);
+      assert.deepEqual(disabledGuardRes.warnings, []);
+    } finally {
+      for (const [key, desc] of savedSwGlobals) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+
+    // 6. Content script Shadow DOM checkout warning banner: safe DOM APIs (0 innerHTML), dismissal, URL guard & cs formatting.
+    const savedCsGlobals = [
+      'window',
+      'document',
+      'MutationObserver',
+      'requestAnimationFrame',
+      'setTimeout',
+      'clearTimeout',
+      'chrome',
+    ].map((k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const);
+    try {
+      let csHref = 'https://shopee.vn/cart';
+      const csUiLang: 'vi' | 'en' | 'cs' = 'cs';
+      const csRafs: Array<() => unknown> = [];
+      const csStorageListeners: Array<
+        (changes: Record<string, unknown>, area: string) => void
+      > = [];
+      const csMessages: Array<Record<string, unknown>> = [];
+      let guardHostEl: MockElement | null = null;
+      let innerHtmlTouchedOnShadow = false;
+
+      interface MockElement {
+        tagName: string;
+        id: string;
+        className: string;
+        type?: string;
+        href?: string;
+        target?: string;
+        rel?: string;
+        textContent: string;
+        attrs: Map<string, string>;
+        children: MockElement[];
+        listeners: Map<string, Array<(ev?: unknown) => void>>;
+        shadowRoot: MockShadow | null;
+        setAttribute: (k: string, v: string) => void;
+        getAttribute: (k: string) => string | null;
+        appendChild: (child: MockElement) => MockElement;
+        addEventListener: (ev: string, fn: (ev?: unknown) => void) => void;
+        attachShadow: () => MockShadow;
+        remove: () => void;
+      }
+      interface MockShadow {
+        children: MockElement[];
+        appendChild: (child: MockElement) => MockElement;
+        replaceChildren: () => void;
+        innerHTML?: string;
+      }
+
+      const makeMockElement = (tag: string): MockElement => {
+        const el: MockElement = {
+          tagName: tag.toUpperCase(),
+          id: '',
+          className: '',
+          textContent: '',
+          attrs: new Map(),
+          children: [],
+          listeners: new Map(),
+          shadowRoot: null,
+          setAttribute(k, v) {
+            el.attrs.set(k, v);
+          },
+          getAttribute(k) {
+            return el.attrs.get(k) ?? null;
+          },
+          appendChild(child) {
+            el.children.push(child);
+            return child;
+          },
+          addEventListener(ev, fn) {
+            const arr = el.listeners.get(ev) ?? [];
+            arr.push(fn);
+            el.listeners.set(ev, arr);
+          },
+          attachShadow() {
+            const shadow: MockShadow = {
+              children: [],
+              appendChild(child) {
+                shadow.children.push(child);
+                return child;
+              },
+              replaceChildren() {
+                shadow.children = [];
+              },
+            };
+            Object.defineProperty(shadow, 'innerHTML', {
+              get() {
+                return '';
+              },
+              set() {
+                innerHtmlTouchedOnShadow = true;
+                throw new Error(
+                  'Checkout guard ShadowRoot must NEVER assign innerHTML'
+                );
+              },
+            });
+            el.shadowRoot = shadow;
+            return shadow;
+          },
+          remove() {
+            if (guardHostEl === el) guardHostEl = null;
+          },
+        };
+        return el;
+      };
+
+      const csCartRow = makeValidCartRow(
+        1,
+        'iPhone 16 Pro 256GB',
+        '/iPhone-16-Pro-256GB-i.100.201',
+        '28.990.000₫'
+      );
+      const csLocalState: Record<string, unknown> = {
+        checkoutGuardEnabled: true,
+      };
+      const csCatalogues = readLocaleCatalogues();
+      const { formatCatalogueEntry: fmtCat } = await import('./i18n.js');
+
+      let csPopstate: (() => void) | undefined;
+      g.window = {
+        location: {
+          get href() {
+            return csHref;
+          },
+          set href(v: string) {
+            csHref = v;
+          },
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'popstate') csPopstate = cb;
+        },
+      };
+      g.document = {
+        body: {
+          appendChild: (el: MockElement) => {
+            if (el.id === 'rate-vn-checkout-guard-host') guardHostEl = el;
+            return el;
+          },
+        },
+        getElementById: (id: string) =>
+          id === 'rate-vn-checkout-guard-host' ? guardHostEl : null,
+        createElement: (tag: string) => makeMockElement(tag),
+        querySelectorAll: (sel: string) =>
+          sel === '.cart-item' ? [csCartRow] : [],
+        querySelector: () => null,
+      };
+      g.MutationObserver = class {
+        observe() {}
+      };
+      g.requestAnimationFrame = (cb: () => unknown) => {
+        csRafs.push(cb);
+        return csRafs.length;
+      };
+      g.setTimeout = (() => 1) as unknown;
+      g.clearTimeout = (() => {}) as unknown;
+      g.chrome = {
+        i18n: {
+          getMessage: (key: string, subs?: string | string[]) => {
+            const cat = csCatalogues[csUiLang as 'vi' | 'en' | 'cs'];
+            const entry = cat?.[key];
+            return entry ? fmtCat(entry, subs) : '';
+          },
+        },
+        storage: {
+          local: {
+            get: async () => ({ ...csLocalState }),
+          },
+          onChanged: {
+            addListener: (
+              fn: (c: Record<string, unknown>, a: string) => void
+            ) => csStorageListeners.push(fn),
+          },
+        },
+        runtime: {
+          sendMessage: async (msg: Record<string, unknown>) => {
+            csMessages.push(msg);
+            if (msg.type === 'RATE_CHECKOUT_GUARD_LOOKUP') {
+              return {
+                ok: true,
+                enabled: true,
+                warnings: [
+                  {
+                    reason: 'cheaper_official',
+                    itemTitle: '<img src=x onerror=alert(1)> iPhone 16 Pro',
+                    cartUnitPriceVnd: 28_990_000,
+                    referencePriceVnd: 27_490_000,
+                    savingsVnd: 1_500_000,
+                    savingsPct: 5.2,
+                    markupPct: 0,
+                    cheaperMerchantName: 'CellphoneS Official',
+                    cheaperPlatform: 'CELLPHONES',
+                    comparisonUrl: 'javascript:alert(1)',
+                  },
+                ],
+              };
+            }
+            return { ok: true };
+          },
+        },
+      };
+
+      const flushCs = async () => {
+        for (let i = 0; i < 6; i += 1) {
+          while (csRafs.length) void csRafs.shift()!();
+          await Promise.resolve();
+        }
+      };
+
+      await import(
+        new URL('./content/content-script.js?case=1876cs', import.meta.url).href
+      );
+      await flushCs();
+
+      assert.equal(innerHtmlTouchedOnShadow, false);
+      assert.ok(guardHostEl?.shadowRoot, 'Shadow DOM checkout banner rendered');
+      const cardNode = guardHostEl!.shadowRoot!.children.find(
+        (c) => c.className === 'guard-card'
+      );
+      assert.ok(cardNode);
+      assert.equal(cardNode.getAttribute('role'), 'region');
+
+      const findInTree = (
+        node: MockElement,
+        pred: (el: MockElement) => boolean
+      ): MockElement | null => {
+        if (pred(node)) return node;
+        for (const ch of node.children) {
+          const hit = findInTree(ch, pred);
+          if (hit) return hit;
+        }
+        return null;
+      };
+
+      const itemTitleNode = findInTree(
+        cardNode,
+        (el) => el.className === 'guard-item-title'
+      );
+      assert.equal(
+        itemTitleNode?.textContent,
+        '<img src=x onerror=alert(1)> iPhone 16 Pro',
+        'untrusted HTML in itemTitle is rendered inertly via textContent'
+      );
+      const itemBodyNode = findInTree(
+        cardNode,
+        (el) => el.className === 'guard-item-body'
+      );
+      assert.ok(
+        itemBodyNode?.textContent.includes('1\u00A0500\u00A0000\u00A0₫') &&
+          itemBodyNode?.textContent.includes('5,2 %'),
+        `Czech checkout banner must format NBSP VND and comma decimals, got: ${itemBodyNode?.textContent}`
+      );
+      const ctaLinkNode = findInTree(
+        cardNode,
+        (el) => el.className === 'guard-cta-link'
+      );
+      assert.equal(
+        ctaLinkNode?.href,
+        'https://rate.vn',
+        'unsafe javascript: comparisonUrl must be neutralized to https://rate.vn'
+      );
+
+      // Clicking Dismiss removes banner and suppresses re-render on identical cart state.
+      const dismissBtnNode = findInTree(
+        cardNode,
+        (el) => el.id === 'rate-checkout-guard-dismiss'
+      );
+      assert.ok(dismissBtnNode);
+      dismissBtnNode.listeners.get('click')?.[0]?.();
+      assert.equal(guardHostEl, null, 'dismiss button removes banner host');
+
+      const msgCountAfterDismiss = csMessages.length;
+      csPopstate?.();
+      await flushCs();
+      assert.equal(
+        guardHostEl,
+        null,
+        'dismissed cart signature stays suppressed'
+      );
+      assert.equal(csMessages.length, msgCountAfterDismiss);
+
+      // Re-enabling via storage.onChanged clears dismissal, re-renders, Escape dismisses, and opt-out removes.
+      csStorageListeners[0]?.(
+        { checkoutGuardEnabled: { newValue: true } },
+        'local'
+      );
+      await flushCs();
+      assert.ok(
+        guardHostEl,
+        'toggling checkoutGuardEnabled true re-evaluates cart'
+      );
+      const reRenderedCard = guardHostEl!.shadowRoot!.children.find(
+        (c) => c.className === 'guard-card'
+      );
+      assert.ok(reRenderedCard);
+      let escPrevented = false;
+      reRenderedCard.listeners.get('keydown')?.[0]?.({
+        key: 'Escape',
+        preventDefault: () => {
+          escPrevented = true;
+        },
+      });
+      assert.equal(escPrevented, true, 'Escape keydown calls preventDefault');
+      assert.equal(
+        guardHostEl,
+        null,
+        'Escape keydown dismisses checkout banner'
+      );
+
+      csStorageListeners[0]?.(
+        { checkoutGuardEnabled: { newValue: true } },
+        'local'
+      );
+      await flushCs();
+      assert.ok(guardHostEl);
+
+      csStorageListeners[0]?.(
+        { checkoutGuardEnabled: { newValue: false } },
+        'local'
+      );
+      await flushCs();
+      assert.equal(
+        guardHostEl,
+        null,
+        'toggling checkoutGuardEnabled false immediately removes checkout banner'
+      );
+    } finally {
+      for (const [key, desc] of savedCsGlobals) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+
+    // 7. Side Panel 1-click Pin Price Alert, <= 50 cap, prototype safety, cloud handoff URL & locale parity.
+    assert.equal(MAX_PINNED_ALERTS, 50);
+    assert.equal(computeDefaultAlertTargetVnd(25_990_000), 24_690_000);
+    assert.equal(computeDefaultAlertTargetVnd(10_000), 10_000);
+    assert.equal(computeDefaultAlertTargetVnd(Number.NaN), null);
+    assert.equal(computeDefaultAlertTargetVnd(5_000), null);
+
+    // Prototype-inherited properties and invalid slugs must be rejected.
+    const protoInherited = Object.create({
+      slug: 'iphone-16',
+      productName: 'Inherited',
+      categorySlug: 'smartphones',
+      targetPriceVnd: 20_000_000,
+      bestPriceAtPinVnd: 21_000_000,
+      pinnedAt: '2026-11-23T00:00:00.000Z',
+    });
+    const sixtyRawAlerts = [
+      protoInherited,
+      {
+        slug: '../admin',
+        productName: 'Traversal',
+        categorySlug: 'smartphones',
+        targetPriceVnd: 20_000_000,
+        bestPriceAtPinVnd: 21_000_000,
+        pinnedAt: '2026-11-23T00:00:00.000Z',
+      },
+      {
+        slug: '__proto__',
+        productName: 'ProtoSlug',
+        categorySlug: 'smartphones',
+        targetPriceVnd: 20_000_000,
+        bestPriceAtPinVnd: 21_000_000,
+        pinnedAt: '2026-11-23T00:00:00.000Z',
+      },
+      ...Array.from({ length: 60 }, (_, idx) => ({
+        slug: `iphone-model-${idx + 1}`,
+        productName: `iPhone Model ${idx + 1}`,
+        categorySlug: 'smartphones' as const,
+        targetPriceVnd: 20_000_000 + idx * 10_000,
+        bestPriceAtPinVnd: 21_000_000 + idx * 10_000,
+        pinnedAt: '2026-11-23T00:00:00.000Z',
+      })),
+    ];
+    const sanitizedFifty = sanitizePinnedAlerts(sixtyRawAlerts);
+    assert.equal(
+      sanitizedFifty.length,
+      50,
+      'sanitizePinnedAlerts must reject prototype/traversal entries and cap at <= 50 items'
+    );
+    assert.equal(sanitizedFifty[0]?.slug, 'iphone-model-1');
+
+    const toggledFiftyFirst = togglePinnedAlert(sanitizedFifty, {
+      slug: 'galaxy-s25-ultra',
+      productName: 'Galaxy S25 Ultra',
+      categorySlug: 'smartphones',
+      targetPriceVnd: 27_500_000,
+      bestPriceAtPinVnd: 29_000_000,
+      pinnedAt: '2026-11-23T01:00:00.000Z',
+    });
+    assert.equal(toggledFiftyFirst.pinned, true);
+    assert.equal(toggledFiftyFirst.alerts.length, 50);
+    assert.equal(toggledFiftyFirst.alerts[0]?.slug, 'galaxy-s25-ultra');
+
+    assert.equal(
+      buildWatchlistEmailAlertUrl(
+        'https://rate.vn',
+        'iphone-16-pro-256gb',
+        24_690_000,
+        'vi'
+      ),
+      'https://rate.vn/vi/watchlist?add=iphone-16-pro-256gb&amp;target=24690000'
+    );
+    assert.equal(
+      buildWatchlistEmailAlertUrl(
+        'https://rate.vn',
+        'iphone-16-pro-256gb',
+        24_690_000,
+        'en-US'
+      ),
+      'https://rate.vn/en/watchlist?add=iphone-16-pro-256gb&amp;target=24690000'
+    );
+    assert.equal(
+      buildWatchlistEmailAlertUrl(
+        'https://rate.vn',
+        'iphone-16-pro-256gb',
+        24_690_000,
+        'cs-CZ'
+      ),
+      'https://rate.vn/cs/watchlist?add=iphone-16-pro-256gb&amp;target=24690000'
+    );
+
+    const renderedPinCardCs = renderPinnedAlertsCardHtml(
+      [
+        {
+          slug: 'iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          categorySlug: 'smartphones',
+          targetPriceVnd: 24_690_000,
+          bestPriceAtPinVnd: 25_990_000,
+          pinnedAt: '2026-11-23T01:00:00.000Z',
+        },
+      ],
+      {
+        apiBaseUrl: 'https://rate.vn',
+        livePriceBySlug: new Map([['iphone-16-pro-256gb', 24_500_000]]),
+        locale: 'cs',
+      }
+    );
+    assert.ok(
+      renderedPinCardCs.includes(
+        'href="https://rate.vn/cs/watchlist?add=iphone-16-pro-256gb&amp;target=24690000"'
+      ),
+      'Pinned Alerts card must render 1-click localized watchlist ?add=&target= link'
+    );
+    assert.ok(renderedPinCardCs.includes('24\u00A0500\u00A0000\u00A0₫'));
+
+    // Interactive Side Panel integration check: pin button click, unpin button click, and #chk-checkout-guard rollback.
+    const savedSpGlobals = ['chrome', 'document', 'fetch'].map(
+      (k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const
+    );
+    try {
+      let spDomReady: (() => void) | undefined;
+      const spStoredLocal: Record<string, unknown> = {
+        apiBaseUrl: 'https://rate.vn',
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 0,
+        checkoutGuardEnabled: true,
+        [PINNED_ALERTS_STORAGE_KEY]: [],
+      };
+      let pinToggleClickCb: (() => void) | undefined;
+      let unpinRowClickCb: (() => void) | undefined;
+      const pinBtnMock = {
+        className: '',
+        innerHTML: '',
+        setAttribute() {},
+        addEventListener(ev: string, cb: () => void) {
+          if (ev === 'click') pinToggleClickCb = cb;
+        },
+      };
+      const unpinBtnMock = {
+        getAttribute: (n: string) =>
+          n === 'data-unpin-slug' ? 'iphone-16-pro-256gb' : null,
+        addEventListener(ev: string, cb: () => void) {
+          if (ev === 'click') unpinRowClickCb = cb;
+        },
+      };
+      const spRoot = {
+        innerHTML: '',
+        querySelector: () => null,
+        querySelectorAll: (sel: string) =>
+          sel === '[data-pin-alert-toggle="true"]' ? [pinBtnMock] : [],
+      };
+      const spPinnedSlot = {
+        innerHTML: '',
+        querySelectorAll: (sel: string) =>
+          sel === '[data-unpin-slug]' &&
+          spPinnedSlot.innerHTML.includes('data-unpin-slug')
+            ? [unpinBtnMock]
+            : [],
+      };
+      let chkGuardChangeCb: (() => Promise<void>) | undefined;
+      const chkCheckoutGuardMock = {
+        checked: true,
+        addEventListener(ev: string, cb: () => Promise<void>) {
+          if (ev === 'change') chkGuardChangeCb = cb;
+        },
+      };
+      let failSettingsSave = false;
+
+      g.fetch = async () => ({
+        ok: true,
+        json: async () => ({ ok: true, data: [] }),
+      });
+      g.chrome = {
+        runtime: {
+          sendMessage: async (msg: Record<string, unknown>) => {
+            if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+              return {
+                ok: true,
+                settings: {
+                  apiBaseUrl: 'https://rate.vn',
+                  crowdContributeOptIn: false,
+                  checkoutGuardEnabled: true,
+                },
+                signal: {
+                  platform: 'shopee',
+                  canonicalUrl: 'https://shopee.vn/iPhone-16-Pro-i.1.2',
+                  externalItemId: '2',
+                  externalShopId: '1',
+                  title: 'iPhone 16 Pro 256GB',
+                  selectedVariant: null,
+                  price: 25_990_000,
+                  originalPrice: null,
+                  ratingStar: null,
+                  ratingCount: null,
+                },
+                data: baseLookupFixture({
+                  masterProduct: {
+                    ...baseLookupFixture({}).masterProduct!,
+                    slug: 'iphone-16-pro-256gb',
+                  },
+                  priceAssessment: {
+                    ...baseLookupFixture({}).priceAssessment,
+                    marketMinPrice: 25_990_000,
+                  },
+                }),
+              };
+            }
+            if (msg.type === 'RATE_UPDATE_SETTINGS') {
+              if (failSettingsSave) return { ok: false };
+              if (typeof msg.checkoutGuardEnabled === 'boolean') {
+                spStoredLocal.checkoutGuardEnabled = msg.checkoutGuardEnabled;
+              }
+              return {
+                ok: true,
+                settings: {
+                  apiBaseUrl: 'https://rate.vn',
+                  crowdContributeOptIn: false,
+                  checkoutGuardEnabled: Boolean(
+                    spStoredLocal.checkoutGuardEnabled
+                  ),
+                },
+              };
+            }
+            return { ok: false };
+          },
+        },
+        storage: {
+          local: {
+            get: async () => ({ ...spStoredLocal }),
+            set: async (obj: Record<string, unknown>) => {
+              Object.assign(spStoredLocal, obj);
+            },
+          },
+          onChanged: { addListener() {} },
+        },
+      };
+      g.document = {
+        documentElement: {},
+        title: '',
+        querySelectorAll: () => [],
+        getElementById: (id: string) => {
+          if (id === 'panel-root') return spRoot;
+          if (id === 'pinned-alerts-slot') return spPinnedSlot;
+          if (id === 'chk-checkout-guard') return chkCheckoutGuardMock;
+          return null;
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'DOMContentLoaded') spDomReady = cb;
+        },
+      };
+
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1876sp', import.meta.url).href
+      );
+      spDomReady!();
+      await new Promise((r) => setTimeout(r, 20));
+
+      assert.ok(
+        spRoot.innerHTML.includes('data-pin-alert-toggle="true"'),
+        'matched product card must render 1-click Pin Price Alert button'
+      );
+      assert.ok(pinToggleClickCb, 'pin button click listener attached');
+
+      // Click Pin -> saves default 5%-below-best rounded to 10k (24,690,000 VND) and renders Pinned Alerts card
+      pinToggleClickCb!();
+      await new Promise((r) => setTimeout(r, 15));
+      const savedPins = spStoredLocal[PINNED_ALERTS_STORAGE_KEY] as Array<{
+        slug: string;
+        targetPriceVnd: number;
+      }>;
+      assert.equal(savedPins.length, 1);
+      assert.equal(savedPins[0]?.slug, 'iphone-16-pro-256gb');
+      assert.equal(savedPins[0]?.targetPriceVnd, 24_690_000);
+      assert.ok(
+        spPinnedSlot.innerHTML.includes(
+          'href="https://rate.vn/vi/watchlist?add=iphone-16-pro-256gb&amp;target=24690000"'
+        ),
+        'Pinned Alerts slot renders watchlist cloud handoff URL immediately on pin'
+      );
+
+      // Click Unpin inside Pinned Alerts slot -> removes item from storage and clears slot
+      assert.ok(unpinRowClickCb);
+      unpinRowClickCb!();
+      await new Promise((r) => setTimeout(r, 15));
+      assert.equal(
+        (spStoredLocal[PINNED_ALERTS_STORAGE_KEY] as unknown[]).length,
+        0
+      );
+      assert.equal(spPinnedSlot.innerHTML, '');
+
+      // Toggle #chk-checkout-guard off -> persists false; failed update rolls checkbox back!
+      chkCheckoutGuardMock.checked = false;
+      await chkGuardChangeCb!();
+      assert.equal(spStoredLocal.checkoutGuardEnabled, false);
+      assert.equal(chkCheckoutGuardMock.checked, false);
+
+      failSettingsSave = true;
+      chkCheckoutGuardMock.checked = true;
+      await chkGuardChangeCb!();
+      assert.equal(
+        chkCheckoutGuardMock.checked,
+        false,
+        'failed RATE_UPDATE_SETTINGS for checkoutGuardEnabled must roll checkbox back to lastConfirmedCheckoutGuard'
+      );
+    } finally {
+      for (const [key, desc] of savedSpGlobals) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+
+    // 8. Locale key & placeholder parity across vi, en, and cs for all 14 #1876 keys + zero em/en-dashes.
+    const required1876Keys = [
+      'checkoutGuardRegionAria',
+      'checkoutGuardTitle',
+      'checkoutGuardDismiss',
+      'checkoutGuardCheaperOfficial',
+      'checkoutGuardMarkupTrap',
+      'checkoutGuardCompareCta',
+      'checkoutGuardToggleTitle',
+      'checkoutGuardToggleBody',
+      'pinAlertBtn',
+      'unpinAlertBtn',
+      'pinnedAlertsTitle',
+      'pinnedAlertTargetVsLive',
+      'pinnedAlertEmailCta',
+      'pinnedAlertUnpinShort',
+    ] as const;
+    const allCats = readLocaleCatalogues();
+    for (const key of required1876Keys) {
+      for (const loc of ['vi', 'en', 'cs'] as const) {
+        const entry = allCats[loc][key];
+        assert.ok(
+          entry?.message,
+          `missing ${key} in _locales/${loc}/messages.json`
+        );
+        assert.equal(
+          /[\u2013\u2014]/.test(entry.message),
+          false,
+          `zero em/en-dashes allowed in ${loc}.${key}`
+        );
+      }
+      assert.deepEqual(
+        Object.keys(allCats.vi[key]?.placeholders ?? {}).sort(),
+        Object.keys(allCats.en[key]?.placeholders ?? {}).sort(),
+        `placeholder parity vi vs en on ${key}`
+      );
+      assert.deepEqual(
+        Object.keys(allCats.vi[key]?.placeholders ?? {}).sort(),
+        Object.keys(allCats.cs[key]?.placeholders ?? {}).sort(),
+        `placeholder parity vi vs cs on ${key}`
+      );
+    }
+
+    // 9. Round-1 Adversarial Security & Race Regression Coverage (P1-1..3, P2-1..2, P3-1..3).
+    // (a) looksLikePiiText catches word-adjacent VN phones, punctuated/2nd-@ emails, and cards while sparing Dell SKUs, EAN-13, and CPU GHz.
+    for (const piiSample of [
+      'Nguyen Van A - 0912 345 678',
+      'Lien he 0912345678',
+      '0912 345 678 Nguyen Van A',
+      '(+84) 912.345.678',
+      '+84 28 3822 1234',
+      'Mua tai @Shopee - (buyer@example.com),',
+      'Email:buyer@example.co.vn.',
+      'Visa 4111 1111 1111 9999',
+      'Amex 3782-822463-10005',
+      '4111222233334444',
+    ]) {
+      assert.equal(
+        looksLikePiiText(piiSample),
+        true,
+        `looksLikePiiText must flag PII sample: ${piiSample}`
+      );
+    }
+    for (const benignProductSample of [
+      'Laptop Dell Inspiron 15 3520 71027003',
+      'Laptop Dell Vostro 15 3530 71043885',
+      'Sony WH-1000XM5 (4548736132610)',
+      'Laptop Intel Core i5-1235U@4.4GHz',
+      'iPhone 16 Pro Max 256GB',
+    ]) {
+      assert.equal(
+        looksLikePiiText(benignProductSample),
+        false,
+        `looksLikePiiText must spare legitimate product title: ${benignProductSample}`
+      );
+    }
+
+    // (b) >256-char Shopee Vietnamese percent-encoded href, >256-char Tailwind line-through class,
+    //     smartPhoneItem camelCase, promo aria-label, Comment node (nodeType 8), and nested .cart-item.recommend.
+    const longPercentSlug = `/Dien-thoai-${'%E1%BB%87'.repeat(35)}-iPhone-16-Pro-Max-i.888999.777666`;
+    assert.ok(longPercentSlug.length > 320);
+    const longTailwindStrikeClass = `${'flex items-center justify-between text-xs font-medium '.repeat(6)}line-through`;
+    assert.ok(longTailwindStrikeClass.length > 300);
+
+    const commentNode = {
+      nodeType: 8,
+      nodeName: '#comment',
+      textContent: ' 9 ',
+    };
+    const activePriceTextNode = {
+      nodeType: 3,
+      nodeValue: '27.990.000₫',
+    };
+    const crossedOutTailwindPrice = {
+      tagName: 'SPAN',
+      className: longTailwindStrikeClass,
+      textContent: '34.990.000₫',
+    };
+    const validPriceWithComment = {
+      tagName: 'SPAN',
+      className: 'item-price',
+      childNodes: [commentNode, activePriceTextNode],
+    };
+    const promoAnchor = {
+      tagName: 'A',
+      className: 'smartPhoneItemTitle',
+      textContent: 'Laptop Dell Inspiron 15 3520 71027003',
+      getAttribute: (n: string) => {
+        if (n === 'href') return longPercentSlug;
+        if (n === 'aria-label') return '[Tra gop 0%] Laptop Dell Inspiron 15';
+        if (n === 'class') return 'smartPhoneItemTitle';
+        return null;
+      },
+    };
+    const outerValidRow: Record<string, unknown> = {
+      tagName: 'DIV',
+      className: 'cart-item smartPhoneItemCard',
+    };
+    const nestedUpsellChild = {
+      tagName: 'DIV',
+      className: 'cart-item recommend',
+      parentElement: outerValidRow,
+      querySelectorAll: () => [],
+    };
+    outerValidRow.querySelectorAll = (sel: string) => {
+      if (sel === 'a[href]') return [promoAnchor];
+      if (sel === '.item-price') {
+        return [crossedOutTailwindPrice, validPriceWithComment];
+      }
+      return [];
+    };
+
+    const longTailwindPiiRow = {
+      tagName: 'DIV',
+      className: `${'px-4 py-2 border rounded-lg bg-white '.repeat(8)}shipping-address`,
+      querySelectorAll: () => [promoAnchor, validPriceWithComment],
+    };
+
+    const edgeCartDoc = {
+      querySelectorAll: (sel: string) =>
+        sel === '.cart-item'
+          ? [longTailwindPiiRow, outerValidRow, nestedUpsellChild]
+          : [],
+    } as unknown as Document;
+
+    const edgeExtracted = extractCartLineItems(
+      edgeCartDoc,
+      'https://shopee.vn/cart'
+    );
+    assert.equal(edgeExtracted.length, 1);
+    assert.equal(
+      edgeExtracted[0]?.title,
+      'Laptop Dell Inspiron 15 3520 71027003'
+    );
+    assert.ok(
+      edgeExtracted[0]?.productUrl?.endsWith('-i.888999.777666'),
+      'Shopee >256-char percent-encoded href must keep trailing -i.<shop>.<item>'
+    );
+    assert.equal(
+      edgeExtracted[0]?.unitPriceVnd,
+      27_990_000,
+      'Tailwind >256-char line-through price and HTML Comment node must be ignored'
+    );
+
+    // (c) Side Panel pre-hydration Pin click preserves existing stored pinnedAlerts (zero data loss).
+    const savedPreHydrateGlobals = ['chrome', 'document', 'fetch'].map(
+      (k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const
+    );
+    try {
+      let preDomReady: (() => void) | undefined;
+      let resolveDelayedLocalGet!: (val: Record<string, unknown>) => void;
+      const delayedLocalGet = new Promise<Record<string, unknown>>((r) => {
+        resolveDelayedLocalGet = r;
+      });
+      const preStoredLocal: Record<string, unknown> = {
+        apiBaseUrl: 'https://rate.vn',
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 0,
+        checkoutGuardEnabled: true,
+        [PINNED_ALERTS_STORAGE_KEY]: [
+          {
+            slug: 'galaxy-s25-ultra',
+            productName: 'Galaxy S25 Ultra',
+            categorySlug: 'smartphones',
+            targetPriceVnd: 27_500_000,
+            bestPriceAtPinVnd: 29_000_000,
+            pinnedAt: '2026-11-23T00:00:00.000Z',
+          },
+        ],
+      };
+      let prePinClickCb: (() => void) | undefined;
+      const prePinBtn = {
+        className: '',
+        innerHTML: '',
+        setAttribute() {},
+        addEventListener(ev: string, cb: () => void) {
+          if (ev === 'click') prePinClickCb = cb;
+        },
+      };
+      const preRoot = {
+        innerHTML: '',
+        querySelector: () => null,
+        querySelectorAll: (sel: string) =>
+          sel === '[data-pin-alert-toggle="true"]' ? [prePinBtn] : [],
+      };
+      const preSlot = { innerHTML: '', querySelectorAll: () => [] };
+
+      g.fetch = async () => ({
+        ok: true,
+        json: async () => ({ ok: true, data: [] }),
+      });
+      g.chrome = {
+        runtime: {
+          sendMessage: async () => ({
+            ok: true,
+            settings: {
+              apiBaseUrl: 'https://rate.vn',
+              crowdContributeOptIn: false,
+              checkoutGuardEnabled: true,
+            },
+            signal: {
+              platform: 'shopee',
+              canonicalUrl: 'https://shopee.vn/iPhone-16-Pro-i.1.2',
+              externalItemId: '2',
+              externalShopId: '1',
+              title: 'iPhone 16 Pro 256GB',
+              selectedVariant: null,
+              price: 25_990_000,
+              originalPrice: null,
+              ratingStar: null,
+              ratingCount: null,
+            },
+            data: baseLookupFixture({
+              masterProduct: {
+                ...baseLookupFixture({}).masterProduct!,
+                slug: 'iphone-16-pro-256gb',
+              },
+            }),
+          }),
+        },
+        storage: {
+          local: {
+            get: () => delayedLocalGet,
+            set: async (obj: Record<string, unknown>) => {
+              Object.assign(preStoredLocal, obj);
+            },
+          },
+          onChanged: { addListener() {} },
+        },
+      };
+      g.document = {
+        documentElement: {},
+        title: '',
+        querySelectorAll: () => [],
+        getElementById: (id: string) => {
+          if (id === 'panel-root') return preRoot;
+          if (id === 'pinned-alerts-slot') return preSlot;
+          return null;
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'DOMContentLoaded') preDomReady = cb;
+        },
+      };
+
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1876prehydrate', import.meta.url)
+          .href
+      );
+      preDomReady!();
+      await new Promise((r) => setTimeout(r, 15));
+      assert.ok(
+        prePinClickCb,
+        'panel rendered before storage.local.get resolved'
+      );
+
+      // User clicks Pin BEFORE storage.local.get resolves!
+      prePinClickCb!();
+      resolveDelayedLocalGet({ ...preStoredLocal });
+      await new Promise((r) => setTimeout(r, 20));
+
+      const mergedPins = preStoredLocal[PINNED_ALERTS_STORAGE_KEY] as Array<{
+        slug: string;
+      }>;
+      assert.deepEqual(
+        mergedPins.map((p) => p.slug),
+        ['iphone-16-pro-256gb', 'galaxy-s25-ultra'],
+        'pre-hydration Pin click must merge onto hydrated pinnedAlerts without wiping stored alerts'
+      );
+    } finally {
+      for (const [key, desc] of savedPreHydrateGlobals) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+
+    console.log(
+      '  ✅ [MV3 22-store checkout price-trap guard & 1-click Side Panel alert pin (#1876)] Verified'
+    );
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

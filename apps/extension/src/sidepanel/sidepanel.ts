@@ -2,6 +2,7 @@ import type {
   ExtensionLookupData,
   ExtensionSettings,
   ExtractedPageProductSignal,
+  PinnedPriceAlert,
 } from '../types.js';
 import {
   DEFAULT_API_BASE_URL,
@@ -28,16 +29,25 @@ import {
 import {
   buildSvgSparkline,
   classifyLookupFailure,
+  computeDefaultAlertTargetVnd,
   escapeHtml,
   isLookupWithoutProduct,
+  isValidPinnedProductSlug,
   merchantTrustColor,
   officialBadgeHtml,
+  PINNED_ALERTS_STORAGE_KEY,
+  removePinnedAlertBySlug,
   renderActionRowsHtml,
   renderLookupErrorHtml,
   renderNotFoundHtml,
   renderOffersCardHtml,
+  renderPinAlertButtonHtml,
+  renderPinnedAlertsCardHtml,
   renderReviewCardHtml,
   renderVariantPickerHtml,
+  resolveLookupBestPriceVnd,
+  sanitizePinnedAlerts,
+  togglePinnedAlert,
   type PanelActionLink,
   riskScoreText,
   trustText,
@@ -338,6 +348,150 @@ async function fetchAndRenderMerchantTrustDirectory(
   }
 }
 
+let currentPinnedAlerts: PinnedPriceAlert[] = [];
+let lastConfirmedPinnedAlerts: PinnedPriceAlert[] = [];
+let pinnedAlertsHydrated = false;
+let pinnedAlertsMutationSeq = 0;
+let pinnedAlertsSaveInFlight = 0;
+let pinnedAlertsHydrationPromise: Promise<void> = Promise.resolve();
+let pinnedAlertsSaveChain: Promise<void> = Promise.resolve();
+let currentRenderedSignal: ExtractedPageProductSignal | null = null;
+let currentRenderedLookup: ExtensionLookupData | null = null;
+let currentRenderedSettings: ExtensionSettings = {
+  apiBaseUrl: DEFAULT_API_BASE_URL,
+  crowdContributeOptIn: false,
+  checkoutGuardEnabled: true,
+};
+
+function syncPinToggleButtonElement(
+  btn: HTMLButtonElement,
+  pinSlug: string,
+  defaultTargetVnd: number | null
+): void {
+  const existing =
+    currentPinnedAlerts.find(
+      (a) => a.slug.toLowerCase() === pinSlug.toLowerCase()
+    ) ?? null;
+  const displayTarget = existing?.targetPriceVnd ?? defaultTargetVnd;
+  if (displayTarget === null) return;
+  const uiLocale = t('langCode');
+  const formattedTarget = formatSafeExtensionVnd(
+    displayTarget,
+    t('notAvailable'),
+    uiLocale
+  );
+  const isPinned = existing !== null;
+  const label = isPinned
+    ? t('unpinAlertBtn', [formattedTarget])
+    : t('pinAlertBtn', [formattedTarget]);
+  btn.className = `btn-pin-alert${isPinned ? ' active' : ''}`;
+  if (typeof btn.setAttribute === 'function') {
+    btn.setAttribute('aria-pressed', isPinned ? 'true' : 'false');
+  }
+  btn.innerHTML = `<span aria-hidden="true">📌 </span>${escapeHtml(label)}`;
+}
+
+function refreshActivePinButtonInRoot(): void {
+  const root = document.getElementById('panel-root');
+  if (!root || typeof root.querySelectorAll !== 'function') return;
+  const lookup = currentRenderedLookup;
+  if (!lookup || isLookupWithoutProduct(lookup)) return;
+  const sizeUnknown = Boolean(lookup.item) && !lookup.selectedVariant;
+  const rawSlug = !sizeUnknown
+    ? cleanUrlSegment(lookup.masterProduct?.slug, 200)
+    : '';
+  if (!isValidPinnedProductSlug(rawSlug)) return;
+  const liveBest = resolveLookupBestPriceVnd(lookup, currentRenderedSignal);
+  const defaultTargetVnd = computeDefaultAlertTargetVnd(liveBest);
+  root
+    .querySelectorAll<HTMLButtonElement>('[data-pin-alert-toggle="true"]')
+    .forEach((btn) => {
+      syncPinToggleButtonElement(btn, rawSlug, defaultTargetVnd);
+    });
+}
+
+function mutatePinnedAlerts(
+  applyFn: (base: PinnedPriceAlert[]) => PinnedPriceAlert[]
+): Promise<void> {
+  pinnedAlertsMutationSeq += 1;
+  pinnedAlertsSaveInFlight += 1;
+  currentPinnedAlerts = applyFn(currentPinnedAlerts);
+  renderPinnedAlertsSlot();
+  refreshActivePinButtonInRoot();
+
+  const runWrite = async (): Promise<void> => {
+    try {
+      if (!pinnedAlertsHydrated) {
+        await pinnedAlertsHydrationPromise;
+      }
+      const nextAlerts = applyFn(lastConfirmedPinnedAlerts);
+      if (
+        typeof chrome !== 'undefined' &&
+        typeof chrome.storage?.local?.set === 'function'
+      ) {
+        await chrome.storage.local.set({
+          [PINNED_ALERTS_STORAGE_KEY]: nextAlerts,
+        });
+      }
+      lastConfirmedPinnedAlerts = nextAlerts;
+      currentPinnedAlerts = nextAlerts;
+    } catch {
+      // Reconciled against lastConfirmedPinnedAlerts in finally once in-flight saves settle.
+    } finally {
+      pinnedAlertsSaveInFlight = Math.max(0, pinnedAlertsSaveInFlight - 1);
+      if (pinnedAlertsSaveInFlight === 0) {
+        currentPinnedAlerts = lastConfirmedPinnedAlerts;
+        renderPinnedAlertsSlot();
+        refreshActivePinButtonInRoot();
+      }
+    }
+  };
+  pinnedAlertsSaveChain = pinnedAlertsSaveChain.then(runWrite, runWrite);
+  return pinnedAlertsSaveChain;
+}
+
+function renderPinnedAlertsSlot(): void {
+  const slot = document.getElementById('pinned-alerts-slot');
+  if (!slot) return;
+
+  const livePriceBySlug = new Map<string, number>();
+  if (currentRenderedLookup && !isLookupWithoutProduct(currentRenderedLookup)) {
+    const sizeUnknown =
+      Boolean(currentRenderedLookup.item) &&
+      !currentRenderedLookup.selectedVariant;
+    const activeSlug = !sizeUnknown
+      ? cleanUrlSegment(currentRenderedLookup.masterProduct?.slug, 200)
+      : '';
+    const liveBest = resolveLookupBestPriceVnd(
+      currentRenderedLookup,
+      currentRenderedSignal
+    );
+    if (isValidPinnedProductSlug(activeSlug) && liveBest !== null) {
+      livePriceBySlug.set(activeSlug.toLowerCase(), liveBest);
+    }
+  }
+
+  slot.innerHTML = renderPinnedAlertsCardHtml(currentPinnedAlerts, {
+    apiBaseUrl: currentRenderedSettings.apiBaseUrl,
+    livePriceBySlug,
+    locale: t('langCode'),
+  });
+
+  if (typeof slot.querySelectorAll === 'function') {
+    slot
+      .querySelectorAll<HTMLButtonElement>('[data-unpin-slug]')
+      .forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const slugToRemove = btn.getAttribute('data-unpin-slug');
+          if (!slugToRemove) return;
+          void mutatePinnedAlerts((base) =>
+            removePinnedAlertBySlug(base, slugToRemove)
+          );
+        });
+      });
+  }
+}
+
 function renderPanelContent(
   root: HTMLElement,
   signal: ExtractedPageProductSignal | null,
@@ -345,6 +499,11 @@ function renderPanelContent(
   settings: ExtensionSettings,
   onSelectVariant: (variantLabel: string) => void
 ): void {
+  currentRenderedSignal = signal;
+  currentRenderedLookup = lookup;
+  currentRenderedSettings = settings;
+  renderPinnedAlertsSlot();
+
   if (!signal) {
     root.innerHTML = `
       <div class="card">
@@ -619,6 +778,25 @@ function renderPanelContent(
     { href: watchlistUrl, icon: '🔔', label: t('linkWatch') },
   ];
 
+  const pinSlug =
+    !sizeUnknown && isValidPinnedProductSlug(master?.slug)
+      ? cleanUrlSegment(master?.slug, 200)
+      : '';
+  const liveBestPrice = resolveLookupBestPriceVnd(lookup, signal);
+  const defaultTargetVnd = computeDefaultAlertTargetVnd(liveBestPrice);
+  const existingPin = pinSlug
+    ? (currentPinnedAlerts.find(
+        (a) => a.slug.toLowerCase() === pinSlug.toLowerCase()
+      ) ?? null)
+    : null;
+  const pinButtonHtml = pinSlug
+    ? renderPinAlertButtonHtml({
+        pinnedAlert: existingPin,
+        defaultTargetVnd,
+        locale: uiLocale,
+      })
+    : '';
+
   root.innerHTML = `
     <div class="card">
       <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
@@ -643,6 +821,7 @@ function renderPanelContent(
         </div>
       </div>
       ${renderActionRowsHtml(actionLinks)}
+      ${pinButtonHtml}
     </div>
     ${leaderboardCardHtml}
     ${variantButtonsHtml}
@@ -657,6 +836,42 @@ function renderPanelContent(
 
   void fetchAndRenderDealRadar(settings, categorySlug);
   void fetchAndRenderMerchantTrustDirectory(settings, signal.platform);
+
+  if (pinSlug) {
+    root
+      .querySelectorAll<HTMLButtonElement>('[data-pin-alert-toggle="true"]')
+      .forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const existingNow =
+            currentPinnedAlerts.find(
+              (a) => a.slug.toLowerCase() === pinSlug.toLowerCase()
+            ) ?? null;
+          const latestBest =
+            resolveLookupBestPriceVnd(lookup, signal) ??
+            existingNow?.bestPriceAtPinVnd ??
+            defaultTargetVnd ??
+            10_000;
+          const targetVnd =
+            computeDefaultAlertTargetVnd(latestBest) ??
+            defaultTargetVnd ??
+            existingNow?.targetPriceVnd ??
+            10_000;
+          const candidate: PinnedPriceAlert = {
+            slug: pinSlug,
+            productName:
+              (sizeUnknown ? lookup.item?.name : master?.name) || signal.title,
+            categorySlug: categorySlug as PinnedPriceAlert['categorySlug'],
+            targetPriceVnd: targetVnd,
+            bestPriceAtPinVnd: latestBest,
+            pinnedAt: new Date().toISOString(),
+          };
+          void mutatePinnedAlerts(
+            (base) => togglePinnedAlert(base, candidate).alerts
+          );
+          syncPinToggleButtonElement(btn, pinSlug, targetVnd);
+        });
+      });
+  }
 
   root.querySelectorAll<HTMLButtonElement>('.variant-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -695,6 +910,13 @@ let apiBaseOpCounter = 0;
 let lastConfirmedApiBaseSeq = 0;
 let apiBaseSaveInFlight = 0;
 
+let checkoutGuardHydrated = false;
+let lastConfirmedCheckoutGuard = true;
+let checkoutGuardMutationSeq = 0;
+let checkoutGuardOpCounter = 0;
+let lastConfirmedCheckoutGuardSeq = 0;
+let checkoutGuardSaveInFlight = 0;
+
 function isEffectiveConsentOptIn(): boolean {
   return storedOptIn && storedConsentVersion === OPT_IN_CONSENT_VERSION;
 }
@@ -719,12 +941,16 @@ async function loadSidePanel(
   const chkOptIn = document.getElementById(
     'chk-crowd-optin'
   ) as HTMLInputElement | null;
+  const chkCheckoutGuard = document.getElementById(
+    'chk-checkout-guard'
+  ) as HTMLInputElement | null;
   const inpApiBase = document.getElementById(
     'inp-api-base'
   ) as HTMLInputElement | null;
   if (!root) return;
   const generation = ++panelLoadGeneration;
   const consentSeqAtStart = consentMutationSeq;
+  const checkoutSeqAtStart = checkoutGuardMutationSeq;
   const apiSeqAtStart = apiBaseMutationSeq;
 
   try {
@@ -752,6 +978,7 @@ async function loadSidePanel(
     const settings: ExtensionSettings = {
       apiBaseUrl: normalizeAllowedApiBaseUrl(rawSettings?.apiBaseUrl),
       crowdContributeOptIn: rawSettings?.crowdContributeOptIn === true,
+      checkoutGuardEnabled: rawSettings?.checkoutGuardEnabled !== false,
     };
     lastLoadedPanelApiBaseUrl = settings.apiBaseUrl;
 
@@ -781,6 +1008,20 @@ async function loadSidePanel(
       sawRawConsentStorage
     ) {
       chkOptIn.checked = isEffectiveConsentOptIn();
+    }
+
+    if (
+      checkoutGuardMutationSeq === checkoutSeqAtStart &&
+      checkoutGuardSaveInFlight === 0
+    ) {
+      if (typeof rawSettings?.checkoutGuardEnabled === 'boolean') {
+        lastConfirmedCheckoutGuard = rawSettings.checkoutGuardEnabled;
+        if (chkCheckoutGuard) {
+          chkCheckoutGuard.checked = lastConfirmedCheckoutGuard;
+        }
+      } else if (checkoutGuardHydrated && chkCheckoutGuard) {
+        chkCheckoutGuard.checked = lastConfirmedCheckoutGuard;
+      }
     }
 
     if (apiBaseMutationSeq === apiSeqAtStart && apiBaseSaveInFlight === 0) {
@@ -876,6 +1117,7 @@ async function runQuickQuery(query: string): Promise<void> {
     const settings: ExtensionSettings = {
       apiBaseUrl: normalizeAllowedApiBaseUrl(rawSettings?.apiBaseUrl),
       crowdContributeOptIn: rawSettings?.crowdContributeOptIn === true,
+      checkoutGuardEnabled: rawSettings?.checkoutGuardEnabled !== false,
     };
 
     if (res?.ok === false) {
@@ -920,6 +1162,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const chkOptIn = document.getElementById(
     'chk-crowd-optin'
   ) as HTMLInputElement | null;
+  const chkCheckoutGuard = document.getElementById(
+    'chk-checkout-guard'
+  ) as HTMLInputElement | null;
   const inpApiBase = document.getElementById(
     'inp-api-base'
   ) as HTMLInputElement | null;
@@ -927,6 +1172,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const hasLocalStorageGet =
     typeof chrome !== 'undefined' &&
     typeof chrome.storage?.local?.get === 'function';
+
+  currentPinnedAlerts = [];
+  lastConfirmedPinnedAlerts = [];
+  pinnedAlertsHydrated = !hasLocalStorageGet;
+  pinnedAlertsMutationSeq = 0;
+  pinnedAlertsSaveInFlight = 0;
+  pinnedAlertsHydrationPromise = Promise.resolve();
 
   consentHydrated = !hasLocalStorageGet;
   apiBaseHydrated = !hasLocalStorageGet;
@@ -940,6 +1192,13 @@ document.addEventListener('DOMContentLoaded', () => {
   optInSaveInFlight = 0;
   bufferedConsentUpdate = null;
 
+  checkoutGuardHydrated = !hasLocalStorageGet;
+  lastConfirmedCheckoutGuard = true;
+  checkoutGuardMutationSeq = 0;
+  checkoutGuardOpCounter = 0;
+  lastConfirmedCheckoutGuardSeq = 0;
+  checkoutGuardSaveInFlight = 0;
+
   lastConfirmedApiBaseUrl = inpApiBase?.value.trim()
     ? normalizeAllowedApiBaseUrl(inpApiBase.value)
     : DEFAULT_API_BASE_URL;
@@ -951,6 +1210,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (chkOptIn) {
     chkOptIn.checked = false;
   }
+  if (chkCheckoutGuard) {
+    chkCheckoutGuard.checked = true;
+  }
+  renderPinnedAlertsSlot();
 
   btnRefresh?.addEventListener('click', () => {
     void loadSidePanel();
@@ -966,6 +1229,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const finishStorageHydration = (
     stored: Record<string, unknown> | undefined
   ) => {
+    if (!pinnedAlertsHydrated) {
+      pinnedAlertsHydrated = true;
+      lastConfirmedPinnedAlerts = sanitizePinnedAlerts(
+        stored?.[PINNED_ALERTS_STORAGE_KEY]
+      );
+      if (pinnedAlertsMutationSeq === 0 && pinnedAlertsSaveInFlight === 0) {
+        currentPinnedAlerts = lastConfirmedPinnedAlerts;
+        renderPinnedAlertsSlot();
+        refreshActivePinButtonInRoot();
+      }
+    }
+
+    if (!checkoutGuardHydrated) {
+      checkoutGuardHydrated = true;
+      if (checkoutGuardMutationSeq === 0 && checkoutGuardSaveInFlight === 0) {
+        lastConfirmedCheckoutGuard = stored?.checkoutGuardEnabled !== false;
+        if (chkCheckoutGuard) {
+          chkCheckoutGuard.checked = lastConfirmedCheckoutGuard;
+        }
+      }
+    }
+
     if (!consentHydrated) {
       const buffered = bufferedConsentUpdate;
       bufferedConsentUpdate = null;
@@ -1005,11 +1290,13 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   if (hasLocalStorageGet) {
-    void Promise.resolve(
+    pinnedAlertsHydrationPromise = Promise.resolve(
       chrome.storage.local.get([
         'crowdContributeOptIn',
         'crowdConsentVersion',
+        'checkoutGuardEnabled',
         'apiBaseUrl',
+        PINNED_ALERTS_STORAGE_KEY,
       ])
     )
       .then((stored) => {
@@ -1036,10 +1323,43 @@ document.addEventListener('DOMContentLoaded', () => {
       );
       apiBaseHydrated = true;
       lastConfirmedApiBaseUrl = nextApiBase;
+      currentRenderedSettings = {
+        ...currentRenderedSettings,
+        apiBaseUrl: nextApiBase,
+      };
+      renderPinnedAlertsSlot();
       if (apiBaseSaveInFlight === 0) {
         apiBaseMutationSeq += 1;
         if (inpApiBase) {
           inpApiBase.value = nextApiBase;
+        }
+      }
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(changes, PINNED_ALERTS_STORAGE_KEY)
+    ) {
+      const incomingPins = sanitizePinnedAlerts(
+        changes[PINNED_ALERTS_STORAGE_KEY]?.newValue
+      );
+      pinnedAlertsHydrated = true;
+      if (pinnedAlertsSaveInFlight === 0) {
+        pinnedAlertsMutationSeq += 1;
+        lastConfirmedPinnedAlerts = incomingPins;
+        currentPinnedAlerts = incomingPins;
+        renderPinnedAlertsSlot();
+        refreshActivePinButtonInRoot();
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(changes, 'checkoutGuardEnabled')) {
+      checkoutGuardHydrated = true;
+      lastConfirmedCheckoutGuard =
+        changes.checkoutGuardEnabled?.newValue !== false;
+      if (checkoutGuardSaveInFlight === 0) {
+        checkoutGuardMutationSeq += 1;
+        if (chkCheckoutGuard) {
+          chkCheckoutGuard.checked = lastConfirmedCheckoutGuard;
         }
       }
     }
@@ -1144,6 +1464,39 @@ document.addEventListener('DOMContentLoaded', () => {
           sawRawConsentStorage && consentHydrated
             ? isEffectiveConsentOptIn()
             : lastConfirmedOptIn;
+      }
+    }
+  });
+
+  chkCheckoutGuard?.addEventListener('change', async () => {
+    const desired = Boolean(chkCheckoutGuard.checked);
+    checkoutGuardMutationSeq += 1;
+    const opSeq = ++checkoutGuardOpCounter;
+    checkoutGuardSaveInFlight += 1;
+    try {
+      const res = (await chrome.runtime.sendMessage({
+        type: 'RATE_UPDATE_SETTINGS',
+        checkoutGuardEnabled: desired,
+      })) as { ok?: boolean; settings?: ExtensionSettings } | undefined;
+      if (
+        !res ||
+        res.ok === false ||
+        typeof res.settings?.checkoutGuardEnabled !== 'boolean' ||
+        res.settings.checkoutGuardEnabled !== desired
+      ) {
+        throw new Error('Checkout guard settings update failed');
+      }
+      if (opSeq >= lastConfirmedCheckoutGuardSeq) {
+        lastConfirmedCheckoutGuardSeq = opSeq;
+        checkoutGuardHydrated = true;
+        lastConfirmedCheckoutGuard = desired;
+      }
+    } catch {
+      // Reconciled against lastConfirmedCheckoutGuard in finally once in-flight saves settle.
+    } finally {
+      checkoutGuardSaveInFlight = Math.max(0, checkoutGuardSaveInFlight - 1);
+      if (checkoutGuardSaveInFlight === 0 && chkCheckoutGuard) {
+        chkCheckoutGuard.checked = lastConfirmedCheckoutGuard;
       }
     }
   });

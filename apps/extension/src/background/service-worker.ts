@@ -12,6 +12,14 @@ import {
   sanitizeProductUrl,
 } from '../extractors/ecommerce-detector.js';
 import {
+  buildCartItemLookupSignal,
+  buildCartLookupCacheKey,
+  CheckoutLookupCoordinator,
+  detectCheckoutPlatform,
+  evaluateCheckoutItemTrap,
+  sanitizeCartLineItems,
+} from '../extractors/checkout-detector.js';
+import {
   buildExtensionObservationV1,
   buildLookupParams,
   DEFAULT_API_BASE_URL,
@@ -35,6 +43,7 @@ import { resolveActionBadge } from '../verdict-display.js';
 const DEFAULT_SETTINGS: ExtensionSettings = {
   apiBaseUrl: DEFAULT_API_BASE_URL,
   crowdContributeOptIn: false,
+  checkoutGuardEnabled: true,
 };
 
 /**
@@ -51,6 +60,7 @@ async function getSettings(): Promise<ExtensionSettings> {
       'apiBaseUrl',
       'crowdContributeOptIn',
       'crowdConsentVersion',
+      'checkoutGuardEnabled',
       PENDING_ERASURE_KEY,
     ]);
     lastSeenPendingErasure =
@@ -63,6 +73,7 @@ async function getSettings(): Promise<ExtensionSettings> {
       crowdContributeOptIn:
         stored.crowdContributeOptIn === true &&
         stored.crowdConsentVersion === OPT_IN_CONSENT_VERSION,
+      checkoutGuardEnabled: stored.checkoutGuardEnabled !== false,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -221,6 +232,13 @@ const latestFullLookupByTab = new Map<number, number>();
 let latestSelectionCounter = 0;
 let latestPageSelectionCounter = 0;
 let settingsUpdateChain: Promise<void> = Promise.resolve();
+let checkoutRequestCounter = 0;
+const latestCheckoutByTab = new Map<number, number>();
+const checkoutLookupCoordinator = new CheckoutLookupCoordinator({
+  ttlMs: 5 * 60_000,
+  maxEntries: 100,
+  maxConcurrency: 3,
+});
 let pendingQuickQueryReceipt: {
   updatedAt: number;
   apiBaseUrl: string;
@@ -580,6 +598,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     const existing = await chrome.storage.local.get([
       'apiBaseUrl',
       'crowdContributeOptIn',
+      'checkoutGuardEnabled',
     ]);
     const defaults: Partial<ExtensionSettings> = {};
     if (typeof existing.apiBaseUrl !== 'string') {
@@ -587,6 +606,9 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }
     if (typeof existing.crowdContributeOptIn !== 'boolean') {
       defaults.crowdContributeOptIn = DEFAULT_SETTINGS.crowdContributeOptIn;
+    }
+    if (typeof existing.checkoutGuardEnabled !== 'boolean') {
+      defaults.checkoutGuardEnabled = DEFAULT_SETTINGS.checkoutGuardEnabled;
     }
     if (Object.keys(defaults).length > 0) {
       await chrome.storage.local.set(defaults);
@@ -1262,8 +1284,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // The cooldown was another server's (DOS/Rate#1466); saving the same one keeps it.
           if (nextSettings.apiBaseUrl !== (await getSettings()).apiBaseUrl) {
             await lookupCooldown.clear();
+            checkoutLookupCoordinator.clear();
             serverChanged = true;
           }
+        }
+        if (
+          !fromOnboarding &&
+          typeof message.checkoutGuardEnabled === 'boolean'
+        ) {
+          nextSettings.checkoutGuardEnabled = message.checkoutGuardEnabled;
         }
         const consent: Record<string, unknown> = {};
         if (typeof message.crowdContributeOptIn === 'boolean') {
@@ -1294,6 +1323,170 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       runSettingsUpdate,
       runSettingsUpdate
     );
+    return true;
+  }
+
+  if (msgType === 'RATE_CHECKOUT_GUARD_LOOKUP') {
+    const senderCheck = validateContentScriptSender(sender);
+    if (!senderCheck.ok) {
+      sendResponse({ ok: false, error: senderCheck.error });
+      return false;
+    }
+    const rawPageUrl =
+      typeof (message as { pageUrl?: unknown }).pageUrl === 'string'
+        ? (message as { pageUrl: string }).pageUrl.trim()
+        : '';
+    const pagePlatform = detectCheckoutPlatform(rawPageUrl);
+    if (!pagePlatform) {
+      sendResponse({
+        ok: false,
+        error: 'Page URL is not an allowed cart or checkout route',
+      });
+      return false;
+    }
+    const senderUrlCandidate =
+      typeof sender.url === 'string' && sender.url.trim()
+        ? sender.url.trim()
+        : typeof (sender.tab as { url?: unknown } | undefined)?.url ===
+              'string' && String((sender.tab as { url: string }).url).trim()
+          ? String((sender.tab as { url: string }).url).trim()
+          : '';
+    if (!senderUrlCandidate) {
+      sendResponse({
+        ok: false,
+        error: 'Sender URL is required for checkout lookup',
+      });
+      return false;
+    }
+    const senderCheckoutPlatform = detectCheckoutPlatform(senderUrlCandidate);
+    const pageIdentity = resolveMarketplaceFromHttpsUrl(rawPageUrl);
+    const senderIdentity = resolveMarketplaceFromHttpsUrl(senderUrlCandidate);
+    const rawSenderOrigin =
+      typeof (sender as { origin?: unknown }).origin === 'string'
+        ? (sender as { origin: string }).origin.trim()
+        : '';
+    const senderOriginIdentity = rawSenderOrigin
+      ? resolveMarketplaceFromHttpsUrl(rawSenderOrigin)
+      : null;
+    if (
+      !senderCheckoutPlatform ||
+      senderCheckoutPlatform !== pagePlatform ||
+      !pageIdentity ||
+      !senderIdentity ||
+      pageIdentity.origin !== senderIdentity.origin ||
+      (rawSenderOrigin !== '' &&
+        senderOriginIdentity?.origin !== pageIdentity.origin)
+    ) {
+      sendResponse({
+        ok: false,
+        error: 'Sender URL does not match declared checkout page',
+      });
+      return false;
+    }
+
+    const reqSeq = ++checkoutRequestCounter;
+    const tabId = resolvePositiveIntId(sender.tab?.id);
+    if (tabId) latestCheckoutByTab.set(tabId, reqSeq);
+    const isLatestCheckout = () =>
+      tabId ? latestCheckoutByTab.get(tabId) === reqSeq : true;
+
+    (async () => {
+      try {
+        const settings = await getSettings();
+        if (settings.checkoutGuardEnabled === false) {
+          sendResponse({ ok: true, enabled: false, warnings: [] });
+          return;
+        }
+        const initialWait = await lookupCooldown.secondsLeft();
+        if (initialWait > 0) {
+          sendResponse({
+            ok: false,
+            status: 429,
+            retryAfterSeconds: initialWait,
+            warnings: [],
+          });
+          return;
+        }
+        const items = sanitizeCartLineItems(
+          (message as { items?: unknown }).items,
+          rawPageUrl
+        );
+        if (items.length === 0) {
+          sendResponse({ ok: true, enabled: true, warnings: [] });
+          return;
+        }
+
+        // Read-only GET /api/v1/rate/extension/lookup only (TTL-cached, <= 3
+        // concurrent requests). Cart items are NEVER sent to M2 observation ingest.
+        let anyLookupFailed = false;
+        const evaluated = await Promise.all(
+          items.map(async (item) => {
+            const cacheKey = buildCartLookupCacheKey(
+              settings.apiBaseUrl,
+              pagePlatform,
+              item
+            );
+            const cartSignal = buildCartItemLookupSignal(pagePlatform, item);
+            const res = await checkoutLookupCoordinator.lookupItem(
+              cacheKey,
+              async () => {
+                if ((await lookupCooldown.secondsLeft()) > 0) {
+                  return { ok: false, data: null };
+                }
+                const outcome = await fetchExtensionLookup(cartSignal, 'full');
+                return outcome.ok
+                  ? { ok: true, data: outcome.data }
+                  : { ok: false, data: null };
+              }
+            );
+            if (!res.ok) {
+              anyLookupFailed = true;
+              return null;
+            }
+            if (!res.data) return null;
+            return evaluateCheckoutItemTrap(item, res.data, {
+              currentPlatform: pagePlatform,
+              apiBaseUrl: settings.apiBaseUrl,
+            });
+          })
+        );
+
+        if (!isLatestCheckout()) {
+          sendResponse({ ok: true, stale: true, warnings: [] });
+          return;
+        }
+
+        const warnings = evaluated
+          .filter((w): w is NonNullable<typeof w> => w !== null)
+          .sort(
+            (a, b) => b.savingsVnd - a.savingsVnd || b.markupPct - a.markupPct
+          );
+
+        if (warnings.length === 0 && anyLookupFailed) {
+          const cooldownWait = await lookupCooldown.secondsLeft();
+          sendResponse({
+            ok: false,
+            status: cooldownWait > 0 ? 429 : 503,
+            ...(cooldownWait > 0 ? { retryAfterSeconds: cooldownWait } : {}),
+            warnings: [],
+          });
+          return;
+        }
+
+        sendResponse({
+          ok: true,
+          enabled: true,
+          warnings,
+        });
+      } catch (err) {
+        sendResponse({
+          ok: false,
+          warnings: [],
+          error:
+            err instanceof Error ? err.message : 'Checkout guard lookup failed',
+        });
+      }
+    })();
     return true;
   }
 

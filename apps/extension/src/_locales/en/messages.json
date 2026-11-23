@@ -719,5 +719,89 @@
   },
   "observationFieldNetwork": {
     "message": "a hash of your network range (not your IP)"
+  },
+  "checkoutGuardRegionAria": {
+    "message": "Rate.vn checkout price alert"
+  },
+  "checkoutGuardTitle": {
+    "message": "Cart Price Guard"
+  },
+  "checkoutGuardDismiss": {
+    "message": "Dismiss"
+  },
+  "checkoutGuardCheaperOfficial": {
+    "message": "Official store $STORE$ has this in stock for $SAVINGS$ less (-$PCT$%).",
+    "placeholders": {
+      "store": {
+        "content": "$1"
+      },
+      "savings": {
+        "content": "$2"
+      },
+      "pct": {
+        "content": "$3"
+      }
+    }
+  },
+  "checkoutGuardMarkupTrap": {
+    "message": "Cart price is +$PCT$% above the verified Rate.vn reference price ($MEDIAN$).",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
+  },
+  "checkoutGuardCompareCta": {
+    "message": "Compare on Rate.vn"
+  },
+  "checkoutGuardToggleTitle": {
+    "message": "Cart & checkout price-trap guard (22 stores):"
+  },
+  "checkoutGuardToggleBody": {
+    "message": "Reads only item titles and unit prices (up to 5 items) on cart and checkout pages to warn when an official store is cheaper or a price is unusually high. Never reads form inputs, addresses, phone numbers, coupons or payment details."
+  },
+  "pinAlertBtn": {
+    "message": "Pin price alert ($TARGET$)",
+    "placeholders": {
+      "target": {
+        "content": "$1"
+      }
+    }
+  },
+  "unpinAlertBtn": {
+    "message": "Pinned alert ($TARGET$) - Unpin",
+    "placeholders": {
+      "target": {
+        "content": "$1"
+      }
+    }
+  },
+  "pinnedAlertsTitle": {
+    "message": "Pinned Price Alerts ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "pinnedAlertTargetVsLive": {
+    "message": "Target: $TARGET$ | Best live: $LIVE$",
+    "placeholders": {
+      "target": {
+        "content": "$1"
+      },
+      "live": {
+        "content": "$2"
+      }
+    }
+  },
+  "pinnedAlertEmailCta": {
+    "message": "Email Alert on Rate.vn"
+  },
+  "pinnedAlertUnpinShort": {
+    "message": "Unpin"
   }
 }
