@@ -64,7 +64,12 @@ const AUTHORIZED_VAT_CHAIN_PLATFORMS = new Set<string>([
 ]);
 
 const AUTHORIZED_VAT_MERCHANT_RE =
-  /(?:tiki\s*trading|thế\s*giới\s*di\s*động|the\s*gioi\s*di\s*dong|\btgdd\b|topzone|fpt\s*shop|fptshop|f\.?studio|cellphones|shopdunk|viettel\s*store|viettelstore|hoàng\s*hà|hoang\s*ha|di\s*động\s*việt|di\s*dong\s*viet|điện\s*máy\s*xanh|dien\s*may\s*xanh|phong\s*vũ|phong\s*vu|gearvn|nguyễn\s*kim|nguyen\s*kim|\bhacom\b|an\s*phát|an\s*phat|memoryzone|mediamart|\bpico\b)/i;
+  /[^\p{L}\d](?:tiki\s+trading|tikitrading|thế\s+giới\s+di\s+động|the\s+gioi\s+di\s+dong|thegioididong|tgdd|topzone|fpt\s+shop|fptshop|f\.?\s*studio|cellphone\s*s|shopdunk|viettel\s+store|viettelstore|hoàng\s+hà(?:\s+mobile)?|hoang\s+ha(?:\s+mobile)?|di\s+động\s+việt|di\s+dong\s+viet|didongviet|điện\s+máy\s+xanh|dien\s+may\s+xanh|dienmayxanh|phong\s+vũ|phong\s+vu|phongvu|gearvn|nguyễn\s+kim|nguyen\s+kim|nguyenkim|hacom|an\s+phát(?:\s+pc|\s+computer)?|an\s+phat(?:\s+pc|\s+computer)?|anphat(?:pc)?|memoryzone|mediamart|pico)(?=[^\p{L}\d])/iu;
+
+function isAuthorizedVatMerchantName(merchantName: string): boolean {
+  if (!merchantName) return false;
+  return AUTHORIZED_VAT_MERCHANT_RE.test(` ${merchantName} `);
+}
 
 const EXPLICIT_AUTHORIZED_VAT_RE =
   /(?:đại\s*lý\s*(?:uỷ|ủy)\s*quyền|authorized\s*reseller|chính\s*hãng\s*vat|xuất\s*(?:hóa|hoá)\s*đơn\s*vat)/i;
@@ -123,7 +128,7 @@ function classifySellerChannelImpl(
 
   if (input.isOfficial === true) {
     if (
-      AUTHORIZED_VAT_MERCHANT_RE.test(merchantName) ||
+      isAuthorizedVatMerchantName(merchantName) ||
       EXPLICIT_AUTHORIZED_VAT_RE.test(`${merchantName} ${title}`)
     ) {
       return 'authorized_vat';

@@ -17,6 +17,7 @@ import {
   MAX_VOUCHER_PERCENT,
   sanitizeVndAmount,
   selectEffectivePriceBaseOffers,
+  TRADE_IN_CONDITION_FACTORS,
   type InstallmentTerm,
   type TradeInConditionTier,
   type VoucherDiscountMode,
@@ -27,6 +28,7 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import ContentText from '@/components/elementary/ContentText';
 import StarRating from '@/components/elementary/StarRating';
 
 interface ProductValueCalculatorProps {
@@ -42,6 +44,7 @@ interface ProductValueCalculatorProps {
   readonly initialIncludeResale?: boolean;
   readonly offers?: readonly MerchantOffer[];
   readonly initialEffectivePanelOpen?: boolean;
+  readonly initialTradeInEnabled?: boolean;
 }
 
 export type HorizonMonths = 12 | 24 | 36;
@@ -182,6 +185,7 @@ export default function ProductValueCalculator({
   initialIncludeResale = true,
   offers,
   initialEffectivePanelOpen = false,
+  initialTradeInEnabled = false,
 }: ProductValueCalculatorProps) {
   const t = useTranslations('productDetail');
   const locale = useLocale();
@@ -210,7 +214,9 @@ export default function ProductValueCalculator({
   const [discountAmountInput, setDiscountAmountInput] = useState<string>('');
   const [discountPercentInput, setDiscountPercentInput] = useState<string>('');
   const [discountCapInput, setDiscountCapInput] = useState<string>('');
-  const [tradeInEnabled, setTradeInEnabled] = useState<boolean>(false);
+  const [tradeInEnabled, setTradeInEnabled] = useState<boolean>(
+    initialTradeInEnabled
+  );
   const [oldBenchmarkInput, setOldBenchmarkInput] = useState<string>('');
   const [conditionTier, setConditionTier] =
     useState<TradeInConditionTier>('grade_1_mint');
@@ -296,10 +302,16 @@ export default function ProductValueCalculator({
     ]
   );
 
-  const boundOfferSource = boundOffer
-    ? `${boundOffer.offer.merchant?.name || boundOffer.offer.platform.toUpperCase()} (${boundOffer.offer.platform.toUpperCase()})`
+  const boundOfferSourceMeta = boundOffer
+    ? {
+        merchantName: boundOffer.offer.merchant?.name?.trim() || null,
+        platformLabel: boundOffer.offer.platform.toUpperCase(),
+      }
     : radarSignal?.genuineDeal?.merchantName
-      ? `${radarSignal.genuineDeal.merchantName} (${radarSignal.genuineDeal.platform.toUpperCase()})`
+      ? {
+          merchantName: radarSignal.genuineDeal.merchantName.trim() || null,
+          platformLabel: radarSignal.genuineDeal.platform.toUpperCase(),
+        }
       : null;
 
   if (metrics.safeMinPrice <= 0) {
@@ -566,9 +578,20 @@ export default function ProductValueCalculator({
             <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
               <div>
                 <h4 className="h6 fw-bold mb-1">{t('effToggle')}</h4>
-                {boundOfferSource && (
+                {boundOfferSourceMeta && (
                   <p className="text-muted small mb-0">
-                    {boundOfferSource} - {formatPriceVnd(boundPriceVnd, locale)}
+                    {boundOfferSourceMeta.merchantName ? (
+                      <>
+                        <ContentText
+                          text={boundOfferSourceMeta.merchantName}
+                          locale={locale}
+                        />{' '}
+                        ({boundOfferSourceMeta.platformLabel})
+                      </>
+                    ) : (
+                      boundOfferSourceMeta.platformLabel
+                    )}{' '}
+                    - {formatPriceVnd(boundPriceVnd, locale)}
                   </p>
                 )}
               </div>
@@ -825,33 +848,31 @@ export default function ProductValueCalculator({
                         >
                           {(
                             [
-                              ['grade_1_mint', 1, formatPercent(100, locale)],
-                              [
-                                'grade_2_light_wear',
-                                2,
-                                formatPercent(85, locale),
-                              ],
-                              [
-                                'grade_3_battery_under_85',
-                                3,
-                                `<${formatPercent(85, locale)}`,
-                              ],
+                              'grade_1_mint',
+                              'grade_2_light_wear',
+                              'grade_3_battery_under_85',
                             ] as const
-                          ).map(([tier, gradeNum, pctLabel]) => (
-                            <button
-                              key={tier}
-                              type="button"
-                              aria-pressed={conditionTier === tier}
-                              onClick={() => setConditionTier(tier)}
-                              className={`btn btn-sm rounded-pill px-2 ${
-                                conditionTier === tier
-                                  ? 'btn-dark'
-                                  : 'btn-outline-secondary'
-                              }`}
-                            >
-                              {t('effC', { n: gradeNum })} ({pctLabel})
-                            </button>
-                          ))}
+                          ).map((tier, idx) => {
+                            const pct = Math.round(
+                              TRADE_IN_CONDITION_FACTORS[tier] * 100
+                            );
+                            return (
+                              <button
+                                key={tier}
+                                type="button"
+                                aria-pressed={conditionTier === tier}
+                                onClick={() => setConditionTier(tier)}
+                                className={`btn btn-sm rounded-pill px-2 ${
+                                  conditionTier === tier
+                                    ? 'btn-dark'
+                                    : 'btn-outline-secondary'
+                                }`}
+                              >
+                                {t('effC', { n: idx + 1 })} (
+                                {formatPercent(pct, locale)})
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
@@ -935,23 +956,35 @@ export default function ProductValueCalculator({
                             : 'text-muted'
                       }`}
                     >
-                      {effectiveResult.selfResaleComparisonDeltaVnd > 0
-                        ? `${t('effStore')}: ${t('cheaperByBadge', {
-                            amount: formatNumber(
-                              effectiveResult.selfResaleComparisonDeltaVnd,
-                              locale
-                            ),
-                          })}`
-                        : effectiveResult.selfResaleComparisonDeltaVnd < 0
-                          ? `${t('effSelf')}: ${t('cheaperByBadge', {
-                              amount: formatNumber(
-                                Math.abs(
-                                  effectiveResult.selfResaleComparisonDeltaVnd
-                                ),
-                                locale
+                      {effectiveResult.selfResaleComparisonDeltaVnd === 0
+                        ? `${t('effStore')} = ${t('effSelf')}`
+                        : effectiveResult.netCashPayableVnd === 0 &&
+                            effectiveResult.selfResaleNetPayableVnd === 0
+                          ? `${
+                              effectiveResult.selfResaleComparisonDeltaVnd > 0
+                                ? t('effStore')
+                                : t('effSelf')
+                            }: +${formatPriceVnd(
+                              Math.abs(
+                                effectiveResult.selfResaleComparisonDeltaVnd
                               ),
-                            })}`
-                          : `${t('effStore')} = ${t('effSelf')}`}
+                              locale
+                            )}`
+                          : effectiveResult.selfResaleComparisonDeltaVnd > 0
+                            ? `${t('effStore')}: ${t('cheaperByBadge', {
+                                amount: formatNumber(
+                                  effectiveResult.selfResaleComparisonDeltaVnd,
+                                  locale
+                                ),
+                              })}`
+                            : `${t('effSelf')}: ${t('cheaperByBadge', {
+                                amount: formatNumber(
+                                  Math.abs(
+                                    effectiveResult.selfResaleComparisonDeltaVnd
+                                  ),
+                                  locale
+                                ),
+                              })}`}
                     </div>
                   </div>
                 </div>

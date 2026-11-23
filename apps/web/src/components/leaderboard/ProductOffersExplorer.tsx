@@ -1103,7 +1103,7 @@ export default function ProductOffersExplorer({
                               {originBadgeLabel}
                             </span>
                             <span
-                              className={`badge ${resolveSellerChannelBadgeClass(sellerChannel)}`}
+                              className={`badge me-1 ${resolveSellerChannelBadgeClass(sellerChannel)}`}
                               data-testid="offer-channel-pill"
                               data-channel={sellerChannel}
                             >

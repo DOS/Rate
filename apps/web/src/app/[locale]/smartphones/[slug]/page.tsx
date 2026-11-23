@@ -1698,6 +1698,7 @@ export async function ProductDetailView({
                 expertScore10={lbScored.expertScore10}
                 valueCriterionScore5={lbScored.criteria.value ?? 0}
                 radarSignal={radarSignal}
+                offers={defaultSize?.offers ?? offers}
               />
             );
           })()}

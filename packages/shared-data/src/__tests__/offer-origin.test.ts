@@ -222,11 +222,135 @@ function testClassifySellerChannel(): void {
     [null, 'independent_shop', 'null input'],
     [undefined, 'independent_shop', 'undefined input'],
     [{}, 'independent_shop', 'empty object input'],
+    // Substring boundary guards against unrelated Official Mall storefronts
+    [
+      {
+        platform: 'shopee',
+        isOfficial: true,
+        merchantName: 'Toàn Phát Official',
+        title: 'Tai nghe Bluetooth',
+      },
+      'official_mall',
+      'Substring an phat inside Toan Phat Official must not misclassify as authorized_vat',
+    ],
+    [
+      {
+        platform: 'shopee',
+        isOfficial: true,
+        merchantName: 'Lan Phát Official',
+        title: 'Loa Bluetooth',
+      },
+      'official_mall',
+      'Substring an phat inside Lan Phat Official stays official_mall',
+    ],
+    [
+      {
+        platform: 'shopee',
+        isOfficial: true,
+        merchantName: 'Hoàng Hào Official',
+        title: 'Phụ kiện điện thoại',
+      },
+      'official_mall',
+      'Substring hoang ha inside Hoang Hao Official stays official_mall',
+    ],
+    [
+      {
+        platform: 'lazada',
+        isOfficial: true,
+        merchantName: 'Laptopzone Official',
+        title: 'Laptop Gaming',
+      },
+      'official_mall',
+      'Substring topzone inside Laptopzone Official stays official_mall',
+    ],
+    [
+      {
+        platform: 'shopee',
+        isOfficial: true,
+        merchantName: 'SelfStudio Official',
+        title: 'Đèn studio',
+      },
+      'official_mall',
+      'Substring fstudio inside SelfStudio Official stays official_mall',
+    ],
+    [
+      {
+        platform: 'shopee',
+        isOfficial: true,
+        merchantName: 'An Phát PC Official',
+        title: 'Laptop ASUS',
+      },
+      'authorized_vat',
+      'Whole-word An Phat PC Official keeps authorized_vat',
+    ],
+    // Tiki Trading 1P handling across isOfficial values
+    [
+      {
+        platform: 'tiki',
+        isOfficial: null,
+        merchantName: 'Tiki Trading',
+        title: 'iPhone 16 Pro Max 256GB VN/A',
+      },
+      'authorized_vat',
+      'Tiki Trading on Tiki with isOfficial null classifies as authorized_vat',
+    ],
+    [
+      {
+        platform: 'tiki',
+        isOfficial: false,
+        merchantName: 'Tiki Trading',
+        title: 'iPhone 16 Pro Max 256GB VN/A',
+      },
+      'independent_shop',
+      'Tiki Trading on Tiki with isOfficial explicitly false falls back to independent_shop',
+    ],
+    // Explicit authorized VAT cues
+    [
+      {
+        platform: 'shopee',
+        isOfficial: true,
+        merchantName: 'Apple Shop',
+        title: 'MacBook Air M4 Xuất hóa đơn VAT',
+      },
+      'authorized_vat',
+      'Official store explicitly promising VAT invoice classifies as authorized_vat',
+    ],
+    [
+      {
+        platform: 'shopee',
+        isOfficial: false,
+        merchantName: 'Shop ABC',
+        title: 'iPhone 16 Xuất hóa đơn VAT',
+      },
+      'independent_shop',
+      'Non-official shop title alone cannot claim authorized_vat',
+    ],
   ];
 
   for (const [input, expected, label] of cases) {
     assert.equal(classifySellerChannel(input), expected, label);
   }
+
+  // Adversarial long inputs remain bounded and fast
+  const startMs = Date.now();
+  const longNoise = `${'xách tay chính hãng vn/a '.repeat(250)} LL/A`;
+  assert.equal(
+    detectProductOrigin(longNoise, `${'official mall '.repeat(300)}`),
+    'imported'
+  );
+  assert.equal(
+    classifySellerChannel({
+      platform: 'shopee',
+      isOfficial: true,
+      merchantName: 'Toan Phat '.repeat(120),
+      title: 'a '.repeat(800),
+    }),
+    'official_mall'
+  );
+  assert.ok(
+    Date.now() - startMs < 200,
+    'Adversarial long origin/channel inputs must complete quickly without backtracking'
+  );
 }
 
 function main(): void {

@@ -541,11 +541,71 @@ function testUiSsrIntegration(): void {
         valueCriterionScore5: 4.5,
         offers: sampleOffers,
         initialEffectivePanelOpen: true,
+        initialTradeInEnabled: true,
       })
     )
   );
   assert.ok(calcCsHtml.includes(csMessages.productDetail.effNote));
   assert.ok(calcCsHtml.includes('26\u00a0500\u00a0000'));
+  assert.ok(calcCsHtml.includes('70\u00a0%'));
+
+  // Verify Vietnamese merchant name receives lang="vi" inside boundOfferSourceMeta on en locale,
+  // and offers === undefined fallback renders cleanly without crashing.
+  const viMerchantHtml = renderToStaticMarkup(
+    React.createElement(
+      IntlProvider,
+      { locale: 'en', messages: enMessages, timeZone: 'Asia/Ho_Chi_Minh' },
+      React.createElement(ProductValueCalculator, {
+        productName: 'iPhone 16 Pro Max 256GB',
+        brand: 'Apple',
+        categorySlug: 'smartphones',
+        minPriceVnd: 27_990_000,
+        maxPriceVnd: 29_990_000,
+        userScore5: 4.8,
+        expertScore10: 9.2,
+        valueCriterionScore5: 4.5,
+        offers: [
+          mkUiOffer(
+            'vi-shop',
+            'shopee',
+            'Cửa Hàng Điện Thoại Hà Nội',
+            true,
+            'iPhone 16 Pro Max 256GB Chính hãng VN/A',
+            27_990_000
+          ),
+        ],
+        initialEffectivePanelOpen: true,
+        initialTradeInEnabled: true,
+      })
+    )
+  );
+  assert.ok(
+    viMerchantHtml.includes('lang="vi"'),
+    'Vietnamese merchant name on /en must receive ContentText lang="vi"'
+  );
+  assert.ok(
+    viMerchantHtml.includes('(70%)'),
+    'Grade 3 button must display 70% payout factor matching calculation'
+  );
+
+  const noOffersOpenHtml = renderToStaticMarkup(
+    React.createElement(
+      IntlProvider,
+      { locale: 'en', messages: enMessages, timeZone: 'Asia/Ho_Chi_Minh' },
+      React.createElement(ProductValueCalculator, {
+        productName: 'iPhone 16 Pro Max 256GB',
+        brand: 'Apple',
+        categorySlug: 'smartphones',
+        minPriceVnd: 27_990_000,
+        maxPriceVnd: 29_990_000,
+        userScore5: 4.8,
+        expertScore10: 9.2,
+        valueCriterionScore5: 4.5,
+        initialEffectivePanelOpen: true,
+      })
+    )
+  );
+  assert.ok(noOffersOpenHtml.includes('27.990.000'));
 }
 
 function main(): void {
