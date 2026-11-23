@@ -161,9 +161,9 @@ async function fetchExtensionLookup(
   );
 }
 
-// Opt-in ExtensionObservation v1 quarantine remains restricted to the 10
-// SQL-checked marketplaces (`EXTENSION_MARKETPLACES`) until a coordinated
-// `DOS-Me` PostgreSQL migration widens `rate.extension_observations` (#1850).
+// Opt-in ExtensionObservation v1 quarantine accepts all 22 SQL-checked
+// marketplaces (`EXTENSION_MARKETPLACES`) aligned with `DOS-Me` migration
+// `20261201130000` (`DOS/Rate#1762`, `DOS/Rate#1850`).
 const SUPPORTED_CROWD_PLATFORMS: ReadonlySet<string> = new Set<string>(
   EXTENSION_MARKETPLACES
 );
@@ -501,8 +501,8 @@ async function maybeSendOptInCrowdSignal(
   if ((await lookupCooldown.secondsLeft()) > 0) return;
   const signal = sanitizeExtensionProductSignal(rawSignal);
   const settings = await getSettings();
-  // Strict Privacy Gate: Only send crowd verification signal if user explicitly opted in
-  // and platform is in the 10-platform capability matrix
+  // Strict Privacy Gate: Only send crowd verification observation if user
+  // explicitly opted in and platform is in the 22 SQL-checked marketplaces.
   if (!settings.crowdContributeOptIn) {
     if (lastSeenPendingErasure) {
       await observationClient.retryErasures();

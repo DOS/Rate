@@ -177,9 +177,10 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     crowdVerifyQueue: true,
   },
   // Wave 1-3 retail chains (DOS/Rate#1850): full lookup, exact item match, and
-  // cross-catalog comparison are enabled; `crowdVerifyQueue` stays false until
-  // a DOS-Me migration widens `rate.enqueue_crowd_verify_signal` and M2 SQL
-  // CHECK constraints (`DOS/Rate#1762`).
+  // cross-catalog comparison are enabled. M2 `rate.extension_observations`
+  // already supports all 22 platforms (`DOS/DOS.Me#1879`, `DOS/Rate#1762`),
+  // while `crowdVerifyQueue` stays false until a separate DOS-Me migration
+  // widens legacy `rate.enqueue_crowd_verify_signal`.
   dienmayxanh: {
     platform: 'dienmayxanh',
     displayName: 'Điện Máy Xanh',

@@ -2986,6 +2986,128 @@ function testExtensionObservation(): void {
   );
   assert.ok(!rules.isExtensionMarketplaceHost('fptshop', 'www.topzone.vn'));
   assert.ok(!rules.isExtensionMarketplaceHost('shopee', 'tiki.vn'));
+  assert.deepEqual(
+    [...rules.EXTENSION_MARKETPLACES],
+    [
+      'shopee',
+      'lazada',
+      'tiki',
+      'tiktok',
+      'cellphones',
+      'tgdd',
+      'fptshop',
+      'hoangha',
+      'didongviet',
+      'phongvu',
+      'dienmayxanh',
+      'topzone',
+      'gearvn',
+      'nguyenkim',
+      'shopdunk',
+      'hacom',
+      'clickbuy',
+      'viettelstore',
+      'pico',
+      'mediamart',
+      'memoryzone',
+      'anphatpc',
+    ]
+  );
+  assert.equal(rules.EXTENSION_MARKETPLACES.length, 22);
+
+  const wave1To3Domains: ReadonlyArray<
+    readonly [rules.ExtensionMarketplace, string]
+  > = [
+    ['dienmayxanh', 'dienmayxanh.com'],
+    ['topzone', 'topzone.vn'],
+    ['gearvn', 'gearvn.com'],
+    ['nguyenkim', 'nguyenkim.com'],
+    ['shopdunk', 'shopdunk.com'],
+    ['hacom', 'hacom.vn'],
+    ['clickbuy', 'clickbuy.com.vn'],
+    ['viettelstore', 'viettelstore.vn'],
+    ['pico', 'pico.vn'],
+    ['mediamart', 'mediamart.vn'],
+    ['memoryzone', 'memoryzone.com.vn'],
+    ['anphatpc', 'anphatpc.com.vn'],
+  ];
+  for (const [marketplace, domain] of wave1To3Domains) {
+    for (const host of [domain, `www.${domain}`, `a.b-c.${domain}`]) {
+      const listingUrl = `https://${host}/products/item-1`;
+      assert.ok(
+        rules.isExtensionMarketplaceHost(marketplace, host),
+        `${marketplace} must accept ${host}`
+      );
+      assert.ok(
+        parse({ ...valid, marketplace, listing_url: listingUrl }).ok,
+        `${marketplace} must accept ${listingUrl}`
+      );
+    }
+    for (const badHost of [
+      `evil${domain}`,
+      `${domain}.evil.com`,
+      `a..${domain}`,
+      `.${domain}`,
+      domain.replace('.', 'x'),
+    ]) {
+      assert.equal(
+        rules.isExtensionMarketplaceHost(marketplace, badHost),
+        false,
+        `${marketplace} must reject ${badHost}`
+      );
+      const badRes = parse({
+        ...valid,
+        marketplace,
+        listing_url: `https://${badHost}/products/item-1`,
+      });
+      assert.equal(badRes.ok, false, `${marketplace} must reject ${badHost}`);
+      if (!badRes.ok) assert.equal(badRes.field, 'listing_url');
+    }
+    for (const badUrl of [
+      `https://WWW.${domain}/products/item-1`,
+      `https://${domain}:443/products/item-1`,
+      `https://user@${domain}/products/item-1`,
+    ]) {
+      const badRes = parse({
+        ...valid,
+        marketplace,
+        listing_url: badUrl,
+      });
+      assert.equal(badRes.ok, false, `${marketplace} must reject ${badUrl}`);
+      if (!badRes.ok) assert.equal(badRes.field, 'listing_url');
+    }
+  }
+
+  for (const [marketplace, foreignHost] of [
+    ['tgdd', 'topzone.vn'],
+    ['tgdd', 'dienmayxanh.com'],
+    ['topzone', 'thegioididong.com'],
+    ['topzone', 'www.thegioididong.com'],
+    ['topzone', 'dienmayxanh.com'],
+    ['topzone', 'shopee.vn'],
+    ['dienmayxanh', 'thegioididong.com'],
+    ['dienmayxanh', 'topzone.vn'],
+    ['gearvn', 'hacom.vn'],
+    ['shopee', 'topzone.vn'],
+  ] as const) {
+    assert.equal(
+      rules.isExtensionMarketplaceHost(marketplace, foreignHost),
+      false,
+      `${marketplace} must reject foreign host ${foreignHost}`
+    );
+    const foreignRes = parse({
+      ...valid,
+      marketplace,
+      listing_url: `https://${foreignHost}/item-1`,
+    });
+    assert.equal(
+      foreignRes.ok,
+      false,
+      `${marketplace} must reject foreign host ${foreignHost}`
+    );
+    if (!foreignRes.ok) assert.equal(foreignRes.field, 'listing_url');
+  }
+
   for (const m of rules.EXTENSION_MARKETPLACES) {
     assert.ok(rules.EXTENSION_MARKETPLACE_HOSTS[m].length > 0, m);
   }

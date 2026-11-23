@@ -111,7 +111,9 @@ CREATE TABLE IF NOT EXISTS rate.extension_observations (
   CONSTRAINT extension_observations_schema_version_check CHECK (schema_version = 1),
   CONSTRAINT extension_observations_marketplace_check CHECK (marketplace IN (
     'shopee', 'lazada', 'tiki', 'tiktok', 'cellphones', 'tgdd', 'fptshop',
-    'hoangha', 'didongviet', 'phongvu')),
+    'hoangha', 'didongviet', 'phongvu',
+    'dienmayxanh', 'topzone', 'gearvn', 'nguyenkim', 'shopdunk', 'hacom',
+    'clickbuy', 'viettelstore', 'pico', 'mediamart', 'memoryzone', 'anphatpc')),
   -- https, at most 2048 characters, no query, fragment or path parameter, no space (JavaScript's
   -- \s set) or control character, and a lowercase host without user or port that belongs to the
   -- marketplace (the host table).
@@ -129,6 +131,18 @@ CREATE TABLE IF NOT EXISTS rate.extension_observations (
       WHEN 'hoangha' THEN listing_url ~ '^https://hoanghamobile\.com(/|$)'
       WHEN 'didongviet' THEN listing_url ~ '^https://didongviet\.vn(/|$)'
       WHEN 'phongvu' THEN listing_url ~ '^https://phongvu\.vn(/|$)'
+      WHEN 'dienmayxanh' THEN listing_url ~ '^https://([a-z0-9-]+\.)*dienmayxanh\.com(/|$)'
+      WHEN 'topzone' THEN listing_url ~ '^https://([a-z0-9-]+\.)*topzone\.vn(/|$)'
+      WHEN 'gearvn' THEN listing_url ~ '^https://([a-z0-9-]+\.)*gearvn\.com(/|$)'
+      WHEN 'nguyenkim' THEN listing_url ~ '^https://([a-z0-9-]+\.)*nguyenkim\.com(/|$)'
+      WHEN 'shopdunk' THEN listing_url ~ '^https://([a-z0-9-]+\.)*shopdunk\.com(/|$)'
+      WHEN 'hacom' THEN listing_url ~ '^https://([a-z0-9-]+\.)*hacom\.vn(/|$)'
+      WHEN 'clickbuy' THEN listing_url ~ '^https://([a-z0-9-]+\.)*clickbuy\.com\.vn(/|$)'
+      WHEN 'viettelstore' THEN listing_url ~ '^https://([a-z0-9-]+\.)*viettelstore\.vn(/|$)'
+      WHEN 'pico' THEN listing_url ~ '^https://([a-z0-9-]+\.)*pico\.vn(/|$)'
+      WHEN 'mediamart' THEN listing_url ~ '^https://([a-z0-9-]+\.)*mediamart\.vn(/|$)'
+      WHEN 'memoryzone' THEN listing_url ~ '^https://([a-z0-9-]+\.)*memoryzone\.com\.vn(/|$)'
+      WHEN 'anphatpc' THEN listing_url ~ '^https://([a-z0-9-]+\.)*anphatpc\.com\.vn(/|$)'
       ELSE false END),
   CONSTRAINT extension_observations_external_item_id_check
     CHECK (external_item_id ~ '^[A-Za-z0-9_.-]{1,64}$'),
@@ -361,8 +375,11 @@ BEGIN
   -- marketplace.
   v_marketplace := CASE WHEN jsonb_typeof(o -> 'marketplace') = 'string'
                         THEN o ->> 'marketplace' END;
-  IF v_marketplace IS NULL OR v_marketplace NOT IN ('shopee', 'lazada', 'tiki', 'tiktok',
-       'cellphones', 'tgdd', 'fptshop', 'hoangha', 'didongviet', 'phongvu') THEN
+  IF v_marketplace IS NULL OR v_marketplace NOT IN (
+       'shopee', 'lazada', 'tiki', 'tiktok', 'cellphones', 'tgdd', 'fptshop',
+       'hoangha', 'didongviet', 'phongvu',
+       'dienmayxanh', 'topzone', 'gearvn', 'nguyenkim', 'shopdunk', 'hacom',
+       'clickbuy', 'viettelstore', 'pico', 'mediamart', 'memoryzone', 'anphatpc') THEN
     RAISE EXCEPTION 'Unsupported marketplace' USING ERRCODE = '22023', DETAIL = 'marketplace';
   END IF;
 
@@ -382,6 +399,18 @@ BEGIN
     WHEN 'hoangha' THEN v_host = 'hoanghamobile.com'
     WHEN 'didongviet' THEN v_host = 'didongviet.vn'
     WHEN 'phongvu' THEN v_host = 'phongvu.vn'
+    WHEN 'dienmayxanh' THEN v_host ~ '^([a-z0-9-]+\.)*dienmayxanh\.com$'
+    WHEN 'topzone' THEN v_host ~ '^([a-z0-9-]+\.)*topzone\.vn$'
+    WHEN 'gearvn' THEN v_host ~ '^([a-z0-9-]+\.)*gearvn\.com$'
+    WHEN 'nguyenkim' THEN v_host ~ '^([a-z0-9-]+\.)*nguyenkim\.com$'
+    WHEN 'shopdunk' THEN v_host ~ '^([a-z0-9-]+\.)*shopdunk\.com$'
+    WHEN 'hacom' THEN v_host ~ '^([a-z0-9-]+\.)*hacom\.vn$'
+    WHEN 'clickbuy' THEN v_host ~ '^([a-z0-9-]+\.)*clickbuy\.com\.vn$'
+    WHEN 'viettelstore' THEN v_host ~ '^([a-z0-9-]+\.)*viettelstore\.vn$'
+    WHEN 'pico' THEN v_host ~ '^([a-z0-9-]+\.)*pico\.vn$'
+    WHEN 'mediamart' THEN v_host ~ '^([a-z0-9-]+\.)*mediamart\.vn$'
+    WHEN 'memoryzone' THEN v_host ~ '^([a-z0-9-]+\.)*memoryzone\.com\.vn$'
+    WHEN 'anphatpc' THEN v_host ~ '^([a-z0-9-]+\.)*anphatpc\.com\.vn$'
     ELSE false END;
   IF v_url IS NULL OR char_length(v_url) > 2048
      OR v_url ~ '[?#;[:space:]\x01-\x1f\x7f-\x9f\xa0\x1680\x2000-\x200a\x2028\x2029\x202f\x205f\x3000\xfeff]'
