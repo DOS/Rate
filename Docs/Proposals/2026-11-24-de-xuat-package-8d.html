@@ -1182,16 +1182,25 @@
                   >buildOgTruthCardPath({ type: 'combo', items: selectedSlugs,
                   officialOnly, minTrust, maxStores, shippingVnd, format:
                   'social', download: true, locale })</code
-                >
-                khi có kết quả <code>result</code> hợp lệ. Để kết quả PNG luôn
-                khớp 100% với số đang xem mà không mở đường Cache-Busting DoS:
-                khi người dùng nhập tay <code>shippingVnd</code> ngoài tập
-                preset chuẩn của CDN (ví dụ <code>12.345đ</code>), UI vô hiệu
-                hóa nút tải kèm gợi ý chọn mức ship chuẩn (<code>0</code>,
+                >. Áp 3 điều kiện gating bắt buộc ở UI để nút tải không bao giờ
+                gửi cấu hình lệch hoặc nhận lỗi <code>400</code>: (1) chỉ bật
+                khi <code>!loading &amp;&amp; result</code> tồn tại và
+                <code>result.query</code> (<code>items</code>,
+                <code>officialOnly</code>, <code>minTrust</code>,
+                <code>maxStores</code>, <code>shippingVnd</code>) khớp đúng với
+                state đang chọn trên UI (tránh xuất kết quả cũ khi debounce hoặc
+                fetch chưa xong); (2) kiểm tra
+                <code>minTrust % 5 === 0</code> (vì
+                <code>clampComboMinTrust</code> có thể nhận số lẻ như
+                <code>minTrust=81</code> từ URL) và <code>shippingVnd</code> nằm
+                trong tập 8 preset chuẩn của CDN (<code>0</code>,
                 <code>15k</code>, <code>20k</code>, <code>25k</code>,
                 <code>30k</code>, <code>40k</code>, <code>50k</code>,
-                <code>100k</code>), tuyệt đối không âm thầm xuất thẻ sai lệch số
-                tiền.
+                <code>100k</code>); (3) khi <code>minTrust</code> không chia hết
+                cho <code>5</code> hoặc <code>shippingVnd</code> nhập tay ngoài
+                tập preset, UI vô hiệu hóa nút tải kèm gợi ý chọn mức bội số
+                <code>5</code> / ship chuẩn, không âm thầm xuất thẻ sai cấu
+                hình.
               </li>
             </ul>
           </dd>
@@ -1229,9 +1238,13 @@
                 mức khớp đúng <code>&lt;select&gt;</code>), và
                 <code>shippingVnd</code> chỉ nhận 8 mức preset chuẩn
                 <code>0|15000|20000|25000|30000|40000|50000|100000</code> (trả
-                <code>400</code> với mọi giá trị ngoài tập allowlist). Nhờ đó
-                thẻ PNG vừa khớp hoàn toàn cấu hình người dùng vừa khống chế số
-                biến thể cache CDN <code>s-maxage=3600</code>.
+                <code>400</code> với mọi giá trị ngoài tập allowlist). Lưu ý
+                tính trung thực về độ tươi dữ liệu: thẻ PNG đảm bảo khớp cùng bộ
+                tham số lọc và khống chế biến thể cache CDN
+                <code>s-maxage=3600</code>
+                (<code>OG_TRUTH_CARD_CACHE_CONTROL</code>), còn giá từng nơi bán
+                là snapshot tại thời điểm render thẻ và có thể chênh nhẹ nếu sàn
+                vừa cập nhật giá trong cửa sổ cache 1 giờ.
               </li>
               <li>
                 <strong
@@ -1251,6 +1264,7 @@
                 tiết kiệm thực tế, số chuỗi tham gia + số shop đạt chuẩn
                 <code>Verified Safe</code> (chỉ đếm khi
                 <code>trustBadge.verifiedSafe === true</code>), và chân trang
+                ghi rõ mốc giờ snapshot UTC/VN + link
                 <code>rate.vn/watchlist?items=...</code>.
               </li>
             </ul>
