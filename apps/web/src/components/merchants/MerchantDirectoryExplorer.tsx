@@ -1567,6 +1567,7 @@ export default function MerchantDirectoryExplorer({
                         >
                           {trustBadge?.verifiedSafe && (
                             <details
+                              open={openSafeDetailsIds.has(merchant.id)}
                               className={
                                 openSafeDetailsIds.has(merchant.id)
                                   ? 'w-100'

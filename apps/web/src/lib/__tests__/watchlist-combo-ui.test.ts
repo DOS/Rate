@@ -1341,6 +1341,18 @@ async function main() {
     let writeCalledSync = false;
     let buildMdCalls = 0;
     const writtenItems: Array<{ blobPromise: Promise<Blob> }> = [];
+    const safariClipboard = {
+      async write(items: Array<{ blobPromise: Promise<Blob> }>) {
+        assert.equal(
+          this,
+          safariClipboard,
+          'clipboard.write must be called with clipboard as receiver (this)'
+        );
+        writeCalledSync = true;
+        writtenItems.push(...items);
+        await Promise.all(items.map((item) => item.blobPromise));
+      },
+    };
     const safariSuccessPromise = copyMerchantsMarkdownWithClipboard({
       matchedCount: 2,
       fetchAllMatching: () =>
@@ -1352,13 +1364,7 @@ async function main() {
         return `# Export (${rows.length})`;
       },
       createClipboardItem: (blobPromise) => ({ blobPromise }),
-      clipboard: {
-        write: async (items) => {
-          writeCalledSync = true;
-          writtenItems.push(...items);
-          await Promise.all(items.map((item) => item.blobPromise));
-        },
-      },
+      clipboard: safariClipboard,
     });
     assert.equal(
       writeCalledSync,
@@ -1443,15 +1449,21 @@ async function main() {
 
     // 6.5e writeText fallback when rowsToExport is non-empty
     const nonEmptyFallbackTexts: string[] = [];
+    const fallbackClipboard = {
+      async writeText(text: string) {
+        assert.equal(
+          this,
+          fallbackClipboard,
+          'clipboard.writeText must be called with clipboard as receiver (this)'
+        );
+        nonEmptyFallbackTexts.push(text);
+      },
+    };
     const fallbackSuccessOk = await copyMerchantsMarkdownWithClipboard({
       matchedCount: 1,
       fetchAllMatching: async () => [cleanMerchant],
       buildMarkdown: (rows) => `# Export (${rows.length})`,
-      clipboard: {
-        writeText: async (text) => {
-          nonEmptyFallbackTexts.push(text);
-        },
-      },
+      clipboard: fallbackClipboard,
     });
     assert.equal(fallbackSuccessOk, true);
     assert.deepEqual(nonEmptyFallbackTexts, ['# Export (1)']);
