@@ -367,6 +367,24 @@ try {
     { marketplace: 'hoangha', listing_url: 'https://hoanghamobile.com/x' },
     { marketplace: 'didongviet', listing_url: 'https://didongviet.vn/x.html' },
     { marketplace: 'phongvu', listing_url: 'https://phongvu.vn/x' },
+    ...[
+      ['dienmayxanh', 'dienmayxanh.com'],
+      ['topzone', 'topzone.vn'],
+      ['gearvn', 'gearvn.com'],
+      ['nguyenkim', 'nguyenkim.com'],
+      ['shopdunk', 'shopdunk.com'],
+      ['hacom', 'hacom.vn'],
+      ['clickbuy', 'clickbuy.com.vn'],
+      ['viettelstore', 'viettelstore.vn'],
+      ['pico', 'pico.vn'],
+      ['mediamart', 'mediamart.vn'],
+      ['memoryzone', 'memoryzone.com.vn'],
+      ['anphatpc', 'anphatpc.com.vn'],
+    ].flatMap(([marketplace, domain]) => [
+      { marketplace, listing_url: `https://${domain}/x` },
+      { marketplace, listing_url: `https://www.${domain}/x` },
+      { marketplace, listing_url: `https://a.b-c.${domain}/x` },
+    ]),
     { listing_url: 'https://shopee.vn' },
     {
       listing_url: `https://shopee.vn/${'a'.repeat(2048 - 'https://shopee.vn/'.length)}`,
@@ -391,11 +409,13 @@ try {
     },
     { variant_label: emoji.repeat(120) },
     { variant_label: `Mau ${ch(0x111)}en ${ch(0x200b)}` },
-    {
-      observed_at: iso(now - 23 * HOUR - 59 * MIN),
-      stock_state: 'out_of_stock',
-    },
-    { observed_at: iso(now + 9 * MIN + 30_000), stock_state: 'unknown' },
+    (t) =>
+      good({
+        observed_at: iso(t - 23 * HOUR - 59 * MIN),
+        stock_state: 'out_of_stock',
+      }),
+    (t) =>
+      good({ observed_at: iso(t + 9 * MIN + 30_000), stock_state: 'unknown' }),
     { observed_at: iso(now - HOUR, { off: 420 }) },
     { observed_at: iso(now - HOUR, { off: 420, sep: '' }) },
     { observed_at: iso(now - HOUR, { off: 420, sep: null }) },
@@ -408,7 +428,7 @@ try {
     { observed_at: iso(now - HOUR, { frac: '.5' }) },
     { extractor: { source: 'mixed', extension_version: '1.0.0-beta+2' } },
     { extractor: { source: 'dom', extension_version: 'v'.repeat(20) } },
-  ].map((over) => ['ok', good(over)]);
+  ].map((over) => ['ok', typeof over === 'function' ? over : good(over)]);
   const hourAgo = iso(now - HOUR);
   const bad = [
     ['observation', []],
@@ -423,6 +443,7 @@ try {
     ['schema_version', good({ schema_version: '1' })],
     ['schema_version', good({ schema_version: null })],
     ['marketplace', good({ marketplace: 'amazon' })],
+    ['marketplace', good({ marketplace: 'phucanh' })],
     ['marketplace', good({ marketplace: 'Shopee' })],
     ['marketplace', good({ marketplace: 'thegioididong' })],
     ['marketplace', good({ marketplace: 'hoanghamobile' })],
@@ -477,6 +498,38 @@ try {
         listing_url: 'https://www.dienmayxanh.com/dtdd/x',
       }),
     ],
+    ...[
+      ['topzone', 'https://eviltopzone.vn/x'],
+      ['gearvn', 'https://evilgearvn.com/x'],
+      ['dienmayxanh', 'https://evildienmayxanh.com/x'],
+      ['nguyenkim', 'https://evilnguyenkim.com/x'],
+      ['shopdunk', 'https://evilshopdunk.com/x'],
+      ['hacom', 'https://evilhacom.vn/x'],
+      ['clickbuy', 'https://evilclickbuy.com.vn/x'],
+      ['viettelstore', 'https://evilviettelstore.vn/x'],
+      ['pico', 'https://evilpico.vn/x'],
+      ['mediamart', 'https://evilmediamart.vn/x'],
+      ['memoryzone', 'https://evilmemoryzone.com.vn/x'],
+      ['anphatpc', 'https://evilanphatpc.com.vn/x'],
+      ['topzone', 'https://topzonexvn/x'],
+      ['clickbuy', 'https://clickbuyxcom.vn/x'],
+      ['anphatpc', 'https://anphatpc.comxvn/x'],
+      ['topzone', 'https://.topzone.vn/x'],
+      ['gearvn', 'https://a..gearvn.com/x'],
+      ['topzone', 'https://topzone.vn.evil.com/x'],
+      ['topzone', 'https://WWW.topzone.vn/x'],
+      ['topzone', 'https://topzone.vn:443/x'],
+      ['topzone', 'https://user@topzone.vn/x'],
+      ['topzone', 'https://shopee.vn/x'],
+      ['topzone', 'https://www.thegioididong.com/dtdd/x'],
+      ['dienmayxanh', 'https://www.topzone.vn/iphone/x'],
+      ['dienmayxanh', 'https://thegioididong.com/dtdd/x'],
+      ['gearvn', 'https://hacom.vn/x'],
+      ['shopee', 'https://www.topzone.vn/x'],
+    ].map(([marketplace, listing_url]) => [
+      'listing_url',
+      good({ marketplace, listing_url }),
+    ]),
     [
       'listing_url',
       good({ listing_url: `https://shopee.vn/${'a'.repeat(2031)}` }),
@@ -521,8 +574,8 @@ try {
     ['stock_qty', good({ stock_qty: 1000001 })],
     ['stock_qty', good({ stock_qty: 1.5 })],
     ['stock_qty', good({ stock_qty: '3' })],
-    ['observed_at', good({ observed_at: iso(now - 24 * HOUR - 60_000) })],
-    ['observed_at', good({ observed_at: iso(now + 10 * MIN + 60_000) })],
+    ['observed_at', (t) => good({ observed_at: iso(t - 24 * HOUR - 60_000) })],
+    ['observed_at', (t) => good({ observed_at: iso(t + 10 * MIN + 60_000) })],
     ['observed_at', good({ observed_at: 'yesterday' })],
     ['observed_at', good({ observed_at: 'now' })],
     ['observed_at', good({ observed_at: '2026-13-01T00:00:00Z' })],
@@ -588,10 +641,16 @@ try {
       return m[2];
     }
   };
+  assert.ok(
+    valid.length < 120,
+    'parity valid batch must stay under the per-submitter hourly limit'
+  );
   const before = count();
   const disagree = [];
-  for (const [expected, obs] of [...valid, ...bad]) {
-    const ts = parse(obs, Date.now());
+  for (const [expected, rawObs] of [...valid, ...bad]) {
+    const callNow = Date.now();
+    const obs = typeof rawObs === 'function' ? rawObs(callNow) : rawObs;
+    const ts = parse(obs, callNow);
     const tsVerdict = ts.ok ? 'ok' : ts.field;
     const db = rpcVerdict(obs);
     const what = JSON.stringify(obs).slice(0, 160);
@@ -1118,26 +1177,53 @@ try {
     undefined,
     'rate_worker insert'
   );
-  const direct = `INSERT INTO rate.extension_observations (submitter_id, schema_version,
+  const directFor = (marketplace, url) =>
+    `INSERT INTO rate.extension_observations (submitter_id, schema_version,
       marketplace, listing_url, external_item_id, price_vnd, stock_state, observed_at, extractor)
-    VALUES (${q(s1)}, 1, 'shopee', URL, 'x', 1000, 'unknown', now(),
+    VALUES (${q(s1)}, 1, ${q(marketplace)}, ${q(url)}, 'x', 1000, 'unknown', now(),
       '{"source": "dom", "extension_version": "1"}') RETURNING status`;
   assert.equal(
-    as('service_role', direct.replace('URL', q('https://shopee.vn/x'))),
+    as('service_role', directFor('shopee', 'https://shopee.vn/x')),
     'quarantined',
     'service_role inserts directly'
   );
-  for (const url of [
-    'https://lazada.vn/x',
-    'https://shopee.vn/x;a=1',
-    `https://shopee.vn/x${ch(0xa0)}`,
+  for (const [marketplace, url] of [
+    ['dienmayxanh', 'https://www.dienmayxanh.com/dtdd/x'],
+    ['topzone', 'https://www.topzone.vn/iphone/x'],
+    ['gearvn', 'https://gearvn.com/products/x'],
+    ['nguyenkim', 'https://nguyenkim.com/x'],
+    ['shopdunk', 'https://shopdunk.com/x'],
+    ['hacom', 'https://hacom.vn/x'],
+    ['clickbuy', 'https://clickbuy.com.vn/x'],
+    ['viettelstore', 'https://viettelstore.vn/x'],
+    ['pico', 'https://pico.vn/x'],
+    ['mediamart', 'https://mediamart.vn/x'],
+    ['memoryzone', 'https://memoryzone.com.vn/x'],
+    ['anphatpc', 'https://anphatpc.com.vn/x'],
+  ]) {
+    assert.equal(
+      as('service_role', directFor(marketplace, url)),
+      'quarantined',
+      `service_role direct insert accepts ${marketplace}`
+    );
+  }
+  for (const [marketplace, url] of [
+    ['shopee', 'https://lazada.vn/x'],
+    ['shopee', 'https://shopee.vn/x;a=1'],
+    ['shopee', `https://shopee.vn/x${ch(0xa0)}`],
+    ['topzone', 'https://eviltopzone.vn/x'],
+    ['topzone', 'https://www.thegioididong.com/dtdd/x'],
+    ['tgdd', 'https://www.topzone.vn/iphone/x'],
+    ['tgdd', 'https://www.dienmayxanh.com/dtdd/x'],
+    ['gearvn', 'https://hacom.vn/x'],
+    ['phucanh', 'https://www.phucanh.vn/x'],
   ])
     refused(
       'service_role',
-      direct.replace('URL', q(url)),
+      directFor(marketplace, url),
       '23514',
       undefined,
-      `the URL CHECK holds service_role: ${url}`
+      `the CHECK holds service_role: ${marketplace} ${url}`
     );
   refused(
     'service_role',
