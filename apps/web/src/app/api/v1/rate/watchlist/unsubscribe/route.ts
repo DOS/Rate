@@ -1,14 +1,18 @@
 import { createHmac } from 'node:crypto';
-import { isIP } from 'node:net';
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   normalizeAlertUnsubscribeSecret,
   verifyAlertUnsubscribeToken,
   type AlertUnsubscribeTokenPayload,
 } from '@/lib/alert-unsubscribe-token';
+import {
+  MAX_UNSUBSCRIBE_BODY_BYTES,
+  isSafeUnsubscribeWebhookUrl,
+  unsubscribePostRateLimiter,
+  validatePublicWebhookUrl,
+} from '@/lib/alert-unsubscribe-webhook';
 import { createLogger, serializeError } from '@/lib/logger';
 import {
-  BoundedSlidingWindowRateLimiter,
   extractClientRateLimitKey,
   payloadTooLargeResponse,
   rateLimitExceededResponse,
@@ -17,45 +21,18 @@ import { normalizeOpenApiServerOrigin } from '@/server/rate/openapi';
 
 const log = createLogger('api.watchlist.unsubscribe');
 
-export const MAX_UNSUBSCRIBE_BODY_BYTES = 4_096;
 const MAX_CONTENT_TYPE_HEADER_LENGTH = 512;
 const BODY_READ_TIMEOUT_MS = 5_000;
 const UPSTREAM_TIMEOUT_MS = 8_000;
-const UNSUBSCRIBE_RATE_LIMIT_WINDOW_MS = 60_000;
-const UNSUBSCRIBE_RATE_LIMIT_MAX_REQUESTS = 20;
 
 const NO_STORE_HEADERS: Record<string, string> = {
   'Cache-Control': 'no-store',
 };
 
-export const unsubscribePostRateLimiter = new BoundedSlidingWindowRateLimiter({
-  windowMs: UNSUBSCRIBE_RATE_LIMIT_WINDOW_MS,
-  maxRequests: UNSUBSCRIBE_RATE_LIMIT_MAX_REQUESTS,
-  maxBuckets: 5_000,
-});
-
 const UTF8_FATAL_DECODER = new TextDecoder('utf-8', { fatal: true });
 const DIGITS_ONLY_RE = /^\d{1,10}$/;
 const RESEND_AUDIENCE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
-const DNS_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-const ALPHA_TLD_RE = /^[a-z]{2,63}$/;
 const VERCEL_PREVIEW_HOST_RE = /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.vercel\.app$/;
-
-const DISALLOWED_WEBHOOK_HOST_SUFFIXES = [
-  '.localhost',
-  '.local',
-  '.internal',
-  '.arpa',
-  '.lan',
-  '.corp',
-  '.home',
-  '.intranet',
-  '.nip.io',
-  '.sslip.io',
-  '.xip.io',
-  '.lvh.me',
-  '.localtest.me',
-] as const;
 
 function jsonNoStore(
   status: number,
@@ -69,50 +46,6 @@ function jsonNoStore(
       ...extraHeaders,
     },
   });
-}
-
-export function isSafeUnsubscribeWebhookUrl(rawUrl: unknown): boolean {
-  if (typeof rawUrl !== 'string') return false;
-  const trimmed = rawUrl.trim();
-  if (!trimmed || trimmed.length > 1024 || /[\s\p{Cc}]/u.test(trimmed)) {
-    return false;
-  }
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmed);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== 'https:') return false;
-  if (parsed.username || parsed.password || parsed.hash) return false;
-  if (parsed.port !== '' && parsed.port !== '443') return false;
-
-  const host = parsed.hostname.toLowerCase();
-  if (
-    !host ||
-    host.length > 253 ||
-    !host.includes('.') ||
-    host.startsWith('.') ||
-    host.endsWith('.') ||
-    host.includes('..') ||
-    host.startsWith('[') ||
-    host.includes(':') ||
-    host === 'localhost' ||
-    isIP(host) !== 0 ||
-    /^\d+(?:\.\d+){3}$/.test(host) ||
-    /^\d+$/.test(host)
-  ) {
-    return false;
-  }
-  if (
-    DISALLOWED_WEBHOOK_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))
-  ) {
-    return false;
-  }
-  const labels = host.split('.');
-  const tld = labels[labels.length - 1] ?? '';
-  if (!ALPHA_TLD_RE.test(tld)) return false;
-  return labels.every((label) => DNS_LABEL_RE.test(label));
 }
 
 function isLoopbackUrlHostname(hostname: string): boolean {
@@ -937,6 +870,30 @@ export async function POST(request: NextRequest) {
         code: 'UNSUBSCRIBE_BACKEND_UNCONFIGURED',
         error: persistence.error,
       });
+    }
+
+    if (persistence.config.webhookUrl) {
+      const dnsValidated = await validatePublicWebhookUrl(
+        persistence.config.webhookUrl
+      );
+      if (!dnsValidated.ok) {
+        log.error('Unsubscribe webhook failed pre-flight DNS/IP check', {
+          reason: dnsValidated.reason,
+        });
+        if (dnsValidated.reason === 'dns_error') {
+          return jsonNoStore(502, {
+            ok: false,
+            code: 'PERSIST_FAILED',
+            error: 'Could not persist unsubscribe preference',
+          });
+        }
+        return jsonNoStore(503, {
+          ok: false,
+          code: 'UNSUBSCRIBE_BACKEND_UNCONFIGURED',
+          error: dnsValidated.error,
+        });
+      }
+      persistence.config.webhookUrl = dnsValidated.url;
     }
 
     const persisted = await persistUnsubscribeSuppression(

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
+import dns from 'node:dns';
 import { readFileSync } from 'node:fs';
 import { NextRequest } from 'next/server';
 import React from 'react';
@@ -11,6 +12,12 @@ import {
   signAlertUnsubscribeToken,
   verifyAlertUnsubscribeToken,
 } from '@/lib/alert-unsubscribe-token';
+import {
+  isPrivateOrLocalIpLiteral,
+  isSafeUnsubscribeWebhookUrl,
+  unsubscribePostRateLimiter,
+  validatePublicWebhookUrl,
+} from '@/lib/alert-unsubscribe-webhook';
 import { pickClientMessages } from '@/lib/client-messages';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 import WatchlistWorkspace, {
@@ -21,13 +28,9 @@ import WatchlistWorkspace, {
   resolveWatchlistUnsubscribeResponseStatus,
 } from '@/components/watchlist/WatchlistWorkspace';
 import { buildRateOpenApiSpec } from '@/server/rate/openapi';
-import {
-  GET,
-  OPTIONS,
-  POST,
-  isSafeUnsubscribeWebhookUrl,
-  unsubscribePostRateLimiter,
-} from '../watchlist/unsubscribe/route';
+import * as unsubscribeRouteModule from '../watchlist/unsubscribe/route';
+
+const { GET, OPTIONS, POST } = unsubscribeRouteModule;
 
 // Built dynamically at runtime so secret-scan heuristics do not flag synthetic fixtures.
 const VECTOR_HMAC_INPUT = '0123456789abcdef'.repeat(2);
@@ -47,12 +50,20 @@ interface FetchCall {
   method: string;
   headers: Record<string, string>;
   rawBody: string;
+  redirect?: RequestRedirect;
 }
 
 async function main() {
   console.warn(
     'Testing RFC 8058 watchlist unsubscribe & target prefill (#1875)'
   );
+
+  // Next.js App Router route.ts must export HTTP verb handlers only
+  assert.deepEqual(Object.keys(unsubscribeRouteModule).sort(), [
+    'GET',
+    'OPTIONS',
+    'POST',
+  ]);
 
   // =========================================================================
   // 1. Deterministic cross-package HMAC-SHA256 test vector (#1874 <-> #1875)
@@ -263,6 +274,94 @@ async function main() {
     );
   }
 
+  for (const publicIp of [
+    '93.184.216.34',
+    '8.8.8.8',
+    '1.1.1.1',
+    '2606:2800:220:1:248:1893:25c8:1946',
+    '2001:4860:4860::8888',
+  ]) {
+    assert.equal(
+      isPrivateOrLocalIpLiteral(publicIp),
+      false,
+      `global unicast IP must pass: ${publicIp}`
+    );
+  }
+
+  for (const privateOrReservedIp of [
+    '',
+    'not-an-ip',
+    '0.0.0.0',
+    '10.0.0.8',
+    '100.64.0.1',
+    '127.0.0.1',
+    '169.254.169.254',
+    '172.16.0.1',
+    '172.31.255.255',
+    '192.168.1.1',
+    '224.0.0.1',
+    '255.255.255.255',
+    '::',
+    '::1',
+    '::ffff:127.0.0.1',
+    '::ffff:169.254.169.254',
+    '64:ff9b::10.0.0.1',
+    '2002:7f00:0001::1',
+    'fc00::1',
+    'fd12:3456:789a::1',
+    'fe80::1',
+    'fe80::1%lo0',
+    'ff02::1',
+  ]) {
+    assert.equal(
+      isPrivateOrLocalIpLiteral(privateOrReservedIp),
+      true,
+      `private/reserved IP must fail closed: ${privateOrReservedIp}`
+    );
+  }
+
+  const okWebhookCheck = await validatePublicWebhookUrl(
+    'https://hooks.example.com/rate/unsubscribe',
+    {
+      lookup: async () => [
+        { address: '93.184.216.34', family: 4 },
+        { address: '2606:2800:220:1:248:1893:25c8:1946', family: 6 },
+      ],
+    }
+  );
+  assert.equal(okWebhookCheck.ok, true);
+
+  const mixedDualStackRebindCheck = await validatePublicWebhookUrl(
+    'https://hooks.example.com/rate/unsubscribe',
+    {
+      lookup: async () => [
+        { address: '93.184.216.34', family: 4 },
+        { address: '::ffff:127.0.0.1', family: 6 },
+      ],
+    }
+  );
+  assert.equal(mixedDualStackRebindCheck.ok, false);
+  if (!mixedDualStackRebindCheck.ok) {
+    assert.equal(mixedDualStackRebindCheck.reason, 'private_ip');
+  }
+
+  const emptyDnsCheck = await validatePublicWebhookUrl(
+    'https://hooks.example.com/rate/unsubscribe',
+    { lookup: async () => [] }
+  );
+  assert.equal(emptyDnsCheck.ok, false);
+  if (!emptyDnsCheck.ok) assert.equal(emptyDnsCheck.reason, 'dns_error');
+
+  const slowDnsCheck = await validatePublicWebhookUrl(
+    'https://hooks.example.com/rate/unsubscribe',
+    {
+      timeoutMs: 100,
+      lookup: () => new Promise(() => {}),
+    }
+  );
+  assert.equal(slowDnsCheck.ok, false);
+  if (!slowDnsCheck.ok) assert.equal(slowDnsCheck.reason, 'dns_error');
+
   // =========================================================================
   // 4. Route handler tests (GET scanner-safe + POST RFC 8058 + JSON + CSRF + 503/502/429)
   // =========================================================================
@@ -274,11 +373,16 @@ async function main() {
     APP_PUBLIC_URL: process.env.APP_PUBLIC_URL,
   };
   const origFetch = globalThis.fetch;
+  const origDnsLookup = dns.promises.lookup;
   let fetchCalls: FetchCall[] = [];
   let resendPostStatus = 200;
   let resendPatchStatus = 200;
   let webhookStatus = 200;
   let throwOnFetch = false;
+  let mockDnsAddresses: Array<{ address: string; family: number }> = [
+    { address: '93.184.216.34', family: 4 },
+  ];
+  let throwOnDns = false;
 
   const liveNowSec = Math.floor(Date.now() / 1000);
   const liveToken = signAlertUnsubscribeToken(
@@ -303,6 +407,15 @@ async function main() {
   );
 
   try {
+    dns.promises.lookup = (async () => {
+      if (throwOnDns) {
+        throw Object.assign(new Error('queryA ENOTFOUND'), {
+          code: 'ENOTFOUND',
+        });
+      }
+      return mockDnsAddresses;
+    }) as unknown as typeof dns.promises.lookup;
+
     globalThis.fetch = (async (
       input: RequestInfo | URL,
       init?: RequestInit
@@ -324,6 +437,7 @@ async function main() {
         method,
         headers,
         rawBody,
+        redirect: init?.redirect,
       });
       if (throwOnFetch) {
         throw new Error('simulated upstream timeout');
@@ -489,6 +603,11 @@ async function main() {
     );
     assert.ok(resendCall, 'Resend Contacts endpoint must be called');
     assert.equal(
+      resendCall.redirect,
+      'error',
+      'Resend fetch must set redirect: error'
+    );
+    assert.equal(
       resendCall.url,
       'https://api.resend.com/audiences/aud_rate_alerts/contacts'
     );
@@ -505,6 +624,11 @@ async function main() {
       c.url.startsWith('https://hooks.example.com/')
     );
     assert.ok(hookCall, 'Webhook endpoint must be called');
+    assert.equal(
+      hookCall.redirect,
+      'error',
+      'Webhook fetch must set redirect: error'
+    );
     const hookSigHeader = hookCall.headers['x-rate-unsubscribe-signature'];
     const expectedHookSig =
       'sha256=' +
@@ -778,7 +902,53 @@ async function main() {
     );
     assert.equal(unsafeHookRes.status, 503);
     assert.equal(fetchCalls.length, 0);
-    delete process.env.RATE_UNSUBSCRIBE_WEBHOOK_URL;
+
+    // DNS rebinding to private/IMDS IP fails closed with 503 and 0 fetch calls;
+    // transient DNS ENOTFOUND fails closed with 502 and 0 fetch calls.
+    const origConsoleErrDns = console.error;
+    console.error = () => {};
+    try {
+      process.env.RATE_UNSUBSCRIBE_WEBHOOK_URL =
+        'https://rebind.example.com/rate-unsub';
+      mockDnsAddresses = [{ address: '169.254.169.254', family: 4 }];
+      fetchCalls = [];
+      const rebindRes = await POST(
+        new NextRequest('https://rate.vn/api/v1/rate/watchlist/unsubscribe', {
+          method: 'POST',
+          headers: {
+            origin: 'https://rate.vn',
+            host: 'rate.vn',
+            'content-type': 'application/json',
+            'x-forwarded-for': '198.51.100.205',
+          },
+          body: JSON.stringify({ token: liveToken }),
+        })
+      );
+      assert.equal(rebindRes.status, 503);
+      assert.equal(fetchCalls.length, 0);
+
+      throwOnDns = true;
+      fetchCalls = [];
+      const dnsFailRes = await POST(
+        new NextRequest('https://rate.vn/api/v1/rate/watchlist/unsubscribe', {
+          method: 'POST',
+          headers: {
+            origin: 'https://rate.vn',
+            host: 'rate.vn',
+            'content-type': 'application/json',
+            'x-forwarded-for': '198.51.100.206',
+          },
+          body: JSON.stringify({ token: liveToken }),
+        })
+      );
+      assert.equal(dnsFailRes.status, 502);
+      assert.equal(fetchCalls.length, 0);
+    } finally {
+      console.error = origConsoleErrDns;
+      throwOnDns = false;
+      mockDnsAddresses = [{ address: '93.184.216.34', family: 4 }];
+      delete process.env.RATE_UNSUBSCRIBE_WEBHOOK_URL;
+    }
 
     // 4.8 Rate limiter: 20 requests/min per IP, 21st returns 429 with Retry-After: 60
     unsubscribePostRateLimiter.pruneExpired(Date.now() + 120_000);
@@ -830,6 +1000,7 @@ async function main() {
     assert.equal(neighborIpRes.status, 200);
   } finally {
     globalThis.fetch = origFetch;
+    dns.promises.lookup = origDnsLookup;
     for (const [k, v] of Object.entries(savedEnv)) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
@@ -1016,6 +1187,7 @@ async function main() {
   // Zero SUPABASE_SECRET_KEY / @repo/shared-data/server in new files
   for (const relPath of [
     '../../../../../lib/alert-unsubscribe-token.ts',
+    '../../../../../lib/alert-unsubscribe-webhook.ts',
     '../watchlist/unsubscribe/route.ts',
   ]) {
     const src = readFileSync(new URL(relPath, import.meta.url), 'utf8');
@@ -1023,7 +1195,7 @@ async function main() {
     assert.equal(src.includes('@repo/shared-data/server'), false);
   }
 
-  // Telemetry URL scrubber redacts ?unsubscribe= and ?token= before Sentry capture
+  // Telemetry URL scrubber redacts ?unsubscribe= and ?token= (case-insensitive) before Sentry capture
   const { scrubSensitiveTelemetryUrl } =
     await import('../../../../../../instrumentation-client');
   assert.equal(
@@ -1031,6 +1203,12 @@ async function main() {
       `https://rate.vn/watchlist?unsubscribe=${encodeURIComponent(signedVectorToken)}&keep=1`
     ),
     'https://rate.vn/watchlist?unsubscribe=%5BREDACTED%5D&keep=1'
+  );
+  assert.equal(
+    scrubSensitiveTelemetryUrl(
+      `https://rate.vn/watchlist?UNSUBSCRIBE=${encodeURIComponent(signedVectorToken)}&TOKEN=abc123`
+    ),
+    'https://rate.vn/watchlist?UNSUBSCRIBE=%5BREDACTED%5D&TOKEN=%5BREDACTED%5D'
   );
   assert.equal(
     scrubSensitiveTelemetryUrl(

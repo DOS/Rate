@@ -16,9 +16,12 @@ const SENSITIVE_QUERY_KEYS = new Set(['unsubscribe', 'token']);
  * browser (#1875).
  */
 export function scrubSensitiveTelemetryUrl(rawUrl: string): string {
+  if (typeof rawUrl !== 'string') return rawUrl;
+  const lowerUrl = rawUrl.toLowerCase();
   if (
-    typeof rawUrl !== 'string' ||
-    (!rawUrl.includes('unsubscribe=') && !rawUrl.includes('token='))
+    !lowerUrl.includes('unsubscribe') &&
+    !lowerUrl.includes('token') &&
+    !lowerUrl.includes('%')
   ) {
     return rawUrl;
   }
