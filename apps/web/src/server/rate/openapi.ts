@@ -32,6 +32,12 @@ export interface OpenApiOperation {
       'application/json': {
         schema: Record<string, unknown>;
       };
+      'application/x-www-form-urlencoded'?: {
+        schema: Record<string, unknown>;
+      };
+      'multipart/form-data'?: {
+        schema: Record<string, unknown>;
+      };
     };
   };
   responses: Record<string, OpenApiResponse>;
@@ -1018,6 +1024,150 @@ function buildBaseRateOpenApiSpec(
             ),
             '502': errorResponse(
               'The alert could not be stored (database error); nothing was saved.'
+            ),
+          },
+        },
+      },
+      '/api/v1/rate/watchlist/unsubscribe': {
+        get: {
+          operationId: 'verifyWatchlistPriceAlertUnsubscribe',
+          summary:
+            'Mail-scanner safe RFC 8058 unsubscribe landing redirect (zero state mutation)',
+          description:
+            'Verifies the HMAC-SHA256 `v1.<payloadB64>.<sigB64>` price-alert unsubscribe token (`RATE_ALERT_UNSUBSCRIBE_SECRET`) without mutating suppression state on `GET` (RFC 8058 Section 3.1 protection against automated email link scanners). Valid tokens receive a `303 See Other` (`Cache-Control: no-store`) redirect to the canonical Watchlist origin (`APP_PUBLIC_URL`) at `/watchlist?unsubscribe=<token>` (or `/vi/watchlist`, `/en/watchlist`, `/cs/watchlist` when `locale` is explicitly passed) where the recipient confirms in one click.',
+          tags: ['Comparison & Watchlist'],
+          parameters: [
+            {
+              name: 'token',
+              in: 'query',
+              required: true,
+              description:
+                'Canonical signed `v1.<payloadB64>.<sigB64>` price-alert unsubscribe token.',
+              schema: { type: 'string', maxLength: 2048 },
+            },
+            {
+              name: 'locale',
+              in: 'query',
+              required: false,
+              description:
+                'Optional UI locale (`vi`, `en`, `cs`) for the `/watchlist` confirmation page.',
+              schema: { type: 'string', enum: ['vi', 'en', 'cs'] },
+            },
+          ],
+          responses: {
+            '303': {
+              description:
+                'Token verified; `Location` points to the approved Watchlist origin (normally `APP_PUBLIC_URL`) at `/watchlist?unsubscribe=<token>` (or `/<locale>/watchlist?unsubscribe=<token>`) with `Cache-Control: no-store`.',
+              headers: {
+                Location: {
+                  description:
+                    'Approved Watchlist confirmation URL (normally `APP_PUBLIC_URL` + `/watchlist?unsubscribe=<token>`).',
+                  schema: {
+                    type: 'string',
+                    example:
+                      'https://rate.vn/watchlist?unsubscribe=v1.eyJ2IjoxfQ.sig',
+                  },
+                },
+              },
+            },
+            '400': errorResponse(
+              'Missing, malformed, tampered, or expired unsubscribe token.'
+            ),
+            '503': errorResponse(
+              'Unsubscribe verification secret is not configured (`code: "UNSUBSCRIBE_BACKEND_UNCONFIGURED"`).'
+            ),
+          },
+        },
+        post: {
+          operationId: 'unsubscribeWatchlistPriceAlert',
+          summary:
+            'Execute RFC 8058 one-click email unsubscribe or browser confirmation',
+          description:
+            'Persists email suppression for a verified `v1.<payloadB64>.<sigB64>` price-alert token via Resend Contacts API (`RESEND_API_KEY` + `RESEND_AUDIENCE_ID`) and/or a signed public HTTPS webhook (`RATE_UNSUBSCRIBE_WEBHOOK_URL`) without service-role database credentials. Accepts RFC 8058 mail-client one-click requests (`?token=<token>` with `application/x-www-form-urlencoded` or `multipart/form-data` body `List-Unsubscribe=One-Click`, bounded `<= 4,096` bytes) and same-origin browser JSON `{ "token": "<token>" }`. Limited to 20 requests/min per client IP; fails closed with `503` when persistence is unconfigured.',
+          tags: ['Comparison & Watchlist'],
+          parameters: [
+            {
+              name: 'token',
+              in: 'query',
+              required: false,
+              description:
+                'Signed `v1.<payloadB64>.<sigB64>` token (required for RFC 8058 `List-Unsubscribe=One-Click` form requests; if also passed alongside JSON `body.token`, both values must match).',
+              schema: { type: 'string', maxLength: 2048 },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['token'],
+                  properties: {
+                    token: {
+                      type: 'string',
+                      maxLength: 2048,
+                      description:
+                        'Signed `v1.<payloadB64>.<sigB64>` token submitted from same-origin `/watchlist`.',
+                    },
+                  },
+                },
+              },
+              'application/x-www-form-urlencoded': {
+                schema: {
+                  type: 'object',
+                  required: ['List-Unsubscribe'],
+                  properties: {
+                    'List-Unsubscribe': {
+                      type: 'string',
+                      enum: ['One-Click'],
+                    },
+                  },
+                },
+              },
+              'multipart/form-data': {
+                schema: {
+                  type: 'object',
+                  required: ['List-Unsubscribe'],
+                  properties: {
+                    'List-Unsubscribe': {
+                      type: 'string',
+                      enum: ['One-Click'],
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description:
+                'Email suppression persisted to all configured backends (`Cache-Control: no-store`).',
+              content: jsonBody({
+                type: 'object',
+                required: ['ok', 'unsubscribed'],
+                properties: {
+                  ok: { type: 'boolean', example: true },
+                  unsubscribed: { type: 'boolean', example: true },
+                },
+              }),
+            },
+            '400': errorResponse(
+              'Missing/invalid/expired/mismatched token (`INVALID_TOKEN`, `MALFORMED_TOKEN`, `INVALID_SIGNATURE`, `INVALID_PAYLOAD`, `TOKEN_EXPIRED`), malformed JSON (`INVALID_BODY`), unsupported `Content-Type` (`UNSUPPORTED_CONTENT_TYPE`), or form POST lacking `List-Unsubscribe=One-Click` (`INVALID_ONE_CLICK_BODY`).'
+            ),
+            '403': errorResponse(
+              'Cross-site request rejected (`code: "CROSS_SITE"`).'
+            ),
+            '413': errorResponse(
+              'Request body exceeds 4,096 bytes (`code: "PAYLOAD_TOO_LARGE"`).'
+            ),
+            '429': rateLimitedResponse(
+              'More than 20 unsubscribe requests per minute from this client IP.'
+            ),
+            '502': errorResponse(
+              'Configured Resend Audience or webhook persistence failed (`code: "PERSIST_FAILED"`).'
+            ),
+            '503': errorResponse(
+              'Unsubscribe verification or persistence backend is not configured (`code: "UNSUBSCRIBE_BACKEND_UNCONFIGURED"`).'
             ),
           },
         },
@@ -2290,7 +2440,7 @@ function buildBaseRateOpenApiSpec(
             code: {
               type: 'string',
               description:
-                'Machine-readable cause when there is one, e.g. `NOT_FOUND` on 404s and `RATE_LIMIT_EXCEEDED` on the `/lookup`, `/inspect`, `/extension/lookup` and `/extension/ingest` 429.',
+                'Machine-readable cause when there is one, e.g. `NOT_FOUND` on 404s and `RATE_LIMIT_EXCEEDED` on the `/lookup`, `/inspect`, `/extension/lookup`, `/extension/ingest` and `/watchlist/unsubscribe` 429.',
               example: 'NOT_FOUND',
             },
           },

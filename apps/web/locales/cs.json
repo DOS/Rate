@@ -821,7 +821,16 @@
     "sizeRequiredTitle": "Vyberte velikost úložiště: cenová upozornění se nastavují pro každou zvlášť.",
     "sizeRequiredCta": "Vybrat velikost",
     "sizeRequiredUnavailable": "Varianty se nepodařilo načíst.",
-    "sizeRequiredProductLink": "Otevřít stránku produktu"
+    "sizeRequiredProductLink": "Otevřít stránku produktu",
+    "unsubTitle": "Odhlášení e-mailových upozornění na pokles ceny",
+    "unsubBody": "Potvrďte níže, pokud už nechcete na tuto adresu dostávat upozornění na pokles ceny.",
+    "unsubConfirmBtn": "Potvrdit odhlášení",
+    "unsubSubmittingBtn": "Odhlašování...",
+    "unsubDismissBtn": "Zavřít",
+    "unsubSuccess": "Odběr e-mailových upozornění na pokles ceny byl zrušen.",
+    "unsubInvalid": "Tento odkaz pro odhlášení je neplatný nebo vypršel.",
+    "unsubUnconfigured": "Ukládání odhlášení v tomto prostředí zatím není nastaveno.",
+    "unsubError": "Požadavek na odhlášení se nepodařilo uložit. Zkuste to prosím znovu."
   },
   "deals": {
     "metaTitle": "Výhodné nabídky ověřené ve 22 obchodech | Rate.vn",
