@@ -29,7 +29,14 @@ import {
   merchantRiskTone,
   type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
-import { selectMerchantRadar } from '@/lib/deal-radar';
+import {
+  evaluateMerchantTrustBadge,
+  type MerchantTrustBadgeResult,
+} from '@/lib/merchant-trust-badge';
+import {
+  selectMerchantRadar,
+  type CrossPlatformDealRadarResponse,
+} from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
 import { useLocale, useTranslations } from 'next-intl';
 import ContentText from '@/components/elementary/ContentText';
@@ -228,7 +235,66 @@ export type MerchantDirectoryExplorerItem = Omit<
   dosafe_risk_score: number | null;
   review_risk_score: number | null;
   dosafe_risk_known?: boolean;
+  offerCount?: number | null;
+  activeFakeDiscountCount?: number | null;
+  fakeDiscountCount?: number | null;
 };
+
+export function resolveDirectoryMerchantFakeDiscountCount(
+  merchant: Pick<
+    MerchantDirectoryExplorerItem,
+    'id' | 'name' | 'activeFakeDiscountCount' | 'fakeDiscountCount'
+  >,
+  radarPayload: CrossPlatformDealRadarResponse | null | undefined
+): number | null {
+  if (merchant.activeFakeDiscountCount !== undefined) {
+    return typeof merchant.activeFakeDiscountCount === 'number' &&
+      Number.isInteger(merchant.activeFakeDiscountCount) &&
+      merchant.activeFakeDiscountCount >= 0
+      ? merchant.activeFakeDiscountCount
+      : null;
+  }
+  if (merchant.fakeDiscountCount !== undefined) {
+    return typeof merchant.fakeDiscountCount === 'number' &&
+      Number.isInteger(merchant.fakeDiscountCount) &&
+      merchant.fakeDiscountCount >= 0
+      ? merchant.fakeDiscountCount
+      : null;
+  }
+  if (!radarPayload) return null;
+  const stats = selectMerchantRadar(radarPayload, merchant);
+  if (stats.fakeTrapCount > 0) return stats.fakeTrapCount;
+  // Deal radar caps fakeSaleTraps at 50; if truncated, fail closed rather
+  // than assuming 0 for merchants absent from the list.
+  if (
+    Array.isArray(radarPayload.fakeSaleTraps) &&
+    radarPayload.fakeSaleTraps.length < 50
+  ) {
+    return 0;
+  }
+  return null;
+}
+
+export function evaluateMerchantDirectoryTrustBadge(
+  merchant: MerchantDirectoryExplorerItem,
+  radarPayload: CrossPlatformDealRadarResponse | null | undefined
+): MerchantTrustBadgeResult {
+  return evaluateMerchantTrustBadge({
+    dosafe_risk_score: merchant.dosafe_risk_score,
+    dosafe_risk_known: merchant.dosafe_risk_known,
+    review_risk_score: merchant.review_risk_score,
+    review_risk_breakdown: merchant.review_risk_breakdown,
+    risk_score: merchant.risk_score,
+    trust_score: merchant.trust_score,
+    is_official: merchant.is_official,
+    offerCount: merchant.offerCount ?? merchant.product_count,
+    product_count: merchant.product_count,
+    activeFakeDiscountCount: resolveDirectoryMerchantFakeDiscountCount(
+      merchant,
+      radarPayload
+    ),
+  });
+}
 
 export interface MerchantDirectoryExplorerPage {
   items: MerchantDirectoryExplorerItem[];
@@ -379,6 +445,10 @@ interface MerchantDirectoryExplorerProps {
   /** Whole-directory stats; they do not depend on the filters. */
   readonly summary: MerchantDirectorySummary;
   readonly locale?: string;
+  /** SSR/unit-test fixture override (#1883). */
+  readonly initialRadarPayload?: CrossPlatformDealRadarResponse | null;
+  /** SSR/unit-test fixture override (#1883). */
+  readonly initialVerifiedSafeOnly?: boolean;
 }
 
 async function fetchDirectoryPage(
@@ -427,6 +497,8 @@ function FiltersFromUrl({
 export default function MerchantDirectoryExplorer({
   initialPage,
   summary,
+  initialRadarPayload,
+  initialVerifiedSafeOnly = false,
 }: MerchantDirectoryExplorerProps) {
   const t = useTranslations('merchants');
   const locale = useLocale();
@@ -436,6 +508,9 @@ export default function MerchantDirectoryExplorer({
   );
   const [officialOnly, setOfficialOnly] = useState(
     DEFAULT_MERCHANT_DIRECTORY_FILTERS.officialOnly
+  );
+  const [verifiedSafeOnly, setVerifiedSafeOnly] = useState(
+    initialVerifiedSafeOnly
   );
   const [riskTier, setRiskTier] = useState<MerchantRiskTier>('all');
   const [seedingTier, setSeedingTier] = useState<MerchantSeedingTier>('all');
@@ -545,7 +620,29 @@ export default function MerchantDirectoryExplorer({
     // Pages can come from different cache snapshots: drop repeats.
     return [...new Map(all.map((m) => [m.id, m])).values()];
   };
-  const radarPayload = useDealRadarPayload();
+  const radarPayload = useDealRadarPayload(initialRadarPayload);
+
+  const badgeByMerchantId = useMemo(() => {
+    const map = new Map<string, MerchantTrustBadgeResult>();
+    for (const m of visibleMerchants) {
+      map.set(m.id, evaluateMerchantDirectoryTrustBadge(m, radarPayload));
+    }
+    return map;
+  }, [visibleMerchants, radarPayload]);
+
+  const displayedMerchants = useMemo(
+    () =>
+      verifiedSafeOnly
+        ? visibleMerchants.filter(
+            (m) => badgeByMerchantId.get(m.id)?.verifiedSafe === true
+          )
+        : visibleMerchants,
+    [verifiedSafeOnly, visibleMerchants, badgeByMerchantId]
+  );
+
+  const displayedMatchedCount = verifiedSafeOnly
+    ? displayedMerchants.length
+    : matchedCount;
 
   const labels = useMemo(
     () => ({
@@ -558,6 +655,13 @@ export default function MerchantDirectoryExplorer({
       platformFilterAria: t('platformFilterAria'),
       seedingFilterAria: t('seedingFilterAria'),
       officialMallOnly: t('officialMallOnly'),
+      verifiedSafeFilterBtn: t('verifiedSafeFilterBtn'),
+      verifiedSafeBadge: t('verifiedSafeBadge'),
+      verifiedSafeTooltip: t('verifiedSafeTooltip'),
+      verifiedSafeSignalDosafe: t('verifiedSafeSignalDosafe'),
+      verifiedSafeSignalReview: t('verifiedSafeSignalReview'),
+      verifiedSafeSignalTrust: t('verifiedSafeSignalTrust'),
+      verifiedSafeSignalFakeZero: t('verifiedSafeSignalFakeZero'),
       riskFilterLabel: t('riskFilterLabel'),
       riskAll: t('riskAll'),
       riskSafe: t('riskSafe'),
@@ -644,6 +748,7 @@ export default function MerchantDirectoryExplorer({
     query.trim() !== '' ||
     platform !== 'all' ||
     officialOnly ||
+    verifiedSafeOnly ||
     riskTier !== 'all' ||
     seedingTier !== 'all' ||
     sortBy !== 'trust_desc';
@@ -652,6 +757,7 @@ export default function MerchantDirectoryExplorer({
     setQuery('');
     setPlatform('all');
     setOfficialOnly(false);
+    setVerifiedSafeOnly(false);
     setRiskTier('all');
     setSeedingTier('all');
     setSortBy('trust_desc');
@@ -984,6 +1090,21 @@ export default function MerchantDirectoryExplorer({
               {labels.officialMallOnly}
             </button>
 
+            <button
+              type="button"
+              aria-pressed={verifiedSafeOnly}
+              data-testid="merchant-verified-safe-filter"
+              onClick={() => setVerifiedSafeOnly(!verifiedSafeOnly)}
+              className={`btn btn-sm rounded-pill d-inline-flex align-items-center gap-1 px-3 ${
+                verifiedSafeOnly
+                  ? 'btn-success fw-semibold'
+                  : 'btn-outline-success'
+              }`}
+            >
+              <BsShieldCheck aria-hidden="true" />
+              {labels.verifiedSafeFilterBtn}
+            </button>
+
             <div
               className="btn-group btn-group-sm"
               role="group"
@@ -1041,7 +1162,7 @@ export default function MerchantDirectoryExplorer({
             </button>
             <span className="small text-muted ms-1">
               {labels.showingCount}{' '}
-              <strong className="text-dark">{matchedCount}</strong>{' '}
+              <strong className="text-dark">{displayedMatchedCount}</strong>{' '}
               {labels.ofCount} {summary.total} {labels.merchantsUnit}
             </span>
             {hasActiveFilters && (
@@ -1059,48 +1180,64 @@ export default function MerchantDirectoryExplorer({
       </div>
 
       {/* Results Grid */}
-      {matchedCount === 0 ? (
-        <div className="card rounded-4 border bg-white p-5 text-center shadow-sm">
-          <div className="mb-3">
-            <BsShieldExclamation
-              aria-hidden="true"
-              className="fs-1 text-warning"
-            />
+      {displayedMatchedCount === 0 ? (
+        <>
+          <div className="card rounded-4 border bg-white p-5 text-center shadow-sm">
+            <div className="mb-3">
+              <BsShieldExclamation
+                aria-hidden="true"
+                className="fs-1 text-warning"
+              />
+            </div>
+            <h3 className="h5 fw-bold mb-2">{labels.emptyTitle}</h3>
+            <p
+              className="text-muted small mx-auto mb-4"
+              style={{ maxWidth: 520 }}
+            >
+              {labels.emptySubtitle}
+            </p>
+            <div className="d-flex justify-content-center flex-wrap gap-2">
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="btn btn-outline-secondary rounded-pill px-4"
+                >
+                  {labels.resetFilters}
+                </button>
+              )}
+              <Link
+                href={
+                  query.trim()
+                    ? `/inspect?q=${encodeURIComponent(query.trim())}`
+                    : '/inspect'
+                }
+                className="btn btn-danger rounded-pill fw-medium px-4"
+              >
+                <BsSearch aria-hidden="true" className="me-1" />
+                {labels.inspectUrlCta}
+              </Link>
+            </div>
           </div>
-          <h3 className="h5 fw-bold mb-2">{labels.emptyTitle}</h3>
-          <p
-            className="text-muted small mx-auto mb-4"
-            style={{ maxWidth: 520 }}
-          >
-            {labels.emptySubtitle}
-          </p>
-          <div className="d-flex justify-content-center flex-wrap gap-2">
-            {hasActiveFilters && (
+          {verifiedSafeOnly && matchedCount > visibleMerchants.length && (
+            <div className="mt-4 text-center">
               <button
                 type="button"
-                onClick={handleReset}
-                className="btn btn-outline-secondary rounded-pill px-4"
+                className="btn btn-outline-dark rounded-pill fw-semibold px-4"
+                onClick={handleShowMore}
+                disabled={loadingMore}
               >
-                {labels.resetFilters}
+                {t('showMoreMerchants', {
+                  count: matchedCount - visibleMerchants.length,
+                })}
               </button>
-            )}
-            <Link
-              href={
-                query.trim()
-                  ? `/inspect?q=${encodeURIComponent(query.trim())}`
-                  : '/inspect'
-              }
-              className="btn btn-danger rounded-pill fw-medium px-4"
-            >
-              <BsSearch aria-hidden="true" className="me-1" />
-              {labels.inspectUrlCta}
-            </Link>
-          </div>
-        </div>
+            </div>
+          )}
+        </>
       ) : (
         <>
           <div className="row g-4">
-            {visibleMerchants.map((merchant) => {
+            {displayedMerchants.map((merchant) => {
               const dosafeDisplay = merchantDirectoryDosafeDisplay(merchant);
               const reviewDisplay =
                 merchantDirectoryReviewRiskDisplay(merchant);
@@ -1318,11 +1455,77 @@ export default function MerchantDirectoryExplorer({
 
                     {(() => {
                       const rStats = getMerchantRadarStats(merchant);
+                      const trustBadge = badgeByMerchantId.get(merchant.id);
+                      const dosafeVal =
+                        trustBadge?.signals.dosafeRiskScore != null
+                          ? `${formatNumber(Math.round(trustBadge.signals.dosafeRiskScore), locale)}/100`
+                          : labels.reviewRiskNoData;
+                      const reviewVal =
+                        trustBadge?.signals.reviewRiskScore != null
+                          ? `${formatNumber(Math.round(trustBadge.signals.reviewRiskScore), locale)}/100`
+                          : labels.reviewRiskNoData;
+                      const authorityVal = trustBadge?.signals.isOfficial
+                        ? trustBadge.signals.combinedTrustScore != null
+                          ? `${labels.officialBadge} (${formatNumber(Math.round(trustBadge.signals.combinedTrustScore), locale)}/100)`
+                          : labels.officialBadge
+                        : trustBadge?.signals.combinedTrustScore != null
+                          ? `${formatNumber(Math.round(trustBadge.signals.combinedTrustScore), locale)}/100`
+                          : labels.trustNoData;
+                      const signalTooltip = trustBadge?.verifiedSafe
+                        ? `${labels.verifiedSafeTooltip}: ${labels.verifiedSafeSignalDosafe} ${dosafeVal} | ${labels.verifiedSafeSignalReview} ${reviewVal} | ${labels.verifiedSafeSignalTrust} ${authorityVal} | ${labels.verifiedSafeSignalFakeZero}`
+                        : '';
                       return (
                         <div
                           className="d-flex align-items-center mb-3 flex-wrap gap-1"
                           data-testid="merchant-deal-radar-badge"
                         >
+                          {trustBadge?.verifiedSafe && (
+                            <details
+                              className="d-inline-block"
+                              data-testid="merchant-verified-safe-details"
+                            >
+                              <summary
+                                className="d-inline-flex align-items-center"
+                                style={{
+                                  cursor: 'pointer',
+                                  listStyle: 'none',
+                                  minHeight: '24px',
+                                }}
+                              >
+                                <span
+                                  className="badge bg-success-subtle text-success border-success-subtle rounded-pill border d-inline-flex align-items-center gap-1 px-2 py-1"
+                                  data-testid="merchant-verified-safe-badge"
+                                  title={signalTooltip}
+                                >
+                                  <BsShieldCheck aria-hidden="true" />
+                                  {labels.verifiedSafeBadge}
+                                </span>
+                              </summary>
+                              <div
+                                className="rounded-3 bg-light small text-dark mt-2 border p-2"
+                                data-testid="merchant-verified-safe-breakdown"
+                              >
+                                <div className="fw-semibold text-success mb-1">
+                                  {labels.verifiedSafeTooltip}
+                                </div>
+                                <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
+                                  <li>
+                                    {labels.verifiedSafeSignalDosafe}{' '}
+                                    <strong>{dosafeVal}</strong>
+                                  </li>
+                                  <li>
+                                    {labels.verifiedSafeSignalReview}{' '}
+                                    <strong>{reviewVal}</strong>
+                                  </li>
+                                  <li>
+                                    {labels.verifiedSafeSignalTrust}{' '}
+                                    <strong>{authorityVal}</strong>
+                                  </li>
+                                  <li>{labels.verifiedSafeSignalFakeZero}</li>
+                                </ul>
+                              </div>
+                            </details>
+                          )}
                           {rStats.genuineDealCount > 0 && (
                             <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-2 py-1">
                               {t('radarGenuineBadge', {

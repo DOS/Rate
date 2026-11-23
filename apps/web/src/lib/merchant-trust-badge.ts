@@ -116,10 +116,19 @@ export function evaluateMerchantTrustBadge(
   const reviewEvidencePresent = hasReviewRiskEvidence(
     input.review_risk_breakdown
   );
-  const reviewRiskScore = reviewRiskScoreOrNull({
-    review_risk_score: input.review_risk_score,
-    review_risk_breakdown: input.review_risk_breakdown,
-  });
+  // Normalize defined non-null input via toBoundedScore100 before reviewRiskScoreOrNull
+  // so hex/boolean runtime inputs cannot bypass bounds checks while preserving null/0/'0'.
+  const preValidatedReview =
+    input.review_risk_score === null || input.review_risk_score === undefined
+      ? null
+      : toBoundedScore100(input.review_risk_score);
+  const reviewRiskScore =
+    preValidatedReview === null
+      ? null
+      : reviewRiskScoreOrNull({
+          review_risk_score: preValidatedReview,
+          review_risk_breakdown: input.review_risk_breakdown,
+        });
   const invalidReviewScore =
     hasRawReviewInput && reviewEvidencePresent && reviewRiskScore === null;
 
