@@ -19,21 +19,27 @@ import { NBSP } from '../locale-format';
 import { evaluateMerchantTrustBadge } from '../merchant-trust-badge';
 import type { CrossPlatformDealRadarResponse } from '../../server/rate/deals';
 import WatchlistWorkspace from '../../components/watchlist/WatchlistWorkspace';
-import {
+import WatchlistComboOptimizer, {
   buildComboCartApiUrl,
   formatComboTrustScore,
   isSafeComboSlugToken,
   mergeComboCartSearchParams,
   parseComboCartItemsQueryParam,
   parseComboCartQueryState,
+  resolveComboCatchErrorKey,
+  resolveComboHttpErrorKey,
+  resolveComboUrlSyncDecision,
   sanitizeComboOfferHref,
   sanitizeComboProductHref,
+  shouldShowComboBoundedSearchNote,
   type ComboCartApiPayload,
 } from '../../components/watchlist/WatchlistComboOptimizer';
 import MerchantDirectoryExplorer, {
+  copyMerchantsMarkdownWithClipboard,
   evaluateMerchantDirectoryTrustBadge,
   filterVerifiedSafeDirectoryMerchants,
   resolveDirectoryMerchantFakeDiscountCount,
+  updateOpenSafeDetailsIds,
   type MerchantDirectoryExplorerItem,
 } from '../../components/merchants/MerchantDirectoryExplorer';
 
@@ -144,9 +150,9 @@ function makeRadarResponse(
   };
 }
 
-function main() {
+async function main() {
   console.warn(
-    'Testing F8 combo cart UI & verified safe merchant badge (#1883)'
+    'Testing F8 combo cart UI & verified safe merchant badge (#1883, #1887)'
   );
 
   // =========================================================================
@@ -1103,7 +1109,402 @@ function main() {
     }
   }
 
+  // =========================================================================
+  // 6. P3 UX polish fixes (#1887)
+  // =========================================================================
+  // 6.1 Localized fetch error fallback (HTTP status + network catch)
+  assert.equal(resolveComboHttpErrorKey(429), 'comboRateLimitError');
+  assert.equal(resolveComboHttpErrorKey(400), 'comboInvalidRequestError');
+  assert.equal(resolveComboHttpErrorKey(500), 'comboFetchError');
+  assert.equal(resolveComboHttpErrorKey(200), 'comboFetchError');
+  assert.equal(
+    resolveComboCatchErrorKey(new TypeError('Failed to fetch'), false),
+    'comboFetchError'
+  );
+  assert.equal(
+    resolveComboCatchErrorKey(
+      new Error('NetworkError when attempting to fetch resource.'),
+      false
+    ),
+    'comboFetchError'
+  );
+  assert.equal(
+    resolveComboCatchErrorKey('unexpected string error', false),
+    'comboFetchError'
+  );
+  assert.equal(
+    resolveComboCatchErrorKey(
+      Object.assign(new Error('Aborted'), { name: 'AbortError' }),
+      false
+    ),
+    null
+  );
+  assert.equal(
+    resolveComboCatchErrorKey(new TypeError('Failed to fetch'), true),
+    null
+  );
+  const comboOptimizerSrc = readFileSync(
+    path.join(webRoot, 'src/components/watchlist/WatchlistComboOptimizer.tsx'),
+    'utf8'
+  );
+  assert.equal(
+    /\.catch\([\s\S]*?err\.message/.test(comboOptimizerSrc),
+    false,
+    'WatchlistComboOptimizer .catch handler must never surface raw err.message'
+  );
+
+  // 6.2 Bounded-search note suppressed when both plans are null
+  assert.equal(
+    shouldShowComboBoundedSearchNote({
+      singleStoreBest: null,
+      multiStoreOptimal: null,
+      diagnostics: { ...comboPayload.diagnostics, searchComplete: false },
+    }),
+    false
+  );
+  assert.equal(
+    shouldShowComboBoundedSearchNote({
+      singleStoreBest: comboPayload.singleStoreBest,
+      multiStoreOptimal: null,
+      diagnostics: { ...comboPayload.diagnostics, searchComplete: false },
+    }),
+    true
+  );
+  assert.equal(
+    shouldShowComboBoundedSearchNote({
+      singleStoreBest: null,
+      multiStoreOptimal: comboPayload.multiStoreOptimal,
+      diagnostics: { ...comboPayload.diagnostics, searchComplete: false },
+    }),
+    true
+  );
+  assert.equal(
+    shouldShowComboBoundedSearchNote({
+      singleStoreBest: comboPayload.singleStoreBest,
+      multiStoreOptimal: comboPayload.multiStoreOptimal,
+      diagnostics: { ...comboPayload.diagnostics, searchComplete: true },
+    }),
+    false
+  );
+
+  for (const loc of ['vi', 'en', 'cs'] as const) {
+    const messages = pickClientMessages(localeCatalogs[loc], 'watchlist');
+    const wlMsgs = messages.watchlist as Record<string, string>;
+    const incompleteNullHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter as never },
+        React.createElement(
+          IntlProvider,
+          { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+          React.createElement(WatchlistComboOptimizer, {
+            watchedItems: [],
+            catalogProducts: catalogSample,
+            locale: loc,
+            initialSelectedSlugs: [
+              'apple-iphone-16',
+              'apple-airpods-pro-2-usb-c',
+            ],
+            initialResult: {
+              ...comboPayload,
+              singleStoreBest: null,
+              multiStoreOptimal: null,
+              savingsVsSingleStoreVnd: 0,
+              savingsVsSingleStorePct: 0,
+              diagnostics: {
+                ...comboPayload.diagnostics,
+                searchComplete: false,
+              },
+            },
+          })
+        )
+      )
+    );
+    assert.ok(
+      incompleteNullHtml.includes('data-testid="combo-savings-summary"')
+    );
+    assert.ok(incompleteNullHtml.includes(wlMsgs.comboPlanBIncomplete!));
+    assert.equal(
+      incompleteNullHtml.includes(wlMsgs.comboBoundedSearchNote!),
+      false,
+      `${loc}: comboBoundedSearchNote must stay hidden when both plans are null`
+    );
+
+    const incompleteSingleHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter as never },
+        React.createElement(
+          IntlProvider,
+          { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+          React.createElement(WatchlistComboOptimizer, {
+            watchedItems: [],
+            catalogProducts: catalogSample,
+            locale: loc,
+            initialSelectedSlugs: [
+              'apple-iphone-16',
+              'apple-airpods-pro-2-usb-c',
+            ],
+            initialResult: {
+              ...comboPayload,
+              multiStoreOptimal: null,
+              savingsVsSingleStoreVnd: 0,
+              savingsVsSingleStorePct: 0,
+              diagnostics: {
+                ...comboPayload.diagnostics,
+                searchComplete: false,
+              },
+            },
+          })
+        )
+      )
+    );
+    assert.ok(
+      incompleteSingleHtml.includes(wlMsgs.comboBoundedSearchNote!),
+      `${loc}: comboBoundedSearchNote must show when at least one plan exists`
+    );
+  }
+
+  // 6.3 Preserve initialSkippedUrlRef on mount no-op sync, clear on URL change or popstate
+  const initialKey = buildComboCartApiUrl({
+    items: ['apple-iphone-16', 'apple-airpods-pro-2-usb-c'],
+    officialOnly: false,
+    minTrust: 80,
+    maxStores: 3,
+    shippingVnd: 0,
+  });
+  const changedKey = buildComboCartApiUrl({
+    items: ['apple-iphone-16', 'apple-airpods-pro-2-usb-c'],
+    officialOnly: true,
+    minTrust: 90,
+    maxStores: 2,
+    shippingVnd: 30_000,
+  });
+  assert.equal(
+    resolveComboUrlSyncDecision({
+      initialSkippedUrl: initialKey,
+      nextUrlKey: initialKey,
+      allowReset: false,
+    }),
+    'skip_initial'
+  );
+  assert.equal(
+    resolveComboUrlSyncDecision({
+      initialSkippedUrl: initialKey,
+      nextUrlKey: changedKey,
+      allowReset: false,
+    }),
+    'apply'
+  );
+  assert.equal(
+    resolveComboUrlSyncDecision({
+      initialSkippedUrl: initialKey,
+      nextUrlKey: initialKey,
+      allowReset: true,
+    }),
+    'apply'
+  );
+  assert.equal(
+    resolveComboUrlSyncDecision({
+      initialSkippedUrl: null,
+      nextUrlKey: initialKey,
+      allowReset: false,
+    }),
+    'apply'
+  );
+
+  // 6.4 Per-card <details> breakdown expansion Set<string> helper
+  const s0 = new Set<string>();
+  const s1 = updateOpenSafeDetailsIds(s0, 'm-1', true);
+  assert.deepEqual([...s0], []);
+  assert.deepEqual([...s1], ['m-1']);
+  const s2 = updateOpenSafeDetailsIds(s1, 'm-2', true);
+  assert.deepEqual([...s1], ['m-1']);
+  assert.deepEqual([...s2], ['m-1', 'm-2']);
+  assert.equal(s2.has('m-1') && s2.has('m-2'), true);
+  assert.equal(updateOpenSafeDetailsIds(s2, 'm-2', true), s2);
+  const s3 = updateOpenSafeDetailsIds(s2, 'm-1', false);
+  assert.deepEqual([...s3], ['m-2']);
+  assert.equal(updateOpenSafeDetailsIds(s3, 'm-missing', false), s3);
+  const s4 = updateOpenSafeDetailsIds(s3, 'm-2', false);
+  assert.deepEqual([...s4], []);
+
+  // 6.5 Guard empty rowsToExport in handleCopyMerchantsMarkdown (Safari ClipboardItem + fallback)
+  const unhandledRejections: unknown[] = [];
+  const onUnhandled = (reason: unknown) => {
+    unhandledRejections.push(reason);
+  };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    // 6.5a Safari ClipboardItem path with non-empty rows: synchronous clipboard.write call before fetch resolves
+    let resolveRows!: (rows: readonly MerchantDirectoryExplorerItem[]) => void;
+    let writeCalledSync = false;
+    let buildMdCalls = 0;
+    const writtenItems: Array<{ blobPromise: Promise<Blob> }> = [];
+    const safariClipboard = {
+      async write(items: Array<{ blobPromise: Promise<Blob> }>) {
+        assert.equal(
+          this,
+          safariClipboard,
+          'clipboard.write must be called with clipboard as receiver (this)'
+        );
+        writeCalledSync = true;
+        writtenItems.push(...items);
+        await Promise.all(items.map((item) => item.blobPromise));
+      },
+    };
+    const safariSuccessPromise = copyMerchantsMarkdownWithClipboard({
+      matchedCount: 2,
+      fetchAllMatching: () =>
+        new Promise<readonly MerchantDirectoryExplorerItem[]>((resolve) => {
+          resolveRows = resolve;
+        }),
+      buildMarkdown: (rows) => {
+        buildMdCalls += 1;
+        return `# Export (${rows.length})`;
+      },
+      createClipboardItem: (blobPromise) => ({ blobPromise }),
+      clipboard: safariClipboard,
+    });
+    assert.equal(
+      writeCalledSync,
+      true,
+      'Safari ClipboardItem path must call clipboard.write synchronously during click gesture'
+    );
+    resolveRows([cleanMerchant]);
+    assert.equal(await safariSuccessPromise, true);
+    assert.equal(buildMdCalls, 1);
+    assert.equal(writtenItems.length, 1);
+    assert.equal(
+      await (await writtenItems[0]!.blobPromise).text(),
+      '# Export (1)'
+    );
+
+    // 6.5b Safari ClipboardItem path when verifiedSafeOnly reduces rowsToExport to []
+    let emptySafariBuildCalls = 0;
+    const emptySafariItems: Array<{ blobPromise: Promise<Blob> }> = [];
+    const safariEmptyOk = await copyMerchantsMarkdownWithClipboard({
+      matchedCount: 5,
+      fetchAllMatching: async () => [],
+      buildMarkdown: () => {
+        emptySafariBuildCalls += 1;
+        return 'HEADER_ONLY';
+      },
+      createClipboardItem: (blobPromise) => ({ blobPromise }),
+      clipboard: {
+        write: async (items) => {
+          emptySafariItems.push(...items);
+          await Promise.all(items.map((item) => item.blobPromise));
+        },
+      },
+    });
+    assert.equal(safariEmptyOk, false);
+    assert.equal(emptySafariBuildCalls, 0);
+    assert.equal(emptySafariItems.length, 1);
+    await assert.rejects(emptySafariItems[0]!.blobPromise, {
+      name: 'EmptyMerchantExportError',
+    });
+
+    // 6.5c Safari early clipboard refusal before fetchAllMatching resolves to [] leaves zero unhandled rejections
+    let resolveDelayedEmpty!: (
+      rows: readonly MerchantDirectoryExplorerItem[]
+    ) => void;
+    const earlyRefusalOk = await copyMerchantsMarkdownWithClipboard({
+      matchedCount: 5,
+      fetchAllMatching: () =>
+        new Promise<readonly MerchantDirectoryExplorerItem[]>((resolve) => {
+          resolveDelayedEmpty = resolve;
+        }),
+      buildMarkdown: () => 'SHOULD_NOT_RUN',
+      createClipboardItem: (blobPromise) => ({ blobPromise }),
+      clipboard: {
+        write: async () => {
+          throw new Error('Clipboard permission denied');
+        },
+      },
+    });
+    assert.equal(earlyRefusalOk, false);
+    resolveDelayedEmpty([]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // 6.5d writeText fallback when rowsToExport is empty: neither buildMarkdown nor writeText runs
+    let fallbackBuildCalls = 0;
+    const emptyFallbackTexts: string[] = [];
+    const fallbackEmptyOk = await copyMerchantsMarkdownWithClipboard({
+      matchedCount: 5,
+      fetchAllMatching: async () => [],
+      buildMarkdown: () => {
+        fallbackBuildCalls += 1;
+        return 'HEADER_ONLY';
+      },
+      clipboard: {
+        writeText: async (text) => {
+          emptyFallbackTexts.push(text);
+        },
+      },
+    });
+    assert.equal(fallbackEmptyOk, false);
+    assert.equal(fallbackBuildCalls, 0);
+    assert.deepEqual(emptyFallbackTexts, []);
+
+    // 6.5e writeText fallback when rowsToExport is non-empty
+    const nonEmptyFallbackTexts: string[] = [];
+    const fallbackClipboard = {
+      async writeText(text: string) {
+        assert.equal(
+          this,
+          fallbackClipboard,
+          'clipboard.writeText must be called with clipboard as receiver (this)'
+        );
+        nonEmptyFallbackTexts.push(text);
+      },
+    };
+    const fallbackSuccessOk = await copyMerchantsMarkdownWithClipboard({
+      matchedCount: 1,
+      fetchAllMatching: async () => [cleanMerchant],
+      buildMarkdown: (rows) => `# Export (${rows.length})`,
+      clipboard: fallbackClipboard,
+    });
+    assert.equal(fallbackSuccessOk, true);
+    assert.deepEqual(nonEmptyFallbackTexts, ['# Export (1)']);
+
+    // 6.5f matchedCount === 0 or fetch rejection
+    let zeroFetchCalls = 0;
+    assert.equal(
+      await copyMerchantsMarkdownWithClipboard({
+        matchedCount: 0,
+        fetchAllMatching: async () => {
+          zeroFetchCalls += 1;
+          return [cleanMerchant];
+        },
+        buildMarkdown: () => 'NOPE',
+        clipboard: { writeText: async () => {} },
+      }),
+      false
+    );
+    assert.equal(zeroFetchCalls, 0);
+
+    assert.equal(
+      await copyMerchantsMarkdownWithClipboard({
+        matchedCount: 3,
+        fetchAllMatching: async () => {
+          throw new Error('Network error');
+        },
+        buildMarkdown: () => 'NOPE',
+        clipboard: { writeText: async () => {} },
+      }),
+      false
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(unhandledRejections, []);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+
   console.warn('✅ All F8 combo cart UI & verified safe merchant tests passed');
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
