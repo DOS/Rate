@@ -66,13 +66,19 @@ function toBoundedScore100(raw: unknown): number | null {
       return null;
     }
     const num = Number(trimmed);
-    if (!Number.isFinite(num)) return null;
-    const clamped = Math.max(0, Math.min(100, num));
-    return clamped === 0 ? 0 : clamped;
+    if (!Number.isFinite(num) || num < 0 || num > 100) return null;
+    return num === 0 ? 0 : num;
   }
-  if (!Number.isFinite(raw)) return null;
-  const clamped = Math.max(0, Math.min(100, raw));
-  return clamped === 0 ? 0 : clamped;
+  if (!Number.isFinite(raw) || raw < 0 || raw > 100) return null;
+  return raw === 0 ? 0 : raw;
+}
+
+function hasExplicitScoreInput(raw: unknown): boolean {
+  return (
+    raw !== null &&
+    raw !== undefined &&
+    !(typeof raw === 'string' && raw.trim() === '')
+  );
 }
 
 function toNonNegativeCountOrNull(raw: unknown): number | null {
@@ -106,13 +112,7 @@ export function evaluateMerchantTrustBadge(
           dosafe_risk_known: input.dosafe_risk_known,
         });
 
-  const hasRawReviewInput =
-    input.review_risk_score !== null &&
-    input.review_risk_score !== undefined &&
-    !(
-      typeof input.review_risk_score === 'string' &&
-      input.review_risk_score.trim() === ''
-    );
+  const hasRawReviewInput = hasExplicitScoreInput(input.review_risk_score);
   const reviewEvidencePresent = hasReviewRiskEvidence(
     input.review_risk_breakdown
   );
@@ -134,11 +134,21 @@ export function evaluateMerchantTrustBadge(
 
   const explicitTrust = toBoundedScore100(input.trust_score);
   const explicitRisk = toBoundedScore100(input.risk_score);
+  const hasInvalidExplicitTrust =
+    hasExplicitScoreInput(input.trust_score) && explicitTrust === null;
+  const hasInvalidExplicitRisk =
+    !hasExplicitScoreInput(input.trust_score) &&
+    hasExplicitScoreInput(input.risk_score) &&
+    explicitRisk === null;
   let combinedTrustScore: number | null = null;
   if (explicitTrust !== null) {
     combinedTrustScore = Math.round(explicitTrust * 100) / 100;
+  } else if (hasInvalidExplicitTrust) {
+    combinedTrustScore = null;
   } else if (explicitRisk !== null) {
     combinedTrustScore = Math.round((100 - explicitRisk) * 100) / 100;
+  } else if (hasInvalidExplicitRisk) {
+    combinedTrustScore = null;
   } else if (dosafeRiskScore !== null || reviewRiskScore !== null) {
     const worstRisk = Math.max(dosafeRiskScore ?? 0, reviewRiskScore ?? 0);
     combinedTrustScore = Math.round((100 - worstRisk) * 100) / 100;

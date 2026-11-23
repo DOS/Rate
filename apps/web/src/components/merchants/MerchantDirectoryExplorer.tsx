@@ -240,6 +240,12 @@ export type MerchantDirectoryExplorerItem = Omit<
   fakeDiscountCount?: number | null;
 };
 
+function toNonNegativeCountOrNull(raw: unknown): number | null {
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 0
+    ? raw
+    : null;
+}
+
 export function resolveDirectoryMerchantFakeDiscountCount(
   merchant: Pick<
     MerchantDirectoryExplorerItem,
@@ -247,32 +253,31 @@ export function resolveDirectoryMerchantFakeDiscountCount(
   >,
   radarPayload: CrossPlatformDealRadarResponse | null | undefined
 ): number | null {
-  if (merchant.activeFakeDiscountCount !== undefined) {
-    return typeof merchant.activeFakeDiscountCount === 'number' &&
-      Number.isInteger(merchant.activeFakeDiscountCount) &&
-      merchant.activeFakeDiscountCount >= 0
-      ? merchant.activeFakeDiscountCount
-      : null;
-  }
-  if (merchant.fakeDiscountCount !== undefined) {
-    return typeof merchant.fakeDiscountCount === 'number' &&
-      Number.isInteger(merchant.fakeDiscountCount) &&
-      merchant.fakeDiscountCount >= 0
-      ? merchant.fakeDiscountCount
-      : null;
+  if (
+    merchant.activeFakeDiscountCount !== undefined ||
+    merchant.fakeDiscountCount !== undefined
+  ) {
+    return toNonNegativeCountOrNull(
+      merchant.activeFakeDiscountCount ?? merchant.fakeDiscountCount
+    );
   }
   if (!radarPayload) return null;
   const stats = selectMerchantRadar(radarPayload, merchant);
   if (stats.fakeTrapCount > 0) return stats.fakeTrapCount;
-  // Deal radar caps fakeSaleTraps at 50; if truncated, fail closed rather
-  // than assuming 0 for merchants absent from the list.
-  if (
-    Array.isArray(radarPayload.fakeSaleTraps) &&
-    radarPayload.fakeSaleTraps.length < 50
-  ) {
-    return 0;
-  }
+  // Deal radar only inspects a subset of master products and keeps one trap per
+  // cluster, so an absence from fakeSaleTraps never proves 0 active fake
+  // discounts across all merchant offers. Fail closed unless an explicit
+  // merchant-wide fake-discount count is supplied above.
   return null;
+}
+
+export function filterVerifiedSafeDirectoryMerchants(
+  items: readonly MerchantDirectoryExplorerItem[],
+  radarPayload: CrossPlatformDealRadarResponse | null | undefined
+): MerchantDirectoryExplorerItem[] {
+  return items.filter(
+    (m) => evaluateMerchantDirectoryTrustBadge(m, radarPayload).verifiedSafe
+  );
 }
 
 export function evaluateMerchantDirectoryTrustBadge(
@@ -528,6 +533,9 @@ export default function MerchantDirectoryExplorer({
     setSortBy(next.sortBy);
   }, []);
   const [copiedMerchantsMd, setCopiedMerchantsMd] = useState(false);
+  const [openSafeDetailsId, setOpenSafeDetailsId] = useState<string | null>(
+    null
+  );
   // The server filters and pages the directory (DOS/Rate#452): only the
   // stores on screen are in the browser. Exports fetch every matching store.
   const filters = useMemo<MerchantDirectoryFilters>(
@@ -618,7 +626,10 @@ export default function MerchantDirectoryExplorer({
       }
     }
     // Pages can come from different cache snapshots: drop repeats.
-    return [...new Map(all.map((m) => [m.id, m])).values()];
+    const unique = [...new Map(all.map((m) => [m.id, m])).values()];
+    return verifiedSafeOnly
+      ? filterVerifiedSafeDirectoryMerchants(unique, radarPayload)
+      : unique;
   };
   const radarPayload = useDealRadarPayload(initialRadarPayload);
 
@@ -819,6 +830,7 @@ export default function MerchantDirectoryExplorer({
     } catch {
       return;
     }
+    if (filteredMerchants.length === 0) return;
     const headers = [
       'MerchantID',
       'Name',
@@ -884,6 +896,7 @@ export default function MerchantDirectoryExplorer({
     } catch {
       return;
     }
+    if (filteredMerchants.length === 0) return;
     const payload = {
       source: 'Rate.vn Merchant Trust Directory',
       exportedAt: new Date().toISOString(),
@@ -1181,46 +1194,27 @@ export default function MerchantDirectoryExplorer({
 
       {/* Results Grid */}
       {displayedMatchedCount === 0 ? (
-        <>
-          <div className="card rounded-4 border bg-white p-5 text-center shadow-sm">
-            <div className="mb-3">
-              <BsShieldExclamation
-                aria-hidden="true"
-                className="fs-1 text-warning"
-              />
-            </div>
-            <h3 className="h5 fw-bold mb-2">{labels.emptyTitle}</h3>
-            <p
-              className="text-muted small mx-auto mb-4"
-              style={{ maxWidth: 520 }}
-            >
-              {labels.emptySubtitle}
-            </p>
-            <div className="d-flex justify-content-center flex-wrap gap-2">
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="btn btn-outline-secondary rounded-pill px-4"
-                >
-                  {labels.resetFilters}
-                </button>
-              )}
-              <Link
-                href={
-                  query.trim()
-                    ? `/inspect?q=${encodeURIComponent(query.trim())}`
-                    : '/inspect'
-                }
-                className="btn btn-danger rounded-pill fw-medium px-4"
-              >
-                <BsSearch aria-hidden="true" className="me-1" />
-                {labels.inspectUrlCta}
-              </Link>
-            </div>
+        <div className="card rounded-4 border bg-white p-5 text-center shadow-sm">
+          <div className="mb-3">
+            <BsShieldExclamation
+              aria-hidden="true"
+              className="fs-1 text-warning"
+            />
           </div>
-          {verifiedSafeOnly && matchedCount > visibleMerchants.length && (
-            <div className="mt-4 text-center">
+          <h3 className="h5 fw-bold mb-2">{labels.emptyTitle}</h3>
+          <p
+            className="text-muted small mx-auto mb-4"
+            style={{ maxWidth: 520 }}
+          >
+            {verifiedSafeOnly && matchedCount > visibleMerchants.length
+              ? t('verifiedSafeMorePagesHint', {
+                  shown: visibleMerchants.length,
+                  total: matchedCount,
+                })
+              : labels.emptySubtitle}
+          </p>
+          <div className="d-flex justify-content-center flex-wrap gap-2">
+            {verifiedSafeOnly && matchedCount > visibleMerchants.length && (
               <button
                 type="button"
                 className="btn btn-outline-dark rounded-pill fw-semibold px-4"
@@ -1231,9 +1225,29 @@ export default function MerchantDirectoryExplorer({
                   count: matchedCount - visibleMerchants.length,
                 })}
               </button>
-            </div>
-          )}
-        </>
+            )}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="btn btn-outline-secondary rounded-pill px-4"
+              >
+                {labels.resetFilters}
+              </button>
+            )}
+            <Link
+              href={
+                query.trim()
+                  ? `/inspect?q=${encodeURIComponent(query.trim())}`
+                  : '/inspect'
+              }
+              className="btn btn-danger rounded-pill fw-medium px-4"
+            >
+              <BsSearch aria-hidden="true" className="me-1" />
+              {labels.inspectUrlCta}
+            </Link>
+          </div>
+        </div>
       ) : (
         <>
           <div className="row g-4">
@@ -1481,8 +1495,22 @@ export default function MerchantDirectoryExplorer({
                         >
                           {trustBadge?.verifiedSafe && (
                             <details
-                              className="d-inline-block"
+                              className={
+                                openSafeDetailsId === merchant.id
+                                  ? 'w-100'
+                                  : 'd-inline-block'
+                              }
                               data-testid="merchant-verified-safe-details"
+                              onToggle={(e) => {
+                                const isOpen = e.currentTarget.open;
+                                setOpenSafeDetailsId((prev) =>
+                                  isOpen
+                                    ? merchant.id
+                                    : prev === merchant.id
+                                      ? null
+                                      : prev
+                                );
+                              }}
                             >
                               <summary
                                 className="d-inline-flex align-items-center"

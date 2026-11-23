@@ -32,6 +32,8 @@ import {
 } from '../../components/watchlist/WatchlistComboOptimizer';
 import MerchantDirectoryExplorer, {
   evaluateMerchantDirectoryTrustBadge,
+  filterVerifiedSafeDirectoryMerchants,
+  resolveDirectoryMerchantFakeDiscountCount,
   type MerchantDirectoryExplorerItem,
 } from '../../components/merchants/MerchantDirectoryExplorer';
 
@@ -328,6 +330,45 @@ function main() {
     assert.equal(zeroReviewRes.verifiedSafe, true);
     assert.equal(zeroReviewRes.signals.reviewRiskScore, 0);
     assert.ok(zeroReviewRes.reasons.includes('review_risk_clean'));
+  }
+
+  // P1 regression: negative or >100 runtime scores must fail closed instead of clamping
+  for (const badScore of [-1, '-5', 101, 150] as const) {
+    const badReviewRes = evaluateMerchantTrustBadge({
+      dosafe_risk_score: 5,
+      review_risk_score: badScore as never,
+      review_risk_breakdown: { total_reviews: 25 },
+      is_official: true,
+      offerCount: 4,
+      activeFakeDiscountCount: 0,
+    });
+    assert.equal(badReviewRes.verifiedSafe, false);
+    assert.equal(badReviewRes.signals.reviewRiskScore, null);
+    assert.ok(badReviewRes.failedReasons.includes('invalid_review_score'));
+
+    const badDosafeRes = evaluateMerchantTrustBadge({
+      dosafe_risk_score: badScore as never,
+      review_risk_score: 5,
+      is_official: true,
+      offerCount: 4,
+      activeFakeDiscountCount: 0,
+    });
+    assert.equal(badDosafeRes.verifiedSafe, false);
+    assert.equal(badDosafeRes.signals.dosafeRiskScore, null);
+    assert.ok(badDosafeRes.failedReasons.includes('missing_dosafe_score'));
+
+    const badTrustRes = evaluateMerchantTrustBadge({
+      dosafe_risk_score: 5,
+      review_risk_score: 5,
+      trust_score: badScore as never,
+      is_official: false,
+      offerCount: 4,
+      activeFakeDiscountCount: 0,
+    });
+    assert.equal(badTrustRes.verifiedSafe, false);
+    assert.ok(
+      badTrustRes.failedReasons.includes('trust_score_below_threshold')
+    );
   }
 
   // =========================================================================
@@ -642,6 +683,8 @@ function main() {
     assert.ok(html.includes('data-testid="combo-diagnostics-alert"'));
     assert.ok(html.includes('href="/smartphones/apple-iphone-16"'));
     assert.ok(html.includes('rel="noopener noreferrer nofollow"'));
+    assert.ok(html.includes('var(--rate-brand-bg)'));
+    assert.equal(html.includes('rgba(216, 48, 48, 0.22)'), false);
     assert.equal(html.includes('javascript:alert(1)'), false);
     assert.equal(html.includes('\u2014'), false);
     assert.equal(html.includes('\u2013'), false);
@@ -676,6 +719,15 @@ function main() {
   // =========================================================================
   // 4. MerchantDirectoryExplorer Verified Safe Merchant Badge & Filter
   // =========================================================================
+  const partialCleanMerchant = makeDirMerchant({
+    id: 'm-partial',
+    name: 'Partial Audit Store',
+    dosafe_risk_score: 4,
+    review_risk_score: 10,
+    trust_score: 90,
+    is_official: true,
+    product_count: 15,
+  });
   const cleanMerchant = makeDirMerchant({
     id: 'm-clean',
     name: 'Verified Official Mall',
@@ -684,6 +736,7 @@ function main() {
     trust_score: 90,
     is_official: true,
     product_count: 15,
+    activeFakeDiscountCount: 0,
   });
   const trapMerchant = makeDirMerchant({
     id: 'm-trap',
@@ -702,14 +755,19 @@ function main() {
     trust_score: 92,
     is_official: true,
     product_count: 15,
+    activeFakeDiscountCount: 0,
   });
 
-  // Fail closed when radarPayload is null
-  const noRadarBadge = evaluateMerchantDirectoryTrustBadge(cleanMerchant, null);
+  // Fail closed when radarPayload is null and no explicit merchant-wide count
+  const noRadarBadge = evaluateMerchantDirectoryTrustBadge(
+    partialCleanMerchant,
+    null
+  );
   assert.equal(noRadarBadge.verifiedSafe, false);
   assert.ok(noRadarBadge.failedReasons.includes('missing_fake_discount_audit'));
 
-  // Fail closed when fakeSaleTraps hits the 50-item truncation cap
+  // Truthful pass & trap detection: partial radar (< 50 traps) NEVER infers 0
+  // for merchants missing explicit activeFakeDiscountCount, while traps still fail.
   const truncatedRadar = makeRadarResponse(
     Array.from({ length: 50 }, (_, idx) => ({
       id: `trap-${idx}`,
@@ -741,13 +799,6 @@ function main() {
       explanationVi: 'Fake',
     }))
   );
-  assert.equal(
-    evaluateMerchantDirectoryTrustBadge(cleanMerchant, truncatedRadar)
-      .verifiedSafe,
-    false
-  );
-
-  // Truthful pass & trap detection when radarPayload is complete (< 50 traps)
   const liveRadar = makeRadarResponse([
     {
       ...truncatedRadar.fakeSaleTraps[0]!,
@@ -755,6 +806,17 @@ function main() {
       merchantName: 'Trap Merchant',
     },
   ]);
+  // Even with < 50 radar traps, merchant without explicit coverage stays unverified
+  const partialLiveBadge = evaluateMerchantDirectoryTrustBadge(
+    partialCleanMerchant,
+    liveRadar
+  );
+  assert.equal(partialLiveBadge.verifiedSafe, false);
+  assert.ok(
+    partialLiveBadge.failedReasons.includes('missing_fake_discount_audit')
+  );
+
+  // Explicit verified merchant-wide count === 0 qualifies truthfully
   const cleanBadge = evaluateMerchantDirectoryTrustBadge(
     cleanMerchant,
     liveRadar
@@ -775,6 +837,38 @@ function main() {
   );
   assert.equal(unknownDosafeBadge.verifiedSafe, false);
   assert.ok(unknownDosafeBadge.failedReasons.includes('missing_dosafe_score'));
+
+  // Zero analyzed clusters or explicit null fake count must fail closed
+  const zeroClusterRadar: CrossPlatformDealRadarResponse = {
+    ...liveRadar,
+    totalClustersAnalyzed: 0,
+  };
+  assert.equal(
+    resolveDirectoryMerchantFakeDiscountCount(
+      partialCleanMerchant,
+      zeroClusterRadar
+    ),
+    null
+  );
+  assert.equal(
+    resolveDirectoryMerchantFakeDiscountCount(
+      { ...cleanMerchant, activeFakeDiscountCount: null },
+      liveRadar
+    ),
+    null
+  );
+  assert.deepEqual(
+    filterVerifiedSafeDirectoryMerchants(
+      [
+        cleanMerchant,
+        partialCleanMerchant,
+        trapMerchant,
+        unknownDosafeMerchant,
+      ],
+      liveRadar
+    ).map((m) => m.id),
+    ['m-clean']
+  );
 
   for (const loc of ['vi', 'en', 'cs'] as const) {
     const messages = pickClientMessages(localeCatalogs[loc], 'merchants');
@@ -864,6 +958,41 @@ function main() {
     );
     assert.equal(filteredHtml.includes('Verified Official Mall'), true);
     assert.equal(filteredHtml.includes('Trap Merchant'), false);
+
+    // When page 1 has 0 verified-safe stores but more pages exist, render hint inside empty state
+    const paginatedHintHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter as never },
+        React.createElement(
+          IntlProvider,
+          { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+          React.createElement(MerchantDirectoryExplorer, {
+            initialPage: {
+              items: [trapMerchant],
+              matched: 5,
+              offset: 0,
+            },
+            summary: {
+              total: 5,
+              official: 5,
+              safe: 5,
+              avgTrust: 90,
+              platformCounts: { shopee: 5 },
+            },
+            initialRadarPayload: liveRadar,
+            initialVerifiedSafeOnly: true,
+          })
+        )
+      )
+    );
+    assert.ok(
+      paginatedHintHtml.includes(
+        (messages.merchants as Record<string, string>)
+          .verifiedSafeMorePagesHint!.replace('{shown}', '1')
+          .replace('{total}', '5')
+      )
+    );
   }
 
   // =========================================================================

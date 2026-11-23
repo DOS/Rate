@@ -1,6 +1,7 @@
 'use client';
 
 import React, {
+  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -8,6 +9,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   BsCheckCircle,
@@ -397,6 +399,45 @@ function displayPlatformLabel(platform: string): string {
     : platform.toUpperCase();
 }
 
+function hasAnyComboParam(searchParams: Pick<URLSearchParams, 'has'>): boolean {
+  return (
+    searchParams.has('items') ||
+    searchParams.has('officialOnly') ||
+    searchParams.has('minTrust') ||
+    searchParams.has('maxStores') ||
+    searchParams.has('shippingVnd')
+  );
+}
+
+/**
+ * Listens to App Router query changes inside a Suspense boundary so soft
+ * <Link href="/watchlist?items=..."> navigations hydrate combo state without
+ * interfering with cached static rendering.
+ */
+function ComboParamsFromUrl({
+  lastSyncedApiUrlRef,
+  onUrlState,
+}: {
+  readonly lastSyncedApiUrlRef: React.RefObject<string | null>;
+  readonly onUrlState: (next: ComboCartQueryState) => void;
+}) {
+  const searchParams = useSearchParams();
+  const hasCombo = hasAnyComboParam(searchParams);
+  const parsed = parseComboCartQueryState(searchParams);
+  const parsedKey = buildComboCartApiUrl(parsed);
+  const hadComboRef = useRef(hasCombo);
+
+  useEffect(() => {
+    if (!hasCombo && !hadComboRef.current) return;
+    hadComboRef.current = hasCombo;
+    if (lastSyncedApiUrlRef.current === parsedKey) return;
+    lastSyncedApiUrlRef.current = parsedKey;
+    onUrlState(hasCombo ? parsed : DEFAULT_QUERY_STATE);
+  }, [hasCombo, lastSyncedApiUrlRef, onUrlState, parsed, parsedKey]);
+
+  return null;
+}
+
 export interface WatchlistComboOptimizerProps {
   watchedItems: readonly WatchlistItem[];
   catalogProducts: readonly MasterProduct[];
@@ -426,25 +467,43 @@ export default function WatchlistComboOptimizer({
     [initialSelectedSlugs]
   );
 
-  const [selectedSlugs, setSelectedSlugs] =
-    useState<string[]>(initialCleanSlugs);
+  const initialStateSnapshot = useMemo<ComboCartQueryState>(
+    () => ({
+      items: initialCleanSlugs,
+      officialOnly: Boolean(initialOptions?.officialOnly),
+      minTrust:
+        initialOptions?.minTrust !== undefined
+          ? clampComboMinTrust(initialOptions.minTrust)
+          : DEFAULT_QUERY_STATE.minTrust,
+      maxStores:
+        initialOptions?.maxStores !== undefined
+          ? clampComboMaxStores(initialOptions.maxStores)
+          : DEFAULT_QUERY_STATE.maxStores,
+      shippingVnd:
+        initialOptions?.shippingVnd !== undefined
+          ? clampComboShippingVnd(initialOptions.shippingVnd)
+          : DEFAULT_QUERY_STATE.shippingVnd,
+    }),
+    [initialCleanSlugs, initialOptions]
+  );
+
+  const [selectedSlugs, setSelectedSlugs] = useState<string[]>(
+    initialStateSnapshot.items
+  );
   const [officialOnly, setOfficialOnly] = useState<boolean>(
-    Boolean(initialOptions?.officialOnly)
+    initialStateSnapshot.officialOnly
   );
   const [minTrust, setMinTrust] = useState<number>(
-    initialOptions?.minTrust !== undefined
-      ? clampComboMinTrust(initialOptions.minTrust)
-      : DEFAULT_QUERY_STATE.minTrust
+    initialStateSnapshot.minTrust
   );
   const [maxStores, setMaxStores] = useState<number>(
-    initialOptions?.maxStores !== undefined
-      ? clampComboMaxStores(initialOptions.maxStores)
-      : DEFAULT_QUERY_STATE.maxStores
+    initialStateSnapshot.maxStores
   );
   const [shippingVnd, setShippingVnd] = useState<number>(
-    initialOptions?.shippingVnd !== undefined
-      ? clampComboShippingVnd(initialOptions.shippingVnd)
-      : DEFAULT_QUERY_STATE.shippingVnd
+    initialStateSnapshot.shippingVnd
+  );
+  const [shippingDraft, setShippingDraft] = useState<string>(
+    String(initialStateSnapshot.shippingVnd)
   );
 
   const [customInput, setCustomInput] = useState('');
@@ -457,8 +516,14 @@ export default function WatchlistComboOptimizer({
     initialResult ?? null
   );
 
-  // Skip the first automatic network fetch only when SSR/test passed an explicit initialResult.
-  const skipInitialFetchRef = useRef<boolean>(Boolean(initialResult));
+  // Store the exact initial query URL key so StrictMode double-mounts skip the
+  // initial SSR-hydrated fetch deterministically without mutating a one-shot boolean.
+  const initialSkippedUrlRef = useRef<string | null>(
+    initialResult && initialStateSnapshot.items.length >= COMBO_CART_MIN_ITEMS
+      ? buildComboCartApiUrl(initialStateSnapshot)
+      : null
+  );
+  const lastSyncedApiUrlRef = useRef<string | null>(null);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -467,28 +532,37 @@ export default function WatchlistComboOptimizer({
     };
   }, []);
 
-  // Hydrate `?items=...` and optional combo query params on client mount without
-  // clobbering `?add=`, `?target=`, `?unsubscribe=`, or `history.state`.
+  const applyUrlState = useCallback((parsed: ComboCartQueryState) => {
+    initialSkippedUrlRef.current = null;
+    setSelectedSlugs(parsed.items);
+    setOfficialOnly(parsed.officialOnly);
+    setMinTrust(parsed.minTrust);
+    setMaxStores(parsed.maxStores);
+    setShippingVnd(parsed.shippingVnd);
+    setShippingDraft(String(parsed.shippingVnd));
+  }, []);
+
+  // Hydrate `?items=...` on client mount and stay synced on browser Back/Forward
+  // without clobbering `?add=`, `?target=`, `?unsubscribe=`, or `history.state`.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const sp = new URLSearchParams(window.location.search);
-    const hasAnyComboParam =
-      sp.has('items') ||
-      sp.has('officialOnly') ||
-      sp.has('minTrust') ||
-      sp.has('maxStores') ||
-      sp.has('shippingVnd');
-    if (!hasAnyComboParam) return;
-    const parsed = parseComboCartQueryState(sp);
-    skipInitialFetchRef.current = false;
-    if (parsed.items.length > 0) {
-      setSelectedSlugs(parsed.items);
-    }
-    if (sp.has('officialOnly')) setOfficialOnly(parsed.officialOnly);
-    if (sp.has('minTrust')) setMinTrust(parsed.minTrust);
-    if (sp.has('maxStores')) setMaxStores(parsed.maxStores);
-    if (sp.has('shippingVnd')) setShippingVnd(parsed.shippingVnd);
-  }, []);
+    const syncFromWindowLocation = (allowReset: boolean) => {
+      const sp = new URLSearchParams(window.location.search);
+      const hasCombo = hasAnyComboParam(sp);
+      if (!hasCombo && !allowReset) return;
+      const parsed = hasCombo
+        ? parseComboCartQueryState(sp)
+        : DEFAULT_QUERY_STATE;
+      const nextKey = buildComboCartApiUrl(parsed);
+      lastSyncedApiUrlRef.current = nextKey;
+      applyUrlState(parsed);
+    };
+
+    syncFromWindowLocation(false);
+    const onPopState = () => syncFromWindowLocation(true);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [applyUrlState]);
 
   const syncComboUrlState = useCallback((nextState: ComboCartQueryState) => {
     if (typeof window === 'undefined') return;
@@ -496,6 +570,7 @@ export default function WatchlistComboOptimizer({
     const nextParams = mergeComboCartSearchParams(now.search, nextState, {
       stripTransient: false,
     });
+    lastSyncedApiUrlRef.current = buildComboCartApiUrl(nextState);
     const qs = nextParams.toString();
     const nextHref = `${now.pathname}${qs ? `?${qs}` : ''}${now.hash}`;
     window.history.replaceState(window.history.state, '', nextHref);
@@ -510,7 +585,7 @@ export default function WatchlistComboOptimizer({
         maxStores: patch.maxStores ?? maxStores,
         shippingVnd: patch.shippingVnd ?? shippingVnd,
       };
-      skipInitialFetchRef.current = false;
+      initialSkippedUrlRef.current = null;
       if (patch.items !== undefined) setSelectedSlugs(nextState.items);
       if (patch.officialOnly !== undefined) {
         setOfficialOnly(nextState.officialOnly);
@@ -537,20 +612,11 @@ export default function WatchlistComboOptimizer({
     if (selectedSlugs.length < COMBO_CART_MIN_ITEMS) {
       setLoading(false);
       setFetchError(null);
-      if (!skipInitialFetchRef.current) {
+      if (initialSkippedUrlRef.current === null) {
         setResult(null);
       }
       return;
     }
-
-    if (skipInitialFetchRef.current) {
-      skipInitialFetchRef.current = false;
-      return;
-    }
-
-    const controller = new AbortController();
-    setLoading(true);
-    setFetchError(null);
 
     const requestUrl = buildComboCartApiUrl({
       items: selectedSlugs,
@@ -560,20 +626,33 @@ export default function WatchlistComboOptimizer({
       shippingVnd,
     });
 
+    if (
+      initialSkippedUrlRef.current !== null &&
+      requestUrl === initialSkippedUrlRef.current &&
+      retryNonce === 0
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+
     const timer = setTimeout(() => {
+      if (controller.signal.aborted) return;
+      setLoading(true);
+      setFetchError(null);
       void fetch(requestUrl, { signal: controller.signal })
         .then(async (res) => {
           const json = (await res.json().catch(() => null)) as {
             ok?: boolean;
             data?: ComboCartApiPayload;
-            error?: string;
           } | null;
+          if (controller.signal.aborted) return;
           if (!res.ok || !json?.ok || !json.data) {
             const msg =
               res.status === 429
                 ? t('comboRateLimitError')
-                : typeof json?.error === 'string' && json.error.length <= 240
-                  ? json.error
+                : res.status === 400
+                  ? t('comboInvalidRequestError')
                   : t('comboFetchError');
             throw new Error(msg);
           }
@@ -732,7 +811,14 @@ export default function WatchlistComboOptimizer({
   };
 
   const handleCopyShareLink = async () => {
-    if (typeof window === 'undefined' || selectedSlugs.length === 0) return;
+    if (
+      typeof window === 'undefined' ||
+      typeof navigator === 'undefined' ||
+      !navigator.clipboard?.writeText ||
+      selectedSlugs.length === 0
+    ) {
+      return;
+    }
     const now = new URL(window.location.href);
     const params = mergeComboCartSearchParams(
       now.search,
@@ -762,7 +848,7 @@ export default function WatchlistComboOptimizer({
 
   const handleRetry = () => {
     if (selectedSlugs.length < COMBO_CART_MIN_ITEMS) return;
-    skipInitialFetchRef.current = false;
+    initialSkippedUrlRef.current = null;
     setRetryNonce((n) => n + 1);
   };
 
@@ -815,7 +901,11 @@ export default function WatchlistComboOptimizer({
     const subtitle = isSingle
       ? t('comboPlanASubtitle')
       : t('comboPlanBSubtitle');
-    const emptyText = isSingle ? t('comboPlanAEmpty') : t('comboPlanBEmpty');
+    const emptyText = isSingle
+      ? t('comboPlanAEmpty')
+      : result && !result.diagnostics.searchComplete
+        ? t('comboPlanBIncomplete')
+        : t('comboPlanBEmpty');
     const isMultiWinner =
       !isSingle &&
       Boolean(plan) &&
@@ -833,7 +923,7 @@ export default function WatchlistComboOptimizer({
           style={{
             backgroundColor: 'var(--rate-bg-surface)',
             border: isMultiWinner
-              ? '1px solid rgba(52, 211, 153, 0.55)'
+              ? '1px solid var(--rate-ink-success)'
               : '1px solid var(--rate-glass-border)',
           }}
         >
@@ -843,14 +933,14 @@ export default function WatchlistComboOptimizer({
                 className="badge rounded-pill mb-2"
                 style={{
                   backgroundColor: isSingle
-                    ? 'rgba(148, 163, 184, 0.16)'
-                    : 'rgba(52, 211, 153, 0.16)',
+                    ? 'var(--rate-glass-bg)'
+                    : 'var(--rate-score-user-bg)',
                   color: isSingle
                     ? 'var(--rate-fg-primary)'
                     : 'var(--rate-ink-success)',
                   border: isSingle
-                    ? '1px solid rgba(148, 163, 184, 0.35)'
-                    : '1px solid rgba(52, 211, 153, 0.35)',
+                    ? '1px solid var(--rate-border-strong)'
+                    : '1px solid var(--rate-ink-success)',
                 }}
               >
                 {isSingle ? t('comboPlanABadge') : t('comboPlanBBadge')}
@@ -971,9 +1061,10 @@ export default function WatchlistComboOptimizer({
                               <span
                                 className="badge rounded-pill"
                                 style={{
-                                  backgroundColor: 'rgba(13, 202, 240, 0.14)',
+                                  backgroundColor:
+                                    'var(--rate-score-expert-bg)',
                                   color: 'var(--rate-ink-info)',
-                                  border: '1px solid rgba(13, 202, 240, 0.35)',
+                                  border: '1px solid var(--rate-ink-info)',
                                 }}
                               >
                                 {t('officialMallBadge')}
@@ -984,9 +1075,9 @@ export default function WatchlistComboOptimizer({
                                 className="badge rounded-pill d-inline-flex align-items-center gap-1"
                                 data-testid="combo-verified-safe-badge"
                                 style={{
-                                  backgroundColor: 'rgba(45, 186, 105, 0.16)',
+                                  backgroundColor: 'var(--rate-score-user-bg)',
                                   color: 'var(--rate-ink-success)',
-                                  border: '1px solid rgba(45, 186, 105, 0.38)',
+                                  border: '1px solid var(--rate-ink-success)',
                                 }}
                               >
                                 <BsShieldCheck aria-hidden="true" />
@@ -1034,7 +1125,7 @@ export default function WatchlistComboOptimizer({
                               key={`${group.storeKey}-${alloc.itemSlug}-${alloc.offerId}`}
                               className="d-flex justify-content-between align-items-center flex-wrap gap-2 small"
                             >
-                              <div style={{ minWidth: 0 }}>
+                              <div style={{ minWidth: 0, maxWidth: '100%' }}>
                                 <div className="fw-medium text-white">
                                   <ContentText
                                     text={alloc.itemName}
@@ -1045,7 +1136,7 @@ export default function WatchlistComboOptimizer({
                                   className="text-truncate"
                                   style={{
                                     color: 'var(--rate-fg-secondary)',
-                                    maxWidth: '340px',
+                                    maxWidth: 'min(340px, 100%)',
                                   }}
                                 >
                                   <ContentText
@@ -1087,9 +1178,16 @@ export default function WatchlistComboOptimizer({
   return (
     <section
       aria-labelledby={`${sectionId}-title`}
+      aria-busy={loading}
       data-testid="watchlist-combo-optimizer"
       className="rate-scoreboard-dark rate-surface-dark p-md-4 mb-4 p-3"
     >
+      <Suspense fallback={null}>
+        <ComboParamsFromUrl
+          lastSyncedApiUrlRef={lastSyncedApiUrlRef}
+          onUrlState={applyUrlState}
+        />
+      </Suspense>
       <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center mb-3 gap-3">
         <div>
           <span className="rate-eyebrow mb-2">{t('comboEyebrow')}</span>
@@ -1167,11 +1265,11 @@ export default function WatchlistComboOptimizer({
               return (
                 <span
                   key={slug}
-                  className="badge rounded-pill d-inline-flex align-items-center gap-1 px-3 py-2"
+                  className="badge rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1"
                   style={{
-                    backgroundColor: 'rgba(216, 48, 48, 0.22)',
-                    color: '#f8fafc',
-                    border: '1px solid rgba(255, 107, 107, 0.5)',
+                    backgroundColor: 'var(--rate-brand-bg)',
+                    color: 'var(--rate-fg-primary)',
+                    border: '1px solid var(--rate-crimson-text)',
                   }}
                 >
                   <span>{displayName}</span>
@@ -1179,8 +1277,15 @@ export default function WatchlistComboOptimizer({
                     type="button"
                     onClick={() => handleToggleSlug(slug)}
                     aria-label={`${t('comboRemoveChipAria')}: ${displayName}`}
-                    className="btn btn-link p-0 text-white d-inline-flex align-items-center"
-                    style={{ minWidth: '24px', minHeight: '24px' }}
+                    className="border-0 bg-transparent p-0 d-inline-flex align-items-center justify-content-center rounded-circle"
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      minWidth: '24px',
+                      minHeight: '24px',
+                      color: 'var(--rate-fg-primary)',
+                      cursor: 'pointer',
+                    }}
                   >
                     <BsX aria-hidden="true" />
                   </button>
@@ -1384,14 +1489,16 @@ export default function WatchlistComboOptimizer({
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
-            maxLength={6}
-            value={String(shippingVnd)}
+            maxLength={7}
+            value={shippingDraft}
             onChange={(e) => {
               const digits = e.target.value.replace(/\D/g, '');
+              setShippingDraft(digits);
               applyComboUpdate({
                 shippingVnd: clampComboShippingVnd(digits || '0'),
               });
             }}
+            onBlur={() => setShippingDraft(String(shippingVnd))}
             className="form-control form-control-sm rate-tabular"
             style={{
               backgroundColor: 'var(--rate-bg-elevated)',
@@ -1418,7 +1525,7 @@ export default function WatchlistComboOptimizer({
             max: COMBO_CART_MAX_ITEMS,
           })}
         </div>
-      ) : loading ? (
+      ) : loading && !result ? (
         <div
           role="status"
           aria-live="polite"
@@ -1439,7 +1546,7 @@ export default function WatchlistComboOptimizer({
           className="rounded-3 d-flex justify-content-between align-items-center flex-wrap gap-2 p-3"
           style={{
             backgroundColor: 'var(--rate-status-bad-bg)',
-            border: '1px solid rgba(248, 113, 113, 0.45)',
+            border: '1px solid var(--rate-ink-danger)',
             color: 'var(--rate-status-bad-fg)',
           }}
         >
@@ -1458,6 +1565,21 @@ export default function WatchlistComboOptimizer({
       ) : (
         result && (
           <div data-testid="combo-results">
+            {loading && (
+              <div
+                role="status"
+                aria-live="polite"
+                data-testid="combo-loading-state"
+                className="rounded-3 small mb-2 px-3 py-2"
+                style={{
+                  backgroundColor: 'var(--rate-glass-bg)',
+                  border: '1px solid var(--rate-glass-border)',
+                  color: 'var(--rate-fg-secondary)',
+                }}
+              >
+                {t('comboLoading')}
+              </div>
+            )}
             {/* Retired Variant / Missing / Uncovered Diagnostics */}
             {(retiredItems.length > 0 || uncoveredDetails.length > 0) && (
               <div
@@ -1466,7 +1588,7 @@ export default function WatchlistComboOptimizer({
                 className="rounded-3 mb-3 p-3"
                 style={{
                   backgroundColor: 'var(--rate-status-warn-bg)',
-                  border: '1px solid rgba(251, 191, 36, 0.45)',
+                  border: '1px solid var(--rate-ink-warning)',
                   color: 'var(--rate-fg-primary)',
                 }}
               >
@@ -1495,7 +1617,9 @@ export default function WatchlistComboOptimizer({
                           href={diag.productHref}
                           className="small fw-semibold text-white text-decoration-underline"
                         >
-                          {t('comboChooseLiveVariantLink')}
+                          {diag.retiredVariant
+                            ? t('comboChooseLiveVariantLink')
+                            : t('comboViewProductLink')}
                         </Link>
                       )}
                     </li>
@@ -1504,19 +1628,21 @@ export default function WatchlistComboOptimizer({
               </div>
             )}
 
-            {/* Savings Summary Strip */}
-            {(result.singleStoreBest || result.multiStoreOptimal) && (
+            {/* Savings Summary Strip / Search Limits Notice */}
+            {(result.singleStoreBest ||
+              result.multiStoreOptimal ||
+              !result.diagnostics.searchComplete) && (
               <div
                 className="rounded-3 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 px-3 py-2"
                 data-testid="combo-savings-summary"
                 style={{
                   backgroundColor:
                     result.savingsVsSingleStoreVnd > 0
-                      ? 'rgba(45, 186, 105, 0.16)'
+                      ? 'var(--rate-score-user-bg)'
                       : 'var(--rate-glass-bg)',
                   border:
                     result.savingsVsSingleStoreVnd > 0
-                      ? '1px solid rgba(52, 211, 153, 0.4)'
+                      ? '1px solid var(--rate-ink-success)'
                       : '1px solid var(--rate-glass-border)',
                 }}
               >
@@ -1542,8 +1668,10 @@ export default function WatchlistComboOptimizer({
                     </>
                   ) : result.singleStoreBest ? (
                     t('comboSingleStoreAlreadyBest')
-                  ) : (
+                  ) : result.multiStoreOptimal ? (
                     t('comboMultiStoreOnlyAvailable')
+                  ) : (
+                    t('comboPlanBIncomplete')
                   )}
                 </div>
                 {!result.diagnostics.searchComplete && (

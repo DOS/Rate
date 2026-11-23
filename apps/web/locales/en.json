@@ -855,6 +855,7 @@
     "comboEmptyPrompt": "Select {min} to {max} distinct products above to compare single-store convenience against an optimal multi-store split.",
     "comboLoading": "Optimizing single-store and multi-store combinations...",
     "comboFetchError": "Could not optimize combo cart right now.",
+    "comboInvalidRequestError": "Selected products or filters are invalid. Please review your selection.",
     "comboRateLimitError": "Too many optimization requests. Please wait a moment and try again.",
     "comboRetryBtn": "Retry",
     "comboDiagnosticsTitle": "Items requiring attention",
@@ -862,6 +863,7 @@
     "comboMissingSlugDiag": "Could not find an active product for slug {slug}.",
     "comboUncoveredSlugDiag": "No qualifying in-stock offers found for {name} under your current trust or official-store filters.",
     "comboChooseLiveVariantLink": "Choose live size →",
+    "comboViewProductLink": "View product →",
     "comboSavingsDelta": "Save {amount} ({pct}) by splitting across trusted stores",
     "comboSingleStoreAlreadyBest": "Buying everything at one store is already the lowest total under your shipping and filter settings.",
     "comboMultiStoreOnlyAvailable": "No single store carries every selected item under your filters. Plan B shows the optimal multi-store combination.",
@@ -874,6 +876,7 @@
     "comboPlanBTitle": "Optimal multi-store split",
     "comboPlanBSubtitle": "Minimize total checkout cost including per-store shipping",
     "comboPlanBEmpty": "No multi-store combination satisfies the selected store limit and trust filters.",
+    "comboPlanBIncomplete": "No plan found within the search limits. Try relaxing filters or selecting fewer products.",
     "comboSubtotalLabel": "Items:",
     "comboShippingLabel": "Shipping:",
     "comboAvgTrustLabel": "Avg trust:",
@@ -1241,7 +1244,8 @@
     "verifiedSafeSignalDosafe": "DOSafe risk:",
     "verifiedSafeSignalReview": "Review risk:",
     "verifiedSafeSignalTrust": "Store authority / trust:",
-    "verifiedSafeSignalFakeZero": "0 active fake-discount alerts detected"
+    "verifiedSafeSignalFakeZero": "0 active fake-discount alerts detected",
+    "verifiedSafeMorePagesHint": "None of the first {shown} loaded stores qualify under this filter yet. Load more from {total} matching stores below."
   },
   "productDetail": {
     "jumpNavAria": "Jump to a section",

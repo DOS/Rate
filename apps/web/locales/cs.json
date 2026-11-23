@@ -855,6 +855,7 @@
     "comboEmptyPrompt": "Vyberte {min} až {max} různých produktů pro porovnání nákupu v jednom obchodě s rozdělením napříč obchody.",
     "comboLoading": "Optimalizuji varianty pro jeden obchod i více obchodů...",
     "comboFetchError": "Kombinovaný košík se nepodařilo optimalizovat.",
+    "comboInvalidRequestError": "Vybrané produkty nebo filtry jsou neplatné. Zkontrolujte prosím výběr.",
     "comboRateLimitError": "Příliš mnoho požadavků. Chvilku počkejte a zkuste to znovu.",
     "comboRetryBtn": "Zkusit znovu",
     "comboDiagnosticsTitle": "Položky vyžadující pozornost",
@@ -862,6 +863,7 @@
     "comboMissingSlugDiag": "Pro slug {slug} nebyl nalezen žádný aktivní produkt.",
     "comboUncoveredSlugDiag": "Pro produkt {name} nebyla nalezena žádná nabídka skladem splňující zvolené filtry důvěry nebo oficiálních obchodů.",
     "comboChooseLiveVariantLink": "Vybrat dostupnou variantu →",
+    "comboViewProductLink": "Zobrazit produkt →",
     "comboSavingsDelta": "Ušetříte {amount} ({pct}) rozdělením mezi důvěryhodné obchody",
     "comboSingleStoreAlreadyBest": "Nákup všeho v jednom obchodě je při zadaném poštovném a filtrech již nejlevnější variantou.",
     "comboMultiStoreOnlyAvailable": "Žádný jednotlivý obchod nenabízí všechny vybrané položky dle filtrů. Plán B ukazuje optimální rozdělení.",
@@ -874,6 +876,7 @@
     "comboPlanBTitle": "Optimální rozdělení mezi obchody",
     "comboPlanBSubtitle": "Minimalizuje celkovou cenu včetně poštovného za každý obchod",
     "comboPlanBEmpty": "Žádná kombinace obchodů nesplňuje limit obchodů a filtry důvěry.",
+    "comboPlanBIncomplete": "V rámci limitů hledání nebyl nalezen žádný plán. Zkuste upravit filtry nebo odebrat položku.",
     "comboSubtotalLabel": "Zboží:",
     "comboShippingLabel": "Doprava:",
     "comboAvgTrustLabel": "Prům. důvěra:",
@@ -1241,7 +1244,8 @@
     "verifiedSafeSignalDosafe": "Riziko DOSafe:",
     "verifiedSafeSignalReview": "Riziko recenzí:",
     "verifiedSafeSignalTrust": "Oficiální status / důvěra:",
-    "verifiedSafeSignalFakeZero": "0 aktivních upozornění na falešné slevy"
+    "verifiedSafeSignalFakeZero": "0 aktivních upozornění na falešné slevy",
+    "verifiedSafeMorePagesHint": "Mezi prvními {shown} načtenými obchody zatím žádný nesplňuje podmínky. Načtěte další z {total} odpovídajících obchodů níže."
   },
   "productDetail": {
     "jumpNavAria": "Přejít na sekci",

@@ -855,6 +855,7 @@
     "comboEmptyPrompt": "Hãy chọn từ {min} đến {max} sản phẩm khác nhau để so sánh mua 1 cửa hàng với tách đơn đa sàn.",
     "comboLoading": "Đang tính toán phương án 1 gian hàng và tách đơn đa sàn...",
     "comboFetchError": "Chưa thể tối ưu giỏ hàng combo lúc này.",
+    "comboInvalidRequestError": "Danh sách sản phẩm hoặc bộ lọc chưa hợp lệ. Vui lòng kiểm tra lại.",
     "comboRateLimitError": "Bạn thao tác hơi nhanh. Vui lòng chờ giây lát rồi thử lại.",
     "comboRetryBtn": "Thử lại",
     "comboDiagnosticsTitle": "Sản phẩm cần lưu ý",
@@ -862,6 +863,7 @@
     "comboMissingSlugDiag": "Không tìm thấy sản phẩm đang bán cho mã {slug}.",
     "comboUncoveredSlugDiag": "Chưa có tin bán còn hàng đạt ngưỡng tin cậy hoặc Official Mall cho {name}.",
     "comboChooseLiveVariantLink": "Chọn dung lượng đang bán →",
+    "comboViewProductLink": "Xem sản phẩm →",
     "comboSavingsDelta": "Tiết kiệm {amount} ({pct}) khi tách đơn qua các gian hàng uy tín",
     "comboSingleStoreAlreadyBest": "Mua gộp tại 1 gian hàng đã là phương án rẻ nhất với mức phí ship và bộ lọc hiện tại.",
     "comboMultiStoreOnlyAvailable": "Chưa có 1 gian hàng nào bán đủ tất cả món đã chọn theo bộ lọc. Phương án B đề xuất cách tách đơn tối ưu.",
@@ -874,6 +876,7 @@
     "comboPlanBTitle": "Tách đơn đa sàn tối ưu giá",
     "comboPlanBSubtitle": "Giảm tối đa tổng hóa đơn thực trả bao gồm phí ship từng đơn",
     "comboPlanBEmpty": "Không tìm thấy tổ hợp đa gian hàng phù hợp với số cửa hàng và mức tin cậy đã chọn.",
+    "comboPlanBIncomplete": "Chưa tìm thấy phương án trong giới hạn tìm kiếm. Hãy thử nới lỏng bộ lọc hoặc giảm bớt sản phẩm.",
     "comboSubtotalLabel": "Tiền hàng:",
     "comboShippingLabel": "Phí ship:",
     "comboAvgTrustLabel": "Tin cậy TB:",
@@ -1241,7 +1244,8 @@
     "verifiedSafeSignalDosafe": "Rủi ro DOSafe:",
     "verifiedSafeSignalReview": "Rủi ro đánh giá:",
     "verifiedSafeSignalTrust": "Xác thực / tin cậy:",
-    "verifiedSafeSignalFakeZero": "0 cảnh báo giảm giá ảo đang hoạt động"
+    "verifiedSafeSignalFakeZero": "0 cảnh báo giảm giá ảo đang hoạt động",
+    "verifiedSafeMorePagesHint": "Chưa có gian hàng nào đạt chuẩn an toàn trong {shown} cửa hàng đầu tiên. Tải thêm từ {total} kết quả bên dưới."
   },
   "productDetail": {
     "jumpNavAria": "Đi tới mục trên trang",
