@@ -821,7 +821,16 @@
     "sizeRequiredTitle": "Chọn dung lượng để theo dõi giá: cảnh báo giá đặt theo từng dung lượng.",
     "sizeRequiredCta": "Chọn dung lượng",
     "sizeRequiredUnavailable": "Chưa tải được danh sách dung lượng.",
-    "sizeRequiredProductLink": "Mở trang sản phẩm"
+    "sizeRequiredProductLink": "Mở trang sản phẩm",
+    "unsubTitle": "Hủy nhận email báo giảm giá",
+    "unsubBody": "Bấm xác nhận bên dưới để ngừng nhận email cảnh báo giá cho địa chỉ này.",
+    "unsubConfirmBtn": "Xác nhận hủy email",
+    "unsubSubmittingBtn": "Đang xử lý...",
+    "unsubDismissBtn": "Đóng",
+    "unsubSuccess": "Đã hủy đăng ký nhận email cảnh báo giá thành công.",
+    "unsubInvalid": "Liên kết hủy đăng ký không hợp lệ hoặc đã hết hạn.",
+    "unsubUnconfigured": "Hệ thống lưu hủy đăng ký chưa được cấu hình ở môi trường này.",
+    "unsubError": "Chưa lưu được yêu cầu hủy đăng ký. Vui lòng thử lại sau."
   },
   "deals": {
     "metaTitle": "Deal công nghệ đã kiểm tra trên 22 sàn | Rate.vn",
