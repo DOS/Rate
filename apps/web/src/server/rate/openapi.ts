@@ -1172,6 +1172,191 @@ function buildBaseRateOpenApiSpec(
           },
         },
       },
+      '/api/v1/rate/combo-cart': {
+        get: {
+          operationId: 'optimizeComboCart',
+          summary:
+            'Solve single-store and bounded multi-store combo cart plans for 2 to 5 products',
+          description:
+            'Resolves 2 to 5 distinct master product or Item slugs (requiring explicit size selection for retired variant slugs), filters out unavailable, bait-priced, untrusted (failing closed on null `risk_score` when `minTrust > 0`), and non-Official offers (when `officialOnly=1`), and computes Plan A (`singleStoreBest`: exact lowest-cost single store carrying all items) alongside Plan B (`multiStoreOptimal`: bounded branch-and-bound optimal split across at most `maxStores` stores including `shippingVnd` per distinct store order). For tractability, Plan B searches at most 14 candidate stores per item (union of top 8 cheapest stores plus multi-item stores) and stops at 50,000 search nodes; `diagnostics.candidateTrimmed`, `diagnostics.nodeCapReached`, and `diagnostics.searchComplete` indicate whether the returned Plan B (or `null`) is exhaustive or bounded. Also evaluates live `verified_safe` merchant trust badges backed by merchant-wide discount audits (`auditScope: "merchant_wide"` vs `"cart_only_unverified"` when unavailable), without unbacked historical claims. Limited to 60 requests per minute per client IP.',
+          tags: ['Comparison & Watchlist'],
+          parameters: [
+            {
+              name: 'items',
+              in: 'query',
+              required: true,
+              description:
+                'Comma-separated list of 2 to 5 unique valid product or Item slugs (e.g. `apple-iphone-16-128gb,apple-airpods-pro-2-usb-c`).',
+              schema: { type: 'string', maxLength: 1000 },
+            },
+            {
+              name: 'officialOnly',
+              in: 'query',
+              required: false,
+              description:
+                'Restrict candidate offers strictly to Official Mall / authorized stores (`0` or `1`, default `0`).',
+              schema: { type: 'string', enum: ['0', '1'], default: '0' },
+            },
+            {
+              name: 'minTrust',
+              in: 'query',
+              required: false,
+              description:
+                'Minimum merchant trust score (`0..100`, default `80`), mapped to `risk_score <= 100 - minTrust` (failing closed on `null` `risk_score` when `minTrust > 0`).',
+              schema: { type: 'number', default: 80 },
+            },
+            {
+              name: 'maxStores',
+              in: 'query',
+              required: false,
+              description:
+                'Maximum number of distinct stores allowed in `multiStoreOptimal` (`1..5`, default `3`).',
+              schema: { type: 'integer', default: 3 },
+            },
+            {
+              name: 'shippingVnd',
+              in: 'query',
+              required: false,
+              description:
+                'Estimated shipping cost in VND per distinct store order (`0..500000`, default `0`).',
+              schema: { type: 'integer', default: 0 },
+            },
+          ],
+          responses: {
+            '200': {
+              description:
+                'Exact single-store and multi-store combo plans, savings metrics, per-item diagnostics, and live merchant trust badges.',
+              content: jsonBody({
+                type: 'object',
+                required: ['ok', 'data'],
+                properties: {
+                  ok: { type: 'boolean', example: true },
+                  data: {
+                    type: 'object',
+                    required: [
+                      'query',
+                      'items',
+                      'missingSlugs',
+                      'singleStoreBest',
+                      'multiStoreOptimal',
+                      'savingsVsSingleStoreVnd',
+                      'savingsVsSingleStorePct',
+                      'cheapestPerItemSubtotalVnd',
+                      'uncoveredSlugs',
+                      'merchantBadges',
+                      'diagnostics',
+                    ],
+                    properties: {
+                      query: {
+                        type: 'object',
+                        properties: {
+                          items: { type: 'array', items: { type: 'string' } },
+                          officialOnly: { type: 'boolean' },
+                          minTrust: { type: 'number' },
+                          maxStores: { type: 'integer' },
+                          shippingVnd: { type: 'integer' },
+                        },
+                      },
+                      items: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            requestedSlug: { type: 'string' },
+                            resolvedSlug: { type: ['string', 'null'] },
+                            itemSlug: { type: ['string', 'null'] },
+                            masterProductId: {
+                              type: ['string', 'null'],
+                              format: 'uuid',
+                            },
+                            name: { type: 'string' },
+                            brand: { type: ['string', 'null'] },
+                            categorySlug: { type: ['string', 'null'] },
+                            productHref: { type: ['string', 'null'] },
+                            sizeRequired: { type: 'boolean' },
+                            retiredVariant: { type: 'boolean' },
+                            found: { type: 'boolean' },
+                            offerCount: { type: 'integer' },
+                            dealRadar: {
+                              anyOf: [RADAR_REF, { type: 'null' }],
+                            },
+                          },
+                        },
+                      },
+                      missingSlugs: {
+                        type: 'array',
+                        items: { type: 'string' },
+                      },
+                      singleStoreBest: {
+                        anyOf: [
+                          { $ref: '#/components/schemas/ComboCartPlan' },
+                          { type: 'null' },
+                        ],
+                      },
+                      multiStoreOptimal: {
+                        anyOf: [
+                          { $ref: '#/components/schemas/ComboCartPlan' },
+                          { type: 'null' },
+                        ],
+                      },
+                      savingsVsSingleStoreVnd: { type: 'integer' },
+                      savingsVsSingleStorePct: { type: 'number' },
+                      cheapestPerItemSubtotalVnd: {
+                        type: ['integer', 'null'],
+                      },
+                      uncoveredSlugs: {
+                        type: 'array',
+                        items: { type: 'string' },
+                      },
+                      merchantBadges: {
+                        type: 'array',
+                        items: {
+                          $ref: '#/components/schemas/MerchantTrustBadge',
+                        },
+                      },
+                      diagnostics: {
+                        type: 'object',
+                        additionalProperties: true,
+                        properties: {
+                          itemCount: { type: 'integer' },
+                          maxStores: { type: 'integer' },
+                          minTrust: { type: 'number' },
+                          officialOnly: { type: 'boolean' },
+                          shippingVndPerOrder: { type: 'integer' },
+                          searchNodesVisited: { type: 'integer' },
+                          maxSearchNodes: { type: 'integer' },
+                          nodeCapReached: { type: 'boolean' },
+                          candidateCapPerItem: { type: 'integer' },
+                          candidateTrimmed: { type: 'boolean' },
+                          searchComplete: {
+                            type: 'boolean',
+                            description:
+                              'True only when neither per-item candidate trimming nor the 50,000-node cap truncated Plan B search.',
+                          },
+                          itemDiagnostics: {
+                            type: 'array',
+                            items: {
+                              type: 'object',
+                              additionalProperties: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              }),
+            },
+            '400': errorResponse(
+              'Invalid `items`, `officialOnly`, `minTrust`, `maxStores`, `shippingVnd`, or duplicate resolved products (`code: "INVALID_QUERY"`).'
+            ),
+            '429': rateLimitedResponse(
+              'More than 60 combo-cart requests per minute from this client IP.'
+            ),
+            '500': errorResponse('Failed to optimize combo cart.'),
+          },
+        },
+      },
       '/api/v1/rate/lookup': {
         get: {
           operationId: 'lookupEcommerceUrlOrQuery',
@@ -2653,6 +2838,120 @@ function buildBaseRateOpenApiSpec(
               enum: ['basic', 'complete', 'excellent', null],
               description:
                 'Public quality tier of the review; null when it is not scored yet or is gated. The 0-100 value score is private to the writer.',
+            },
+          },
+        },
+        ComboCartSelectedAllocation: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            itemSlug: { type: 'string' },
+            itemName: { type: 'string' },
+            offerId: { type: 'string' },
+            offerTitle: { type: 'string' },
+            offerUrl: { type: 'string' },
+            platform: { type: 'string' },
+            storeKey: { type: 'string' },
+            merchantId: { type: ['string', 'null'] },
+            merchantName: { type: 'string' },
+            isOfficial: { type: 'boolean' },
+            riskScore: { type: ['number', 'null'] },
+            trustScore: { type: ['number', 'null'] },
+            priceVnd: { type: 'integer' },
+          },
+        },
+        MerchantTrustBadge: {
+          type: 'object',
+          additionalProperties: true,
+          required: [
+            'verifiedSafe',
+            'badgeCode',
+            'reasons',
+            'failedReasons',
+            'signals',
+          ],
+          properties: {
+            storeKey: { type: 'string' },
+            merchantId: { type: ['string', 'null'] },
+            merchantName: { type: 'string' },
+            platform: { type: 'string' },
+            auditScope: {
+              type: 'string',
+              enum: ['merchant_wide', 'cart_only_unverified'],
+            },
+            cartOfferCount: { type: 'integer' },
+            cartFakeDiscountCount: { type: 'integer' },
+            verifiedSafe: { type: 'boolean' },
+            badgeCode: {
+              type: ['string', 'null'],
+              enum: ['verified_safe', null],
+            },
+            reasons: { type: 'array', items: { type: 'string' } },
+            failedReasons: { type: 'array', items: { type: 'string' } },
+            signals: {
+              type: 'object',
+              properties: {
+                dosafeRiskScore: { type: ['number', 'null'] },
+                reviewRiskScore: { type: ['number', 'null'] },
+                combinedTrustScore: { type: ['number', 'null'] },
+                isOfficial: { type: 'boolean' },
+                offerCount: { type: 'integer' },
+                activeFakeDiscountCount: { type: ['integer', 'null'] },
+              },
+            },
+          },
+        },
+        ComboCartStoreGroup: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            storeKey: { type: 'string' },
+            merchantId: { type: ['string', 'null'] },
+            merchantName: { type: 'string' },
+            platform: { type: 'string' },
+            isOfficial: { type: 'boolean' },
+            riskScore: { type: ['number', 'null'] },
+            trustScore: { type: ['number', 'null'] },
+            itemCount: { type: 'integer' },
+            itemsSubtotalVnd: { type: 'integer' },
+            shippingVnd: { type: 'integer' },
+            storeTotalVnd: { type: 'integer' },
+            items: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/ComboCartSelectedAllocation',
+              },
+            },
+            trustBadge: {
+              $ref: '#/components/schemas/MerchantTrustBadge',
+            },
+          },
+        },
+        ComboCartPlan: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            kind: {
+              type: 'string',
+              enum: ['single_store', 'multi_store'],
+            },
+            distinctStoreCount: { type: 'integer' },
+            itemsSubtotalVnd: { type: 'integer' },
+            shippingVnd: { type: 'integer' },
+            totalVnd: { type: 'integer' },
+            allOfficial: { type: 'boolean' },
+            avgTrustScore: { type: ['number', 'null'] },
+            allocations: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/ComboCartSelectedAllocation',
+              },
+            },
+            storeGroups: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/ComboCartStoreGroup',
+              },
             },
           },
         },
