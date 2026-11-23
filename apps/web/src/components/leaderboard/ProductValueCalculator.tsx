@@ -9,7 +9,7 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import { MAX_VALID_VND_PRICE, type MerchantOffer } from '@/lib/rate-domain';
+import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 import {
   computeEffectivePrice,
   INSTALLMENT_TERMS,
@@ -18,6 +18,7 @@ import {
   sanitizeVndAmount,
   selectEffectivePriceBaseOffers,
   TRADE_IN_CONDITION_FACTORS,
+  type EffectivePriceOfferCandidate,
   type InstallmentTerm,
   type TradeInConditionTier,
   type VoucherDiscountMode,
@@ -42,7 +43,7 @@ interface ProductValueCalculatorProps {
   readonly valueCriterionScore5: number;
   readonly radarSignal?: RadarSignal | null;
   readonly initialIncludeResale?: boolean;
-  readonly offers?: readonly MerchantOffer[];
+  readonly offers?: readonly EffectivePriceOfferCandidate[];
   readonly initialEffectivePanelOpen?: boolean;
   readonly initialTradeInEnabled?: boolean;
 }
@@ -631,7 +632,7 @@ export default function ProductValueCalculator({
                         : 'btn-outline-dark'
                     }`}
                   >
-                    {t('offersOriginVnaBadge')} (
+                    {t('oVna')} (
                     {formatPriceVnd(baseOffers.bestOfficialVnaPriceVnd, locale)}
                     )
                   </button>

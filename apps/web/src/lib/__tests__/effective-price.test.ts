@@ -13,6 +13,7 @@ import {
   computeEffectivePrice,
   MAX_INSTALLMENT_FEE_PERCENT,
   MAX_VOUCHER_PERCENT,
+  pickEffectivePriceCandidates,
   selectEffectivePriceBaseOffers,
   type EffectivePriceOfferCandidate,
 } from '../effective-price';
@@ -284,16 +285,28 @@ function testOfferSelectionIgnoresBaitAndUnavailable(): void {
 
   const corruptFallback = selectEffectivePriceBaseOffers(null, 999_999_999_999);
   assert.equal(corruptFallback.bestPlausiblePriceVnd, 0);
+
+  const richOffers = offers.map((o) => ({
+    ...o,
+    url: `https://example.test/${o.id}`,
+    merchant: o.merchant ? { ...o.merchant, location: 'HN' } : null,
+  }));
+  const pickedCandidates = pickEffectivePriceCandidates(richOffers, 29_990_000);
+  assert.deepEqual(
+    pickedCandidates.map((o) => o.id),
+    ['imported', 'vna-chain']
+  );
+  assert.equal('url' in pickedCandidates[0]!, false);
 }
 
 function testLocaleParityAndZeroDashes(): void {
   const newKeys = [
-    'offersOfficialVnaOnlyBtn',
-    'offersOriginVnaBadge',
-    'offersOriginImportedBadge',
-    'offersOriginUnknownBadge',
-    'offersChannelAuthorizedVat',
-    'offersChannelIndependentShop',
+    'oVnaBtn',
+    'oVna',
+    'oImp',
+    'oUnk',
+    'oVat',
+    'oShop',
     'effToggle',
     'effBase',
     'effDisc',

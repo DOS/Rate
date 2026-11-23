@@ -121,6 +121,7 @@ import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditB
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
+import { pickEffectivePriceCandidates } from '@/lib/effective-price';
 import ClientMessages from '@/components/providers/ClientMessages';
 import {
   applyCategorySpecTemplate,
@@ -1698,7 +1699,10 @@ export async function ProductDetailView({
                 expertScore10={lbScored.expertScore10}
                 valueCriterionScore5={lbScored.criteria.value ?? 0}
                 radarSignal={radarSignal}
-                offers={defaultSize?.offers ?? offers}
+                offers={pickEffectivePriceCandidates(
+                  defaultSize?.offers ?? offers,
+                  currentMinPrice
+                )}
               />
             );
           })()}

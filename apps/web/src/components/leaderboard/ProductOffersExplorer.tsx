@@ -919,7 +919,7 @@ export default function ProductOffersExplorer({
               }`}
               style={{ fontSize: '0.8125rem' }}
             >
-              {t('offersOfficialVnaOnlyBtn')}
+              {t('oVnaBtn')}
             </button>
             <button
               type="button"
@@ -1029,16 +1029,16 @@ export default function ProductOffersExplorer({
                 });
                 const originBadgeLabel =
                   origin === 'official_vna'
-                    ? t('offersOriginVnaBadge')
+                    ? t('oVna')
                     : origin === 'imported'
-                      ? t('offersOriginImportedBadge')
-                      : t('offersOriginUnknownBadge');
+                      ? t('oImp')
+                      : t('oUnk');
                 const channelBadgeLabel =
                   sellerChannel === 'authorized_vat'
-                    ? t('offersChannelAuthorizedVat')
+                    ? t('oVat')
                     : sellerChannel === 'official_mall'
                       ? t('offersOfficialMallBadge')
-                      : t('offersChannelIndependentShop');
+                      : t('oShop');
 
                 const isBait = isExplorerOfferImplausiblyLow(
                   offer,

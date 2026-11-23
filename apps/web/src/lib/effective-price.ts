@@ -452,3 +452,41 @@ export function selectEffectivePriceBaseOffers<
     bestOfficialVnaPriceVnd: bestOfficialVnaOffer?.priceVnd ?? null,
   };
 }
+
+/**
+ * Extracts up to two lightweight candidate offers (best overall + best Official
+ * VN/A) for client serialization on product detail pages without duplicating
+ * full offer telemetry and merchant breakdown payloads into RSC HTML.
+ */
+export function pickEffectivePriceCandidates<
+  T extends EffectivePriceOfferCandidate,
+>(
+  offers: readonly T[] | null | undefined,
+  fallbackMinPriceVnd: number
+): EffectivePriceOfferCandidate[] {
+  const { bestPlausibleOffer, bestOfficialVnaOffer } =
+    selectEffectivePriceBaseOffers(offers, fallbackMinPriceVnd);
+  const picked: EffectivePriceOfferCandidate[] = [];
+  const seen = new Set<string>();
+  for (const candidate of [bestPlausibleOffer, bestOfficialVnaOffer]) {
+    if (!candidate) continue;
+    const raw = candidate.offer;
+    if (seen.has(raw.id)) continue;
+    seen.add(raw.id);
+    picked.push({
+      id: raw.id,
+      platform: raw.platform,
+      title: raw.title,
+      price_current: raw.price_current,
+      availability: raw.availability ?? null,
+      merchant: raw.merchant
+        ? {
+            name: raw.merchant.name ?? null,
+            is_official: raw.merchant.is_official ?? null,
+            risk_score: raw.merchant.risk_score ?? null,
+          }
+        : null,
+    });
+  }
+  return picked;
+}
