@@ -60,6 +60,10 @@ import {
   toFormatLocale,
 } from '@/lib/locale-format';
 import StarRating from '@/components/elementary/StarRating';
+import WatchlistComboOptimizer, {
+  type ComboCartApiPayload,
+  type ComboCartQueryState,
+} from './WatchlistComboOptimizer';
 
 export const MIN_WATCHLIST_QUERY_TARGET_VND = 1_000;
 
@@ -195,6 +199,12 @@ interface WatchlistWorkspaceProps {
   initialLiveDeals?: Record<string, LiveWatchlistDeal>;
   /** SSR/unit-test fixture override (#1875). */
   initialUnsubscribeState?: WatchlistUnsubscribeBannerState | null;
+  /** SSR/unit-test fixture override (#1883). */
+  initialComboSlugs?: readonly string[];
+  /** SSR/unit-test fixture override (#1883). */
+  initialComboOptions?: Partial<Omit<ComboCartQueryState, 'items'>>;
+  /** SSR/unit-test fixture override (#1883). */
+  initialComboResult?: ComboCartApiPayload | null;
 }
 
 export interface LiveWatchlistDeal {
@@ -544,6 +554,9 @@ export default function WatchlistWorkspace({
   initialEditingSlug,
   initialLiveDeals,
   initialUnsubscribeState,
+  initialComboSlugs,
+  initialComboOptions,
+  initialComboResult,
 }: WatchlistWorkspaceProps) {
   const t = useTranslations('watchlist');
   const contextLocale = useLocale();
@@ -1404,6 +1417,16 @@ export default function WatchlistWorkspace({
           </div>
         </section>
       )}
+
+      {/* Multi-Store Combo Cart Optimizer (#1883) */}
+      <WatchlistComboOptimizer
+        watchedItems={items}
+        catalogProducts={catalogProducts}
+        locale={locale || 'vi'}
+        initialSelectedSlugs={initialComboSlugs}
+        initialOptions={initialComboOptions}
+        initialResult={initialComboResult}
+      />
 
       {/* Empty State with Quick Add Suggestions */}
       {items.length === 0 ? (

@@ -29,7 +29,14 @@ import {
   merchantRiskTone,
   type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
-import { selectMerchantRadar } from '@/lib/deal-radar';
+import {
+  evaluateMerchantTrustBadge,
+  type MerchantTrustBadgeResult,
+} from '@/lib/merchant-trust-badge';
+import {
+  selectMerchantRadar,
+  type CrossPlatformDealRadarResponse,
+} from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
 import { useLocale, useTranslations } from 'next-intl';
 import ContentText from '@/components/elementary/ContentText';
@@ -228,7 +235,71 @@ export type MerchantDirectoryExplorerItem = Omit<
   dosafe_risk_score: number | null;
   review_risk_score: number | null;
   dosafe_risk_known?: boolean;
+  offerCount?: number | null;
+  activeFakeDiscountCount?: number | null;
+  fakeDiscountCount?: number | null;
 };
+
+function toNonNegativeCountOrNull(raw: unknown): number | null {
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 0
+    ? raw
+    : null;
+}
+
+export function resolveDirectoryMerchantFakeDiscountCount(
+  merchant: Pick<
+    MerchantDirectoryExplorerItem,
+    'id' | 'name' | 'activeFakeDiscountCount' | 'fakeDiscountCount'
+  >,
+  radarPayload: CrossPlatformDealRadarResponse | null | undefined
+): number | null {
+  if (
+    merchant.activeFakeDiscountCount !== undefined ||
+    merchant.fakeDiscountCount !== undefined
+  ) {
+    return toNonNegativeCountOrNull(
+      merchant.activeFakeDiscountCount ?? merchant.fakeDiscountCount
+    );
+  }
+  if (!radarPayload) return null;
+  const stats = selectMerchantRadar(radarPayload, merchant);
+  if (stats.fakeTrapCount > 0) return stats.fakeTrapCount;
+  // Deal radar only inspects a subset of master products and keeps one trap per
+  // cluster, so an absence from fakeSaleTraps never proves 0 active fake
+  // discounts across all merchant offers. Fail closed unless an explicit
+  // merchant-wide fake-discount count is supplied above.
+  return null;
+}
+
+export function filterVerifiedSafeDirectoryMerchants(
+  items: readonly MerchantDirectoryExplorerItem[],
+  radarPayload: CrossPlatformDealRadarResponse | null | undefined
+): MerchantDirectoryExplorerItem[] {
+  return items.filter(
+    (m) => evaluateMerchantDirectoryTrustBadge(m, radarPayload).verifiedSafe
+  );
+}
+
+export function evaluateMerchantDirectoryTrustBadge(
+  merchant: MerchantDirectoryExplorerItem,
+  radarPayload: CrossPlatformDealRadarResponse | null | undefined
+): MerchantTrustBadgeResult {
+  return evaluateMerchantTrustBadge({
+    dosafe_risk_score: merchant.dosafe_risk_score,
+    dosafe_risk_known: merchant.dosafe_risk_known,
+    review_risk_score: merchant.review_risk_score,
+    review_risk_breakdown: merchant.review_risk_breakdown,
+    risk_score: merchant.risk_score,
+    trust_score: merchant.trust_score,
+    is_official: merchant.is_official,
+    offerCount: merchant.offerCount ?? merchant.product_count,
+    product_count: merchant.product_count,
+    activeFakeDiscountCount: resolveDirectoryMerchantFakeDiscountCount(
+      merchant,
+      radarPayload
+    ),
+  });
+}
 
 export interface MerchantDirectoryExplorerPage {
   items: MerchantDirectoryExplorerItem[];
@@ -379,6 +450,10 @@ interface MerchantDirectoryExplorerProps {
   /** Whole-directory stats; they do not depend on the filters. */
   readonly summary: MerchantDirectorySummary;
   readonly locale?: string;
+  /** SSR/unit-test fixture override (#1883). */
+  readonly initialRadarPayload?: CrossPlatformDealRadarResponse | null;
+  /** SSR/unit-test fixture override (#1883). */
+  readonly initialVerifiedSafeOnly?: boolean;
 }
 
 async function fetchDirectoryPage(
@@ -427,6 +502,8 @@ function FiltersFromUrl({
 export default function MerchantDirectoryExplorer({
   initialPage,
   summary,
+  initialRadarPayload,
+  initialVerifiedSafeOnly = false,
 }: MerchantDirectoryExplorerProps) {
   const t = useTranslations('merchants');
   const locale = useLocale();
@@ -436,6 +513,9 @@ export default function MerchantDirectoryExplorer({
   );
   const [officialOnly, setOfficialOnly] = useState(
     DEFAULT_MERCHANT_DIRECTORY_FILTERS.officialOnly
+  );
+  const [verifiedSafeOnly, setVerifiedSafeOnly] = useState(
+    initialVerifiedSafeOnly
   );
   const [riskTier, setRiskTier] = useState<MerchantRiskTier>('all');
   const [seedingTier, setSeedingTier] = useState<MerchantSeedingTier>('all');
@@ -453,6 +533,9 @@ export default function MerchantDirectoryExplorer({
     setSortBy(next.sortBy);
   }, []);
   const [copiedMerchantsMd, setCopiedMerchantsMd] = useState(false);
+  const [openSafeDetailsId, setOpenSafeDetailsId] = useState<string | null>(
+    null
+  );
   // The server filters and pages the directory (DOS/Rate#452): only the
   // stores on screen are in the browser. Exports fetch every matching store.
   const filters = useMemo<MerchantDirectoryFilters>(
@@ -543,9 +626,34 @@ export default function MerchantDirectoryExplorer({
       }
     }
     // Pages can come from different cache snapshots: drop repeats.
-    return [...new Map(all.map((m) => [m.id, m])).values()];
+    const unique = [...new Map(all.map((m) => [m.id, m])).values()];
+    return verifiedSafeOnly
+      ? filterVerifiedSafeDirectoryMerchants(unique, radarPayload)
+      : unique;
   };
-  const radarPayload = useDealRadarPayload();
+  const radarPayload = useDealRadarPayload(initialRadarPayload);
+
+  const badgeByMerchantId = useMemo(() => {
+    const map = new Map<string, MerchantTrustBadgeResult>();
+    for (const m of visibleMerchants) {
+      map.set(m.id, evaluateMerchantDirectoryTrustBadge(m, radarPayload));
+    }
+    return map;
+  }, [visibleMerchants, radarPayload]);
+
+  const displayedMerchants = useMemo(
+    () =>
+      verifiedSafeOnly
+        ? visibleMerchants.filter(
+            (m) => badgeByMerchantId.get(m.id)?.verifiedSafe === true
+          )
+        : visibleMerchants,
+    [verifiedSafeOnly, visibleMerchants, badgeByMerchantId]
+  );
+
+  const displayedMatchedCount = verifiedSafeOnly
+    ? displayedMerchants.length
+    : matchedCount;
 
   const labels = useMemo(
     () => ({
@@ -558,6 +666,13 @@ export default function MerchantDirectoryExplorer({
       platformFilterAria: t('platformFilterAria'),
       seedingFilterAria: t('seedingFilterAria'),
       officialMallOnly: t('officialMallOnly'),
+      verifiedSafeFilterBtn: t('verifiedSafeFilterBtn'),
+      verifiedSafeBadge: t('verifiedSafeBadge'),
+      verifiedSafeTooltip: t('verifiedSafeTooltip'),
+      verifiedSafeSignalDosafe: t('verifiedSafeSignalDosafe'),
+      verifiedSafeSignalReview: t('verifiedSafeSignalReview'),
+      verifiedSafeSignalTrust: t('verifiedSafeSignalTrust'),
+      verifiedSafeSignalFakeZero: t('verifiedSafeSignalFakeZero'),
       riskFilterLabel: t('riskFilterLabel'),
       riskAll: t('riskAll'),
       riskSafe: t('riskSafe'),
@@ -644,6 +759,7 @@ export default function MerchantDirectoryExplorer({
     query.trim() !== '' ||
     platform !== 'all' ||
     officialOnly ||
+    verifiedSafeOnly ||
     riskTier !== 'all' ||
     seedingTier !== 'all' ||
     sortBy !== 'trust_desc';
@@ -652,6 +768,7 @@ export default function MerchantDirectoryExplorer({
     setQuery('');
     setPlatform('all');
     setOfficialOnly(false);
+    setVerifiedSafeOnly(false);
     setRiskTier('all');
     setSeedingTier('all');
     setSortBy('trust_desc');
@@ -713,6 +830,7 @@ export default function MerchantDirectoryExplorer({
     } catch {
       return;
     }
+    if (filteredMerchants.length === 0) return;
     const headers = [
       'MerchantID',
       'Name',
@@ -778,6 +896,7 @@ export default function MerchantDirectoryExplorer({
     } catch {
       return;
     }
+    if (filteredMerchants.length === 0) return;
     const payload = {
       source: 'Rate.vn Merchant Trust Directory',
       exportedAt: new Date().toISOString(),
@@ -984,6 +1103,21 @@ export default function MerchantDirectoryExplorer({
               {labels.officialMallOnly}
             </button>
 
+            <button
+              type="button"
+              aria-pressed={verifiedSafeOnly}
+              data-testid="merchant-verified-safe-filter"
+              onClick={() => setVerifiedSafeOnly(!verifiedSafeOnly)}
+              className={`btn btn-sm rounded-pill d-inline-flex align-items-center gap-1 px-3 ${
+                verifiedSafeOnly
+                  ? 'btn-success fw-semibold'
+                  : 'btn-outline-success'
+              }`}
+            >
+              <BsShieldCheck aria-hidden="true" />
+              {labels.verifiedSafeFilterBtn}
+            </button>
+
             <div
               className="btn-group btn-group-sm"
               role="group"
@@ -1041,7 +1175,7 @@ export default function MerchantDirectoryExplorer({
             </button>
             <span className="small text-muted ms-1">
               {labels.showingCount}{' '}
-              <strong className="text-dark">{matchedCount}</strong>{' '}
+              <strong className="text-dark">{displayedMatchedCount}</strong>{' '}
               {labels.ofCount} {summary.total} {labels.merchantsUnit}
             </span>
             {hasActiveFilters && (
@@ -1059,7 +1193,7 @@ export default function MerchantDirectoryExplorer({
       </div>
 
       {/* Results Grid */}
-      {matchedCount === 0 ? (
+      {displayedMatchedCount === 0 ? (
         <div className="card rounded-4 border bg-white p-5 text-center shadow-sm">
           <div className="mb-3">
             <BsShieldExclamation
@@ -1072,9 +1206,26 @@ export default function MerchantDirectoryExplorer({
             className="text-muted small mx-auto mb-4"
             style={{ maxWidth: 520 }}
           >
-            {labels.emptySubtitle}
+            {verifiedSafeOnly && matchedCount > visibleMerchants.length
+              ? t('verifiedSafeMorePagesHint', {
+                  shown: visibleMerchants.length,
+                  total: matchedCount,
+                })
+              : labels.emptySubtitle}
           </p>
           <div className="d-flex justify-content-center flex-wrap gap-2">
+            {verifiedSafeOnly && matchedCount > visibleMerchants.length && (
+              <button
+                type="button"
+                className="btn btn-outline-dark rounded-pill fw-semibold px-4"
+                onClick={handleShowMore}
+                disabled={loadingMore}
+              >
+                {t('showMoreMerchants', {
+                  count: matchedCount - visibleMerchants.length,
+                })}
+              </button>
+            )}
             {hasActiveFilters && (
               <button
                 type="button"
@@ -1100,7 +1251,7 @@ export default function MerchantDirectoryExplorer({
       ) : (
         <>
           <div className="row g-4">
-            {visibleMerchants.map((merchant) => {
+            {displayedMerchants.map((merchant) => {
               const dosafeDisplay = merchantDirectoryDosafeDisplay(merchant);
               const reviewDisplay =
                 merchantDirectoryReviewRiskDisplay(merchant);
@@ -1318,11 +1469,91 @@ export default function MerchantDirectoryExplorer({
 
                     {(() => {
                       const rStats = getMerchantRadarStats(merchant);
+                      const trustBadge = badgeByMerchantId.get(merchant.id);
+                      const dosafeVal =
+                        trustBadge?.signals.dosafeRiskScore != null
+                          ? `${formatNumber(Math.round(trustBadge.signals.dosafeRiskScore), locale)}/100`
+                          : labels.reviewRiskNoData;
+                      const reviewVal =
+                        trustBadge?.signals.reviewRiskScore != null
+                          ? `${formatNumber(Math.round(trustBadge.signals.reviewRiskScore), locale)}/100`
+                          : labels.reviewRiskNoData;
+                      const authorityVal = trustBadge?.signals.isOfficial
+                        ? trustBadge.signals.combinedTrustScore != null
+                          ? `${labels.officialBadge} (${formatNumber(Math.round(trustBadge.signals.combinedTrustScore), locale)}/100)`
+                          : labels.officialBadge
+                        : trustBadge?.signals.combinedTrustScore != null
+                          ? `${formatNumber(Math.round(trustBadge.signals.combinedTrustScore), locale)}/100`
+                          : labels.trustNoData;
+                      const signalTooltip = trustBadge?.verifiedSafe
+                        ? `${labels.verifiedSafeTooltip}: ${labels.verifiedSafeSignalDosafe} ${dosafeVal} | ${labels.verifiedSafeSignalReview} ${reviewVal} | ${labels.verifiedSafeSignalTrust} ${authorityVal} | ${labels.verifiedSafeSignalFakeZero}`
+                        : '';
                       return (
                         <div
                           className="d-flex align-items-center mb-3 flex-wrap gap-1"
                           data-testid="merchant-deal-radar-badge"
                         >
+                          {trustBadge?.verifiedSafe && (
+                            <details
+                              className={
+                                openSafeDetailsId === merchant.id
+                                  ? 'w-100'
+                                  : 'd-inline-block'
+                              }
+                              data-testid="merchant-verified-safe-details"
+                              onToggle={(e) => {
+                                const isOpen = e.currentTarget.open;
+                                setOpenSafeDetailsId((prev) =>
+                                  isOpen
+                                    ? merchant.id
+                                    : prev === merchant.id
+                                      ? null
+                                      : prev
+                                );
+                              }}
+                            >
+                              <summary
+                                className="d-inline-flex align-items-center"
+                                style={{
+                                  cursor: 'pointer',
+                                  listStyle: 'none',
+                                  minHeight: '24px',
+                                }}
+                              >
+                                <span
+                                  className="badge bg-success-subtle text-success border-success-subtle rounded-pill border d-inline-flex align-items-center gap-1 px-2 py-1"
+                                  data-testid="merchant-verified-safe-badge"
+                                  title={signalTooltip}
+                                >
+                                  <BsShieldCheck aria-hidden="true" />
+                                  {labels.verifiedSafeBadge}
+                                </span>
+                              </summary>
+                              <div
+                                className="rounded-3 bg-light small text-dark mt-2 border p-2"
+                                data-testid="merchant-verified-safe-breakdown"
+                              >
+                                <div className="fw-semibold text-success mb-1">
+                                  {labels.verifiedSafeTooltip}
+                                </div>
+                                <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
+                                  <li>
+                                    {labels.verifiedSafeSignalDosafe}{' '}
+                                    <strong>{dosafeVal}</strong>
+                                  </li>
+                                  <li>
+                                    {labels.verifiedSafeSignalReview}{' '}
+                                    <strong>{reviewVal}</strong>
+                                  </li>
+                                  <li>
+                                    {labels.verifiedSafeSignalTrust}{' '}
+                                    <strong>{authorityVal}</strong>
+                                  </li>
+                                  <li>{labels.verifiedSafeSignalFakeZero}</li>
+                                </ul>
+                              </div>
+                            </details>
+                          )}
                           {rStats.genuineDealCount > 0 && (
                             <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-2 py-1">
                               {t('radarGenuineBadge', {

@@ -7,6 +7,18 @@
  * A pick is a namespace ("deals"), a nested key ("rate.nav") or the keys of
  * a namespace that start with a prefix ("compare.tray*").
  */
+const PRICE_WATCH_BUTTON_PICKS = [
+  'watchlist.btn*',
+  'watchlist.editorTitle',
+  'watchlist.closeAria',
+  'watchlist.currentBestPrice',
+  'watchlist.preset*',
+  'watchlist.targetInputLabel',
+  'watchlist.unwatchBtn',
+  'watchlist.viewWatchlistLink',
+  'watchlist.saveTargetBtn',
+] as const;
+
 export const CLIENT_MESSAGE_SCOPES = {
   // Navbar, error boundary, compare tray and the quick compare / watch / price
   // signal controls that appear on most pages.
@@ -30,7 +42,8 @@ export const CLIENT_MESSAGE_SCOPES = {
     'reviews',
     'analyzerCopy',
     'priceVerdict',
-    'watchlist',
+    // Only PriceWatchButton keys; keep /watchlist combo optimizer strings off product HTML (#1883).
+    ...PRICE_WATCH_BUTTON_PICKS,
   ],
   compare: ['compare'],
   deals: ['deals'],
@@ -39,7 +52,7 @@ export const CLIENT_MESSAGE_SCOPES = {
     'inspect',
     'priceVerdict',
     'analyzerCopy',
-    'watchlist',
+    ...PRICE_WATCH_BUTTON_PICKS,
     'productDetail.offersUnavailable*',
     'productDetail.offersDiscontinued*',
   ],
