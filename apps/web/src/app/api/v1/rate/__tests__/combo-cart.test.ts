@@ -1158,6 +1158,29 @@ async function main() {
     assert.ok(comboOp.responses['200']);
     assert.ok(comboOp.responses['400']);
     assert.ok(comboOp.responses['429']);
+    const itemsSchemaProps = (
+      comboOp.responses['200'] as {
+        content?: {
+          'application/json'?: {
+            schema?: {
+              properties?: {
+                data?: {
+                  properties?: {
+                    items?: {
+                      items?: {
+                        properties?: Record<string, unknown>;
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      }
+    )?.content?.['application/json']?.schema?.properties?.data?.properties
+      ?.items?.items?.properties;
+    assert.ok(itemsSchemaProps?.retiredVariant);
     assert.ok(spec.components.schemas.ComboCartPlan);
     assert.ok(spec.components.schemas.MerchantTrustBadge);
 

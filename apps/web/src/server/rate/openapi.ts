@@ -1274,6 +1274,7 @@ function buildBaseRateOpenApiSpec(
                             categorySlug: { type: ['string', 'null'] },
                             productHref: { type: ['string', 'null'] },
                             sizeRequired: { type: 'boolean' },
+                            retiredVariant: { type: 'boolean' },
                             found: { type: 'boolean' },
                             offerCount: { type: 'integer' },
                             dealRadar: {
