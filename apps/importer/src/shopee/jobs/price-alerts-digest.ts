@@ -140,6 +140,7 @@ export interface AlertPriceHistoryRow {
   readonly product_id: string;
   readonly price: number | string;
   readonly recorded_at: string;
+  readonly origin?: string | null;
 }
 
 export interface EligiblePriceAlertCandidate {
@@ -633,6 +634,7 @@ function evaluatePublishedMasterOffers(input: {
     if (!historyRows) continue;
     for (const obs of historyRows) {
       if (!obs || typeof obs !== 'object') continue;
+      if ((obs.origin ?? 'crawl') !== 'crawl') continue;
       const obsPrice = parseSafeVndNumber(obs.price);
       if (!Number.isFinite(obsPrice)) continue;
       const recordedMs = typeof obs.recorded_at === 'string' ? Date.parse(obs.recorded_at) : NaN;
@@ -698,7 +700,7 @@ export async function runPriceAlertsDigest(
 
   if (apply) {
     assertValidAlertUnsubscribeSecret(options.unsubscribeSecret);
-    unsubscribeSecret = options.unsubscribeSecret!.trim();
+    unsubscribeSecret = options.unsubscribeSecret!;
     resendApiKey = validateResendApiKey(options.resendApiKey);
     fromEmail = validateSenderFromAddress(options.fromEmail);
   }
@@ -880,12 +882,13 @@ export async function runPriceAlertsDigest(
       ? selectInByKey<AlertPriceHistoryRow>(
           supabase,
           'price_history',
-          'id, product_id, price, recorded_at',
+          'id, product_id, price, recorded_at, origin',
           'product_id',
           offerProductIds,
           'id',
           query =>
             query
+              .eq('origin', 'crawl')
               .gte('recorded_at', ninetyDaysAgoIso)
               .gt('price', 0)
               .lte('price', MAX_VALID_VND_PRICE)
@@ -1131,7 +1134,9 @@ export async function runPriceAlertsDigestCli(
     DEFAULT_RATE_SITE_ORIGIN;
   const siteOrigin = validateHttpsSiteOrigin(rawSiteOrigin);
 
-  const rawSecret = (env.RATE_ALERT_UNSUBSCRIBE_SECRET || '').trim();
+  // Pass raw RATE_ALERT_UNSUBSCRIBE_SECRET without trimming so padded/newline-terminated
+  // values fail closed identically to apps/web (#1875).
+  const rawSecret = env.RATE_ALERT_UNSUBSCRIBE_SECRET ?? '';
   const rawResendKey = (env.RESEND_API_KEY || '').trim();
   const rawFrom = (env.ALERT_EMAIL_FROM || '').trim();
   const rawAudienceId = (env.RESEND_AUDIENCE_ID || '').trim();

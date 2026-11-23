@@ -116,22 +116,26 @@ export function normalizeAlertSubscriberEmail(raw: unknown): string | null {
 }
 
 /**
- * Validates that `secret` (after trimming surrounding whitespace) is a well-formed UTF-16
- * string without control characters and measures `32..1024` UTF-8 bytes, matching `apps/web`.
+ * Validates that `secret` is a well-formed UTF-16 string with no leading/trailing whitespace,
+ * no control characters, and `32..1024` UTF-8 bytes, matching `apps/web` (#1875).
  */
 export function assertValidAlertUnsubscribeSecret(secret: unknown): Buffer {
-  if (typeof secret !== 'string' || secret.length > 4096 || !isWellFormedUtf16(secret)) {
+  if (
+    typeof secret !== 'string' ||
+    secret.length === 0 ||
+    secret.length > 4096 ||
+    !isWellFormedUtf16(secret)
+  ) {
     throw new Error(
       `RATE_ALERT_UNSUBSCRIBE_SECRET must be a non-empty UTF-8 string of at least ${MIN_ALERT_UNSUBSCRIBE_SECRET_BYTES} bytes.`
     );
   }
-  const trimmed = secret.trim();
-  if (!trimmed || /\p{Cc}/u.test(trimmed)) {
+  if (secret !== secret.trim() || /\p{Cc}/u.test(secret)) {
     throw new Error(
-      `RATE_ALERT_UNSUBSCRIBE_SECRET must be a non-empty UTF-8 string without control characters.`
+      'RATE_ALERT_UNSUBSCRIBE_SECRET must not contain leading/trailing whitespace or control characters.'
     );
   }
-  const keyBytes = Buffer.from(trimmed, 'utf8');
+  const keyBytes = Buffer.from(secret, 'utf8');
   if (
     keyBytes.byteLength < MIN_ALERT_UNSUBSCRIBE_SECRET_BYTES ||
     keyBytes.byteLength > MAX_ALERT_UNSUBSCRIBE_SECRET_BYTES

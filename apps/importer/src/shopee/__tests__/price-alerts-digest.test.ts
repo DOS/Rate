@@ -84,7 +84,7 @@ function createFakeDigestSupabase(
     categories: (tables.categories ?? []).map(r => ({ ...r })),
     products: (tables.products ?? []).map(r => ({ origin: 'crawl', ...r })),
     merchants: (tables.merchants ?? []).map(r => ({ ...r })),
-    price_history: (tables.price_history ?? []).map(r => ({ ...r })),
+    price_history: (tables.price_history ?? []).map(r => ({ origin: 'crawl', ...r })),
   };
 
   const makeSelectBuilder = (tableName: string) => {
@@ -204,18 +204,6 @@ test('canonical HMAC unsubscribe token matches shared apps/web test vector and v
 
   assert.equal(signed, EXPECTED_SHARED_WIRE_VALUE);
 
-  // Leading/trailing whitespace around input trims identically to apps/web
-  const paddedSigned = signAlertUnsubscribeToken(
-    {
-      alertId: SHARED_VECTOR_ALERT_ID,
-      email: 'buyer@example.com',
-      masterProductId: SHARED_VECTOR_MASTER_ID,
-      issuedAtUnixSec: SHARED_VECTOR_IAT,
-    },
-    `  ${SHARED_VECTOR_HEX}\n`
-  );
-  assert.equal(paddedSigned, EXPECTED_SHARED_WIRE_VALUE);
-
   const [, payloadB64] = signed.split('.');
   const decodedJson = Buffer.from(payloadB64!, 'base64url').toString('utf8');
   assert.equal(
@@ -251,6 +239,9 @@ test('unsubscribe token signer and verifier fail closed on padded/NUL inputs, ma
     ' '.repeat(40),
     `x${' '.repeat(31)}`,
     `x${'\u0000'.repeat(31)}`,
+    `  ${SHARED_VECTOR_HEX}`,
+    `${SHARED_VECTOR_HEX}\n`,
+    `  ${SHARED_VECTOR_HEX}  `,
     `${SHARED_VECTOR_HEX}\u0000`,
     'a'.repeat(1025),
     `${'a'.repeat(31)}\uD800`,
@@ -266,6 +257,11 @@ test('unsubscribe token signer and verifier fail closed on padded/NUL inputs, ma
         },
         badInput
       )
+    );
+    assert.throws(() =>
+      verifyAlertUnsubscribeToken(EXPECTED_SHARED_WIRE_VALUE, badInput, {
+        nowUnixSec: SHARED_VECTOR_IAT,
+      })
     );
   }
 
@@ -621,6 +617,20 @@ test('parsePriceAlertsDigestArgs, package exports, and CLI fail closed on --dry-
     }),
     /--dry-run does not combine with --apply/
   );
+  await assert.rejects(
+    runPriceAlertsDigestCli(['--apply'], {
+      env: {
+        RATE_ALERT_UNSUBSCRIBE_SECRET: `${SHARED_VECTOR_HEX}\n`,
+        RESEND_API_KEY: STUB_MAILER_CRED,
+        ALERT_EMAIL_FROM: 'Rate.vn <alerts@rate.vn>',
+      },
+      getClient: async () => {
+        clientOpened = true;
+        throw new Error('should not be reached');
+      },
+    }),
+    /whitespace or control characters/
+  );
   assert.equal(clientOpened, false, 'CLI must fail before opening rate_worker session');
 
   const { supabase } = createFakeDigestSupabase({});
@@ -867,12 +877,14 @@ test('digest filters out bait listings, out-of-stock offers, non-crawl rows, sub
         product_id: 'p_ok_1',
         price: 19_500_000,
         recorded_at: '2026-10-15T00:00:00.000Z',
+        origin: 'crawl',
       },
       {
         id: 2,
         product_id: 'p_ok_2',
         price: 18_200_000,
         recorded_at: '2026-11-10T00:00:00.000Z',
+        origin: 'crawl',
       },
       // Non-crawl listing observation at 16M must not suppress 90d ATL!
       {
@@ -880,6 +892,35 @@ test('digest filters out bait listings, out-of-stock offers, non-crawl rows, sub
         product_id: 'p_noncrawl_hist',
         price: 16_000_000,
         recorded_at: '2026-11-10T00:00:00.000Z',
+      },
+      // Non-crawl price_history rows (backfill/seed/synthetic/fixture) on crawled product_id must also be ignored!
+      {
+        id: 4,
+        product_id: 'p_ok_1',
+        price: 15_000_000,
+        recorded_at: '2026-11-12T00:00:00.000Z',
+        origin: 'backfill',
+      },
+      {
+        id: 5,
+        product_id: 'p_ok_1',
+        price: 15_100_000,
+        recorded_at: '2026-11-13T00:00:00.000Z',
+        origin: 'seed',
+      },
+      {
+        id: 6,
+        product_id: 'p_ok_1',
+        price: 15_200_000,
+        recorded_at: '2026-11-14T00:00:00.000Z',
+        origin: 'synthetic',
+      },
+      {
+        id: 7,
+        product_id: 'p_ok_1',
+        price: 15_300_000,
+        recorded_at: '2026-11-15T00:00:00.000Z',
+        origin: 'fixture',
       },
     ],
     price_alerts: [
@@ -973,6 +1014,7 @@ test('digest filters out bait listings, out-of-stock offers, non-crawl rows, sub
   assert.equal(updates.length, 0);
   assert.equal(drySummary.candidates[0]?.alertId, '30000000-0000-4000-8000-000000000005');
   assert.equal(drySummary.candidates[0]?.bestPrice, 17_990_000);
+  assert.equal(drySummary.candidates[0]?.observed90dFloor, 18_200_000);
   assert.equal(drySummary.candidates[0]?.isAllTimeLow90d, true);
   assert.equal(drySummary.candidates[0]?.productUrl, 'https://rate.vn/smartphones/xiaomi-16');
 });
@@ -1054,6 +1096,19 @@ test('--apply skips Resend Audience unsubscribed contacts, fails closed on suppr
   );
   assert.equal(dbMissingInput.updates.length, 0);
 
+  // 1b) --apply fails closed when RATE_ALERT_UNSUBSCRIBE_SECRET has leading/trailing whitespace or newline
+  await assert.rejects(
+    runPriceAlertsDigest(dbMissingInput.supabase, {
+      apply: true,
+      now,
+      unsubscribeSecret: `  ${SHARED_VECTOR_HEX}\n`,
+      resendApiKey: STUB_MAILER_CRED,
+      fromEmail: 'Rate.vn <alerts@rate.vn>',
+    }),
+    /whitespace or control characters/
+  );
+  assert.equal(dbMissingInput.updates.length, 0);
+
   // 2) --apply fails closed when Resend Audience suppression endpoint errors
   let emailsAttemptedOnSuppressionFailure = 0;
   const dbSuppFail = createFakeDigestSupabase(makeTables());
@@ -1084,7 +1139,7 @@ test('--apply skips Resend Audience unsubscribed contacts, fails closed on suppr
   const applySummary = await runPriceAlertsDigest(dbLive.supabase, {
     apply: true,
     now,
-    unsubscribeSecret: `  ${SHARED_VECTOR_HEX}\n`,
+    unsubscribeSecret: SHARED_VECTOR_HEX,
     resendApiKey: STUB_MAILER_CRED,
     fromEmail: 'Rate.vn <alerts@rate.vn>',
     audienceId: 'aud_live_1',
@@ -1093,7 +1148,7 @@ test('--apply skips Resend Audience unsubscribed contacts, fails closed on suppr
       attemptedRecipients.push(input.toEmail);
       // Verify no ATL badge when price_history is empty
       assert.equal(input.isAllTimeLow90d, false);
-      // Verify canonical token decodes for this alert even when input had trailing newline
+      // Verify canonical token decodes for this alert
       const check = verifyAlertUnsubscribeToken(input.unsubscribeToken, SHARED_VECTOR_HEX, {
         nowUnixSec: Math.floor(now.getTime() / 1000),
       });
