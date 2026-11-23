@@ -1176,9 +1176,9 @@ function buildBaseRateOpenApiSpec(
         get: {
           operationId: 'optimizeComboCart',
           summary:
-            'Solve exact single-store and multi-store combo cart plans for 2 to 5 products',
+            'Solve single-store and bounded multi-store combo cart plans for 2 to 5 products',
           description:
-            'Resolves 2 to 5 distinct master product or Item slugs, filters out unavailable, bait-priced, untrusted (failing closed on null `risk_score` when `minTrust > 0`), and non-Official offers (when `officialOnly=1`), and computes Plan A (`singleStoreBest`: lowest-cost single store carrying all items) alongside Plan B (`multiStoreOptimal`: exact branch-and-bound optimal split across at most `maxStores` stores including `shippingVnd` per distinct store order). Also evaluates live `verified_safe` merchant trust badges without unbacked historical claims. Limited to 60 requests per minute per client IP.',
+            'Resolves 2 to 5 distinct master product or Item slugs (requiring explicit size selection for retired variant slugs), filters out unavailable, bait-priced, untrusted (failing closed on null `risk_score` when `minTrust > 0`), and non-Official offers (when `officialOnly=1`), and computes Plan A (`singleStoreBest`: exact lowest-cost single store carrying all items) alongside Plan B (`multiStoreOptimal`: bounded branch-and-bound optimal split across at most `maxStores` stores including `shippingVnd` per distinct store order). For tractability, Plan B searches at most 14 candidate stores per item (union of top 8 cheapest stores plus multi-item stores) and stops at 50,000 search nodes; `diagnostics.candidateTrimmed`, `diagnostics.nodeCapReached`, and `diagnostics.searchComplete` indicate whether the returned Plan B (or `null`) is exhaustive or bounded. Also evaluates live `verified_safe` merchant trust badges backed by merchant-wide discount audits (`auditScope: "merchant_wide"` vs `"cart_only_unverified"` when unavailable), without unbacked historical claims. Limited to 60 requests per minute per client IP.',
           tags: ['Comparison & Watchlist'],
           parameters: [
             {
@@ -1316,6 +1316,30 @@ function buildBaseRateOpenApiSpec(
                       diagnostics: {
                         type: 'object',
                         additionalProperties: true,
+                        properties: {
+                          itemCount: { type: 'integer' },
+                          maxStores: { type: 'integer' },
+                          minTrust: { type: 'number' },
+                          officialOnly: { type: 'boolean' },
+                          shippingVndPerOrder: { type: 'integer' },
+                          searchNodesVisited: { type: 'integer' },
+                          maxSearchNodes: { type: 'integer' },
+                          nodeCapReached: { type: 'boolean' },
+                          candidateCapPerItem: { type: 'integer' },
+                          candidateTrimmed: { type: 'boolean' },
+                          searchComplete: {
+                            type: 'boolean',
+                            description:
+                              'True only when neither per-item candidate trimming nor the 50,000-node cap truncated Plan B search.',
+                          },
+                          itemDiagnostics: {
+                            type: 'array',
+                            items: {
+                              type: 'object',
+                              additionalProperties: true,
+                            },
+                          },
+                        },
                       },
                     },
                   },
@@ -2850,6 +2874,12 @@ function buildBaseRateOpenApiSpec(
             merchantId: { type: ['string', 'null'] },
             merchantName: { type: 'string' },
             platform: { type: 'string' },
+            auditScope: {
+              type: 'string',
+              enum: ['merchant_wide', 'cart_only_unverified'],
+            },
+            cartOfferCount: { type: 'integer' },
+            cartFakeDiscountCount: { type: 'integer' },
             verifiedSafe: { type: 'boolean' },
             badgeCode: {
               type: ['string', 'null'],

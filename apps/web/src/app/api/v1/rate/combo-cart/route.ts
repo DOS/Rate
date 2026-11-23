@@ -14,6 +14,7 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
   isCanonicalCategorySlug,
+  reviewRiskScoreOrNull,
   type CanonicalCategorySlug,
 } from '@/lib/rate-domain-core';
 import { radarExportFields } from '@/lib/deal-radar';
@@ -27,6 +28,7 @@ import {
   COMBO_CART_MIN_ITEMS,
   COMBO_CART_MIN_MAX_STORES,
   optimizeComboCart,
+  resolveComboStoreIdentity,
   type ComboCartItemInput,
   type ComboCartPlan,
   type ComboCartStoreGroup,
@@ -38,13 +40,13 @@ import {
 import {
   computeProductRadarSignal,
   getCachedMasterProductBySlug,
+  getCachedMerchantProfileById,
   getMasterProductOffersBatch,
   getRateClient,
 } from '@/server/rate';
 import {
   BoundedSlidingWindowRateLimiter,
   PUBLIC_API_CORS_HEADERS,
-  PublicApiError,
   extractClientRateLimitKey,
   jsonApiError,
   parseFiniteDecimalInput,
@@ -196,7 +198,7 @@ function parseComboCartQuery(
           error: 'Invalid ?minTrust= parameter (expected 0 to 100).',
         };
       }
-      minTrust = parsed;
+      minTrust = parsed === 0 ? 0 : parsed;
     }
   }
 
@@ -236,7 +238,7 @@ function parseComboCartQuery(
           error: `Invalid ?shippingVnd= parameter (expected integer 0 to ${COMBO_CART_MAX_SHIPPING_VND}).`,
         };
       }
-      shippingVnd = parsed;
+      shippingVnd = parsed === 0 ? 0 : parsed;
     }
   }
 
@@ -341,23 +343,20 @@ function resolveComboItemHref(
     : getMasterProductHref(master);
 }
 
-function cleanStoreKey(offer: MerchantOffer): string {
-  const merchantId =
-    typeof offer.merchant?.id === 'string'
-      ? offer.merchant.id
-          .replace(/\p{Cc}+/gu, '')
-          .trim()
-          .slice(0, 128)
-      : '';
-  const platform =
-    typeof (offer.merchant?.platform ?? offer.platform) === 'string'
-      ? String(offer.merchant?.platform ?? offer.platform)
-          .replace(/\p{Cc}+/gu, '')
-          .trim()
-          .toLowerCase()
-          .slice(0, 40)
-      : '';
-  return merchantId || platform || 'shopee';
+function resolveRetiredItemHref(
+  target: {
+    itemSlug: string;
+    itemCategoryId: string | null;
+  },
+  itemCategorySlugs: ReadonlyMap<string, CanonicalCategorySlug | false>
+): string | null {
+  if (!target.itemCategoryId || !isSafeComboSlugToken(target.itemSlug)) {
+    return null;
+  }
+  const cat = itemCategorySlugs.get(target.itemCategoryId);
+  if (typeof cat !== 'string' || !isCanonicalCategorySlug(cat)) return null;
+  const href = `/${cat}/${target.itemSlug}`;
+  return /^\/[a-z]+\/[^/?#\s]+$/.test(href) ? href : null;
 }
 
 function computeMedianPrice(values: readonly number[]): number {
@@ -371,6 +370,7 @@ function computeMedianPrice(values: readonly number[]): number {
 }
 
 interface AggregatedMerchantAudit {
+  internalKey: string;
   storeKey: string;
   merchantId: string | null;
   merchantName: string;
@@ -380,8 +380,8 @@ interface AggregatedMerchantAudit {
   reviewRiskScore: number | null;
   reviewRiskBreakdown: { total_reviews?: unknown } | null;
   riskScore: number | null;
-  offerCount: number;
-  activeFakeDiscountCount: number;
+  cartOfferCount: number;
+  cartFakeDiscountCount: number;
 }
 
 function accumulateMerchantSignals(
@@ -409,49 +409,31 @@ function accumulateMerchantSignals(
 
   let trapCountedForProduct = false;
 
-  for (const offer of plausible) {
-    const storeKey = cleanStoreKey(offer);
-    const platform =
-      (offer.merchant?.platform || offer.platform || 'shopee')
-        .replace(/\p{Cc}+/gu, '')
-        .trim()
-        .toLowerCase()
-        .slice(0, 40) || 'shopee';
-    const merchantId =
-      typeof offer.merchant?.id === 'string' && offer.merchant.id.trim()
-        ? offer.merchant.id
-            .replace(/\p{Cc}+/gu, '')
-            .trim()
-            .slice(0, 128)
-        : null;
-    const merchantName =
-      typeof offer.merchant?.name === 'string' && offer.merchant.name.trim()
-        ? offer.merchant.name
-            .replace(/\p{Cc}+/gu, ' ')
-            .trim()
-            .slice(0, 160)
-        : platform.toUpperCase();
+  for (let idx = 0; idx < plausible.length; idx++) {
+    const offer = plausible[idx]!;
+    const identity = resolveComboStoreIdentity(offer, `agg-${idx + 1}`);
     const isOfficial = offer.merchant?.is_official === true;
     const dosafe =
       typeof offer.merchant?.dosafe_risk_score === 'number' &&
       Number.isFinite(offer.merchant.dosafe_risk_score)
         ? offer.merchant.dosafe_risk_score
         : null;
-    const review =
-      typeof offer.merchant?.review_risk_score === 'number' &&
-      Number.isFinite(offer.merchant.review_risk_score)
-        ? offer.merchant.review_risk_score
-        : null;
-    const risk =
-      typeof offer.merchant?.risk_score === 'number' &&
-      Number.isFinite(offer.merchant.risk_score)
-        ? offer.merchant.risk_score
-        : null;
     const breakdown =
       offer.merchant?.review_risk_breakdown &&
       typeof offer.merchant.review_risk_breakdown === 'object' &&
       !Array.isArray(offer.merchant.review_risk_breakdown)
         ? (offer.merchant.review_risk_breakdown as { total_reviews?: unknown })
+        : null;
+    // Normalize each review score against its own breakdown so measured evidence
+    // and its score stay paired regardless of cart item order.
+    const normalizedReview = reviewRiskScoreOrNull({
+      review_risk_score: offer.merchant?.review_risk_score,
+      review_risk_breakdown: breakdown,
+    });
+    const risk =
+      typeof offer.merchant?.risk_score === 'number' &&
+      Number.isFinite(offer.merchant.risk_score)
+        ? offer.merchant.risk_score
         : null;
 
     let isFakeSale = false;
@@ -475,22 +457,23 @@ function accumulateMerchantSignals(
 
     if (
       !isFakeSale &&
+      !trapCountedForProduct &&
       radarFakeTrap &&
-      ((merchantId && radarFakeTrap.merchantId === merchantId) ||
-        (!merchantId &&
-          radarFakeTrap.platform.toLowerCase() === platform &&
+      ((identity.merchantId &&
+        radarFakeTrap.merchantId === identity.merchantId) ||
+        (!identity.merchantId &&
+          radarFakeTrap.platform.toLowerCase() === identity.platform &&
           radarFakeTrap.merchantName.toLowerCase() ===
-            merchantName.toLowerCase()))
+            identity.merchantName.toLowerCase()))
     ) {
       isFakeSale = true;
+      trapCountedForProduct = true;
     }
 
-    if (isFakeSale) trapCountedForProduct = true;
-
-    const prev = acc.get(storeKey);
+    const prev = acc.get(identity.internalKey);
     if (prev) {
-      prev.offerCount += 1;
-      if (isFakeSale) prev.activeFakeDiscountCount += 1;
+      prev.cartOfferCount += 1;
+      if (isFakeSale) prev.cartFakeDiscountCount += 1;
       prev.isOfficial = prev.isOfficial && isOfficial;
       if (dosafe !== null) {
         prev.dosafeRiskScore =
@@ -498,73 +481,95 @@ function accumulateMerchantSignals(
             ? dosafe
             : Math.max(prev.dosafeRiskScore, dosafe);
       }
-      if (review !== null) {
-        prev.reviewRiskScore =
-          prev.reviewRiskScore === null
-            ? review
-            : Math.max(prev.reviewRiskScore, review);
+      if (
+        normalizedReview !== null &&
+        (prev.reviewRiskScore === null ||
+          normalizedReview > prev.reviewRiskScore)
+      ) {
+        prev.reviewRiskScore = normalizedReview;
+        prev.reviewRiskBreakdown = breakdown;
       }
       if (risk !== null) {
         prev.riskScore =
           prev.riskScore === null ? risk : Math.max(prev.riskScore, risk);
       }
-      if (!prev.reviewRiskBreakdown && breakdown) {
-        prev.reviewRiskBreakdown = breakdown;
-      }
     } else {
-      acc.set(storeKey, {
-        storeKey,
-        merchantId,
-        merchantName,
-        platform,
+      acc.set(identity.internalKey, {
+        internalKey: identity.internalKey,
+        storeKey: identity.storeKey,
+        merchantId: identity.merchantId,
+        merchantName: identity.merchantName,
+        platform: identity.platform,
         isOfficial,
         dosafeRiskScore: dosafe,
-        reviewRiskScore: review,
-        reviewRiskBreakdown: breakdown,
+        reviewRiskScore: normalizedReview,
+        reviewRiskBreakdown: normalizedReview !== null ? breakdown : null,
         riskScore: risk,
-        offerCount: 1,
-        activeFakeDiscountCount: isFakeSale ? 1 : 0,
+        cartOfferCount: 1,
+        cartFakeDiscountCount: isFakeSale ? 1 : 0,
       });
-    }
-  }
-
-  if (radarFakeTrap && !trapCountedForProduct) {
-    const trapStoreKey =
-      radarFakeTrap.merchantId.trim() ||
-      radarFakeTrap.platform.trim().toLowerCase();
-    const existing = trapStoreKey ? acc.get(trapStoreKey) : undefined;
-    if (existing) {
-      existing.activeFakeDiscountCount += 1;
     }
   }
 }
 
+export type MerchantBadgeAuditScope = 'merchant_wide' | 'cart_only_unverified';
+
+export interface ComboCartApiMerchantBadge extends MerchantTrustBadgeResult {
+  storeKey: string;
+  merchantId: string | null;
+  merchantName: string;
+  platform: string;
+  auditScope: MerchantBadgeAuditScope;
+  cartOfferCount: number;
+  cartFakeDiscountCount: number;
+}
+
 export interface ComboCartApiStoreGroup extends ComboCartStoreGroup {
-  trustBadge: MerchantTrustBadgeResult;
+  trustBadge: ComboCartApiMerchantBadge;
 }
 
 export interface ComboCartApiPlan extends Omit<ComboCartPlan, 'storeGroups'> {
   storeGroups: ComboCartApiStoreGroup[];
 }
 
+function groupLookupKey(
+  group: Pick<ComboCartStoreGroup, 'merchantId' | 'storeKey'>
+): string {
+  return group.merchantId ? `id:${group.merchantId}` : group.storeKey;
+}
+
 function attachTrustBadgesToPlan(
   plan: ComboCartPlan | null,
-  badgesByStoreKey: ReadonlyMap<string, MerchantTrustBadgeResult>
+  badgesByInternalKey: ReadonlyMap<string, ComboCartApiMerchantBadge>
 ): ComboCartApiPlan | null {
   if (!plan) return null;
   return {
     ...plan,
-    storeGroups: plan.storeGroups.map((group) => ({
-      ...group,
-      trustBadge:
-        badgesByStoreKey.get(group.storeKey) ??
-        evaluateMerchantTrustBadge({
-          risk_score: group.riskScore,
-          is_official: group.isOfficial,
-          offerCount: group.itemCount,
-          activeFakeDiscountCount: null,
-        }),
-    })),
+    storeGroups: plan.storeGroups.map((group) => {
+      const found = badgesByInternalKey.get(groupLookupKey(group));
+      if (found) {
+        return { ...group, trustBadge: found };
+      }
+      const fallbackBadge = evaluateMerchantTrustBadge({
+        risk_score: group.riskScore,
+        is_official: group.isOfficial,
+        offerCount: group.itemCount,
+        activeFakeDiscountCount: null,
+      });
+      return {
+        ...group,
+        trustBadge: {
+          ...fallbackBadge,
+          storeKey: group.storeKey,
+          merchantId: group.merchantId,
+          merchantName: group.merchantName,
+          platform: group.platform,
+          auditScope: 'cart_only_unverified',
+          cartOfferCount: group.itemCount,
+          cartFakeDiscountCount: 0,
+        },
+      };
+    }),
   };
 }
 
@@ -577,8 +582,8 @@ export async function OPTIONS() {
 
 /**
  * GET /api/v1/rate/combo-cart?items=slug1,slug2,...&officialOnly=0|1&minTrust=80&maxStores=3&shippingVnd=0
- * Resolves 2 to 5 master product or Item slugs, runs exact single-store and bounded
- * multi-store combo cart optimization, and evaluates verified safe merchant badges.
+ * Resolves 2 to 5 master product or Item slugs, runs single-store and bounded
+ * multi-store combo cart optimization, and evaluates live verified safe merchant badges.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -614,10 +619,25 @@ export async function GET(request: NextRequest) {
     const resolvedTargets = await Promise.all(
       requestedSlugs.map(async (requestedSlug) => {
         const target = await resolveWatchlistSlug(requestedSlug);
-        const master = await getCachedMasterProductBySlug(
-          target?.variantSlug ?? requestedSlug
-        );
-        return { requestedSlug, target, master };
+        // Never substitute another live variant's offers for a retired variant
+        // slug; require explicit size selection instead while preserving Item
+        // slug default-variant resolution.
+        const isRetiredVariantSubstitution =
+          target !== null &&
+          target.sizeRequired &&
+          target.itemSlug.toLowerCase() !== requestedSlug.toLowerCase() &&
+          target.variantSlug.toLowerCase() !== requestedSlug.toLowerCase();
+        const master = isRetiredVariantSubstitution
+          ? null
+          : await getCachedMasterProductBySlug(
+              target?.variantSlug ?? requestedSlug
+            );
+        return {
+          requestedSlug,
+          target,
+          isRetiredVariantSubstitution,
+          master,
+        };
       })
     );
 
@@ -625,11 +645,13 @@ export async function GET(request: NextRequest) {
     for (const entry of resolvedTargets) {
       if (!entry.master) continue;
       if (seenMasterIds.has(entry.master.id)) {
-        return jsonApiError(
-          400,
-          'Requested slugs resolve to duplicate products.',
-          new PublicApiError('Requested slugs resolve to duplicate products.'),
-          { 'Cache-Control': 'no-store' }
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'Requested slugs resolve to duplicate products.',
+            code: 'INVALID_QUERY',
+          },
+          { status: 400, headers: NO_STORE_CORS_HEADERS }
         );
       }
       seenMasterIds.add(entry.master.id);
@@ -652,7 +674,10 @@ export async function GET(request: NextRequest) {
     ]);
 
     const missingSlugs: string[] = [];
-    const merchantAuditByStore = new Map<string, AggregatedMerchantAudit>();
+    const merchantAuditByInternalKey = new Map<
+      string,
+      AggregatedMerchantAudit
+    >();
     const optimizerItems: ComboCartItemInput[] = [];
     const itemSummaries: Array<{
       requestedSlug: string;
@@ -664,6 +689,7 @@ export async function GET(request: NextRequest) {
       categorySlug: CanonicalCategorySlug | null;
       productHref: string | null;
       sizeRequired: boolean;
+      retiredVariant: boolean;
       found: boolean;
       offerCount: number;
       dealRadar: ReturnType<typeof radarExportFields> | null;
@@ -680,13 +706,17 @@ export async function GET(request: NextRequest) {
         itemSummaries.push({
           requestedSlug: entry.requestedSlug,
           resolvedSlug: null,
-          itemSlug: null,
+          itemSlug: entry.target?.itemSlug ?? null,
           masterProductId: null,
           name: entry.requestedSlug,
           brand: null,
           categorySlug: null,
-          productHref: null,
-          sizeRequired: false,
+          productHref:
+            entry.isRetiredVariantSubstitution && entry.target
+              ? resolveRetiredItemHref(entry.target, itemCategorySlugs)
+              : null,
+          sizeRequired: entry.isRetiredVariantSubstitution,
+          retiredVariant: entry.isRetiredVariantSubstitution,
           found: false,
           offerCount: 0,
           dealRadar: null,
@@ -718,7 +748,7 @@ export async function GET(request: NextRequest) {
               platform: radarSignal.fakeSaleTrap.platform,
             }
           : null,
-        merchantAuditByStore
+        merchantAuditByInternalKey
       );
 
       optimizerItems.push({
@@ -742,6 +772,7 @@ export async function GET(request: NextRequest) {
           itemCategorySlugs
         ),
         sizeRequired: Boolean(entry.target?.sizeRequired),
+        retiredVariant: false,
         found: true,
         offerCount: inStockValid.length,
         dealRadar: radarExportFields(radarSignal),
@@ -755,56 +786,95 @@ export async function GET(request: NextRequest) {
       shippingVndPerOrder: shippingVnd,
     });
 
-    const badgesByStoreKey = new Map<string, MerchantTrustBadgeResult>();
-    const merchantBadges: Array<
-      MerchantTrustBadgeResult & {
-        storeKey: string;
-        merchantId: string | null;
-        merchantName: string;
-        platform: string;
-      }
-    > = [];
-
-    const referencedStoreKeys = new Set<string>();
+    const referencedInternalKeys = new Set<string>();
     for (const plan of [
       optimization.singleStoreBest,
       optimization.multiStoreOptimal,
     ]) {
       if (!plan) continue;
       for (const group of plan.storeGroups) {
-        referencedStoreKeys.add(group.storeKey);
+        referencedInternalKeys.add(groupLookupKey(group));
       }
     }
 
-    for (const storeKey of referencedStoreKeys) {
-      const agg = merchantAuditByStore.get(storeKey);
-      if (!agg) continue;
+    const referencedAudits = Array.from(referencedInternalKeys)
+      .map((key) => merchantAuditByInternalKey.get(key))
+      .filter((agg): agg is AggregatedMerchantAudit => Boolean(agg));
+
+    // Fetch merchant-wide discount audits for referenced stores in parallel so
+    // `verified_safe` never grants `no_active_fake_discounts` from a cart-only scan.
+    const merchantProfiles = await Promise.all(
+      referencedAudits.map((agg) =>
+        agg.merchantId
+          ? getCachedMerchantProfileById(agg.merchantId).catch(() => null)
+          : Promise.resolve(null)
+      )
+    );
+
+    const badgesByInternalKey = new Map<string, ComboCartApiMerchantBadge>();
+    const merchantBadges: ComboCartApiMerchantBadge[] = [];
+
+    for (let i = 0; i < referencedAudits.length; i++) {
+      const agg = referencedAudits[i]!;
+      const profile = merchantProfiles[i] ?? null;
+
+      let merchantOfferCount: number;
+      let activeFakeDiscountCount: number | null;
+      let auditScope: MerchantBadgeAuditScope;
+
+      if (profile) {
+        const activeListings = profile.listings.filter(
+          (l) => !isOfferUnavailable(l)
+        );
+        merchantOfferCount = activeListings.length;
+        const profileFakeCount = activeListings.filter(
+          (l) =>
+            l.discount_analysis?.verdict === 'fake_discount' ||
+            l.discount_analysis?.verdict === 'suspicious_discount'
+        ).length;
+        activeFakeDiscountCount = Math.max(
+          profileFakeCount,
+          agg.cartFakeDiscountCount
+        );
+        auditScope = 'merchant_wide';
+      } else {
+        merchantOfferCount = agg.cartOfferCount;
+        activeFakeDiscountCount =
+          agg.cartFakeDiscountCount > 0 ? agg.cartFakeDiscountCount : null;
+        auditScope = 'cart_only_unverified';
+      }
+
       const badge = evaluateMerchantTrustBadge({
         dosafe_risk_score: agg.dosafeRiskScore,
         review_risk_score: agg.reviewRiskScore,
         review_risk_breakdown: agg.reviewRiskBreakdown,
         risk_score: agg.riskScore,
         is_official: agg.isOfficial,
-        offerCount: agg.offerCount,
-        activeFakeDiscountCount: agg.activeFakeDiscountCount,
+        offerCount: merchantOfferCount,
+        activeFakeDiscountCount,
       });
-      badgesByStoreKey.set(storeKey, badge);
-      merchantBadges.push({
+
+      const fullBadge: ComboCartApiMerchantBadge = {
         storeKey: agg.storeKey,
         merchantId: agg.merchantId,
         merchantName: agg.merchantName,
         platform: agg.platform,
+        auditScope,
+        cartOfferCount: agg.cartOfferCount,
+        cartFakeDiscountCount: agg.cartFakeDiscountCount,
         ...badge,
-      });
+      };
+      badgesByInternalKey.set(agg.internalKey, fullBadge);
+      merchantBadges.push(fullBadge);
     }
 
     const singleStoreBest = attachTrustBadgesToPlan(
       optimization.singleStoreBest,
-      badgesByStoreKey
+      badgesByInternalKey
     );
     const multiStoreOptimal = attachTrustBadgesToPlan(
       optimization.multiStoreOptimal,
-      badgesByStoreKey
+      badgesByInternalKey
     );
 
     return NextResponse.json(

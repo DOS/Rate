@@ -59,17 +59,27 @@ export interface MerchantTrustBadgeResult {
 function toBoundedScore100(raw: unknown): number | null {
   if (raw === null || raw === undefined) return null;
   if (typeof raw !== 'number' && typeof raw !== 'string') return null;
-  if (typeof raw === 'string' && raw.trim() === '') return null;
-  const num = Number(raw);
-  if (!Number.isFinite(num)) return null;
-  return Math.max(0, Math.min(100, num));
+  if (typeof raw === 'string') {
+    if (/[\p{Cc}]/u.test(raw)) return null;
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return null;
+    }
+    const num = Number(trimmed);
+    if (!Number.isFinite(num)) return null;
+    const clamped = Math.max(0, Math.min(100, num));
+    return clamped === 0 ? 0 : clamped;
+  }
+  if (!Number.isFinite(raw)) return null;
+  const clamped = Math.max(0, Math.min(100, raw));
+  return clamped === 0 ? 0 : clamped;
 }
 
 function toNonNegativeCountOrNull(raw: unknown): number | null {
   if (raw === null || raw === undefined) return null;
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
   if (raw < 0 || !Number.isInteger(raw)) return null;
-  return raw;
+  return raw === 0 ? 0 : raw;
 }
 
 /**
@@ -85,10 +95,16 @@ export function evaluateMerchantTrustBadge(
       ? rawInput
       : ({} as MerchantTrustBadgeInput);
 
-  const dosafeRiskScore = knownDosafeRiskScore({
-    dosafe_risk_score: input.dosafe_risk_score,
-    dosafe_risk_known: input.dosafe_risk_known,
-  });
+  // Validate before knownDosafeRiskScore so whitespace-only strings or booleans
+  // never coerce to 0.
+  const preValidatedDosafe = toBoundedScore100(input.dosafe_risk_score);
+  const dosafeRiskScore =
+    preValidatedDosafe === null
+      ? null
+      : knownDosafeRiskScore({
+          dosafe_risk_score: preValidatedDosafe,
+          dosafe_risk_known: input.dosafe_risk_known,
+        });
 
   const hasRawReviewInput =
     input.review_risk_score !== null &&

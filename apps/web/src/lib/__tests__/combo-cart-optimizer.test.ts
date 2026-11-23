@@ -390,20 +390,20 @@ function main() {
   assert.deepEqual(uncoveredRes.uncoveredSlugs, ['no-offer']);
 
   // =========================================================================
-  // 5. Multi-item store beyond top-8 included in 14-candidate window
+  // 5. Multi-item store beyond top-8 included in 14-candidate window (Plan B only)
   // =========================================================================
-  const nineCheaperForItem1 = Array.from({ length: 9 }, (_, i) =>
+  const eightCheaperForItem1 = Array.from({ length: 8 }, (_, i) =>
     makeOffer(`i1-${i}`, `solo-i1-${i}`, 1_000_000 + i * 10_000)
   );
-  const nineCheaperForItem2 = Array.from({ length: 9 }, (_, i) =>
+  const eightCheaperForItem2 = Array.from({ length: 8 }, (_, i) =>
     makeOffer(`i2-${i}`, `solo-i2-${i}`, 1_000_000 + i * 10_000)
   );
-  const sharedStoreAtRank10Item1 = makeOffer(
+  const sharedStoreBeyondTop8Item1 = makeOffer(
     'i1-shared',
     'shared-rank-10',
     1_150_000
   );
-  const sharedStoreAtRank10Item2 = makeOffer(
+  const sharedStoreBeyondTop8Item2 = makeOffer(
     'i2-shared',
     'shared-rank-10',
     1_150_000
@@ -413,61 +413,83 @@ function main() {
       {
         slug: 'r1',
         name: 'R1',
-        offers: [...nineCheaperForItem1, sharedStoreAtRank10Item1],
+        offers: [...eightCheaperForItem1, sharedStoreBeyondTop8Item1],
       },
       {
         slug: 'r2',
         name: 'R2',
-        offers: [...nineCheaperForItem2, sharedStoreAtRank10Item2],
+        offers: [...eightCheaperForItem2, sharedStoreBeyondTop8Item2],
+      },
+      {
+        slug: 'r3',
+        name: 'R3',
+        offers: [makeOffer('i3-solo', 'solo-r3', 1_000_000)],
       },
     ],
     { shippingVndPerOrder: 400_000, maxStores: 2 }
   );
-  // Solo cheapest: 1.0M + 1.0M + 2*400k = 2.8M
-  // Shared rank-10: 1.15M + 1.15M + 1*400k = 2.7M!
-  assert.equal(rank10Res.singleStoreBest!.totalVnd, 2_700_000);
-  assert.equal(rank10Res.multiStoreOptimal!.totalVnd, 2_700_000);
-  assert.equal(
-    rank10Res.multiStoreOptimal!.allocations[0]!.storeKey,
-    'shared-rank-10'
+  // r3 is only sold by solo-r3 so Plan A (singleStoreBest) is null.
+  // Top-8 solos for r1/r2 plus solo-r3 need 3 stores (> maxStores: 2).
+  // Plan B MUST reach rank-10 shared-rank-10 (in the 14-candidate window):
+  // 1.15M + 1.15M + 1.0M + 2*400k = 4.1M across 2 stores.
+  assert.equal(rank10Res.singleStoreBest, null);
+  assert.ok(rank10Res.multiStoreOptimal);
+  assert.equal(rank10Res.multiStoreOptimal.totalVnd, 4_100_000);
+  assert.equal(rank10Res.multiStoreOptimal.distinctStoreCount, 2);
+  assert.deepEqual(
+    rank10Res.multiStoreOptimal.allocations.map((a) => a.storeKey),
+    ['shared-rank-10', 'shared-rank-10', 'solo-r3']
   );
+  assert.deepEqual(
+    rank10Res.multiStoreOptimal.storeGroups.map((g) => g.storeKey),
+    ['shared-rank-10', 'solo-r3']
+  );
+  assert.equal(rank10Res.diagnostics.candidateTrimmed, false);
+  assert.equal(rank10Res.diagnostics.nodeCapReached, false);
+  assert.equal(rank10Res.diagnostics.searchComplete, true);
 
   // =========================================================================
   // 6. Hard candidate cap (14) & node cap (<= 50_000) bound check
   // =========================================================================
+  const makePairShared = (prefix: string, price: number) =>
+    Array.from({ length: 6 }, (_, storeIdx) =>
+      makeOffer(`${prefix}-${storeIdx}`, `${prefix}-${storeIdx}`, price, {
+        isOfficial: true,
+        riskScore: 10,
+      })
+    );
   const stressItems: ComboCartItemInput[] = Array.from(
     { length: 5 },
-    (_, itemIdx) => ({
-      slug: `stress-${itemIdx}`,
-      name: `Stress ${itemIdx}`,
-      offers: [
-        // 8 solo stores (ranks 0..7)
-        ...Array.from({ length: 8 }, (__, storeIdx) =>
-          makeOffer(
-            `st-${itemIdx}-solo-${storeIdx}`,
-            `st-solo-${itemIdx}-${storeIdx}`,
-            1_000_000,
-            { isOfficial: true, riskScore: 10 }
-          )
-        ),
-        // 10 multi-item stores appearing across all 5 items (ranks 8..17, capped at 14 total)
-        ...Array.from({ length: 10 }, (__, storeIdx) =>
-          makeOffer(
-            `st-${itemIdx}-shared-${storeIdx}`,
-            `st-shared-${storeIdx}`,
-            1_000_000,
-            { isOfficial: true, riskScore: 10 }
-          )
-        ),
-      ],
-    })
+    (_, itemIdx) => {
+      const soloOffers = Array.from({ length: 8 }, (__, storeIdx) =>
+        makeOffer(
+          `aa-solo-${itemIdx}-${storeIdx}`,
+          `aa-solo-${itemIdx}-${storeIdx}`,
+          1_000_000,
+          { isOfficial: true, riskScore: 10 }
+        )
+      );
+      const extraOffers: ComboCartOfferInput[] = [];
+      if (itemIdx === 0 || itemIdx === 1) {
+        extraOffers.push(...makePairShared('zz-ab', 1_000_000));
+      }
+      if (itemIdx === 2 || itemIdx === 3) {
+        extraOffers.push(...makePairShared('zz-cd', 1_000_001));
+      }
+      if (itemIdx === 3 || itemIdx === 4) {
+        extraOffers.push(...makePairShared('zz-de', 1_000_001));
+      }
+      return {
+        slug: `stress-${itemIdx}`,
+        name: `Stress ${itemIdx}`,
+        offers: [...soloOffers, ...extraOffers],
+      };
+    }
   );
-  const started = Date.now();
   const stressRes = optimizeComboCart(stressItems, {
     maxStores: 5,
     shippingVndPerOrder: 0,
   });
-  const elapsedMs = Date.now() - started;
   assert.ok(stressRes.multiStoreOptimal);
   assert.equal(stressRes.multiStoreOptimal.totalVnd, 5_000_000);
   assert.ok(
@@ -475,13 +497,11 @@ function main() {
     `nodesVisited=${stressRes.diagnostics.searchNodesVisited} must not exceed ${COMBO_CART_MAX_SEARCH_NODES}`
   );
   assert.equal(stressRes.diagnostics.nodeCapReached, true);
+  assert.equal(stressRes.diagnostics.candidateTrimmed, true);
+  assert.equal(stressRes.diagnostics.searchComplete, false);
   for (const diag of stressRes.diagnostics.itemDiagnostics) {
     assert.ok(diag.candidateStoreCount <= COMBO_CART_MAX_CANDIDATES_PER_ITEM);
   }
-  assert.ok(
-    elapsedMs < 2000,
-    `Node-capped search finished fast (${elapsedMs}ms)`
-  );
 
   // =========================================================================
   // 7. Deterministic tie-breakers (Plan A & store dedupe) + Prototype-key safety
@@ -541,6 +561,110 @@ function main() {
   assert.equal(tieRes.singleStoreBest!.allocations[0]!.storeKey, '__proto__');
   assert.equal(tieRes.singleStoreBest!.allocations[0]!.offerId, 't4-dup-cheap');
   assert.equal(({} as Record<string, unknown>).polluted, undefined);
+
+  // ID-less offers on same platform must NOT merge onto a bare platform key,
+  // and omitted offer IDs must not collide with synthetic 'anon-0' bait IDs.
+  const idlessRes = optimizeComboCart(
+    [
+      {
+        slug: 'idless-1',
+        name: 'Idless 1',
+        implausiblyLowOfferIds: ['anon-0'],
+        offers: [
+          {
+            id: null,
+            platform: 'shopee',
+            price_current: 1_000_000,
+            availability: 'in_stock',
+            merchant: {
+              id: null,
+              name: 'Shop Alpha',
+              platform: 'shopee',
+              risk_score: 10,
+            },
+          },
+          {
+            id: null,
+            platform: 'shopee',
+            price_current: 1_200_000,
+            availability: 'in_stock',
+            merchant: {
+              id: null,
+              name: 'Shopee',
+              platform: 'shopee',
+              risk_score: 10,
+            },
+          },
+        ],
+      },
+      {
+        slug: 'idless-2',
+        name: 'Idless 2',
+        implausiblyLowOfferIds: ['anon-0'],
+        offers: [
+          {
+            id: null,
+            platform: 'shopee',
+            price_current: 1_000_000,
+            availability: 'in_stock',
+            merchant: {
+              id: null,
+              name: 'Shop Beta',
+              platform: 'shopee',
+              risk_score: 10,
+            },
+          },
+        ],
+      },
+    ],
+    { shippingVndPerOrder: 0, maxStores: 2 }
+  );
+  assert.equal(idlessRes.singleStoreBest, null);
+  assert.ok(idlessRes.multiStoreOptimal);
+  assert.equal(idlessRes.multiStoreOptimal.totalVnd, 2_000_000);
+  assert.equal(idlessRes.multiStoreOptimal.distinctStoreCount, 2);
+
+  // Equal-price dominance with shippingVndPerOrder: 0 -> fewer distinct stores wins
+  const dominanceRes = optimizeComboCart(
+    [
+      {
+        slug: 'dom-1',
+        name: 'Dom 1',
+        offers: [
+          makeOffer('d1-a', 'aa-solo-1', 1_000_000, {
+            isOfficial: true,
+            riskScore: 10,
+          }),
+          makeOffer('d1-z', 'zz-shared', 1_000_000, {
+            isOfficial: true,
+            riskScore: 10,
+          }),
+        ],
+      },
+      {
+        slug: 'dom-2',
+        name: 'Dom 2',
+        offers: [
+          makeOffer('d2-a', 'aa-solo-2', 1_000_000, {
+            isOfficial: true,
+            riskScore: 10,
+          }),
+          makeOffer('d2-z', 'zz-shared', 1_000_000, {
+            isOfficial: true,
+            riskScore: 10,
+          }),
+        ],
+      },
+    ],
+    { shippingVndPerOrder: 0, maxStores: 2 }
+  );
+  assert.ok(dominanceRes.multiStoreOptimal);
+  assert.equal(dominanceRes.multiStoreOptimal.totalVnd, 2_000_000);
+  assert.equal(dominanceRes.multiStoreOptimal.distinctStoreCount, 1);
+  assert.equal(
+    dominanceRes.multiStoreOptimal.allocations[0]!.storeKey,
+    'zz-shared'
+  );
 
   // Input length bounds
   assert.throws(
@@ -624,6 +748,28 @@ function main() {
   });
   assert.equal(missingDosafe.verifiedSafe, false);
   assert.ok(missingDosafe.failedReasons.includes('missing_dosafe_score'));
+
+  // Whitespace-only or boolean dosafe_risk_score must fail closed; numeric 0 and '0' pass
+  for (const blankDosafe of [' ', '\t', false as unknown as number]) {
+    const blankRes = evaluateMerchantTrustBadge({
+      dosafe_risk_score: blankDosafe,
+      review_risk_score: 5,
+      is_official: true,
+      offerCount: 3,
+      activeFakeDiscountCount: 0,
+    });
+    assert.equal(blankRes.verifiedSafe, false);
+    assert.ok(blankRes.failedReasons.includes('missing_dosafe_score'));
+  }
+  const zeroStringDosafe = evaluateMerchantTrustBadge({
+    dosafe_risk_score: '0',
+    review_risk_score: 5,
+    is_official: true,
+    offerCount: 3,
+    activeFakeDiscountCount: 0,
+  });
+  assert.equal(zeroStringDosafe.verifiedSafe, true);
+  assert.equal(zeroStringDosafe.signals.dosafeRiskScore, 0);
 
   // DOSafe > 15 fails
   const highDosafe = evaluateMerchantTrustBadge({

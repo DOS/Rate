@@ -121,6 +121,8 @@ export interface ComboCartDiagnostics {
   maxSearchNodes: number;
   nodeCapReached: boolean;
   candidateCapPerItem: number;
+  candidateTrimmed: boolean;
+  searchComplete: boolean;
   itemDiagnostics: ComboCartItemDiagnostic[];
 }
 
@@ -134,6 +136,15 @@ export interface ComboCartOptimizationResult {
   diagnostics: ComboCartDiagnostics;
 }
 
+export interface ComboStoreIdentity {
+  internalKey: string;
+  storeKey: string;
+  platform: string;
+  merchantId: string | null;
+  merchantName: string;
+  offerId: string;
+}
+
 interface NormalizedCandidateOffer {
   itemIndex: number;
   itemSlug: string;
@@ -142,6 +153,7 @@ interface NormalizedCandidateOffer {
   offerTitle: string;
   offerUrl: string;
   platform: string;
+  internalStoreKey: string;
   storeKey: string;
   storeId: number;
   merchantId: string | null;
@@ -167,6 +179,73 @@ function cleanKeyPart(raw: unknown, maxLen = 128): string {
     .replace(/\p{Cc}+/gu, '')
     .trim()
     .slice(0, maxLen);
+}
+
+const GENERIC_FALLBACK_MERCHANT_NAMES = new Set([
+  'gian hàng',
+  'official store',
+]);
+
+/**
+ * Resolves a collision-free store identity for an offer.
+ * Offers with `merchant.id` key by that merchant ID; ID-less offers never
+ * collapse onto a bare platform key, isolating distinct sellers by
+ * platform + normalized seller name or falling back to listing ID.
+ */
+export function resolveComboStoreIdentity(
+  offer: {
+    id?: unknown;
+    platform?: unknown;
+    merchant?: {
+      id?: unknown;
+      name?: unknown;
+      platform?: unknown;
+    } | null;
+  },
+  fallbackOfferId: string
+): ComboStoreIdentity {
+  const merchant =
+    offer.merchant &&
+    typeof offer.merchant === 'object' &&
+    !Array.isArray(offer.merchant)
+      ? offer.merchant
+      : null;
+  const cleanMerchantPlat = cleanKeyPart(merchant?.platform, 40).toLowerCase();
+  const cleanOfferPlat = cleanKeyPart(offer.platform, 40).toLowerCase();
+  const platform = cleanMerchantPlat || cleanOfferPlat || 'shopee';
+  const cleanMerchantId = cleanKeyPart(merchant?.id, 128);
+  const rawName = cleanText(merchant?.name, 160);
+  const cleanOfferId = cleanKeyPart(offer.id, 128) || fallbackOfferId;
+  const merchantName = rawName || platform.toUpperCase();
+
+  if (cleanMerchantId) {
+    return {
+      internalKey: `id:${cleanMerchantId}`,
+      storeKey: cleanMerchantId,
+      platform,
+      merchantId: cleanMerchantId,
+      merchantName,
+      offerId: cleanOfferId,
+    };
+  }
+
+  const lowerName = rawName.toLowerCase();
+  const hasDistinctName =
+    Boolean(lowerName) &&
+    lowerName !== platform &&
+    !GENERIC_FALLBACK_MERCHANT_NAMES.has(lowerName);
+  const fallbackKey = hasDistinctName
+    ? `${platform}:name:${lowerName}`
+    : `${platform}:offer:${cleanOfferId}`;
+
+  return {
+    internalKey: fallbackKey,
+    storeKey: fallbackKey,
+    platform,
+    merchantId: null,
+    merchantName,
+    offerId: cleanOfferId,
+  };
 }
 
 function sanitizeSafeOfferUrl(raw: unknown): string {
@@ -279,16 +358,23 @@ function normalizeOptions(options?: ComboCartOptimizeOptions): {
         )
       : COMBO_CART_DEFAULT_SHIPPING_VND;
 
-  return { officialOnly, minTrust, maxStores, shippingVndPerOrder };
+  return {
+    officialOnly,
+    minTrust: minTrust === 0 ? 0 : minTrust,
+    maxStores,
+    shippingVndPerOrder: shippingVndPerOrder === 0 ? 0 : shippingVndPerOrder,
+  };
 }
 
 function buildCombinedBaitIdSet(
   inStockOffers: readonly { id?: string | null; price_current: number }[],
   callerBaitIds: ReadonlySet<string> | readonly string[] | null | undefined
 ): Set<string> {
+  // Keep natural bait detection on real offer IDs only; ID-less offers are
+  // handled by object identity inside isOfferImplausiblyLowAgainstInStock.
   const combined = implausiblyLowOfferIds(
-    inStockOffers.map((o, idx) => ({
-      id: cleanKeyPart(o.id, 256) || `anon-${idx}`,
+    inStockOffers.map((o) => ({
+      id: cleanKeyPart(o.id, 256),
       price_current: o.price_current,
     }))
   );
@@ -374,15 +460,17 @@ function buildPlanFromSelections(
   let itemsSubtotalVnd = 0;
   let allOfficial = true;
 
-  for (const alloc of allocations) {
+  for (let i = 0; i < allocations.length; i++) {
+    const alloc = allocations[i]!;
+    const internalKey = selectionsInItemOrder[i]!.internalStoreKey;
     itemsSubtotalVnd += alloc.priceVnd;
     if (!alloc.isOfficial) allOfficial = false;
-    const existing = byStore.get(alloc.storeKey);
+    const existing = byStore.get(internalKey);
     if (existing) {
       existing.items.push(alloc);
       existing.itemsSubtotalVnd += alloc.priceVnd;
     } else {
-      byStore.set(alloc.storeKey, {
+      byStore.set(internalKey, {
         meta: alloc,
         items: [alloc],
         itemsSubtotalVnd: alloc.priceVnd,
@@ -462,14 +550,14 @@ function isBetterMultiPlan(
 function canonicalAllocationKey(
   selectionsInItemOrder: readonly NormalizedCandidateOffer[]
 ): string {
-  return selectionsInItemOrder
-    .map((s) => `${s.storeKey}:${s.offerId}`)
-    .join('|');
+  return JSON.stringify(
+    selectionsInItemOrder.map((s) => [s.internalStoreKey, s.offerId])
+  );
 }
 
 /**
- * Solves exact single-store and bounded multi-store optimal purchasing plans
- * across 2 to 5 distinct items using deterministic branch-and-bound pruning.
+ * Solves single-store (exact intersection) and bounded multi-store branch-and-bound
+ * purchasing plans across 2 to 5 distinct items.
  */
 export function optimizeComboCart(
   rawItems: readonly ComboCartItemInput[],
@@ -510,12 +598,12 @@ export function optimizeComboCart(
     normalizeOptions(options);
   const maxAllowedRiskScaled = Math.round((100 - minTrust) * 1_000_000);
 
-  const storeKeyToId = new Map<string, number>();
-  const getStoreId = (storeKey: string): number => {
-    const existing = storeKeyToId.get(storeKey);
+  const internalStoreKeyToId = new Map<string, number>();
+  const getStoreId = (internalStoreKey: string): number => {
+    const existing = internalStoreKeyToId.get(internalStoreKey);
     if (existing !== undefined) return existing;
-    const next = storeKeyToId.size;
-    storeKeyToId.set(storeKey, next);
+    const next = internalStoreKeyToId.size;
+    internalStoreKeyToId.set(internalStoreKey, next);
     return next;
   };
 
@@ -589,36 +677,32 @@ export function optimizeComboCart(
         }
       }
 
-      const cleanPlatform =
-        cleanKeyPart(merchant?.platform ?? offer.platform, 40).toLowerCase() ||
-        'shopee';
-      const cleanMerchantId = cleanKeyPart(merchant?.id, 128);
-      const cleanOfferId =
-        cleanKeyPart(offer.id, 128) || `offer-${itemIndex}-${idx + 1}`;
-      const storeKey = cleanMerchantId || cleanPlatform;
-      const cleanMerchantName =
-        cleanText(merchant?.name, 160) || cleanPlatform.toUpperCase();
+      const storeIdentity = resolveComboStoreIdentity(
+        offer,
+        `offer-${itemIndex}-${idx + 1}`
+      );
 
       const candidate: Omit<NormalizedCandidateOffer, 'storeId'> = {
         itemIndex,
         itemSlug: item.slug,
         itemName: item.name,
-        offerId: cleanOfferId,
+        offerId: storeIdentity.offerId,
         offerTitle: cleanText(offer.title, 320) || item.name,
         offerUrl: sanitizeSafeOfferUrl(offer.url),
-        platform: cleanPlatform,
-        storeKey,
-        merchantId: cleanMerchantId || null,
-        merchantName: cleanMerchantName,
+        platform: storeIdentity.platform,
+        internalStoreKey: storeIdentity.internalKey,
+        storeKey: storeIdentity.storeKey,
+        merchantId: storeIdentity.merchantId,
+        merchantName: storeIdentity.merchantName,
         isOfficial,
         riskScore,
         trustScore: computeTrustScore(riskScore),
         priceVnd: offer.price_current,
       };
 
-      const existing = bestByStore.get(storeKey);
+      const existing = bestByStore.get(storeIdentity.internalKey);
       if (!existing || compareItemOffers(candidate, existing) < 0) {
-        bestByStore.set(storeKey, candidate);
+        bestByStore.set(storeIdentity.internalKey, candidate);
       }
     }
 
@@ -626,12 +710,12 @@ export function optimizeComboCart(
       .sort(compareItemOffers)
       .map((entry) => ({
         ...entry,
-        storeId: getStoreId(entry.storeKey),
+        storeId: getStoreId(entry.internalStoreKey),
       }));
 
     const itemMap = new Map<string, NormalizedCandidateOffer>();
     for (const c of dedupedSorted) {
-      itemMap.set(c.storeKey, c);
+      itemMap.set(c.internalStoreKey, c);
     }
 
     dedupedPerItem.push(itemMap);
@@ -670,14 +754,14 @@ export function optimizeComboCart(
   if (allItemsCovered) {
     const firstItemStores = sortedOffersPerItem[0]!;
     for (const firstOffer of firstItemStores) {
-      const storeKey = firstOffer.storeKey;
+      const internalKey = firstOffer.internalStoreKey;
       const selections: NormalizedCandidateOffer[] = [firstOffer];
       let coversAll = true;
       let subtotal = firstOffer.priceVnd;
       let allOfficial = firstOffer.isOfficial;
 
       for (let i = 1; i < items.length; i++) {
-        const match = dedupedPerItem[i]!.get(storeKey);
+        const match = dedupedPerItem[i]!.get(internalKey);
         if (!match) {
           coversAll = false;
           break;
@@ -701,11 +785,14 @@ export function optimizeComboCart(
                 (singleStoreBestMetrics.avgTrustScore ?? -1)
               ? (avgTrustScore ?? -1) >
                 (singleStoreBestMetrics.avgTrustScore ?? -1)
-              : compareAscii(storeKey, singleStoreBestMetrics.storeKey) < 0));
+              : compareAscii(
+                  firstOffer.storeKey,
+                  singleStoreBestMetrics.storeKey
+                ) < 0));
 
       if (isBetterSingle) {
         singleStoreBestMetrics = {
-          storeKey,
+          storeKey: firstOffer.storeKey,
           totalVnd,
           allOfficial,
           avgTrustScore,
@@ -726,15 +813,17 @@ export function optimizeComboCart(
   // Count how many items each store carries for Plan B candidate selection
   const storeItemFrequency = new Map<string, number>();
   for (const itemMap of dedupedPerItem) {
-    for (const storeKey of itemMap.keys()) {
+    for (const internalKey of itemMap.keys()) {
       storeItemFrequency.set(
-        storeKey,
-        (storeItemFrequency.get(storeKey) ?? 0) + 1
+        internalKey,
+        (storeItemFrequency.get(internalKey) ?? 0) + 1
       );
     }
   }
 
   const candidateOffersPerItem: NormalizedCandidateOffer[][] = [];
+  let candidateTrimmed = false;
+
   for (let i = 0; i < items.length; i++) {
     const sorted = sortedOffersPerItem[i]!;
     const picked = new Set<string>();
@@ -746,7 +835,7 @@ export function optimizeComboCart(
       idx++
     ) {
       const offer = sorted[idx]!;
-      picked.add(offer.storeKey);
+      picked.add(offer.internalStoreKey);
       combined.push(offer);
     }
 
@@ -757,18 +846,22 @@ export function optimizeComboCart(
       idx++
     ) {
       const offer = sorted[idx]!;
-      if (picked.has(offer.storeKey)) continue;
-      if ((storeItemFrequency.get(offer.storeKey) ?? 0) >= 2) {
-        picked.add(offer.storeKey);
+      if (picked.has(offer.internalStoreKey)) continue;
+      if ((storeItemFrequency.get(offer.internalStoreKey) ?? 0) >= 2) {
+        picked.add(offer.internalStoreKey);
         combined.push(offer);
       }
+    }
+
+    if (combined.length < sorted.length) {
+      candidateTrimmed = true;
     }
 
     candidateOffersPerItem.push(combined);
     itemDiagnostics[i]!.candidateStoreCount = combined.length;
   }
 
-  // Plan B: exact bounded branch-and-bound solver
+  // Plan B: bounded branch-and-bound solver
   let multiStoreOptimal: ComboCartPlan | null = null;
   let searchNodesVisited = 0;
   let nodeCapReached = false;
@@ -807,7 +900,7 @@ export function optimizeComboCart(
         suffixMinPrices[d + 1]! + orderedCandidates[d]![0]!.priceVnd;
     }
 
-    const totalStores = storeKeyToId.size;
+    const totalStores = internalStoreKeyToId.size;
     const storeFreq = new Int32Array(totalStores);
     const currentBySearchDepth = new Array<NormalizedCandidateOffer | null>(
       k
@@ -847,8 +940,9 @@ export function optimizeComboCart(
         return;
       }
 
-      // Compute admissible lower bound for remaining depth..k-1
+      // Compute admissible lower bound and minimum final store count for depth..k-1
       let lowerBoundTotal: number;
+      let minStoresNeeded: number;
       if (distinctStores === maxStores) {
         let remMinCost = 0;
         for (let j = depth; j < k; j++) {
@@ -864,6 +958,7 @@ export function optimizeComboCart(
           }
           remMinCost += minUsedPrice;
         }
+        minStoresNeeded = distinctStores;
         lowerBoundTotal =
           currentSubtotal + remMinCost + distinctStores * shippingVndPerOrder;
       } else {
@@ -883,7 +978,7 @@ export function optimizeComboCart(
             }
           }
         }
-        const minStoresNeeded = distinctStores + (needsNewStore ? 1 : 0);
+        minStoresNeeded = distinctStores + (needsNewStore ? 1 : 0);
         if (minStoresNeeded > maxStores) {
           return;
         }
@@ -893,7 +988,12 @@ export function optimizeComboCart(
           minStoresNeeded * shippingVndPerOrder;
       }
 
-      if (bestMetrics !== null && lowerBoundTotal > bestMetrics.totalVnd) {
+      if (
+        bestMetrics !== null &&
+        (lowerBoundTotal > bestMetrics.totalVnd ||
+          (lowerBoundTotal === bestMetrics.totalVnd &&
+            minStoresNeeded > bestMetrics.distinctStoreCount))
+      ) {
         return;
       }
 
@@ -914,7 +1014,12 @@ export function optimizeComboCart(
         const nextSubtotal = currentSubtotal + cand.priceVnd;
         const childMinTotal =
           nextSubtotal + remSuffix + nextDistinct * shippingVndPerOrder;
-        if (bestMetrics !== null && childMinTotal > bestMetrics.totalVnd) {
+        if (
+          bestMetrics !== null &&
+          (childMinTotal > bestMetrics.totalVnd ||
+            (childMinTotal === bestMetrics.totalVnd &&
+              nextDistinct > bestMetrics.distinctStoreCount))
+        ) {
           continue;
         }
 
@@ -968,6 +1073,8 @@ export function optimizeComboCart(
       maxSearchNodes: COMBO_CART_MAX_SEARCH_NODES,
       nodeCapReached,
       candidateCapPerItem: COMBO_CART_MAX_CANDIDATES_PER_ITEM,
+      candidateTrimmed,
+      searchComplete: !nodeCapReached && !candidateTrimmed,
       itemDiagnostics,
     },
   };
