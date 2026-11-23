@@ -399,6 +399,60 @@ function displayPlatformLabel(platform: string): string {
     : platform.toUpperCase();
 }
 
+export type ComboFetchErrorKey =
+  'comboRateLimitError' | 'comboInvalidRequestError' | 'comboFetchError';
+
+export function resolveComboHttpErrorKey(status: number): ComboFetchErrorKey {
+  if (status === 429) return 'comboRateLimitError';
+  if (status === 400) return 'comboInvalidRequestError';
+  return 'comboFetchError';
+}
+
+export function resolveComboCatchErrorKey(
+  err: unknown,
+  aborted = false
+): 'comboFetchError' | null {
+  if (
+    aborted ||
+    (typeof err === 'object' &&
+      err !== null &&
+      'name' in err &&
+      (err as { name?: unknown }).name === 'AbortError')
+  ) {
+    return null;
+  }
+  return 'comboFetchError';
+}
+
+export type ComboUrlSyncDecision = 'skip_initial' | 'apply';
+
+export function resolveComboUrlSyncDecision(params: {
+  readonly initialSkippedUrl: string | null;
+  readonly nextUrlKey: string;
+  readonly allowReset: boolean;
+}): ComboUrlSyncDecision {
+  if (
+    params.initialSkippedUrl !== null &&
+    !params.allowReset &&
+    params.nextUrlKey === params.initialSkippedUrl
+  ) {
+    return 'skip_initial';
+  }
+  return 'apply';
+}
+
+export function shouldShowComboBoundedSearchNote(
+  result: Pick<
+    ComboCartApiPayload,
+    'singleStoreBest' | 'multiStoreOptimal' | 'diagnostics'
+  >
+): boolean {
+  return (
+    !result.diagnostics.searchComplete &&
+    Boolean(result.singleStoreBest || result.multiStoreOptimal)
+  );
+}
+
 function hasAnyComboParam(searchParams: Pick<URLSearchParams, 'has'>): boolean {
   return (
     searchParams.has('items') ||
@@ -532,15 +586,31 @@ export default function WatchlistComboOptimizer({
     };
   }, []);
 
-  const applyUrlState = useCallback((parsed: ComboCartQueryState) => {
-    initialSkippedUrlRef.current = null;
-    setSelectedSlugs(parsed.items);
-    setOfficialOnly(parsed.officialOnly);
-    setMinTrust(parsed.minTrust);
-    setMaxStores(parsed.maxStores);
-    setShippingVnd(parsed.shippingVnd);
-    setShippingDraft(String(parsed.shippingVnd));
-  }, []);
+  const applyUrlState = useCallback(
+    (
+      parsed: ComboCartQueryState,
+      options?: { readonly allowReset?: boolean }
+    ) => {
+      const nextKey = buildComboCartApiUrl(parsed);
+      if (
+        resolveComboUrlSyncDecision({
+          initialSkippedUrl: initialSkippedUrlRef.current,
+          nextUrlKey: nextKey,
+          allowReset: Boolean(options?.allowReset),
+        }) === 'skip_initial'
+      ) {
+        return;
+      }
+      initialSkippedUrlRef.current = null;
+      setSelectedSlugs(parsed.items);
+      setOfficialOnly(parsed.officialOnly);
+      setMinTrust(parsed.minTrust);
+      setMaxStores(parsed.maxStores);
+      setShippingVnd(parsed.shippingVnd);
+      setShippingDraft(String(parsed.shippingVnd));
+    },
+    []
+  );
 
   // Hydrate `?items=...` on client mount and stay synced on browser Back/Forward
   // without clobbering `?add=`, `?target=`, `?unsubscribe=`, or `history.state`.
@@ -555,7 +625,7 @@ export default function WatchlistComboOptimizer({
         : DEFAULT_QUERY_STATE;
       const nextKey = buildComboCartApiUrl(parsed);
       lastSyncedApiUrlRef.current = nextKey;
-      applyUrlState(parsed);
+      applyUrlState(parsed, { allowReset });
     };
 
     syncFromWindowLocation(false);
@@ -648,29 +718,20 @@ export default function WatchlistComboOptimizer({
           } | null;
           if (controller.signal.aborted) return;
           if (!res.ok || !json?.ok || !json.data) {
-            const msg =
-              res.status === 429
-                ? t('comboRateLimitError')
-                : res.status === 400
-                  ? t('comboInvalidRequestError')
-                  : t('comboFetchError');
-            throw new Error(msg);
+            setFetchError(t(resolveComboHttpErrorKey(res.status)));
+            return;
           }
           setResult(json.data);
           setFetchError(null);
         })
         .catch((err: unknown) => {
-          if (
-            controller.signal.aborted ||
-            (err instanceof Error && err.name === 'AbortError')
-          ) {
-            return;
-          }
-          setFetchError(
-            err instanceof Error && err.message
-              ? err.message
-              : t('comboFetchError')
+          const errKey = resolveComboCatchErrorKey(
+            err,
+            controller.signal.aborted
           );
+          if (errKey) {
+            setFetchError(t(errKey));
+          }
         })
         .finally(() => {
           if (!controller.signal.aborted) {
@@ -1674,7 +1735,7 @@ export default function WatchlistComboOptimizer({
                     t('comboPlanBIncomplete')
                   )}
                 </div>
-                {!result.diagnostics.searchComplete && (
+                {shouldShowComboBoundedSearchNote(result) && (
                   <span
                     className="small"
                     style={{ color: 'var(--rate-fg-secondary)' }}
