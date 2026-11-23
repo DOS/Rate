@@ -54,10 +54,23 @@ function main() {
   );
   assert.ok(Object.keys(shared.compare as object).length > 0);
 
-  // A scope adds whole namespaces on top of the shared subsets.
+  // A scope adds whole namespaces (and PriceWatchButton keys) on top of the shared subsets,
+  // while keeping /watchlist combo optimizer copy off /smartphones/[slug] HTML (#1883).
   const detail = pickClientMessages(en, 'productDetail');
   assert.deepEqual(detail.productDetail, en.productDetail);
-  assert.deepEqual(detail.watchlist, en.watchlist);
+  assert.equal(
+    (detail.watchlist as Record<string, unknown>).btnWatch,
+    en.watchlist?.btnWatch
+  );
+  assert.equal(
+    (detail.watchlist as Record<string, unknown>).saveTargetBtn,
+    en.watchlist?.saveTargetBtn
+  );
+  assert.equal(
+    Object.keys(detail.watchlist as object).some((k) => k.startsWith('combo')),
+    false
+  );
+  assert.deepEqual(pickClientMessages(en, 'watchlist').watchlist, en.watchlist);
   assert.ok(
     Object.keys(detail.compare as object).every(
       (k) => k.startsWith('tray') || k.startsWith('quickToggle')
