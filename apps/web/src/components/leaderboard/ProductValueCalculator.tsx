@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   RADAR_CSV_HEADERS,
@@ -9,9 +9,21 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
+import { MAX_VALID_VND_PRICE, type MerchantOffer } from '@/lib/rate-domain';
+import {
+  computeEffectivePrice,
+  INSTALLMENT_TERMS,
+  MAX_INSTALLMENT_FEE_PERCENT,
+  MAX_VOUCHER_PERCENT,
+  sanitizeVndAmount,
+  selectEffectivePriceBaseOffers,
+  type InstallmentTerm,
+  type TradeInConditionTier,
+  type VoucherDiscountMode,
+} from '@/lib/effective-price';
 import {
   formatNumber,
+  formatPercent,
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
@@ -28,6 +40,8 @@ interface ProductValueCalculatorProps {
   readonly valueCriterionScore5: number;
   readonly radarSignal?: RadarSignal | null;
   readonly initialIncludeResale?: boolean;
+  readonly offers?: readonly MerchantOffer[];
+  readonly initialEffectivePanelOpen?: boolean;
 }
 
 export type HorizonMonths = 12 | 24 | 36;
@@ -166,12 +180,44 @@ export default function ProductValueCalculator({
   valueCriterionScore5,
   radarSignal,
   initialIncludeResale = true,
+  offers,
+  initialEffectivePanelOpen = false,
 }: ProductValueCalculatorProps) {
   const t = useTranslations('productDetail');
   const locale = useLocale();
+  const baseId = useId();
+  const effectivePanelId = `${baseId}-effective-panel`;
+  const basePriceInputId = `${baseId}-base-price`;
+  const voucherAmountInputId = `${baseId}-voucher-amount`;
+  const voucherPercentInputId = `${baseId}-voucher-percent`;
+  const voucherCapInputId = `${baseId}-voucher-cap`;
+  const oldBenchmarkInputId = `${baseId}-old-benchmark`;
+  const tradeInBonusInputId = `${baseId}-trade-in-bonus`;
+  const installmentFeeInputId = `${baseId}-installment-fee`;
+
   const [months, setMonths] = useState<HorizonMonths>(24);
   const [includeResale, setIncludeResale] =
     useState<boolean>(initialIncludeResale);
+  const [isEffectiveOpen, setIsEffectiveOpen] = useState<boolean>(
+    initialEffectivePanelOpen
+  );
+  const [offerTier, setOfferTier] = useState<'lowest' | 'vna'>('lowest');
+  const [customBasePriceInput, setCustomBasePriceInput] = useState<
+    string | null
+  >(null);
+  const [discountMode, setDiscountMode] =
+    useState<VoucherDiscountMode>('fixed');
+  const [discountAmountInput, setDiscountAmountInput] = useState<string>('');
+  const [discountPercentInput, setDiscountPercentInput] = useState<string>('');
+  const [discountCapInput, setDiscountCapInput] = useState<string>('');
+  const [tradeInEnabled, setTradeInEnabled] = useState<boolean>(false);
+  const [oldBenchmarkInput, setOldBenchmarkInput] = useState<string>('');
+  const [conditionTier, setConditionTier] =
+    useState<TradeInConditionTier>('grade_1_mint');
+  const [tradeInBonusInput, setTradeInBonusInput] = useState<string>('');
+  const [installmentTerm, setInstallmentTerm] =
+    useState<InstallmentTerm>('cash');
+  const [installmentFeeInput, setInstallmentFeeInput] = useState<string>('0');
 
   const metrics = useMemo(
     () =>
@@ -196,6 +242,65 @@ export default function ProductValueCalculator({
       userScore5,
     ]
   );
+
+  const baseOffers = useMemo(
+    () => selectEffectivePriceBaseOffers(offers, metrics.safeMinPrice),
+    [offers, metrics.safeMinPrice]
+  );
+  const hasDistinctVnaOffer =
+    baseOffers.bestOfficialVnaOffer !== null &&
+    baseOffers.bestOfficialVnaOffer.offer.id !==
+      baseOffers.bestPlausibleOffer?.offer.id;
+  const activeOfferTier: 'lowest' | 'vna' =
+    offerTier === 'vna' && baseOffers.bestOfficialVnaOffer ? 'vna' : 'lowest';
+  const boundOffer =
+    activeOfferTier === 'vna'
+      ? baseOffers.bestOfficialVnaOffer
+      : baseOffers.bestPlausibleOffer;
+  const boundPriceVnd =
+    activeOfferTier === 'vna' && baseOffers.bestOfficialVnaPriceVnd !== null
+      ? baseOffers.bestOfficialVnaPriceVnd
+      : baseOffers.bestPlausiblePriceVnd;
+  const activeBasePriceVnd =
+    customBasePriceInput !== null
+      ? sanitizeVndAmount(customBasePriceInput)
+      : boundPriceVnd;
+
+  const effectiveResult = useMemo(
+    () =>
+      computeEffectivePrice({
+        basePriceVnd: activeBasePriceVnd,
+        discountMode,
+        discountAmountVnd: Number(discountAmountInput),
+        discountPercent: Number(discountPercentInput),
+        discountMaxCapVnd: discountCapInput ? Number(discountCapInput) : null,
+        tradeInEnabled,
+        oldDeviceResaleBenchmarkVnd: Number(oldBenchmarkInput),
+        tradeInConditionTier: conditionTier,
+        tradeInBonusVnd: Number(tradeInBonusInput),
+        installmentTerm,
+        installmentFeePercent: Number(installmentFeeInput),
+      }),
+    [
+      activeBasePriceVnd,
+      conditionTier,
+      discountAmountInput,
+      discountCapInput,
+      discountMode,
+      discountPercentInput,
+      installmentFeeInput,
+      installmentTerm,
+      oldBenchmarkInput,
+      tradeInBonusInput,
+      tradeInEnabled,
+    ]
+  );
+
+  const boundOfferSource = boundOffer
+    ? `${boundOffer.offer.merchant?.name || boundOffer.offer.platform.toUpperCase()} (${boundOffer.offer.platform.toUpperCase()})`
+    : radarSignal?.genuineDeal?.merchantName
+      ? `${radarSignal.genuineDeal.merchantName} (${radarSignal.genuineDeal.platform.toUpperCase()})`
+      : null;
 
   if (metrics.safeMinPrice <= 0) {
     return null;
@@ -436,6 +541,482 @@ export default function ProductValueCalculator({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="border-top mt-3 pt-3">
+        <button
+          type="button"
+          aria-expanded={isEffectiveOpen}
+          aria-controls={isEffectiveOpen ? effectivePanelId : undefined}
+          onClick={() => setIsEffectiveOpen((prev) => !prev)}
+          data-testid="effective-price-toggle-btn"
+          className={`btn btn-sm rounded-pill fw-semibold px-3 ${
+            isEffectiveOpen ? 'btn-dark' : 'btn-outline-dark'
+          }`}
+        >
+          {t('effToggle')}
+        </button>
+
+        {isEffectiveOpen && (
+          <div
+            id={effectivePanelId}
+            data-testid="effective-price-panel"
+            className="rounded-3 bg-light mt-3 border p-3"
+          >
+            <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+              <div>
+                <h4 className="h6 fw-bold mb-1">{t('effToggle')}</h4>
+                {boundOfferSource && (
+                  <p className="text-muted small mb-0">
+                    {boundOfferSource} - {formatPriceVnd(boundPriceVnd, locale)}
+                  </p>
+                )}
+              </div>
+
+              {hasDistinctVnaOffer && baseOffers.bestOfficialVnaPriceVnd && (
+                <div
+                  className="btn-group btn-group-sm"
+                  role="group"
+                  aria-label={t('effBase')}
+                >
+                  <button
+                    type="button"
+                    aria-pressed={activeOfferTier === 'lowest'}
+                    onClick={() => {
+                      setOfferTier('lowest');
+                      setCustomBasePriceInput(null);
+                    }}
+                    className={`btn rounded-pill me-1 px-3 ${
+                      activeOfferTier === 'lowest'
+                        ? 'btn-dark'
+                        : 'btn-outline-dark'
+                    }`}
+                  >
+                    {t('offersSpreadLowLabel')}{' '}
+                    {formatPriceVnd(baseOffers.bestPlausiblePriceVnd, locale)}
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={activeOfferTier === 'vna'}
+                    onClick={() => {
+                      setOfferTier('vna');
+                      setCustomBasePriceInput(null);
+                    }}
+                    className={`btn rounded-pill px-3 ${
+                      activeOfferTier === 'vna'
+                        ? 'btn-dark'
+                        : 'btn-outline-dark'
+                    }`}
+                  >
+                    {t('offersOriginVnaBadge')} (
+                    {formatPriceVnd(baseOffers.bestOfficialVnaPriceVnd, locale)}
+                    )
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="row g-3">
+              <div className="col-md-4">
+                <label
+                  htmlFor={basePriceInputId}
+                  className="form-label small fw-semibold mb-1"
+                >
+                  {t('effBase')}
+                </label>
+                <input
+                  id={basePriceInputId}
+                  type="number"
+                  min={0}
+                  max={MAX_VALID_VND_PRICE}
+                  step={10000}
+                  value={customBasePriceInput ?? String(boundPriceVnd)}
+                  onChange={(e) => setCustomBasePriceInput(e.target.value)}
+                  className="form-control form-control-sm rate-tabular"
+                />
+              </div>
+
+              <div className="col-md-8">
+                <div
+                  className="d-flex align-items-center flex-wrap gap-2 mb-2"
+                  role="group"
+                  aria-label={t('effDisc')}
+                >
+                  <button
+                    type="button"
+                    aria-pressed={discountMode === 'fixed'}
+                    onClick={() => setDiscountMode('fixed')}
+                    className={`btn btn-sm rounded-pill px-3 ${
+                      discountMode === 'fixed'
+                        ? 'btn-dark'
+                        : 'btn-outline-secondary'
+                    }`}
+                  >
+                    VND
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={discountMode === 'percent'}
+                    onClick={() => setDiscountMode('percent')}
+                    className={`btn btn-sm rounded-pill px-3 ${
+                      discountMode === 'percent'
+                        ? 'btn-dark'
+                        : 'btn-outline-secondary'
+                    }`}
+                  >
+                    %
+                  </button>
+                </div>
+
+                {discountMode === 'fixed' ? (
+                  <div>
+                    <label
+                      htmlFor={voucherAmountInputId}
+                      className="form-label small fw-semibold mb-1"
+                    >
+                      {t('effDisc')} (VND)
+                    </label>
+                    <input
+                      id={voucherAmountInputId}
+                      type="number"
+                      min={0}
+                      max={MAX_VALID_VND_PRICE}
+                      step={50000}
+                      value={discountAmountInput}
+                      placeholder="0"
+                      onChange={(e) => setDiscountAmountInput(e.target.value)}
+                      className="form-control form-control-sm rate-tabular"
+                    />
+                  </div>
+                ) : (
+                  <div className="row g-2">
+                    <div className="col-sm-6">
+                      <label
+                        htmlFor={voucherPercentInputId}
+                        className="form-label small fw-semibold mb-1"
+                      >
+                        {t('effDisc')} (0-
+                        {formatPercent(MAX_VOUCHER_PERCENT, locale)})
+                      </label>
+                      <input
+                        id={voucherPercentInputId}
+                        type="number"
+                        min={0}
+                        max={MAX_VOUCHER_PERCENT}
+                        step={1}
+                        value={discountPercentInput}
+                        placeholder="0"
+                        onChange={(e) =>
+                          setDiscountPercentInput(e.target.value)
+                        }
+                        className="form-control form-control-sm rate-tabular"
+                      />
+                    </div>
+                    <div className="col-sm-6">
+                      <label
+                        htmlFor={voucherCapInputId}
+                        className="form-label small fw-semibold mb-1"
+                      >
+                        {t('effCap')}
+                      </label>
+                      <input
+                        id={voucherCapInputId}
+                        type="number"
+                        min={0}
+                        max={MAX_VALID_VND_PRICE}
+                        step={50000}
+                        value={discountCapInput}
+                        placeholder="0"
+                        onChange={(e) => setDiscountCapInput(e.target.value)}
+                        className="form-control form-control-sm rate-tabular"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="col-12">
+                <div className="border-top pt-3">
+                  <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                    <button
+                      type="button"
+                      aria-pressed={tradeInEnabled}
+                      onClick={() => setTradeInEnabled((prev) => !prev)}
+                      data-testid="effective-trade-in-toggle-btn"
+                      className={`btn btn-sm rounded-pill px-3 ${
+                        tradeInEnabled ? 'btn-dark' : 'btn-outline-dark'
+                      }`}
+                    >
+                      {t('effTrade')}
+                    </button>
+
+                    <div
+                      className="d-flex align-items-center flex-wrap gap-1"
+                      role="group"
+                      aria-label={t('effTerm')}
+                    >
+                      {INSTALLMENT_TERMS.map((term) => (
+                        <button
+                          key={String(term)}
+                          type="button"
+                          aria-pressed={installmentTerm === term}
+                          onClick={() => setInstallmentTerm(term)}
+                          className={`btn btn-sm rounded-pill px-2 ${
+                            installmentTerm === term
+                              ? 'btn-danger'
+                              : 'btn-outline-secondary'
+                          }`}
+                        >
+                          {term === 'cash'
+                            ? t('effCash')
+                            : t('valueCalcMonthsBtn', {
+                                months: term,
+                              })}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {tradeInEnabled && (
+                    <div className="row g-2 mb-3">
+                      <div className="col-md-4">
+                        <label
+                          htmlFor={oldBenchmarkInputId}
+                          className="form-label small fw-semibold mb-1"
+                        >
+                          {t('effOld')}
+                        </label>
+                        <input
+                          id={oldBenchmarkInputId}
+                          type="number"
+                          min={0}
+                          max={MAX_VALID_VND_PRICE}
+                          step={100000}
+                          value={oldBenchmarkInput}
+                          placeholder="0"
+                          onChange={(e) => setOldBenchmarkInput(e.target.value)}
+                          className="form-control form-control-sm rate-tabular"
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label
+                          htmlFor={tradeInBonusInputId}
+                          className="form-label small fw-semibold mb-1"
+                        >
+                          {t('effBonus')}
+                        </label>
+                        <input
+                          id={tradeInBonusInputId}
+                          type="number"
+                          min={0}
+                          max={MAX_VALID_VND_PRICE}
+                          step={100000}
+                          value={tradeInBonusInput}
+                          placeholder="0"
+                          onChange={(e) => setTradeInBonusInput(e.target.value)}
+                          className="form-control form-control-sm rate-tabular"
+                        />
+                      </div>
+                      <div className="col-md-4 d-flex flex-column justify-content-end">
+                        <div
+                          className="d-flex flex-wrap gap-1"
+                          role="group"
+                          aria-label={t('effTrade')}
+                        >
+                          {(
+                            [
+                              ['grade_1_mint', 1, formatPercent(100, locale)],
+                              [
+                                'grade_2_light_wear',
+                                2,
+                                formatPercent(85, locale),
+                              ],
+                              [
+                                'grade_3_battery_under_85',
+                                3,
+                                `<${formatPercent(85, locale)}`,
+                              ],
+                            ] as const
+                          ).map(([tier, gradeNum, pctLabel]) => (
+                            <button
+                              key={tier}
+                              type="button"
+                              aria-pressed={conditionTier === tier}
+                              onClick={() => setConditionTier(tier)}
+                              className={`btn btn-sm rounded-pill px-2 ${
+                                conditionTier === tier
+                                  ? 'btn-dark'
+                                  : 'btn-outline-secondary'
+                              }`}
+                            >
+                              {t('effC', { n: gradeNum })} ({pctLabel})
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {installmentTerm !== 'cash' && (
+                    <div className="row g-2 mb-3">
+                      <div className="col-md-4">
+                        <label
+                          htmlFor={installmentFeeInputId}
+                          className="form-label small fw-semibold mb-1"
+                        >
+                          {t('effFee')} (0-
+                          {formatPercent(MAX_INSTALLMENT_FEE_PERCENT, locale)})
+                        </label>
+                        <input
+                          id={installmentFeeInputId}
+                          type="number"
+                          min={0}
+                          max={MAX_INSTALLMENT_FEE_PERCENT}
+                          step={0.5}
+                          value={installmentFeeInput}
+                          onChange={(e) =>
+                            setInstallmentFeeInput(e.target.value)
+                          }
+                          className="form-control form-control-sm rate-tabular"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="row g-3 mt-1">
+              <div className="col-md-4">
+                <div className="rounded-3 bg-white h-100 border p-3">
+                  <div className="text-muted small mb-1">{t('effNet')}</div>
+                  <div
+                    className="h5 fw-bold rate-tabular text-dark mb-1"
+                    data-testid="effective-net-payable"
+                  >
+                    {formatPriceVnd(effectiveResult.netCashPayableVnd, locale)}
+                  </div>
+                  {effectiveResult.voucherSavingsVnd > 0 && (
+                    <div className="small text-secondary rate-tabular">
+                      {t('effDisc')}: -
+                      {formatPriceVnd(
+                        effectiveResult.voucherSavingsVnd,
+                        locale
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {tradeInEnabled && effectiveResult.oldDeviceBenchmarkVnd > 0 && (
+                <div className="col-md-4">
+                  <div className="rounded-3 bg-white h-100 border p-3">
+                    <div className="text-muted small mb-1">
+                      {t('effStore')} / {t('effSelf')}
+                    </div>
+                    <div className="small text-dark rate-tabular mb-1">
+                      {t('effStore')}:{' '}
+                      {formatPriceVnd(
+                        effectiveResult.storeTradeInCreditVnd,
+                        locale
+                      )}{' '}
+                      / {t('effSelf')}:{' '}
+                      {formatPriceVnd(
+                        effectiveResult.oldDeviceBenchmarkVnd,
+                        locale
+                      )}
+                    </div>
+                    <div
+                      className={`small fw-semibold rate-tabular ${
+                        effectiveResult.selfResaleComparisonDeltaVnd > 0
+                          ? 'text-success'
+                          : effectiveResult.selfResaleComparisonDeltaVnd < 0
+                            ? 'text-warning-emphasis'
+                            : 'text-muted'
+                      }`}
+                    >
+                      {effectiveResult.selfResaleComparisonDeltaVnd > 0
+                        ? `${t('effStore')}: ${t('cheaperByBadge', {
+                            amount: formatNumber(
+                              effectiveResult.selfResaleComparisonDeltaVnd,
+                              locale
+                            ),
+                          })}`
+                        : effectiveResult.selfResaleComparisonDeltaVnd < 0
+                          ? `${t('effSelf')}: ${t('cheaperByBadge', {
+                              amount: formatNumber(
+                                Math.abs(
+                                  effectiveResult.selfResaleComparisonDeltaVnd
+                                ),
+                                locale
+                              ),
+                            })}`
+                          : `${t('effStore')} = ${t('effSelf')}`}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div
+                className={
+                  tradeInEnabled && effectiveResult.oldDeviceBenchmarkVnd > 0
+                    ? 'col-md-4'
+                    : 'col-md-8'
+                }
+              >
+                <div className="rounded-3 bg-white h-100 border p-3">
+                  <div className="text-muted small mb-1">
+                    {installmentTerm === 'cash'
+                      ? t('effCash')
+                      : `${t('effTerm')} (${t('valueCalcMonthsBtn', {
+                          months: effectiveResult.installmentMonths,
+                        })})`}
+                  </div>
+                  {installmentTerm === 'cash' ? (
+                    <div className="h5 fw-bold rate-tabular text-dark mb-0">
+                      {formatPriceVnd(
+                        effectiveResult.netCashPayableVnd,
+                        locale
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="h5 fw-bold rate-tabular text-danger mb-1">
+                        {formatPriceVnd(
+                          effectiveResult.monthlyPaymentVnd,
+                          locale,
+                          { symbol: t('valueCalcPerMonthUnit') }
+                        )}
+                      </div>
+                      <div className="small text-secondary rate-tabular">
+                        {t('effFee')}:{' '}
+                        {formatPriceVnd(
+                          effectiveResult.conversionFeeVnd,
+                          locale
+                        )}{' '}
+                        / {t('effTotal')}:{' '}
+                        {formatPriceVnd(effectiveResult.totalPaidVnd, locale)}
+                        {effectiveResult.totalDiffVsCashVnd > 0
+                          ? ` (+${formatPriceVnd(
+                              effectiveResult.totalDiffVsCashVnd,
+                              locale
+                            )})`
+                          : ''}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <p
+              className="text-muted small mb-0 mt-3"
+              data-testid="effective-price-disclaimer"
+            >
+              {t('effNote')}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

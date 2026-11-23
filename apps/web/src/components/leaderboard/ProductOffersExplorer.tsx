@@ -33,9 +33,13 @@ import {
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
+  classifySellerChannel,
+  detectProductOrigin,
   implausiblyLowOfferIds,
   isOfferImplausiblyLowAgainstInStock,
   normalizeOfferId,
+  type ProductOrigin,
+  type SellerChannel,
 } from '@repo/shared-data/rules';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
 import { contentLang } from '@/lib/content-lang';
@@ -55,6 +59,7 @@ interface ProductOffersExplorerProps {
   readonly byOffer: MasterProductPriceHistorySummary['byOffer'];
   readonly radarSignal?: RadarSignal | null;
   readonly initialHighTrustOnly?: boolean;
+  readonly initialOfficialVnaOnly?: boolean;
 }
 
 export type OfferSortKey = 'price_asc' | 'trust_desc' | 'discount_desc';
@@ -447,6 +452,18 @@ export function buildOffersMarkdown(params: {
   ].join('\n');
 }
 
+export function resolveOfferOriginBadgeClass(origin: ProductOrigin): string {
+  if (origin === 'official_vna') return 'bg-info-subtle text-info-emphasis';
+  if (origin === 'imported') return 'bg-warning-subtle text-warning-emphasis';
+  return 'bg-light text-muted border';
+}
+
+export function resolveSellerChannelBadgeClass(channel: SellerChannel): string {
+  if (channel === 'authorized_vat') return 'bg-success-subtle text-success';
+  if (channel === 'official_mall') return 'bg-success-subtle text-success';
+  return 'bg-secondary-subtle text-secondary';
+}
+
 export default function ProductOffersExplorer({
   productName,
   productSlug,
@@ -454,12 +471,16 @@ export default function ProductOffersExplorer({
   byOffer,
   radarSignal,
   initialHighTrustOnly = false,
+  initialOfficialVnaOnly = false,
 }: ProductOffersExplorerProps) {
   const t = useTranslations('productDetail');
   const tVerdict = useTranslations('priceVerdict');
   const locale = useLocale();
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [officialOnly, setOfficialOnly] = useState(false);
+  const [officialVnaOnly, setOfficialVnaOnly] = useState(
+    initialOfficialVnaOnly
+  );
   const [highTrustOnly, setHighTrustOnly] = useState(initialHighTrustOnly);
   const [sortBy, setSortBy] = useState<OfferSortKey>('price_asc');
   const [copiedOffersMd, setCopiedOffersMd] = useState(false);
@@ -504,6 +525,9 @@ export default function ProductOffersExplorer({
         return false;
       }
       if (officialOnly && !o.merchant.is_official) {
+        return false;
+      }
+      if (officialVnaOnly && detectProductOrigin(o.title) !== 'official_vna') {
         return false;
       }
       if (highTrustOnly && offerRiskTone(o.merchant.risk_score) !== 'good') {
@@ -569,6 +593,7 @@ export default function ProductOffersExplorer({
     inStockOffers,
     selectedPlatform,
     officialOnly,
+    officialVnaOnly,
     highTrustOnly,
     sortBy,
     implausibleOfferIds,
@@ -884,6 +909,20 @@ export default function ProductOffersExplorer({
             </button>
             <button
               type="button"
+              aria-pressed={officialVnaOnly}
+              onClick={() => setOfficialVnaOnly((v) => !v)}
+              data-testid="offers-official-vna-filter-btn"
+              className={`btn btn-sm rounded-pill px-3 py-1 ${
+                officialVnaOnly
+                  ? 'btn-dark fw-semibold'
+                  : 'btn-outline-dark bg-white'
+              }`}
+              style={{ fontSize: '0.8125rem' }}
+            >
+              {t('offersOfficialVnaOnlyBtn')}
+            </button>
+            <button
+              type="button"
               aria-pressed={highTrustOnly}
               onClick={() => setHighTrustOnly((v) => !v)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
@@ -923,6 +962,7 @@ export default function ProductOffersExplorer({
             onClick={() => {
               setSelectedPlatform('all');
               setOfficialOnly(false);
+              setOfficialVnaOnly(false);
               setHighTrustOnly(false);
             }}
             className="btn btn-sm btn-outline-danger rounded-pill px-3"
@@ -980,6 +1020,26 @@ export default function ProductOffersExplorer({
                     ? t('offersTrustBadgeNoData')
                     : t('offersTrustBadge', { score: trustScore });
 
+                const origin = detectProductOrigin(offer.title);
+                const sellerChannel = classifySellerChannel({
+                  platform: offer.platform,
+                  isOfficial: offer.merchant.is_official,
+                  merchantName: offer.merchant.name,
+                  title: offer.title,
+                });
+                const originBadgeLabel =
+                  origin === 'official_vna'
+                    ? t('offersOriginVnaBadge')
+                    : origin === 'imported'
+                      ? t('offersOriginImportedBadge')
+                      : t('offersOriginUnknownBadge');
+                const channelBadgeLabel =
+                  sellerChannel === 'authorized_vat'
+                    ? t('offersChannelAuthorizedVat')
+                    : sellerChannel === 'official_mall'
+                      ? t('offersOfficialMallBadge')
+                      : t('offersChannelIndependentShop');
+
                 const isBait = isExplorerOfferImplausiblyLow(
                   offer,
                   inStockOffers,
@@ -1034,31 +1094,42 @@ export default function ProductOffersExplorer({
                               />
                             )}
                           </div>
-                          {offer.merchant.is_official && (
-                            <span className="badge bg-success-subtle text-success small">
-                              {t('offersOfficialMallBadge')}
-                            </span>
-                          )}
-                          {isBait && (
+                          <div className="mt-1">
                             <span
-                              className="badge bg-danger-subtle text-danger small"
-                              data-testid="offer-implausibly-low"
-                              title={t('offersImplausiblyLowTitle')}
+                              className={`badge me-1 ${resolveOfferOriginBadgeClass(origin)}`}
+                              data-testid="offer-origin-badge"
+                              data-origin={origin}
                             >
-                              {t('offersImplausiblyLowBadge')}
+                              {originBadgeLabel}
                             </span>
-                          )}
-                          {isOfferUnavailable(offer) && (
                             <span
-                              className="badge bg-secondary-subtle text-secondary small"
-                              data-testid="offer-unavailable"
-                              title={t('offersUnavailableTitle')}
+                              className={`badge ${resolveSellerChannelBadgeClass(sellerChannel)}`}
+                              data-testid="offer-channel-pill"
+                              data-channel={sellerChannel}
                             >
-                              {offer.availability === 'discontinued'
-                                ? t('offersDiscontinuedBadge')
-                                : t('offersUnavailableBadge')}
+                              {channelBadgeLabel}
                             </span>
-                          )}
+                            {isBait && (
+                              <span
+                                className="badge bg-danger-subtle text-danger small"
+                                data-testid="offer-implausibly-low"
+                                title={t('offersImplausiblyLowTitle')}
+                              >
+                                {t('offersImplausiblyLowBadge')}
+                              </span>
+                            )}
+                            {isOfferUnavailable(offer) && (
+                              <span
+                                className="badge bg-secondary-subtle text-secondary small"
+                                data-testid="offer-unavailable"
+                                title={t('offersUnavailableTitle')}
+                              >
+                                {offer.availability === 'discontinued'
+                                  ? t('offersDiscontinuedBadge')
+                                  : t('offersUnavailableBadge')}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
