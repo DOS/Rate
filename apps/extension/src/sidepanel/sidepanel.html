@@ -261,6 +261,51 @@
       font-size: 13px;
       margin-top: 6px;
     }
+    .btn-pin-alert {
+      width: 100%;
+      background: var(--bg-card-alt);
+      color: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      text-align: center;
+    }
+    .btn-pin-alert.active {
+      background: rgba(45, 186, 105, 0.16);
+      border-color: rgba(45, 186, 105, 0.5);
+      color: #34d399;
+    }
+    .pinned-alert-row {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .pinned-alert-row:last-child {
+      border-bottom: none;
+    }
+    .pin-email-link {
+      background: var(--accent);
+      color: #ffffff;
+      border-radius: 6px;
+      padding: 4px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .pin-remove-btn {
+      background: var(--bg-card-alt);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -298,6 +343,8 @@
     </div>
   </div>
 
+  <div id="pinned-alerts-slot"></div>
+
   <div class="card">
     <div class="card-title" data-i18n="privacyTitle"></div>
     <label class="privacy-row">
@@ -305,6 +352,13 @@
       <span>
         <strong data-i18n="optInTitle"></strong>
         <span data-i18n="optInBody"></span>
+      </span>
+    </label>
+    <label class="privacy-row">
+      <input type="checkbox" id="chk-checkout-guard" checked style="margin-top: 3px;" />
+      <span>
+        <strong data-i18n="checkoutGuardToggleTitle"></strong>
+        <span data-i18n="checkoutGuardToggleBody"></span>
       </span>
     </label>
     <div style="margin-top: 10px;">

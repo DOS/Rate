@@ -8,12 +8,12 @@ import { Link } from '@/lib/navigation';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MasterProduct } from '@repo/shared-data';
 import {
+  MAX_VALID_VND_PRICE,
   getMasterProductHref,
   resolveCompareEffectiveUserRating,
 } from '@/lib/rate-domain';
 import { formatScoreFixed } from '@/lib/rating-display';
 import {
-  MIN_WATCHLIST_TARGET_PRICE,
   computeWatchlistTargetPrice,
   getWatchlist,
   removeWatchlistItem,
@@ -61,6 +61,129 @@ import {
 } from '@/lib/locale-format';
 import StarRating from '@/components/elementary/StarRating';
 
+export const MIN_WATCHLIST_QUERY_TARGET_VND = 1_000;
+
+export type WatchlistUnsubscribeBannerStatus =
+  'ready' | 'submitting' | 'confirmed' | 'invalid' | 'unconfigured' | 'error';
+
+export interface WatchlistUnsubscribeBannerState {
+  token: string;
+  status: WatchlistUnsubscribeBannerStatus;
+}
+
+const STRICT_POSITIVE_INT_RE = /^[1-9]\d{0,11}$/;
+const CLIENT_UNSUBSCRIBE_TOKEN_SYNTAX_RE =
+  /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+/**
+ * Validates `?target=<positive integer VND>` on `/watchlist?add=<slug>&target=<vnd>`,
+ * accepting strict finite integers in `[1_000, MAX_VALID_VND_PRICE]` and ignoring
+ * malformed, decimal, negative, leading-zero, or out-of-range inputs (#1875).
+ */
+export function parseWatchlistTargetQueryParam(raw: unknown): number | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!STRICT_POSITIVE_INT_RE.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < MIN_WATCHLIST_QUERY_TARGET_VND ||
+    parsed > MAX_VALID_VND_PRICE
+  ) {
+    return null;
+  }
+  return parsed;
+}
+
+export function resolveBoundedWatchlistTargetInput(
+  customTarget: unknown,
+  fallbackBasePrice?: unknown
+): number {
+  const num = Number(customTarget);
+  if (!Number.isFinite(num) || num <= 0) {
+    return sanitizeWatchlistTargetPrice(customTarget, fallbackBasePrice);
+  }
+  return Math.max(
+    MIN_WATCHLIST_QUERY_TARGET_VND,
+    Math.min(MAX_VALID_VND_PRICE, Math.round(num))
+  );
+}
+
+export function parseWatchlistUnsubscribeQueryParam(
+  raw: unknown
+): WatchlistUnsubscribeBannerState | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== 'string') {
+    return { token: '', status: 'invalid' };
+  }
+  const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+  if (
+    !cleaned ||
+    cleaned.length > 2048 ||
+    !CLIENT_UNSUBSCRIBE_TOKEN_SYNTAX_RE.test(cleaned)
+  ) {
+    return { token: '', status: 'invalid' };
+  }
+  return { token: cleaned, status: 'ready' };
+}
+
+export function resolveWatchlistUnsubscribeResponseStatus(
+  httpStatus: number,
+  body: unknown
+): WatchlistUnsubscribeBannerStatus {
+  const rec =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null;
+  if (
+    httpStatus >= 200 &&
+    httpStatus < 300 &&
+    rec?.ok === true &&
+    rec?.unsubscribed === true
+  ) {
+    return 'confirmed';
+  }
+  if (
+    httpStatus === 503 ||
+    rec?.code === 'UNSUBSCRIBE_BACKEND_UNCONFIGURED' ||
+    rec?.code === 'SECRET_UNCONFIGURED'
+  ) {
+    return 'unconfigured';
+  }
+  if (httpStatus === 400) {
+    return 'invalid';
+  }
+  return 'error';
+}
+
+export function addProductToLocalWatchlist(
+  p: MasterProduct,
+  customTargetVnd?: number | null
+): WatchlistItem[] {
+  const minP = Number(p.min_price || 0);
+  const targetP =
+    typeof customTargetVnd === 'number' &&
+    Number.isSafeInteger(customTargetVnd) &&
+    customTargetVnd >= MIN_WATCHLIST_QUERY_TARGET_VND &&
+    customTargetVnd <= MAX_VALID_VND_PRICE
+      ? customTargetVnd
+      : computeWatchlistTargetPrice(minP, 5);
+  const thumb = productImageUrl(p);
+  const resolvedHref = getMasterProductHref(p);
+  const resolvedCategoryPath =
+    resolvedHref.replace(`/${p.slug}`, '') || '/smartphones';
+  return upsertWatchlistItem({
+    slug: p.slug,
+    name: p.name,
+    brand: p.brand,
+    categoryPath: resolvedCategoryPath,
+    thumbnail: thumb,
+    priceWhenAdded: minP,
+    targetPrice: targetP,
+    addedAt: new Date().toISOString(),
+  });
+}
+
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
   locale?: string;
@@ -70,6 +193,8 @@ interface WatchlistWorkspaceProps {
   initialEditingSlug?: string | null;
   /** SSR/unit-test fixture override (#1693). */
   initialLiveDeals?: Record<string, LiveWatchlistDeal>;
+  /** SSR/unit-test fixture override (#1875). */
+  initialUnsubscribeState?: WatchlistUnsubscribeBannerState | null;
 }
 
 export interface LiveWatchlistDeal {
@@ -418,6 +543,7 @@ export default function WatchlistWorkspace({
   initialItems,
   initialEditingSlug,
   initialLiveDeals,
+  initialUnsubscribeState,
 }: WatchlistWorkspaceProps) {
   const t = useTranslations('watchlist');
   const contextLocale = useLocale();
@@ -437,7 +563,7 @@ export default function WatchlistWorkspace({
   );
   const [editTarget, setEditTarget] = useState<number>(
     initialEditItem
-      ? sanitizeWatchlistTargetPrice(
+      ? resolveBoundedWatchlistTargetInput(
           initialEditItem.targetPrice,
           initialEditItem.priceWhenAdded
         )
@@ -449,6 +575,15 @@ export default function WatchlistWorkspace({
   } | null>(null);
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
   const [copiedPortfolioMd, setCopiedPortfolioMd] = useState<boolean>(false);
+  const [unsubBanner, setUnsubBanner] =
+    useState<WatchlistUnsubscribeBannerState | null>(
+      initialUnsubscribeState ?? null
+    );
+  const unsubConfirmBtnRef = useRef<HTMLButtonElement | null>(null);
+  const unsubDismissBtnRef = useRef<HTMLButtonElement | null>(null);
+  const prevUnsubStatusRef = useRef<WatchlistUnsubscribeBannerStatus | null>(
+    initialUnsubscribeState?.status ?? null
+  );
 
   useEffect(() => {
     const sync = () => setItems(getWatchlist());
@@ -480,63 +615,158 @@ export default function WatchlistWorkspace({
   );
 
   const handleQuickAddCatalog = (p: MasterProduct) => {
-    const minP = Number(p.min_price || 0);
-    const targetP = computeWatchlistTargetPrice(minP, 5);
-    const thumb = productImageUrl(p);
-    const resolvedHref = getMasterProductHref(p);
-    const resolvedCategoryPath =
-      resolvedHref.replace(`/${p.slug}`, '') || '/smartphones';
-    upsertWatchlistItem({
-      slug: p.slug,
-      name: p.name,
-      brand: p.brand,
-      categoryPath: resolvedCategoryPath,
-      thumbnail: thumb,
-      priceWhenAdded: minP,
-      targetPrice: targetP,
-      addedAt: new Date().toISOString(),
-    });
+    addProductToLocalWatchlist(p);
   };
 
-  // `/watchlist?add=<slug>` (the browser extension's link, DOS/Rate#1158): add
-  // that product once, then drop the parameter so a reload adds nothing. The
-  // add is idempotent (by slug), so a second effect run (Strict Mode) is safe.
+  // `/watchlist?add=<slug>&target=<vnd>` (MV3 Side Panel & extension links,
+  // DOS/Rate#1158, #1875): add or prefill that product once, then drop both
+  // parameters so a reload adds nothing.
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (!url.searchParams.has('add')) return;
+    const hasAdd = url.searchParams.has('add');
+    const hasTarget = url.searchParams.has('target');
+    if (!hasAdd && !hasTarget) return;
     const raw = (url.searchParams.get('add') ?? '').trim();
     // The product route's own slug rule.
     const slug = /^[a-zA-Z0-9._-]{1,120}$/.test(raw) ? raw : '';
-    const dropParam = () => {
+    const customTarget = parseWatchlistTargetQueryParam(
+      url.searchParams.get('target')
+    );
+    const dropParams = () => {
       const now = new URL(window.location.href);
       now.searchParams.delete('add');
+      now.searchParams.delete('target');
       window.history.replaceState(
-        null,
+        window.history.state,
         '',
         `${now.pathname}${now.search}${now.hash}`
       );
     };
-    if (!slug || getWatchlist().some((x) => x.slug === slug)) {
-      dropParam();
+    if (!slug) {
+      dropParams();
       return;
     }
-    fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+    const existing = getWatchlist().find(
+      (x) => x.slug.toLowerCase() === slug.toLowerCase()
+    );
+    if (existing) {
+      if (customTarget !== null) {
+        upsertWatchlistItem({
+          ...existing,
+          targetPrice: customTarget,
+        });
+        setEditingSlug(existing.slug);
+        setEditTarget(customTarget);
+      }
+      dropParams();
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`, {
+      signal: controller.signal,
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
+        if (cancelled) return;
         const product = json?.ok ? (json.data?.product as MasterProduct) : null;
         if (
-          product?.slug === slug &&
-          !getWatchlist().some((x) => x.slug === slug)
+          product?.slug &&
+          product.slug.toLowerCase() === slug.toLowerCase() &&
+          !getWatchlist().some(
+            (x) => x.slug.toLowerCase() === product.slug.toLowerCase()
+          )
         ) {
-          handleQuickAddCatalog(product);
+          addProductToLocalWatchlist(product, customTarget);
+          if (customTarget !== null) {
+            setEditingSlug(product.slug);
+            setEditTarget(customTarget);
+          }
         }
       })
       .catch(() => {
-        // An unknown or unreachable product adds nothing.
+        // An unknown, unreachable, or aborted product read adds nothing.
       })
-      .finally(dropParam);
+      .finally(() => {
+        if (!cancelled) dropParams();
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
     // Runs once per page load.
   }, []);
+
+  const clearUnsubscribeQueryParam = () => {
+    if (typeof window === 'undefined') return;
+    const now = new URL(window.location.href);
+    if (!now.searchParams.has('unsubscribe')) return;
+    now.searchParams.delete('unsubscribe');
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${now.pathname}${now.search}${now.hash}`
+    );
+  };
+
+  // `/watchlist?unsubscribe=<token>` (RFC 8058 mail-scanner safe landing,
+  // DOS/Rate#1875): capture the token into component memory and immediately
+  // scrub `?unsubscribe=` from the address bar so client telemetry/history
+  // never retains the bearer capability or encoded subscriber email.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('unsubscribe')) return;
+    const parsed = parseWatchlistUnsubscribeQueryParam(
+      url.searchParams.get('unsubscribe')
+    );
+    clearUnsubscribeQueryParam();
+    if (parsed) {
+      setUnsubBanner(parsed);
+    }
+  }, []);
+
+  // Preserve keyboard focus when the Confirm button disables during
+  // `'submitting'` and either unmounts (terminal states) or re-enables (`error`).
+  useEffect(() => {
+    const prev = prevUnsubStatusRef.current;
+    const current = unsubBanner?.status ?? null;
+    prevUnsubStatusRef.current = current;
+    if (prev !== 'submitting' || !current || current === 'submitting') return;
+    if (current === 'error') {
+      unsubConfirmBtnRef.current?.focus();
+    } else {
+      unsubDismissBtnRef.current?.focus();
+    }
+  }, [unsubBanner?.status]);
+
+  const handleDismissUnsubscribe = () => {
+    clearUnsubscribeQueryParam();
+    setUnsubBanner(null);
+  };
+
+  const handleConfirmUnsubscribe = async () => {
+    if (!unsubBanner?.token || unsubBanner.status === 'submitting') return;
+    const token = unsubBanner.token;
+    setUnsubBanner({ token, status: 'submitting' });
+    try {
+      const res = await fetch('/api/v1/rate/watchlist/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const payload: unknown = await res.json().catch(() => null);
+      const nextStatus = resolveWatchlistUnsubscribeResponseStatus(
+        res.status,
+        payload
+      );
+      if (nextStatus === 'confirmed') {
+        clearUnsubscribeQueryParam();
+      }
+      setUnsubBanner({ token, status: nextStatus });
+    } catch {
+      setUnsubBanner({ token, status: 'error' });
+    }
+  };
 
   // An entry naming a whole Item needs a size: alerts stay per size
   // (DOS/Rate#1278). The sizes come from the product API's `variants`.
@@ -606,7 +836,7 @@ export default function WatchlistWorkspace({
   };
 
   const handleUpdateTarget = async (item: WatchlistItem) => {
-    const cleanTarget = sanitizeWatchlistTargetPrice(
+    const cleanTarget = resolveBoundedWatchlistTargetInput(
       editTarget,
       item.priceWhenAdded
     );
@@ -654,7 +884,7 @@ export default function WatchlistWorkspace({
             headers,
             body: JSON.stringify({
               slug: item.slug,
-              targetPrice: sanitizeWatchlistTargetPrice(
+              targetPrice: resolveBoundedWatchlistTargetInput(
                 item.targetPrice,
                 item.priceWhenAdded
               ),
@@ -1100,6 +1330,81 @@ export default function WatchlistWorkspace({
         </div>
       </div>
 
+      {/* RFC 8058 One-Click Unsubscribe Confirmation Banner (#1875) */}
+      {unsubBanner && (
+        <section
+          aria-labelledby={`${workspaceId}-unsub-title`}
+          data-testid="watchlist-unsubscribe-banner"
+          className="card rounded-4 mb-4 border bg-white p-4 shadow-sm"
+        >
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+            <div>
+              <h2 id={`${workspaceId}-unsub-title`} className="h5 fw-bold mb-1">
+                {t('unsubTitle')}
+              </h2>
+              {unsubBanner.status === 'ready' ||
+              unsubBanner.status === 'submitting' ? (
+                <p className="text-muted small mb-0">{t('unsubBody')}</p>
+              ) : (
+                <div
+                  role={unsubBanner.status === 'confirmed' ? 'status' : 'alert'}
+                  data-testid="watchlist-unsubscribe-status"
+                  className={`small fw-medium mb-0 ${
+                    unsubBanner.status === 'confirmed'
+                      ? 'text-success'
+                      : 'text-danger'
+                  }`}
+                >
+                  {unsubBanner.status === 'confirmed' ? (
+                    <BsCheckCircle aria-hidden="true" className="me-1" />
+                  ) : (
+                    <BsExclamationTriangle
+                      aria-hidden="true"
+                      className="me-1"
+                    />
+                  )}
+                  {unsubBanner.status === 'confirmed'
+                    ? t('unsubSuccess')
+                    : unsubBanner.status === 'invalid'
+                      ? t('unsubInvalid')
+                      : unsubBanner.status === 'unconfigured'
+                        ? t('unsubUnconfigured')
+                        : t('unsubError')}
+                </div>
+              )}
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+              {(unsubBanner.status === 'ready' ||
+                unsubBanner.status === 'submitting' ||
+                unsubBanner.status === 'error') &&
+                Boolean(unsubBanner.token) && (
+                  <button
+                    ref={unsubConfirmBtnRef}
+                    type="button"
+                    disabled={unsubBanner.status === 'submitting'}
+                    onClick={() => void handleConfirmUnsubscribe()}
+                    data-testid="watchlist-unsubscribe-confirm-btn"
+                    className="btn btn-danger rounded-pill fw-semibold px-4"
+                  >
+                    {unsubBanner.status === 'submitting'
+                      ? t('unsubSubmittingBtn')
+                      : t('unsubConfirmBtn')}
+                  </button>
+                )}
+              <button
+                ref={unsubDismissBtnRef}
+                type="button"
+                onClick={handleDismissUnsubscribe}
+                data-testid="watchlist-unsubscribe-dismiss-btn"
+                className="btn btn-outline-dark rounded-pill px-3"
+              >
+                {t('unsubDismissBtn')}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Empty State with Quick Add Suggestions */}
       {items.length === 0 ? (
         <div className="card rounded-4 p-md-5 mb-4 border bg-white p-4 text-center shadow-sm">
@@ -1430,7 +1735,7 @@ export default function WatchlistWorkspace({
                             }
                             setEditingSlug(item.slug);
                             setEditTarget(
-                              sanitizeWatchlistTargetPrice(
+                              resolveBoundedWatchlistTargetInput(
                                 item.targetPrice,
                                 currentMin || item.priceWhenAdded
                               )
@@ -1570,11 +1875,17 @@ export default function WatchlistWorkspace({
                           item.name
                         )}
                         step={
-                          currentMin > 0 && currentMin < 2_000_000
-                            ? 10000
-                            : 100000
+                          editTarget > 0 && editTarget % 10_000 !== 0
+                            ? 1000
+                            : currentMin > 0 && currentMin < 2_000_000
+                              ? 10000
+                              : 100000
                         }
-                        min={MIN_WATCHLIST_TARGET_PRICE}
+                        min={
+                          editTarget > 0 && editTarget < 10_000
+                            ? MIN_WATCHLIST_QUERY_TARGET_VND
+                            : 10000
+                        }
                         value={editTarget}
                         onChange={(e) =>
                           setEditTarget(Number(e.target.value || 0))

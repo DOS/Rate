@@ -246,6 +246,38 @@ export interface ExtractedPageProductSignal {
 export interface ExtensionSettings {
   apiBaseUrl: string;
   crowdContributeOptIn: boolean;
+  checkoutGuardEnabled?: boolean;
+}
+
+export interface ExtractedCartLineItem {
+  title: string;
+  productUrl: string | null;
+  unitPriceVnd: number;
+}
+
+export type CheckoutAlertReason = 'cheaper_official' | 'markup_trap';
+
+export interface CheckoutPriceTrapWarning {
+  reason: CheckoutAlertReason;
+  itemTitle: string;
+  cartUnitPriceVnd: number;
+  referencePriceVnd: number;
+  savingsVnd: number;
+  savingsPct: number;
+  markupPct: number;
+  cheaperMerchantName: string | null;
+  cheaperPlatform: string | null;
+  comparisonUrl: string;
+}
+
+export interface PinnedPriceAlert {
+  slug: string;
+  productName: string;
+  categorySlug:
+    'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
+  targetPriceVnd: number;
+  bestPriceAtPinVnd: number;
+  pinnedAt: string;
 }
 
 // Minimal Chrome Extension Manifest V3 Ambient Declarations for strict TS 7.0.2

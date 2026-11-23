@@ -719,5 +719,89 @@
   },
   "observationFieldNetwork": {
     "message": "mã băm dải mạng của bạn (không phải IP)"
+  },
+  "checkoutGuardRegionAria": {
+    "message": "Cảnh báo giá giỏ hàng Rate.vn"
+  },
+  "checkoutGuardTitle": {
+    "message": "Cảnh báo giá giỏ hàng"
+  },
+  "checkoutGuardDismiss": {
+    "message": "Đóng"
+  },
+  "checkoutGuardCheaperOfficial": {
+    "message": "Gian hàng chính hãng $STORE$ đang còn hàng rẻ hơn $SAVINGS$ (-$PCT$%).",
+    "placeholders": {
+      "store": {
+        "content": "$1"
+      },
+      "savings": {
+        "content": "$2"
+      },
+      "pct": {
+        "content": "$3"
+      }
+    }
+  },
+  "checkoutGuardMarkupTrap": {
+    "message": "Giá trong giỏ cao hơn +$PCT$% so với giá chuẩn xác minh trên Rate.vn ($MEDIAN$).",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
+  },
+  "checkoutGuardCompareCta": {
+    "message": "Đối chiếu trên Rate.vn"
+  },
+  "checkoutGuardToggleTitle": {
+    "message": "Cảnh báo bẫy giá tại giỏ hàng (22 sàn):"
+  },
+  "checkoutGuardToggleBody": {
+    "message": "Chỉ đọc tên và đơn giá tối đa 5 món hàng trên trang giỏ hàng/thanh toán để báo nơi bán chính hãng rẻ hơn hoặc giá cao bất thường. Không bao giờ đọc ô nhập liệu, địa chỉ, số điện thoại, mã giảm giá hay thẻ thanh toán."
+  },
+  "pinAlertBtn": {
+    "message": "Ghim báo giá ($TARGET$)",
+    "placeholders": {
+      "target": {
+        "content": "$1"
+      }
+    }
+  },
+  "unpinAlertBtn": {
+    "message": "Đã ghim báo giá ($TARGET$) - Bỏ ghim",
+    "placeholders": {
+      "target": {
+        "content": "$1"
+      }
+    }
+  },
+  "pinnedAlertsTitle": {
+    "message": "Cảnh Báo Giá Đã Ghim ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "pinnedAlertTargetVsLive": {
+    "message": "Mục tiêu: $TARGET$ | Giá tốt nhất: $LIVE$",
+    "placeholders": {
+      "target": {
+        "content": "$1"
+      },
+      "live": {
+        "content": "$2"
+      }
+    }
+  },
+  "pinnedAlertEmailCta": {
+    "message": "Nhận Email trên Rate.vn"
+  },
+  "pinnedAlertUnpinShort": {
+    "message": "Bỏ ghim"
   }
 }

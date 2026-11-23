@@ -9,12 +9,14 @@ import type {
   ExtensionPriceHistoryPoint,
   ExtensionVariantCandidate,
   ExtractedPageProductSignal,
+  PinnedPriceAlert,
 } from '../types.js';
 import {
   escapeSafeExternalHref,
   filterValidSparklinePrices,
   formatSafeExtensionVnd,
   formatSafeNumber,
+  MAX_VALID_EXTENSION_VND_PRICE,
   normalizeFiveStarRating,
   resolveExtensionMasterRating,
   resolveSafeApiRelativeUrl,
@@ -542,4 +544,363 @@ export function riskScoreText(
   return typeof score !== 'number' || !Number.isFinite(score)
     ? t('reviewRiskNoData')
     : formatSafeNumber(score, { min: 0, max: 100 }, locale);
+}
+
+export const MAX_PINNED_ALERTS = 50;
+export const PINNED_ALERTS_STORAGE_KEY = 'pinnedAlerts';
+
+const ALLOWED_PIN_CATEGORIES = new Set<PinnedPriceAlert['categorySlug']>([
+  'smartphones',
+  'tablets',
+  'laptops',
+  'smartwatches',
+  'earbuds',
+]);
+
+const RESERVED_PIN_SLUGS =
+  /^(?:__proto__|constructor|prototype|toString|valueOf|null|undefined|nan|infinity|-infinity|true|false|0+)$/i;
+
+export function isValidPinnedProductSlug(raw: unknown): raw is string {
+  if (typeof raw !== 'string') return false;
+  const cleaned = stripLoneSurrogates(raw)
+    .replace(/\p{Cc}+/gu, '')
+    .trim();
+  if (cleaned.length < 2 || cleaned.length > 200) return false;
+  if (cleaned.includes('..') || RESERVED_PIN_SLUGS.test(cleaned)) return false;
+  return /^[a-z0-9][a-z0-9._-]*[a-z0-9]$/i.test(cleaned);
+}
+
+export function computeDefaultAlertTargetVnd(
+  bestPriceVnd: number | null | undefined
+): number | null {
+  if (
+    typeof bestPriceVnd !== 'number' ||
+    !Number.isFinite(bestPriceVnd) ||
+    Math.round(bestPriceVnd) < 10_000 ||
+    Math.round(bestPriceVnd) > MAX_VALID_EXTENSION_VND_PRICE
+  ) {
+    return null;
+  }
+  return Math.max(
+    10_000,
+    Math.floor((Math.round(bestPriceVnd) * 0.95) / 10_000) * 10_000
+  );
+}
+
+export function resolveLookupBestPriceVnd(
+  lookup: ExtensionLookupData | null | undefined,
+  signal?: Pick<ExtractedPageProductSignal, 'price'> | null
+): number | null {
+  const isValidVnd = (v: unknown): v is number =>
+    typeof v === 'number' &&
+    Number.isFinite(v) &&
+    Math.round(v) >= 10_000 &&
+    Math.round(v) <= MAX_VALID_EXTENSION_VND_PRICE;
+
+  if (lookup) {
+    const offersSource =
+      Array.isArray(lookup.allOffers) && lookup.allOffers.length > 0
+        ? lookup.allOffers
+        : Array.isArray(lookup.topCheaperOffers)
+          ? lookup.topCheaperOffers
+          : [];
+    const buyable = orderOffersForPanel(offersSource).find(
+      (o) => isOfferBuyable(o) && isValidVnd(o.price_current)
+    );
+    if (buyable && isValidVnd(buyable.price_current)) {
+      return Math.round(buyable.price_current);
+    }
+    if (isValidVnd(lookup.priceAssessment?.marketMinPrice)) {
+      return Math.round(lookup.priceAssessment.marketMinPrice);
+    }
+    if (isValidVnd(lookup.masterProduct?.min_price)) {
+      return Math.round(lookup.masterProduct.min_price);
+    }
+    if (isValidVnd(lookup.priceAssessment?.observedPrice)) {
+      return Math.round(lookup.priceAssessment.observedPrice);
+    }
+  }
+  if (isValidVnd(signal?.price)) {
+    return Math.round(signal.price);
+  }
+  return null;
+}
+
+function sanitizeSinglePinnedAlert(raw: unknown): PinnedPriceAlert | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  const getOwn = (key: string): unknown =>
+    Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
+
+  const rawSlug = getOwn('slug');
+  if (!isValidPinnedProductSlug(rawSlug)) return null;
+  const slug = stripLoneSurrogates(rawSlug)
+    .replace(/\p{Cc}+/gu, '')
+    .trim();
+
+  const rawName = getOwn('productName');
+  if (typeof rawName !== 'string') return null;
+  const productName = sliceCodePoints(
+    stripLoneSurrogates(rawName)
+      .replace(/\p{Cc}+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+    200
+  );
+  if (!productName) return null;
+
+  const rawCat = getOwn('categorySlug');
+  const categorySlug: PinnedPriceAlert['categorySlug'] =
+    typeof rawCat === 'string' &&
+    ALLOWED_PIN_CATEGORIES.has(rawCat as PinnedPriceAlert['categorySlug'])
+      ? (rawCat as PinnedPriceAlert['categorySlug'])
+      : 'smartphones';
+
+  const rawTarget = getOwn('targetPriceVnd');
+  if (
+    typeof rawTarget !== 'number' ||
+    !Number.isFinite(rawTarget) ||
+    Math.round(rawTarget) < 10_000 ||
+    Math.round(rawTarget) > MAX_VALID_EXTENSION_VND_PRICE
+  ) {
+    return null;
+  }
+  const targetPriceVnd = Math.round(rawTarget);
+
+  const rawBest = getOwn('bestPriceAtPinVnd');
+  const bestPriceAtPinVnd =
+    typeof rawBest === 'number' &&
+    Number.isFinite(rawBest) &&
+    Math.round(rawBest) >= 10_000 &&
+    Math.round(rawBest) <= MAX_VALID_EXTENSION_VND_PRICE
+      ? Math.round(rawBest)
+      : targetPriceVnd;
+
+  const rawPinnedAt = getOwn('pinnedAt');
+  let pinnedAt = '1970-01-01T00:00:00.000Z';
+  if (typeof rawPinnedAt === 'string' && rawPinnedAt.length <= 64) {
+    const ts = Date.parse(rawPinnedAt.trim());
+    if (Number.isFinite(ts)) {
+      pinnedAt = new Date(ts).toISOString();
+    }
+  }
+
+  return {
+    slug,
+    productName,
+    categorySlug,
+    targetPriceVnd,
+    bestPriceAtPinVnd,
+    pinnedAt,
+  };
+}
+
+/**
+ * Prototype-safe schema validation and deduplication for `pinnedAlerts` read
+ * from `chrome.storage.local`, strictly bounded to `<= 50` items.
+ */
+export function sanitizePinnedAlerts(raw: unknown): PinnedPriceAlert[] {
+  if (!Array.isArray(raw)) return [];
+  const out: PinnedPriceAlert[] = [];
+  const seenSlugs = new Set<string>();
+
+  for (const item of raw) {
+    if (out.length >= MAX_PINNED_ALERTS) break;
+    const clean = sanitizeSinglePinnedAlert(item);
+    if (!clean) continue;
+    const lowerSlug = clean.slug.toLowerCase();
+    if (seenSlugs.has(lowerSlug)) continue;
+    seenSlugs.add(lowerSlug);
+    out.push(clean);
+  }
+  return out;
+}
+
+export function togglePinnedAlert(
+  existingRaw: unknown,
+  candidateRaw: PinnedPriceAlert
+): { alerts: PinnedPriceAlert[]; pinned: boolean } {
+  const existing = sanitizePinnedAlerts(existingRaw);
+  const candidate = sanitizeSinglePinnedAlert(candidateRaw);
+  if (!candidate) {
+    return { alerts: existing, pinned: false };
+  }
+  const lowerSlug = candidate.slug.toLowerCase();
+  const alreadyPinned = existing.some(
+    (a) => a.slug.toLowerCase() === lowerSlug
+  );
+  if (alreadyPinned) {
+    return {
+      alerts: existing.filter((a) => a.slug.toLowerCase() !== lowerSlug),
+      pinned: false,
+    };
+  }
+  return {
+    alerts: [candidate, ...existing].slice(0, MAX_PINNED_ALERTS),
+    pinned: true,
+  };
+}
+
+export function removePinnedAlertBySlug(
+  existingRaw: unknown,
+  rawSlug: unknown
+): PinnedPriceAlert[] {
+  const existing = sanitizePinnedAlerts(existingRaw);
+  if (typeof rawSlug !== 'string') return existing;
+  const targetLower = stripLoneSurrogates(rawSlug).trim().toLowerCase();
+  if (!targetLower) return existing;
+  return existing.filter((a) => a.slug.toLowerCase() !== targetLower);
+}
+
+export function resolveExtensionUrlLocalePrefix(
+  rawLocale = t('langCode')
+): 'vi' | 'en' | 'cs' {
+  if (typeof rawLocale !== 'string') return 'vi';
+  const primary = rawLocale.trim().slice(0, 32).toLowerCase().split(/[-_]/)[0];
+  if (primary === 'en' || primary === 'cs') return primary;
+  return 'vi';
+}
+
+export function buildWatchlistEmailAlertUrl(
+  apiBaseUrl: string | null | undefined,
+  slug: string,
+  targetPriceVnd: number,
+  locale = t('langCode')
+): string {
+  const localePrefix = resolveExtensionUrlLocalePrefix(locale);
+  const cleanSlug = isValidPinnedProductSlug(slug)
+    ? stripLoneSurrogates(slug)
+        .replace(/\p{Cc}+/gu, '')
+        .trim()
+    : '';
+  const cleanTarget =
+    typeof targetPriceVnd === 'number' &&
+    Number.isFinite(targetPriceVnd) &&
+    Math.round(targetPriceVnd) >= 10_000 &&
+    Math.round(targetPriceVnd) <= MAX_VALID_EXTENSION_VND_PRICE
+      ? Math.round(targetPriceVnd)
+      : null;
+  if (!cleanSlug || cleanTarget === null) {
+    return resolveSafeApiRelativeUrl(
+      apiBaseUrl,
+      `/${localePrefix}/watchlist`,
+      '/watchlist'
+    );
+  }
+  return resolveSafeApiRelativeUrl(
+    apiBaseUrl,
+    `/${localePrefix}/watchlist?add=${encodeSurrogateSafeUriComponent(cleanSlug, 200)}&target=${cleanTarget}`,
+    '/watchlist'
+  );
+}
+
+export function renderPinAlertButtonHtml(options: {
+  pinnedAlert: PinnedPriceAlert | null;
+  defaultTargetVnd: number | null;
+  locale?: string;
+}): string {
+  const locale = options.locale ?? t('langCode');
+  const existing = options.pinnedAlert;
+  const displayTarget = existing?.targetPriceVnd ?? options.defaultTargetVnd;
+  if (displayTarget === null) return '';
+
+  const formattedTarget = formatSafeExtensionVnd(
+    displayTarget,
+    t('notAvailable'),
+    locale
+  );
+  const isPinned = existing !== null;
+  const label = isPinned
+    ? t('unpinAlertBtn', [formattedTarget])
+    : t('pinAlertBtn', [formattedTarget]);
+
+  return `
+      <div class="btn-row" style="margin-top: 8px;">
+        <button
+          type="button"
+          class="btn-pin-alert${isPinned ? ' active' : ''}"
+          data-pin-alert-toggle="true"
+          aria-pressed="${isPinned ? 'true' : 'false'}"
+        ><span aria-hidden="true">📌 </span>${escapeHtml(label)}</button>
+      </div>
+    `;
+}
+
+export function renderPinnedAlertsCardHtml(
+  alerts: readonly PinnedPriceAlert[],
+  options: {
+    apiBaseUrl: string;
+    livePriceBySlug?: ReadonlyMap<string, number>;
+    locale?: string;
+  }
+): string {
+  const safeAlerts = sanitizePinnedAlerts(alerts);
+  if (safeAlerts.length === 0) return '';
+  const locale = options.locale ?? t('langCode');
+
+  const rows = safeAlerts
+    .map((alert) => {
+      const liveOverride = options.livePriceBySlug?.get(
+        alert.slug.toLowerCase()
+      );
+      const livePrice =
+        typeof liveOverride === 'number' &&
+        Number.isFinite(liveOverride) &&
+        Math.round(liveOverride) >= 10_000 &&
+        Math.round(liveOverride) <= MAX_VALID_EXTENSION_VND_PRICE
+          ? Math.round(liveOverride)
+          : alert.bestPriceAtPinVnd;
+      const hitTarget = livePrice <= alert.targetPriceVnd;
+      const productHref = resolveSafeApiRelativeUrl(
+        options.apiBaseUrl,
+        `/${alert.categorySlug}/${encodeSurrogateSafeUriComponent(alert.slug, 200)}`,
+        `/${alert.categorySlug}`
+      );
+      const emailAlertHref = buildWatchlistEmailAlertUrl(
+        options.apiBaseUrl,
+        alert.slug,
+        alert.targetPriceVnd,
+        locale
+      );
+      const targetVsLive = t('pinnedAlertTargetVsLive', [
+        formatSafeExtensionVnd(alert.targetPriceVnd, t('notAvailable'), locale),
+        formatSafeExtensionVnd(livePrice, t('notAvailable'), locale),
+      ]);
+
+      return `
+        <div class="pinned-alert-row">
+          <div style="min-width:0;flex:1;">
+            <div class="offer-shop">
+              <a href="${productHref}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
+                ${contentTextHtml(alert.productName)}
+              </a>
+            </div>
+            <div class="offer-meta" style="color:${hitTarget ? '#34d399' : '#9ca3af'};">
+              ${escapeHtml(targetVsLive)}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+              <a
+                href="${emailAlertHref}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="pin-email-link"
+              ><span aria-hidden="true">✉️ </span>${escapeHtml(t('pinnedAlertEmailCta'))}</a>
+              <button
+                type="button"
+                class="pin-remove-btn"
+                data-unpin-slug="${escapeHtml(alert.slug)}"
+              >${escapeHtml(t('pinnedAlertUnpinShort'))}</button>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  return `
+      <div class="card">
+        <div class="card-title"><span aria-hidden="true">📌 </span>${escapeHtml(t('pinnedAlertsTitle', [formatSafeNumber(safeAlerts.length, { min: 1, max: MAX_PINNED_ALERTS }, locale)]))}</div>
+        ${rows}
+      </div>
+    `;
 }
