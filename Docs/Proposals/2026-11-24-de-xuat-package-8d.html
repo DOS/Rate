@@ -1,0 +1,2136 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>
+      Đề xuất Package 8D - MCP v1.1, Web Conversion &amp; Extension MV3 3.1 |
+      Rate.vn
+    </title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f1113;
+        --surface: #161a1e;
+        --surface-2: #1d2228;
+        --surface-3: #242b33;
+        --border: #2a313a;
+        --border-strong: #3a4450;
+        --text: #e8edf2;
+        --muted: #9ba5b0;
+        --accent: #ff2e29;
+        --accent-text: #ff7a76;
+        --accent-soft: rgba(255, 46, 41, 0.14);
+        --green: #4ade80;
+        --green-soft: rgba(74, 222, 128, 0.13);
+        --amber: #fbbf24;
+        --amber-soft: rgba(251, 191, 36, 0.14);
+        --blue: #93c5fd;
+        --blue-soft: rgba(147, 197, 253, 0.14);
+        --purple: #c4b5fd;
+        --purple-soft: rgba(196, 181, 253, 0.14);
+        --code-bg: #0b0d0f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 32px 16px 72px;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter,
+          sans-serif;
+        line-height: 1.65;
+        font-size: 15px;
+      }
+
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        font-size: 29px;
+        line-height: 1.25;
+        margin: 12px 0 10px;
+        letter-spacing: -0.02em;
+        color: #ffffff;
+      }
+
+      h2 {
+        font-size: 21px;
+        margin: 44px 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        color: #ffffff;
+        letter-spacing: -0.01em;
+      }
+
+      h3 {
+        font-size: 17px;
+        margin: 0 0 8px;
+        color: #ffffff;
+      }
+
+      h4 {
+        font-size: 13.5px;
+        margin: 14px 0 6px;
+        color: #ffffff;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      p,
+      li {
+        color: var(--text);
+      }
+
+      ul,
+      ol {
+        padding-left: 20px;
+        margin: 6px 0;
+      }
+
+      li {
+        margin-bottom: 5px;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      a {
+        color: var(--accent-text);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        overflow-wrap: anywhere;
+      }
+
+      a:hover {
+        color: #ffa19e;
+      }
+
+      code {
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-size: 13px;
+        color: #f1f5f9;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        overflow-wrap: anywhere;
+      }
+
+      pre {
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        overflow-x: auto;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: #e2e8f0;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        margin: 10px 0 0;
+      }
+
+      .top-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 3px 9px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        line-height: 1.4;
+      }
+
+      .badge-accent {
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        border: 1px solid rgba(255, 46, 41, 0.42);
+      }
+
+      .badge-green {
+        background: var(--green-soft);
+        color: var(--green);
+        border: 1px solid rgba(74, 222, 128, 0.35);
+      }
+
+      .badge-amber {
+        background: var(--amber-soft);
+        color: var(--amber);
+        border: 1px solid rgba(251, 191, 36, 0.35);
+      }
+
+      .badge-blue {
+        background: var(--blue-soft);
+        color: var(--blue);
+        border: 1px solid rgba(147, 197, 253, 0.35);
+      }
+
+      .badge-purple {
+        background: var(--purple-soft);
+        color: var(--purple);
+        border: 1px solid rgba(196, 181, 253, 0.35);
+      }
+
+      .kpi-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+        gap: 12px;
+        margin: 18px 0 24px;
+      }
+
+      .kpi-box {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+
+      .kpi-box .kpi-val {
+        font-size: 21px;
+        font-weight: 800;
+        color: #ffffff;
+        line-height: 1.25;
+      }
+
+      .kpi-box .kpi-lbl {
+        font-size: 13px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+
+      .pkg-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin: 16px 0;
+      }
+
+      .pkg-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .pkg-card.recommended {
+        border: 2px solid var(--accent);
+        background: linear-gradient(
+          180deg,
+          rgba(255, 46, 41, 0.07) 0%,
+          var(--surface) 44%
+        );
+      }
+
+      .pkg-card h3 {
+        margin-top: 8px;
+        font-size: 17.5px;
+      }
+
+      .pkg-meta {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .callout {
+        background: var(--surface);
+        border-left: 4px solid var(--accent);
+        border-top: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px 16px;
+        margin: 16px 0;
+      }
+
+      .callout.callout-green {
+        border-left-color: var(--green);
+      }
+
+      .callout.callout-amber {
+        border-left-color: var(--amber);
+      }
+
+      .callout strong {
+        color: #ffffff;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+        margin: 12px 0;
+      }
+
+      .filter-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .btn-chip {
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+        border-radius: 999px;
+        padding: 6px 13px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+      }
+
+      .btn-chip:hover {
+        border-color: var(--accent-text);
+      }
+
+      .btn-chip[aria-pressed='true'] {
+        background: var(--accent-soft);
+        color: #ffffff;
+        border-color: var(--accent);
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        margin: 12px 0;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        min-width: 720px;
+        background: var(--surface);
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+        padding: 9px 11px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th:last-child,
+      td:last-child {
+        border-right: none;
+      }
+
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      th {
+        background: var(--surface-2);
+        color: #ffffff;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin: 18px 0;
+      }
+
+      .card.hidden-by-filter {
+        display: none;
+      }
+
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .card-head h3 {
+        flex: 1 1 320px;
+        margin: 0;
+        font-size: 18px;
+      }
+
+      dl.spec-dl {
+        margin: 12px 0 0;
+        display: grid;
+        grid-template-columns: 185px 1fr;
+        gap: 8px 14px;
+      }
+
+      dl.spec-dl dt {
+        color: var(--muted);
+        font-size: 13.5px;
+        font-weight: 600;
+      }
+
+      dl.spec-dl dd {
+        margin: 0;
+        font-size: 14.5px;
+      }
+
+      .rec {
+        color: var(--green);
+        font-weight: 600;
+      }
+
+      .warn-text {
+        color: var(--amber);
+        font-weight: 600;
+      }
+
+      .ui-preview {
+        margin-top: 16px;
+        background: #111418;
+        border: 1px solid var(--border-strong);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+
+      .ui-preview-title {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        margin-bottom: 10px;
+        font-weight: 700;
+      }
+
+      .og-mock {
+        background: linear-gradient(135deg, #14181d 0%, #0f1113 100%);
+        border: 1px solid rgba(255, 46, 41, 0.45);
+        border-radius: 12px;
+        padding: 16px;
+      }
+
+      .og-mock-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .og-brand {
+        display: inline-block;
+        background: var(--accent);
+        color: #ffffff;
+        font-weight: 800;
+        font-size: 12px;
+        padding: 3px 9px;
+        border-radius: 6px;
+        letter-spacing: 0.04em;
+      }
+
+      .plan-pair {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      .plan-box {
+        background: var(--surface-2);
+        border: 1px solid var(--border-strong);
+        border-radius: 10px;
+        padding: 12px 14px;
+      }
+
+      .plan-box.winner {
+        border-color: rgba(74, 222, 128, 0.55);
+        background: linear-gradient(
+          180deg,
+          rgba(74, 222, 128, 0.08) 0%,
+          var(--surface-2) 60%
+        );
+      }
+
+      .plan-price {
+        font-size: 21px;
+        font-weight: 800;
+        color: #ffffff;
+        margin: 4px 0;
+      }
+
+      .plan-box.winner .plan-price {
+        color: var(--green);
+      }
+
+      .ext-mock {
+        max-width: 440px;
+        background: #0f1113;
+        border: 1px solid var(--border-strong);
+        border-radius: 12px;
+        padding: 14px;
+      }
+
+      .ext-offer-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .ext-offer-row:last-child {
+        border-bottom: none;
+      }
+
+      .ext-combo-btn {
+        display: block;
+        margin-top: 10px;
+        background: var(--accent);
+        color: #ffffff;
+        text-align: center;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .anti-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 12px;
+        margin: 12px 0;
+      }
+
+      @media (max-width: 860px) {
+        .pkg-grid,
+        .plan-pair {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        h1 {
+          font-size: 24px;
+        }
+        dl.spec-dl {
+          grid-template-columns: 1fr;
+          gap: 3px;
+        }
+        dl.spec-dl dt {
+          margin-top: 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="top-badges">
+        <span class="badge badge-accent">Đề xuất Kỹ thuật Package 8D</span>
+        <span class="badge badge-amber">Chờ JOY chọn phương án</span>
+        <span class="badge badge-blue"
+          >Issue #1892 - Chỉ nghiên cứu &amp; đề xuất</span
+        >
+        <span class="badge badge-green"
+          >0 DDL - 0 Secret Prod - 0 Permission mới</span
+        >
+      </div>
+
+      <h1>
+        Đề xuất Package 8D: Kết Nối Combo Cart Vào Rate MCP v1.1, Web Conversion
+        &amp; Extension MV3 3.1
+      </h1>
+      <p class="muted">
+        Ngày 24/11/2026 - Người soạn: <code>Brand</code> (Rate Core), theo phê
+        duyệt của JOY lúc <code>2026-11-24T02:19:37+07:00</code>. Toàn bộ tên
+        file, hàm, route, hằng số và giới hạn trong tài liệu này đã được kiểm
+        chứng trực tiếp trên nhánh <code>origin/dev</code> tại commit
+        <code>1f0492b1</code>. Theo đúng quy chuẩn Product Owner, chưa mở bất kỳ
+        issue con nào cho <code>8D.1</code>, <code>8D.2</code>,
+        <code>8D.3</code> và chưa chạm tới code runtime hay cơ sở dữ liệu
+        Production.
+      </p>
+
+      <div class="kpi-strip" aria-label="Tổng quan phạm vi Package 8D">
+        <div class="kpi-box">
+          <div class="kpi-val">5 -&gt; 7 MCP Tools</div>
+          <div class="kpi-lbl">
+            Nâng <code>mcp.ts</code> lên v1.1.0, đồng bộ <code>/llms.txt</code>,
+            <code>mcp.json</code>, <code>/developers</code>
+          </div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-val">3 -&gt; 4 mẫu OG Card</div>
+          <div class="kpi-lbl">
+            Mở rộng <code>/api/v1/rate/og</code> với <code>type=combo</code> +
+            CTA <code>/watchlist?items=</code>
+          </div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-val">0 Chrome Permission</div>
+          <div class="kpi-lbl">
+            Extension giữ nguyên <code>["storage", "sidePanel"]</code>, bật cầu
+            nối Combo &amp; VN/A
+          </div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-val">0 DDL / 0 Secret</div>
+          <div class="kpi-lbl">
+            Tách bạch hoàn toàn khỏi <code>F5</code> Resend/HMAC,
+            <code>M2</code> Prod toggle &amp; <code>#1890</code>
+          </div>
+        </div>
+      </div>
+
+      <h2>0. Tóm Tắt Điều Hành Trong 60 Giây - Vì Sao Cần Nhịp Package 8D?</h2>
+      <p>
+        Qua các đợt <strong>8A - 8C</strong> (commit <code>1c75b42a</code> đến
+        <code>1f0492b1</code>), <code>DOS/Rate</code> đã xây xong toàn bộ các
+        động cơ lõi độc lập: <code>effective-price.ts</code> (tính giá thực trả
+        VN/A, thu cũ đổi mới, trả góp 0%),
+        <code>combo-cart-optimizer.ts</code> +
+        <code>/api/v1/rate/combo-cart</code> (giải giỏ combo 2-5 món trên 22
+        sàn), <code>og-truth-card.tsx</code> (vẽ PNG sự thật giá
+        <code>1200x630</code> và <code>1080x1350</code>),
+        <code>mcp.ts</code> (MCP Server v1.0.0 với 5 tools), và Extension MV3
+        v2.0.0 (<code>Checkout Guard</code> + <code>pinnedAlerts</code> tối đa
+        50 món + M2 quarantine 22 sàn ở <code>#1889</code>).
+      </p>
+      <p>
+        Tuy nhiên, các mảnh ghép này hiện mới chạy rời rạc ở từng màn hình riêng
+        lẻ. <strong>Package 8D</strong> là nhịp nối mạch (zero-DDL, zero-secret)
+        để nhân đôi giá trị sử dụng trên cả 3 kênh:
+      </p>
+
+      <div class="pkg-grid">
+        <div class="pkg-card recommended">
+          <div>
+            <span class="badge badge-accent">Nhịp 1 - AI &amp; BFF Core</span>
+            <h3>8D.1 - Rate Shopping MCP v1.1 + AI Agent Discovery</h3>
+            <p class="muted">
+              Đưa bộ tối ưu giỏ hàng đa sàn và bộ tính Giá Thực Trả VN/A thành
+              chuẩn công cụ MCP cho AI Agents.
+            </p>
+            <ul>
+              <li>
+                Tách tầng dùng chung
+                <code>src/server/rate/combo-cart.ts</code> (0
+                <code>SUPABASE_SECRET_KEY</code>).
+              </li>
+              <li>
+                Thêm 2 tools: <code>optimize_combo_cart</code> &amp;
+                <code>calculate_effective_price</code>.
+              </li>
+              <li>
+                Nâng <code>MCP_SERVER_INFO.version</code> lên
+                <code>1.1.0</code> và đồng bộ <code>/llms.txt</code>,
+                <code>/.well-known/mcp.json</code>, <code>/developers</code>.
+              </li>
+            </ul>
+          </div>
+          <div class="pkg-meta">
+            <strong>Size:</strong> <code>M</code> - <strong>Đụng DB:</strong>
+            <code>0</code> DDL<br />
+            <strong>Phụ thuộc:</strong> Sẵn sàng chạy ngay (0 xung đột với
+            <code>#1887</code>)
+          </div>
+        </div>
+
+        <div class="pkg-card">
+          <div>
+            <span class="badge badge-blue"
+              >Nhịp 2 - Web Conversion &amp; Viral</span
+            >
+            <h3>8D.2 - Cross-Feature CTA &amp; Combo OG Truth Card</h3>
+            <p class="muted">
+              Dẫn người mua từ trang sản phẩm / so sánh thẳng vào
+              <code>/watchlist?items=</code> và xuất thẻ ảnh Combo PNG.
+            </p>
+            <ul>
+              <li>
+                CTA nhẹ (<code>prefetch={false}</code>) tại
+                <code>CompareWorkspace</code>,
+                <code>VersusInteractiveScoreboard</code>,
+                <code>CompareTrayBar</code>, <code>ProductDetailView</code>.
+              </li>
+              <li>
+                Giữ nguyên ngân sách <code>perf-budget.spec.ts</code> &amp;
+                <code>client-messages.ts</code>.
+              </li>
+              <li>
+                Mở rộng
+                <code>/api/v1/rate/og?type=combo&amp;items=...</code> (2-5
+                slugs, chống Cache DoS).
+              </li>
+            </ul>
+          </div>
+          <div class="pkg-meta">
+            <strong>Size:</strong> <code>M</code> - <strong>Đụng DB:</strong>
+            <code>0</code> DDL<br />
+            <strong>Phụ thuộc:</strong> Chờ <code>#1887</code> &amp; nên chạy
+            sau <code>8D.1</code> để tái dùng
+            <code>server/rate/combo-cart.ts</code>
+          </div>
+        </div>
+
+        <div class="pkg-card">
+          <div>
+            <span class="badge badge-green">Nhịp 1 - Song song 100%</span>
+            <h3>8D.3 - Extension MV3 3.1 Bridge (0 Quyền Mới)</h3>
+            <p class="muted">
+              Biến Side Panel thành trạm chuyển tiếp sang giỏ Combo và hiển thị
+              rõ xuất xứ VN/A trên từng tin bán.
+            </p>
+            <ul>
+              <li>
+                Tái dùng <code>detectProductOrigin</code> &amp;
+                <code>classifySellerChannel</code> từ
+                <code>@repo/shared-data/rules</code>.
+              </li>
+              <li>
+                Hiển thị trung thực tín hiệu tin cậy (không bịa
+                <code>verified_safe</code> khi thiếu audit toàn gian hàng).
+              </li>
+              <li>
+                Nút 1 chạm "Tối ưu giỏ combo (2-5 món đã ghim)" mở
+                <code>rate.vn/watchlist?items=...</code>.
+              </li>
+            </ul>
+          </div>
+          <div class="pkg-meta">
+            <strong>Size:</strong> <code>S - M</code> -
+            <strong>Đụng DB:</strong> <code>0</code> DDL<br />
+            <strong>Quyền mới:</strong> <code>0</code> (<code
+              >manifest.json</code
+            >
+            không đổi <code>permissions</code>)
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-green">
+        <strong>Điểm mạnh kiến trúc của Package 8D:</strong> Cả 3 cụm đều chỉ
+        đọc dữ liệu catalog/cache đã có trên Production, không cần PR migration
+        qua <code>DOS-Me</code>, không cần thêm secret mới trên Vercel, và có
+        thể chia tách file sạch sẽ để các sub-session chạy song song an toàn.
+      </div>
+
+      <h2>
+        1. Phân Tích Chi Tiết 3 Cụm Kỹ Thuật Package 8D (Đối Chiếu Codebase
+        Thật)
+      </h2>
+
+      <div class="toolbar" role="region" aria-label="Bộ lọc cụm đề xuất">
+        <div class="filter-group" role="group" aria-label="Lọc theo cụm 8D">
+          <button
+            type="button"
+            class="btn-chip"
+            data-stream-filter="all"
+            aria-pressed="true"
+          >
+            Tất cả (3 cụm)
+          </button>
+          <button
+            type="button"
+            class="btn-chip"
+            data-stream-filter="8D1"
+            aria-pressed="false"
+          >
+            8D.1 - MCP v1.1
+          </button>
+          <button
+            type="button"
+            class="btn-chip"
+            data-stream-filter="8D2"
+            aria-pressed="false"
+          >
+            8D.2 - Web &amp; OG Combo
+          </button>
+          <button
+            type="button"
+            class="btn-chip"
+            data-stream-filter="8D3"
+            aria-pressed="false"
+          >
+            8D.3 - Extension 3.1
+          </button>
+        </div>
+        <span class="muted" style="font-size: 13px"
+          >Lọc đồng bộ cả thẻ chi tiết và ma trận file ở Mục 3</span
+        >
+      </div>
+
+      <!-- 8D.1 -->
+      <div class="card" id="card-8d1" data-stream-card="8D1">
+        <div class="card-head">
+          <h3>8D.1 - Rate Shopping MCP v1.1 &amp; AI Agent Discovery</h3>
+          <span class="badge badge-accent">Stream: 8D.1 (Agent: Core)</span>
+          <span class="badge badge-green">0 DDL / 0 Secret</span>
+          <span class="badge badge-blue">Size: M</span>
+        </div>
+        <p class="muted">
+          Nâng cấp <code>POST /api/mcp</code> từ 5 lên 7 read-only tools bằng
+          cách nối trực tiếp hai động cơ 8C vừa lên <code>dev</code> (<code
+            >optimizeComboCart</code
+          >
+          và <code>computeEffectivePrice</code>), giúp Claude, ChatGPT, Cursor
+          hoặc DOSClaw trả lời các câu hỏi phức tạp như
+          <em
+            >"Mua trọn bộ iPhone 16 Pro Max + AirPods Pro 2 + Apple Watch ở tối
+            đa 2 shop uy tín hết bao nhiêu?"</em
+          >
+          hay
+          <em
+            >"Máy này mua VN/A thu cũ đổi mới + trả góp 6 tháng mất thực tế bao
+            nhiêu?"</em
+          >.
+        </p>
+
+        <dl class="spec-dl">
+          <dt>Hiện trạng đã kiểm chứng</dt>
+          <dd>
+            <ul>
+              <li>
+                <code>apps/web/src/server/rate/mcp.ts</code>: đang chạy
+                <code>MCP_SERVER_INFO.version = '1.0.0'</code>, protocol
+                <code>MCP_LATEST_PROTOCOL_VERSION = '2025-06-18'</code> (hỗ trợ
+                <code>2025-06-18</code>, <code>2025-03-26</code>,
+                <code>2024-11-05</code>), gồm 5 tools
+                (<code>search_verified_catalog</code>,
+                <code>get_22_store_offers_and_price_truth</code>,
+                <code>compare_devices_by_use_case</code>,
+                <code>audit_listing_url</code>, <code>get_genuine_deals</code>).
+              </li>
+              <li>
+                Giới hạn bảo mật cứng trong <code>mcp.ts</code>:
+                <code>MAX_MCP_BODY_BYTES = 16_384</code>,
+                <code>MAX_MCP_RESULT_ITEMS = 10</code>,
+                <code>MCP_RATE_LIMIT_MAX_REQUESTS = 60</code> trong
+                <code>MCP_RATE_LIMIT_WINDOW_MS = 60_000</code> (<code
+                  >mcpRateLimiter</code
+                >
+                tối đa 5.000 bucket),
+                <code>auditLimiter = inspectRateLimiter</code> (30 req/phút),
+                <code>MAX_JSON_NESTING_DEPTH = 24</code>,
+                <code>MAX_JSON_OBJECT_KEYS = 64</code>,
+                <code>MAX_JSON_ARRAY_ITEMS = 64</code>,
+                <code>MAX_RPC_ID_LENGTH = 256</code>, chặn prototype keys
+                (<code>__proto__</code>, <code>constructor</code>,
+                <code>prototype</code>), <code>DB_INTERNAL_ERROR_REGEX</code>,
+                SSRF guard <code>isSafeExternalHttpUrlWithMax</code>.
+              </li>
+              <li>
+                <code>apps/web/src/app/api/v1/rate/combo-cart/route.ts</code>:
+                đang chứa trực tiếp phần giải slug
+                (<code>resolveWatchlistSlug</code>), đọc batch offer
+                (<code>getMasterProductOffersBatch</code>), tính radar và kiểm
+                định <code>Verified Safe</code> toàn gian hàng (<code
+                  >getCachedMerchantProfileById</code
+                >
+                + <code>evaluateMerchantTrustBadge</code>) trước khi gọi
+                <code>optimizeComboCart</code>.
+              </li>
+              <li>
+                <code>apps/web/src/lib/effective-price.ts</code>: xuất sẵn các
+                pure functions <code>computeEffectivePrice</code>,
+                <code>selectEffectivePriceBaseOffers</code> và
+                <code>pickEffectivePriceCandidates</code> (tự import và gắn nhãn
+                qua <code>detectProductOrigin</code> &amp;
+                <code>classifySellerChannel</code> từ
+                <code>@repo/shared-data/rules</code>).
+              </li>
+            </ul>
+          </dd>
+
+          <dt>Kiến trúc tách dùng chung (Zero Duplication)</dt>
+          <dd>
+            <ul>
+              <li>
+                Trích logic orchestration từ
+                <code>apps/web/src/app/api/v1/rate/combo-cart/route.ts</code>
+                sang module server riêng
+                <code>apps/web/src/server/rate/combo-cart.ts</code> (bắt buộc
+                <code>import 'server-only'</code>, chỉ dùng
+                <code>getRateClient()</code> anon/cached readers, tuyệt đối
+                không dùng <code>SUPABASE_SECRET_KEY</code>, và bổ sung module
+                mới vào danh sách kiểm tra trong
+                <code
+                  >apps/web/src/server/rate/__tests__/core-rate-architecture.test.ts</code
+                >).
+              </li>
+              <li>
+                <code>combo-cart/route.ts</code> trở thành HTTP wrapper mỏng:
+                chỉ xuất <code>GET</code> và <code>OPTIONS</code> (tuyệt đối
+                không re-export helper từ <code>server/rate/combo-cart.ts</code>
+                để giữ nguyên assertion
+                <code>Object.keys(comboCartRouteModule)</code>, rate limiter
+                60/min và các chốt bảo mật trong
+                <code>combo-cart.test.ts</code>).
+              </li>
+              <li>
+                <code>mcp.ts</code> gọi thẳng service chung này thông qua
+                interface <code>McpDataReaders</code> (có thể inject mock trong
+                <code>mcp.test.ts</code> mà không cần Supabase thật).
+              </li>
+            </ul>
+          </dd>
+
+          <dt>Thiết kế Tool 6: <code>optimize_combo_cart</code></dt>
+          <dd>
+            <ul>
+              <li>
+                <strong>Input Schema (<code>z.strictObject</code>):</strong>
+                <code>items</code> (mảng <code>2..5</code> slug hợp lệ, từ chối
+                token nguy hiểm như
+                <code>__proto__</code>/<code>constructor</code>, deduplicate
+                không phân biệt hoa thường và yêu cầu còn tối thiểu
+                <code>2</code> slug phân biệt),
+                <code>officialOnly</code> (boolean, mặc định
+                <code>false</code>), <code>minTrust</code> (number
+                <code>0..100</code>, mặc định
+                <code>COMBO_CART_DEFAULT_MIN_TRUST = 80</code>),
+                <code>maxStores</code> (integer <code>1..5</code>, mặc định
+                <code>COMBO_CART_DEFAULT_MAX_STORES = 3</code>),
+                <code>shippingVndPerOrder</code> (integer
+                <code>0..500_000</code>, mặc định <code>0</code>).
+              </li>
+              <li>
+                <strong>Xử lý &amp; Invariant:</strong> giữ nguyên chốt an toàn
+                của <code>resolveWatchlistSlug</code> (không đánh tráo variant
+                đã ngừng bán nếu <code>sizeRequired</code>; trả
+                <code>retired_variant: true</code> để AI nhắc người dùng chọn
+                đúng dung lượng), lọc bỏ tin hết hàng và giá mồi
+                (<code>implausiblyLowOfferIds</code>), chạy branch-and-bound
+                giới hạn cứng
+                <code>COMBO_CART_MAX_SEARCH_NODES = 50_000</code> và
+                <code>COMBO_CART_MAX_CANDIDATES_PER_ITEM = 14</code>.
+              </li>
+              <li>
+                <strong>Output:</strong> <code>single_store_best</code> (Plan
+                A), <code>multi_store_optimal</code> (Plan B),
+                <code>savings_vs_single_store_vnd</code>,
+                <code>savings_vs_single_store_pct</code>,
+                <code>cheapest_per_item_subtotal_vnd</code>,
+                <code>uncovered_slugs</code>, <code>missing_slugs</code>,
+                <code>merchant_badges</code> (ghi rõ
+                <code
+                  >audit_scope: 'merchant_wide' | 'cart_only_unverified'</code
+                >
+                và <code>verified_safe</code>), <code>diagnostics</code>,
+                <code>canonical_citation_url</code>
+                (<code>https://rate.vn/watchlist?items=...</code>), và
+                <code>observed_at</code>.
+              </li>
+            </ul>
+          </dd>
+
+          <dt>Thiết kế Tool 7: <code>calculate_effective_price</code></dt>
+          <dd>
+            <ul>
+              <li>
+                <strong>Input Schema (<code>z.strictObject</code>):</strong>
+                <code>slug</code> (bắt buộc, kiểm tra
+                <code>isValidSlugToken</code> + hỗ trợ Item/variant qua
+                <code>resolveCompareTokenTarget</code>),
+                <code>discountMode</code> (<code>'fixed' | 'percent'</code>, mặc
+                định <code>'fixed'</code>), <code>discountAmountVnd</code> (int
+                <code>0..MAX_VALID_VND_PRICE</code>),
+                <code>discountPercent</code> (number <code>0..80</code> =
+                <code>MAX_VOUCHER_PERCENT</code>),
+                <code>discountMaxCapVnd</code> (int nullable),
+                <code>tradeInEnabled</code> (boolean, mặc định
+                <code>false</code>),
+                <code>oldDeviceResaleBenchmarkVnd</code> (int),
+                <code>tradeInConditionTier</code> (<code>'grade_1_mint'</code>
+                100% | <code>'grade_2_light_wear'</code> 85% |
+                <code>'grade_3_battery_under_85'</code> 70%),
+                <code>tradeInBonusVnd</code> (int),
+                <code>installmentTerm</code> (<code
+                  >'cash' | 3 | 6 | 9 | 12</code
+                >, mặc định <code>'cash'</code>),
+                <code>installmentFeePercent</code> (number <code>0..15</code> =
+                <code>MAX_INSTALLMENT_FEE_PERCENT</code>).
+              </li>
+              <li>
+                <strong>Xử lý &amp; Output:</strong> Đọc
+                <code>getCachedMasterProductBySlug</code> +
+                <code>getCachedMasterProductOffers</code> (lọc qua
+                <code>withPublicOfferReviewRisk</code>), chọn đồng thời 2 mốc
+                nền qua <code>selectEffectivePriceBaseOffers</code>: (1)
+                <code>best_plausible_offer</code> (kèm <code>origin</code> VN/A
+                hay xách tay và <code>seller_channel</code>) và (2)
+                <code>best_official_vna_offer</code> (nếu có). Chạy
+                <code>computeEffectivePrice</code> trên cả hai để AI chỉ rõ:
+                <em
+                  >"Bản rẻ nhất sau voucher + thu cũ + trả góp là X đ, nhưng bản
+                  Chính hãng VN/A bảo hành chuẩn là Y đ (chênh Z đ)"</em
+                >. Kèm cờ bắt buộc <code>is_reference_estimate: true</code>,
+                <code>canonical_citation_url</code>, và
+                <code>price_observed_at</code>.
+              </li>
+            </ul>
+          </dd>
+
+          <dt>Đồng bộ Discovery &amp; Kiểm thử</dt>
+          <dd>
+            <ul>
+              <li>
+                <code>apps/web/src/server/rate/mcp.ts</code>: nâng
+                <code>MCP_SERVER_INFO.version</code> từ <code>'1.0.0'</code> lên
+                <code>'1.1.0'</code>; cập nhật
+                <code>buildRateLlmsTxt()</code> (<code>/llms.txt</code>) liệt kê
+                đủ 7 MCP tools và các route REST mới
+                (<code>/api/v1/rate/combo-cart</code>,
+                <code>/api/v1/rate/og</code>).
+                <code>/.well-known/mcp.json</code> tự động phản ánh qua
+                <code>buildRateWellKnownMcpDescriptor()</code>.
+              </li>
+              <li>
+                <code>apps/web/src/app/[locale]/developers/page.tsx</code>: mở
+                rộng <code>MCP_TOOL_KEYS</code> từ 5 lên 7 tools, cập nhật ví dụ
+                cURL/JSON-RPC (và đồng bộ danh sách
+                <code>apiEndpointsSpec</code> vốn hiện chưa liệt kê
+                <code>/api/v1/rate/combo-cart</code> hay
+                <code>/api/v1/rate/og</code>); bổ sung
+                <code>developers.mcpTools.optimize_combo_cart</code> và
+                <code>developers.mcpTools.calculate_effective_price</code> trong
+                <code>apps/web/locales/{vi,en,cs}.json</code> (không dùng
+                em/en-dash).
+              </li>
+              <li>
+                Cập nhật bộ test:
+                <code>apps/web/src/server/rate/__tests__/mcp.test.ts</code>
+                (test unit 2 tools mới, error sanitization, prototype-pollution,
+                SSRF, <code>llms.txt</code>, <code>mcp.json</code>),
+                <code
+                  >apps/web/src/server/rate/__tests__/core-rate-architecture.test.ts</code
+                >
+                (đăng ký <code>combo-cart.ts</code> vào guard
+                <code>server-only</code>), và
+                <code>apps/web/src/lib/__tests__/developers-copy.test.ts</code>
+                (cưỡng chế đủ 7 key dịch ở 3 ngôn ngữ <code>vi/en/cs</code>).
+              </li>
+            </ul>
+          </dd>
+
+          <dt>Rủi ro &amp; Chốt chặn</dt>
+          <dd>
+            <span class="warn-text">Chú ý hiệu năng fan-out trong MCP:</span>
+            <code>optimize_combo_cart</code> chỉ được đọc profile gian hàng
+            (<code>getCachedMerchantProfileById</code>) cho các cửa hàng xuất
+            hiện trong Plan A / Plan B (tối đa ~5-10 shop tham chiếu, chạy song
+            song), không quét toàn bộ danh bạ shop. Giữ nguyên trần
+            <code>16_384</code> bytes body và rate limit <code>60/60s</code>.
+          </dd>
+        </dl>
+      </div>
+
+      <!-- 8D.2 -->
+      <div class="card" id="card-8d2" data-stream-card="8D2">
+        <div class="card-head">
+          <h3>8D.2 - Web Cross-Feature Conversion &amp; Combo OG Truth Card</h3>
+          <span class="badge badge-blue">Stream: 8D.2 (Agent: Web)</span>
+          <span class="badge badge-green">0 DDL / 0 Secret</span>
+          <span class="badge badge-blue">Size: M</span>
+        </div>
+        <p class="muted">
+          Biến <code>/watchlist?items=...</code> thành đích đến tự nhiên từ các
+          màn hình có tỷ lệ xem cao nhất (<code>/compare</code>,
+          <code>/compare/[versus]</code>, <code>CompareTrayBar</code>, và trang
+          chi tiết sản phẩm), đồng thời bổ sung loại ảnh PNG thứ 4 cho
+          <code>/api/v1/rate/og</code> (<code>type=combo</code>) để người dùng
+          chia sẻ bảng so sánh Plan A vs Plan B lên Zalo, Telegram, Facebook.
+        </p>
+
+        <dl class="spec-dl">
+          <dt>Hiện trạng đã kiểm chứng</dt>
+          <dd>
+            <ul>
+              <li>
+                <code>apps/web/src/lib/og-truth-card.tsx</code> (lưu ý file thật
+                là <code>.tsx</code>, không phải <code>.ts</code>) và
+                <code>apps/web/src/app/api/v1/rate/og/route.ts</code> hiện chỉ
+                hỗ trợ 3 loại: <code>product</code>, <code>versus</code>,
+                <code>deals</code>; rate limit <code>60/60s</code> qua
+                <code>ogTruthCardRateLimiter</code>;
+                <code>MAX_OG_QUERY_LENGTH = 512</code>.
+              </li>
+              <li>
+                <code>apps/web/src/lib/client-messages.ts</code> &amp;
+                <code>client-messages.test.ts</code>: đang tách chặt namespace
+                <code>watchlist.combo*</code> ra khỏi scope
+                <code>productDetail</code> (chỉ giữ
+                <code>PRICE_WATCH_BUTTON_PICKS</code>) để không làm phình HTML
+                trang chi tiết sản phẩm.
+              </li>
+              <li>
+                <code>apps/web/e2e/perf-budget.spec.ts</code>: áp trần wire
+                bytes trên điện thoại Pixel 7 cho trang sản phẩm
+                <code>/smartphones/iphone-16-pro-max-256gb</code> là
+                <code>html &lt;= 56 KB</code> (đo ngày 30/10 là 50,8 KB),
+                <code>js &lt;= 388 KB</code> (352,1 KB),
+                <code>css &lt;= 48 KB</code> (43,5 KB),
+                <code>prefetch &lt;= 8 KB</code> (1,7-5,7 KB).
+              </li>
+              <li>
+                <code>CompareWorkspace.tsx</code> đã có nút
+                <code>handleWatchAllCompared</code> (lưu toàn bộ các máy đang so
+                sánh vào Watchlist); <code>CompareTrayBar.tsx</code> đã có
+                <code>buildCompareTrayHref</code> mở
+                <code>/compare?cat=...&amp;slugs=...</code>;
+                <code>WatchlistComboOptimizer.tsx</code> đã tự hydrate khi vào
+                <code>/watchlist?items=slug1,slug2...</code>.
+              </li>
+            </ul>
+          </dd>
+
+          <dt>Phần A - Cross-Feature CTA nhẹ, không vỡ Perf Budget</dt>
+          <dd>
+            <ul>
+              <li>
+                <strong
+                  >Trên <code>CompareWorkspace.tsx</code> &amp;
+                  <code>VersusInteractiveScoreboard.tsx</code>:</strong
+                >
+                Khi đang so sánh <code>2..4</code> sản phẩm (<code
+                  >&lt;= 5</code
+                >
+                món tối đa của Combo Cart), thêm nút liên kết
+                <code
+                  >&lt;Link href="/watchlist?items=..."
+                  prefetch={false}&gt;</code
+                >
+                ("Tối ưu giỏ combo (N món)") ngay cạnh nhóm nút hành động (<code
+                  >watchAllGroupBtn</code
+                >
+                / <code>actionButtons</code>; lưu ý
+                <code>CompareWorkspace</code> render
+                <code>controlsBlock</code> trên cả <code>/compare</code> lẫn
+                <code>/compare/[versus]</code>). Nhờ nằm ở namespace
+                <code>compare</code>, hoàn toàn không đụng
+                <code>productDetail</code>.
+              </li>
+              <li>
+                <strong>Trên <code>CompareTrayBar.tsx</code>:</strong> Khi khay
+                so sánh có từ <code>2</code> máy trở lên, thêm chip link gọn
+                <code>prefetch={false}</code> dẫn tới
+                <code>/watchlist?items=...</code>. Hai ràng buộc bắt buộc: (1)
+                đặt <code>prefetch={false}</code> để Next.js không tự prefetch
+                RSC của <code>/watchlist</code> trên trang sản phẩm (bảo vệ
+                ngưỡng <code>prefetch &lt;= 8 KB</code> trong
+                <code>perf-budget.spec.ts</code>); (2) key dịch mới trong
+                <code>compare.*</code> <strong>BẮT BUỘC</strong> bắt đầu bằng
+                tiền tố <code>tray*</code> (ví dụ
+                <code>compare.trayComboCartBtn</code>) vì
+                <code>client-messages.ts</code> và
+                <code>client-messages.test.ts</code> chỉ cho phép
+                <code>compare.tray*</code> và
+                <code>compare.quickToggle*</code> xuất hiện trong scope
+                <code>productDetail</code>.
+              </li>
+              <li>
+                <strong
+                  >Trên
+                  <code>ProductDetailView</code>
+                  (<code>apps/web/src/app/[locale]/smartphones/[slug]/page.tsx</code>):</strong
+                >
+                Dùng 1 thẻ <code>&lt;Link prefetch={false}&gt;</code> render
+                thẳng từ Server Component (0 KB client JS thêm vào bundle, ~120
+                bytes HTML, dùng key thuộc namespace <code>productDetail</code>)
+                tại khối giá / cụm đối thủ cùng phân khúc
+                (<code>relatedCompetitors</code>) dẫn sang
+                <code>/watchlist?items=&lt;slug&gt;</code> (hoặc
+                <code>?items=&lt;slug&gt;,&lt;topPeerSlug&gt;</code> ở nút "Ghép
+                giỏ combo"). Tuyệt đối không đưa
+                <code>WatchlistComboOptimizer</code> hay chuỗi
+                <code>watchlist.combo*</code> vào client bundle trang sản phẩm.
+              </li>
+              <li>
+                <strong
+                  >Trên <code>WatchlistComboOptimizer.tsx</code> (sau khi
+                  <code>#1887</code> merge):</strong
+                >
+                Thêm nút <code>"Tải Ảnh Thẻ Combo (PNG 4:5)"</code> gọi
+                <code
+                  >buildOgTruthCardPath({ type: 'combo', items: selectedSlugs,
+                  officialOnly, format: 'social', download: true, locale
+                  })</code
+                >
+                khi có kết quả <code>result</code> hợp lệ.
+              </li>
+            </ul>
+          </dd>
+
+          <dt>
+            Phần B - Mở rộng <code>/api/v1/rate/og?type=combo</code> (<code
+              >og-truth-card.tsx</code
+            >
+            + <code>og/route.ts</code> + <code>seo.ts</code>)
+          </dt>
+          <dd>
+            <ul>
+              <li>
+                <strong
+                  >Phát hiện giới hạn quan trọng &amp; cách xử lý chống
+                  Cache-Busting DoS:</strong
+                >
+                Hiện tại <code>parseOgTruthCardQuery</code> chặn chuỗi query
+                <code>&gt; 512</code> ký tự. Vì
+                <code>URLSearchParams</code> trong
+                <code>buildOgTruthCardPath</code> encode dấu phẩy thành
+                <code>%2C</code>, nếu nhận <code>5</code> slug dài tối đa
+                <code>120</code> ký tự/slug, query string của
+                <code>type=combo</code> có thể đạt ~674 ký tự. Giải pháp: giữ
+                nguyên trần <code>512</code> cho
+                <code>product</code>/<code>versus</code>/<code>deals</code>,
+                nâng trần riêng cho <code>type=combo</code> lên
+                <code>768</code> ký tự (còn dư ~94 ký tự an toàn), giới hạn chặt
+                mỗi slug <code>isValidOgSlug(token, 120)</code>, kiểm tra
+                <code>2..5</code> slug duy nhất không phân biệt hoa thường, và
+                <strong
+                  >chỉ cho phép tham số <code>officialOnly=0|1</code></strong
+                >
+                (giữ mặc định
+                <code>minTrust=80, maxStores=3, shippingVnd=0</code> trên OG
+                image) để kẻ xấu không thể truyền
+                <code>shippingVnd=10001..99999</code> nhằm làm nổ bộ nhớ đệm CDN
+                <code>s-maxage=3600</code>.
+              </li>
+              <li>
+                <strong
+                  >Bố cục thẻ PNG Combo (<code>1200x630</code> OG &amp;
+                  <code>1080x1350</code> Social 4:5):</strong
+                >
+                Nền tối <code>#0f1113</code>, điểm nhấn <code>#FF2E29</code> và
+                xanh lá <code>#34d399</code>; toàn bộ text đi qua
+                <code>sanitizeOgCardText</code> +
+                <code>SAFE_OG_GLYPH_DISALLOWED_RE</code> (font Geist tích hợp
+                sẵn, 0 gọi CDN/Google Fonts). Hiển thị: tiêu đề số món combo, 2
+                cột đối chiếu <strong>Phương án A (1 cửa hàng)</strong> vs
+                <strong>Phương án B (Tối ưu đa sàn)</strong>, số tiền &amp; %
+                tiết kiệm thực tế, số chuỗi tham gia + số shop đạt chuẩn
+                <code>Verified Safe</code> (chỉ đếm khi
+                <code>trustBadge.verifiedSafe === true</code>), và chân trang
+                <code>rate.vn/watchlist?items=...</code>.
+              </li>
+            </ul>
+          </dd>
+        </dl>
+
+        <div class="ui-preview" aria-label="Minh họa Combo OG Truth Card">
+          <div class="toolbar" style="margin-top: 0">
+            <div class="ui-preview-title" style="margin-bottom: 0">
+              Minh họa Thẻ PNG <code>/api/v1/rate/og?type=combo</code> (Dữ liệu
+              mẫu tương tác)
+            </div>
+            <div
+              class="filter-group"
+              role="group"
+              aria-label="Chuyển chế độ thẻ Combo mẫu"
+            >
+              <button
+                type="button"
+                class="btn-chip og-demo-btn"
+                data-og-mode="all"
+                aria-pressed="true"
+              >
+                Tất cả nơi bán (minTrust 80)
+              </button>
+              <button
+                type="button"
+                class="btn-chip og-demo-btn"
+                data-og-mode="official"
+                aria-pressed="false"
+              >
+                Chỉ Official / Chính hãng
+              </button>
+            </div>
+          </div>
+
+          <div class="og-mock">
+            <div class="og-mock-head">
+              <div>
+                <span class="og-brand">RATE.VN</span>
+                <span
+                  class="muted"
+                  style="font-size: 12px; font-weight: 700; margin-left: 8px"
+                  >TỐI ƯU GIỎ COMBO 3 MÓN (22 CHUỖI)</span
+                >
+              </div>
+              <span id="og-demo-badge" class="badge badge-green"
+                >Tiết kiệm -1.450.000 đ (-3,7%)</span
+              >
+            </div>
+            <div
+              id="og-demo-items"
+              style="font-size: 13.5px; color: #cbd5e1; margin-bottom: 12px"
+            >
+              iPhone 16 Pro Max 256GB + AirPods Pro 2 USB-C + Apple Watch Series
+              10 42mm
+            </div>
+            <div class="plan-pair">
+              <div class="plan-box">
+                <div class="muted" style="font-size: 12px; font-weight: 700">
+                  PHƯƠNG ÁN A - 1 ĐIỂM ĐẾN
+                </div>
+                <div id="og-demo-plan-a-price" class="plan-price">
+                  39.340.000 đ
+                </div>
+                <div
+                  id="og-demo-plan-a-meta"
+                  class="muted"
+                  style="font-size: 12.5px"
+                >
+                  1 chuỗi gom đủ 3 món - Verified Safe
+                </div>
+              </div>
+              <div class="plan-box winner">
+                <div
+                  style="font-size: 12px; font-weight: 700; color: var(--green)"
+                >
+                  PHƯƠNG ÁN B - TỐI ƯU ĐA SÀN
+                </div>
+                <div id="og-demo-plan-b-price" class="plan-price">
+                  37.890.000 đ
+                </div>
+                <div
+                  id="og-demo-plan-b-meta"
+                  class="muted"
+                  style="font-size: 12.5px"
+                >
+                  2 chuỗi uy tín (Trust TB 93/100) - 2/2 Verified Safe
+                </div>
+              </div>
+            </div>
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                margin-top: 12px;
+                padding-top: 8px;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+                font-size: 12px;
+              "
+              class="muted"
+            >
+              <span
+                >rate.vn/watchlist?items=apple-iphone-16-pro-max-256gb,...</span
+              >
+              <span>Dữ liệu độc lập - Đã lọc giá mồi &amp; hết hàng</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 8D.3 -->
+      <div class="card" id="card-8d3" data-stream-card="8D3">
+        <div class="card-head">
+          <h3>8D.3 - Extension MV3 3.1 Bridge (Zero New Chrome Permissions)</h3>
+          <span class="badge badge-green"
+            >Stream: 8D.3 (Agent: Extension / Web)</span
+          >
+          <span class="badge badge-green">0 Permission mới</span>
+          <span class="badge badge-blue">Size: S - M</span>
+        </div>
+        <p class="muted">
+          Nối trực tiếp <code>pinnedAlerts</code> trong Side Panel của Extension
+          sang bộ tối ưu giỏ Combo trên Web, đồng thời đưa bộ phân loại Chính
+          hãng <code>VN/A</code> &amp; kênh bán hàng chuẩn Open-Core vào danh
+          sách giá đối thủ ngay trong trình duyệt mà không thêm bất kỳ quyền
+          nhạy cảm nào vào <code>manifest.json</code>.
+        </p>
+
+        <dl class="spec-dl">
+          <dt>Đã có từ 8B &amp; #1889</dt>
+          <dd>
+            <ul>
+              <li>
+                <code>apps/extension/manifest.json</code> (v2.0.0): chỉ xin đúng
+                2 permissions <code>["storage", "sidePanel"]</code> và
+                <code>host_permissions</code> cho 22 sàn TMĐT/chuỗi bán lẻ +
+                <code>https://rate.vn/*</code>,
+                <code>https://www.rate.vn/*</code>.
+              </li>
+              <li>
+                <code>apps/extension/src/extractors/checkout-detector.ts</code>:
+                Checkout Guard kiểm tra bẫy giá tối đa
+                <code>MAX_CART_LINE_ITEMS = 5</code> món tại giỏ hàng trên đủ 22
+                sàn, cách ly tuyệt đối ô nhập liệu / PII / thẻ thanh toán.
+              </li>
+              <li>
+                <code>apps/extension/src/sidepanel/panel-view.ts</code> &amp;
+                <code>sidepanel.ts</code>: đã có nút ghim báo giá 1 chạm (<code
+                  >pinnedAlerts</code
+                >
+                tối đa <code>MAX_PINNED_ALERTS = 50</code> trong
+                <code>chrome.storage.local</code>), hiển thị giá mục tiêu vs giá
+                live và link <code>buildWatchlistEmailAlertUrl</code>.
+              </li>
+              <li>
+                <code
+                  >packages/shared-data/src/rules/extension-observation.ts</code
+                >: vừa đồng bộ đủ 22 sàn cho hàng đợi M2 (<code>#1889</code>, đã
+                lên <code>dev</code>).
+              </li>
+            </ul>
+          </dd>
+
+          <dt>1. Hiển thị VN/A Origin &amp; Seller Channel trong Side Panel</dt>
+          <dd>
+            <ul>
+              <li>
+                <code>apps/extension/package.json</code> đã khai báo dependency
+                <code>@repo/shared-data</code>, và
+                <code>packages/shared-data/src/rules/offer-origin.ts</code> viết
+                thuần hàm JS/TS (không kéo <code>zod</code> hay Supabase vào
+                bundle extension; <code>service-worker.ts</code> vốn đã import
+                từ <code>@repo/shared-data/rules</code> qua
+                <code>esbuild</code>).
+              </li>
+              <li>
+                Trong
+                <code>renderOfferRowHtml</code>
+                (<code>apps/extension/src/sidepanel/panel-view.ts</code>), gọi
+                trực tiếp <code>detectProductOrigin(off.title)</code> và
+                <code
+                  >classifySellerChannel({ platform: off.platform, isOfficial:
+                  off.merchant.is_official, merchantName: off.merchant.name,
+                  title: off.title })</code
+                >
+                từ dữ liệu thật sẵn có trong <code>ExtensionOfferItem</code> để
+                gắn pill rõ ràng: <code>VN/A</code> / <code>Xách tay</code> và
+                <code>Ủy quyền VAT</code> / <code>Official Mall</code> (chỉ gắn
+                khi có tín hiệu khớp, nếu <code>unknown</code> thì không bịa
+                nhãn; lưu ý <code>renderOfferRowHtml</code> hiện đã render sẵn
+                <code>officialBadgeHtml()</code> nên cần khử trùng lặp để không
+                in lặp kiểu "Chính hãng Official Mall"). Mọi chuỗi hiển thị mới
+                bắt buộc đặt trong
+                <code
+                  >apps/extension/src/_locales/{vi,en,cs}/messages.json</code
+                >
+                qua helper <code>t(...)</code>, không viết ký tự tiếng Việt trực
+                tiếp trong <code>.ts</code> theo ràng buộc của
+                <code>test-extension-pipeline.ts</code>.
+              </li>
+            </ul>
+          </dd>
+
+          <dt>2. Chốt trung thực cho huy hiệu Verified Safe Merchant</dt>
+          <dd>
+            <ul>
+              <li>
+                <strong>Khoảng trống đã kiểm chứng:</strong>
+                <code>ExtensionOfferItem</code>
+                (<code>apps/extension/src/types.ts</code>) và endpoint
+                <code>GET /api/v1/rate/extension/lookup</code>
+                (<code>apps/web/src/server/rate/extension.ts</code>) hiện chỉ
+                gửi
+                <code
+                  >merchant: { id, name, is_official, risk_score,
+                  dosafe_risk_score, review_risk_score }</code
+                >, <strong>chưa có</strong> trường
+                <code>activeFakeDiscountCount</code> toàn gian hàng của
+                <code>evaluateMerchantTrustBadge</code>.
+              </li>
+              <li>
+                <strong>Nguyên tắc không bịa dữ liệu:</strong> Tuyệt đối
+                <strong>không</strong> gắn nhãn <code>Verified Safe</code> chỉ
+                dựa vào <code>risk_score &lt; 20</code> hoặc
+                <code>is_official</code>! Do đó có 2 lựa chọn sạch: (a)
+                <strong
+                  >Giữ 8D.3 thuần trong <code>apps/extension/</code> (khuyến
+                  nghị để song song 0 xung đột):</strong
+                >
+                hiển thị trung thực pill <code>"Tin cậy cao"</code> (khi
+                <code>merchantTrustColor(off.merchant) === '#34d399'</code> tức
+                <code>risk_score &lt; 20</code>) kèm điểm tin cậy thật, và chỉ
+                render huy hiệu <code>"Verified Safe"</code> nếu payload từ
+                server có trường cờ xác thực rõ ràng; hoặc (b) Bổ sung tính
+                <code>verifiedSafe?: boolean</code> (dùng
+                <code>getCachedMerchantProfileById</code> +
+                <code>evaluateMerchantTrustBadge</code>) trong
+                <code>apps/web/src/server/rate/extension.ts</code> ở một bước
+                nối tiếp nhỏ sau <code>8D.1</code>.
+              </li>
+            </ul>
+          </dd>
+
+          <dt>3. Nút 1 chạm "Tối ưu giỏ combo" từ <code>pinnedAlerts</code></dt>
+          <dd>
+            <ul>
+              <li>
+                Trong <code>apps/extension/src/sidepanel/panel-view.ts</code>,
+                thêm pure helper
+                <code
+                  >buildWatchlistComboCartUrl(apiBaseUrl, alerts, locale)</code
+                >: lọc qua <code>isValidPinnedProductSlug</code>, deduplicate
+                không phân biệt hoa thường, lấy tối đa <code>5</code> sản phẩm
+                (<code>COMBO_CART_MAX_ITEMS</code>) mới ghim nhất khi
+                <code>safeAlerts.length &gt;= 2</code>, dựng URL
+                <code>/{locale}/watchlist?items=slug1,slug2,...</code> qua
+                <code>resolveSafeApiRelativeUrl</code> (chống open redirect
+                &amp; lone surrogates).
+              </li>
+              <li>
+                Render nút
+                <code>&lt;a target="_blank" rel="noopener noreferrer"&gt;</code>
+                ngay cuối card <code>renderPinnedAlertsCardHtml</code> (ví dụ:
+                <em>"Tối ưu giỏ combo (3 món đã ghim)"</em>, hoặc ghi rõ
+                <em>"Tối ưu 5 món mới ghim nhất"</em> nếu user ghim &gt; 5 món).
+                Hỗ trợ đầy đủ 3 bộ từ điển
+                <code>apps/extension/src/_locales/{vi,en,cs}/messages.json</code
+                >.
+              </li>
+            </ul>
+          </dd>
+
+          <dt>4. Kiểm chứng <code>manifest.json</code> = 0 quyền mới</dt>
+          <dd>
+            <ul>
+              <li>
+                Không thêm <code>tabs</code>, không thêm <code>activeTab</code>,
+                không thêm <code>scripting</code> hay bất kỳ
+                <code>host_permissions</code> nào (<code
+                  >https://rate.vn/*</code
+                >
+                và 22 sàn đã có sẵn trong <code>manifest.json</code>). Người
+                dùng không bị Chrome vô hiệu hóa extension khi cập nhật và
+                Chrome Web Store không bị kích hoạt vòng duyệt quyền mở rộng.
+              </li>
+            </ul>
+          </dd>
+        </dl>
+
+        <div class="ui-preview" aria-label="Minh họa Side Panel Extension 3.1">
+          <div class="ui-preview-title">
+            Minh họa Side Panel Extension 3.1 (Danh sách nơi bán + Nút Combo từ
+            Pinned Alerts)
+          </div>
+          <div class="ext-mock">
+            <div
+              style="
+                font-size: 12px;
+                font-weight: 700;
+                color: var(--muted);
+                text-transform: uppercase;
+                margin-bottom: 6px;
+              "
+            >
+              So Sánh Giá Các Gian Hàng (3)
+            </div>
+            <div class="ext-offer-row">
+              <div>
+                <div style="font-weight: 700; font-size: 13px; color: #fff">
+                  CellphoneS
+                  <span
+                    class="badge badge-green"
+                    style="font-size: 11px; padding: 1px 6px"
+                    >Ủy quyền VAT</span
+                  >
+                  <span
+                    class="badge badge-blue"
+                    style="font-size: 11px; padding: 1px 6px"
+                    >VN/A</span
+                  >
+                  <span
+                    class="badge badge-green"
+                    style="font-size: 11px; padding: 1px 6px"
+                    >Rẻ nhất</span
+                  >
+                </div>
+                <div class="muted" style="font-size: 12px">
+                  CELLPHONES - ★ 4.9 - Tin cậy cao (Rủi ro: 4/100)
+                </div>
+              </div>
+              <div
+                style="
+                  font-weight: 800;
+                  color: var(--green);
+                  font-size: 13.5px;
+                  white-space: nowrap;
+                "
+              >
+                28.990.000 đ
+              </div>
+            </div>
+            <div class="ext-offer-row">
+              <div>
+                <div style="font-weight: 700; font-size: 13px; color: #fff">
+                  Shop Tech Import HN
+                  <span
+                    class="badge badge-amber"
+                    style="font-size: 11px; padding: 1px 6px"
+                    >Xách tay</span
+                  >
+                </div>
+                <div class="muted" style="font-size: 12px">
+                  SHOPEE - ★ 4.7 - Rủi ro tổng hợp: 28/100
+                </div>
+              </div>
+              <div
+                style="
+                  font-weight: 800;
+                  color: #cbd5e1;
+                  font-size: 13.5px;
+                  white-space: nowrap;
+                "
+              >
+                29.150.000 đ
+              </div>
+            </div>
+
+            <div
+              style="
+                margin-top: 12px;
+                padding-top: 10px;
+                border-top: 1px solid var(--border);
+              "
+            >
+              <div
+                style="
+                  font-size: 12px;
+                  font-weight: 700;
+                  color: var(--muted);
+                  text-transform: uppercase;
+                  margin-bottom: 6px;
+                "
+              >
+                Cảnh Báo Giá Đã Ghim (3)
+              </div>
+              <div style="font-size: 12.5px; color: #e2e8f0">
+                1. Apple iPhone 16 Pro Max 256GB
+              </div>
+              <div style="font-size: 12.5px; color: #e2e8f0">
+                2. Apple AirPods Pro 2 USB-C
+              </div>
+              <div style="font-size: 12.5px; color: #e2e8f0">
+                3. Apple Watch Series 10 42mm
+              </div>
+              <a href="#card-8d3" class="ext-combo-btn" onclick="return false;"
+                >Tối ưu giỏ combo (3 món đã ghim) -&gt; rate.vn</a
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h2>
+        2. Ranh Giới Tách Bạch Với Các Đầu Việc Bị Chặn / Cần Secret Prod
+        (Non-Goals)
+      </h2>
+      <p>
+        Package 8D được thiết kế riêng để không bị kẹt bởi bất kỳ thay đổi
+        Production nhạy cảm hay migration liên-repo nào. Các hạng mục dưới đây
+        <strong>tuyệt đối nằm ngoài Package 8D</strong> và giữ nguyên trạng thái
+        chờ phê duyệt riêng của JOY:
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Hạng mục ngoài phạm vi 8D</th>
+              <th>Trạng thái đã kiểm chứng trong code</th>
+              <th>Lý do không gộp vào Package 8D</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>F5 Prod Activation</strong><br />(Email gửi thật &amp;
+                Hủy đăng ký 1 chạm RFC 8058)
+              </td>
+              <td>
+                <code
+                  >apps/web/src/app/api/v1/rate/watchlist/unsubscribe/route.ts</code
+                >
+                đang trả <code>503 UNSUBSCRIBE_BACKEND_UNCONFIGURED</code> khi
+                thiếu secrets, còn CLI job
+                <code
+                  >apps/importer/src/shopee/jobs/price-alerts-digest.ts</code
+                >
+                mặc định chạy <code>dry-run</code> và chặn
+                <code>apply</code> bằng validation error nếu thiếu biến cấu
+                hình.
+              </td>
+              <td>
+                Đòi hỏi cấu hình <code>RESEND_API_KEY</code>,
+                <code>RESEND_AUDIENCE_ID</code> (hoặc
+                <code>RATE_UNSUBSCRIBE_WEBHOOK_URL</code>), và
+                <code>RATE_ALERT_UNSUBSCRIBE_SECRET</code> trên Production
+                (Vercel + GitHub Actions).
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>M2 Prod Toggle (<code>#1606</code>)</strong><br />(Mở
+                cổng thu nhận quan sát từ Extension)
+              </td>
+              <td>
+                <code>apps/web/src/server/rate/extension-observations.ts</code>
+                khóa an toàn (<code>404 NOT_ENABLED</code>) khi
+                <code>RATE_EXTENSION_OBSERVATIONS !== '1'</code>, đồng thời yêu
+                cầu <code>RATE_EXTENSION_INGEST_KEY</code> và
+                <code>RATE_NETWORK_HASH_SALT</code>.
+              </td>
+              <td>
+                Cần kiểm tra read-only bảng quarantine bởi Rate Services trước,
+                rồi mới xin phép JOY bật biến môi trường Production và phát hành
+                bản Extension lên Chrome Web Store.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong><code>DOS/Rate#1890</code></strong
+                ><br />(Mở rộng <code>external_item_id</code>
+                <code>64 -&gt; 128</code> ký tự)
+              </td>
+              <td>
+                <code>extension_observations_external_item_id_check</code> và
+                <code>rate.submit_extension_observation</code> đang giới hạn
+                <code>{1,64}</code>, trong khi slug <code>anphatpc</code> /
+                chuỗi bán lẻ có thể dài <code>120-128</code> ký tự.
+              </td>
+              <td>
+                Bắt buộc phải có PR migration bên <code>DOS/DOS.Me</code> và
+                thống nhất khóa đối chiếu với consumer M3/M4 của
+                <code>DOS/Rate-Services</code> (<code>cross-repo write</code>).
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong><code>DOS/Rate#1887</code> (Đang chạy)</strong><br />(UX
+                polish P3 cho F8 Combo Cart &amp; Badge)
+              </td>
+              <td>
+                Đang được sub-session <code>Agent: Web</code> xử lý trên nhánh
+                <code>fix/1887-f8-ux-polish</code> (chỉ sửa
+                <code>WatchlistComboOptimizer.tsx</code>,
+                <code>MerchantDirectoryExplorer.tsx</code>, unit tests).
+              </td>
+              <td>
+                Hoàn tất độc lập trước <code>8D.2</code> để tránh xung đột hai
+                nhánh cùng sửa <code>WatchlistComboOptimizer.tsx</code>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>3. Ma Trận Sở Hữu File Song Song (Chứng Minh Zero Overlap)</h2>
+      <p class="muted">
+        Bảng dưới đây phân định chính xác từng file của <code>8D.1</code>,
+        <code>8D.2</code> và <code>8D.3</code>. Hai điểm cần phối hợp nhịp nhàng
+        duy nhất được đánh dấu rõ ở cuối bảng để PO điều phối 0 xung đột merge.
+      </p>
+
+      <div class="table-wrap">
+        <table id="ownership-table">
+          <thead>
+            <tr>
+              <th>Cụm</th>
+              <th>Agent gợi ý</th>
+              <th>Danh sách file sở hữu độc quyền</th>
+              <th>Kiểm thử &amp; Lệnh xác minh</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-stream-row="8D1">
+              <td><span class="badge badge-accent">8D.1</span></td>
+              <td><code>Core</code></td>
+              <td>
+                <ul>
+                  <li>
+                    <code>apps/web/src/server/rate/combo-cart.ts</code> (tạo
+                    mới, tách từ route)
+                  </li>
+                  <li>
+                    <code
+                      >apps/web/src/app/api/v1/rate/combo-cart/route.ts</code
+                    >
+                    (bọc mỏng)
+                  </li>
+                  <li>
+                    <code>apps/web/src/server/rate/mcp.ts</code> (v1.1.0, 2
+                    tools mới, <code>buildRateLlmsTxt</code>)
+                  </li>
+                  <li>
+                    <code>apps/web/src/app/[locale]/developers/page.tsx</code>
+                    (<code>MCP_TOOL_KEYS</code>)
+                  </li>
+                </ul>
+              </td>
+              <td>
+                <code>mcp.test.ts</code>, <code>developers-copy.test.ts</code>,
+                <code>combo-cart.test.ts</code>,
+                <code>core-rate-architecture.test.ts</code>,
+                <code>pnpm --filter @repo/web typecheck</code>
+              </td>
+            </tr>
+            <tr data-stream-row="8D2">
+              <td><span class="badge badge-blue">8D.2</span></td>
+              <td><code>Web</code></td>
+              <td>
+                <ul>
+                  <li>
+                    <code>apps/web/src/lib/seo.ts</code> (thêm target
+                    <code>combo</code>)
+                  </li>
+                  <li>
+                    <code>apps/web/src/lib/og-truth-card.tsx</code> (query cap
+                    768 + renderer <code>combo</code>)
+                  </li>
+                  <li>
+                    <code>apps/web/src/app/api/v1/rate/og/route.ts</code>
+                    (resolver <code>type=combo</code>)
+                  </li>
+                  <li>
+                    <code
+                      >apps/web/src/components/compare/CompareWorkspace.tsx</code
+                    >
+                  </li>
+                  <li>
+                    <code
+                      >apps/web/src/components/compare/VersusInteractiveScoreboard.tsx</code
+                    >
+                  </li>
+                  <li>
+                    <code
+                      >apps/web/src/components/compare/CompareTrayBar.tsx</code
+                    >
+                  </li>
+                  <li>
+                    <code
+                      >apps/web/src/app/[locale]/smartphones/[slug]/page.tsx</code
+                    >
+                    (Server Link nhẹ)
+                  </li>
+                  <li>
+                    <code
+                      >apps/web/src/components/watchlist/WatchlistComboOptimizer.tsx</code
+                    >
+                    (sau <code>#1887</code>)
+                  </li>
+                </ul>
+              </td>
+              <td>
+                <code>seo.test.ts</code>, <code>client-messages.test.ts</code>,
+                <code>watchlist-combo-ui.test.ts</code>,
+                <code>e2e/perf-budget.spec.ts</code>
+              </td>
+            </tr>
+            <tr data-stream-row="8D3">
+              <td><span class="badge badge-green">8D.3</span></td>
+              <td><code>Guard</code> hoặc <code>Web</code></td>
+              <td>
+                <ul>
+                  <li>
+                    <code>apps/extension/src/sidepanel/panel-view.ts</code>
+                    (VN/A badge + Combo URL builder)
+                  </li>
+                  <li>
+                    <code>apps/extension/src/sidepanel/sidepanel.ts</code> (nối
+                    locale &amp; events nếu cần)
+                  </li>
+                  <li>
+                    <code>apps/extension/src/_locales/vi/messages.json</code>
+                  </li>
+                  <li>
+                    <code>apps/extension/src/_locales/en/messages.json</code>
+                  </li>
+                  <li>
+                    <code>apps/extension/src/_locales/cs/messages.json</code>
+                  </li>
+                  <li>
+                    <code>apps/extension/src/test-extension-pipeline.ts</code>
+                  </li>
+                </ul>
+              </td>
+              <td>
+                <code>pnpm --filter @repo/extension typecheck</code>,
+                <code>lint</code>, <code>test</code>, <code>build</code> (kiểm
+                tra <code>manifest.json</code> 0 diff permission)
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-amber">
+        <strong
+          >2 điểm phối hợp bắt buộc để giữ 0 xung đột giữa <code>8D.1</code> và
+          <code>8D.2</code>:</strong
+        >
+        <ul>
+          <li>
+            <strong
+              >Điểm 1 - Từ điển
+              <code>apps/web/locales/{vi,en,cs}.json</code> &amp;
+              <code>server/rate/combo-cart.ts</code>:</strong
+            >
+            Cả <code>8D.1</code> (thêm 2 khóa
+            <code>developers.mcpTools.*</code>) và <code>8D.2</code> (thêm nhãn
+            CTA ở <code>compare.tray*</code> cho <code>CompareTrayBar</code>,
+            <code>compare.*</code>, <code>productDetail.*</code>,
+            <code>watchlist.*</code>) đều chạm file JSON dịch thuật. Do đó, chạy
+            <strong
+              >Nhịp 1: <code>8D.1</code> + <code>8D.3</code> song song
+              100%</strong
+            >
+            (0 chung file nào!); ngay khi <code>8D.1</code> và
+            <code>#1887</code> vào <code>dev</code>, chạy
+            <strong>Nhịp 2: <code>8D.2</code></strong> tái sử dụng thẳng
+            <code>server/rate/combo-cart.ts</code> cho
+            <code>og/route.ts</code> và không bao giờ đụng
+            <code>locales/*.json</code> cùng lúc với <code>8D.1</code>.
+          </li>
+          <li>
+            <strong>Điểm 2 - <code>WatchlistComboOptimizer.tsx</code>:</strong>
+            Phải chờ nhánh <code>fix/1887-f8-ux-polish</code> merge xong mới bắt
+            đầu sửa trong <code>8D.2</code>.
+          </li>
+        </ul>
+      </div>
+
+      <h2>4. Không Làm Gì Trong Package 8D (Giữ Kỷ Luật Kiến Trúc)</h2>
+      <div class="anti-grid">
+        <div class="card" style="margin: 0">
+          <h3>1. Không thêm tool ghi/mutating vào MCP</h3>
+          <p class="muted">
+            <strong>Lý do:</strong> Giữ 100%
+            <code>readOnlyHint: true</code> trên <code>/api/mcp</code> để không
+            cần OAuth/API key, không lộ bề mặt ghi dữ liệu và giữ nguyên trần
+            bảo mật <code>16 KB</code> / <code>60 req/min</code>.
+          </p>
+        </div>
+        <div class="card" style="margin: 0">
+          <h3>2. Không mở khóa shippingVnd tùy ý trên OG URL</h3>
+          <p class="muted">
+            <strong>Lý do:</strong> Cho phép người dùng truyền số nguyên tự do
+            vào query của route cache công khai <code>s-maxage=3600</code> sẽ
+            tạo rủi ro Cache-Busting DoS khi render PNG qua
+            <code>next/og</code>. Chỉ mở <code>items</code> (2-5 slugs) +
+            <code>officialOnly=0|1</code>.
+          </p>
+        </div>
+        <div class="card" style="margin: 0">
+          <h3>3. Không tự suy diễn cờ Verified Safe ở Extension</h3>
+          <p class="muted">
+            <strong>Lý do:</strong> Thiếu
+            <code>activeFakeDiscountCount === 0</code> toàn gian hàng thì không
+            đủ điều kiện <code>verified_safe</code>. Extension chỉ hiển thị
+            những gì có thật trong payload (<code>VN/A</code>, kênh
+            <code>Ủy quyền VAT</code>, điểm tin cậy <code>risk_score</code>).
+          </p>
+        </div>
+      </div>
+
+      <h2>5. Bảng Lựa Chọn Quyết Định Cho JOY</h2>
+      <p>
+        Sau khi xem tài liệu này, JOY chỉ cần chọn một phương án trong cuộc trò
+        chuyện với Product Owner (Rate Core) để PO mở issue chuẩn Tiếng Anh trên
+        Project #9 và phân công sub-session:
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Phương án</th>
+              <th>Phạm vi triển khai</th>
+              <th>Lộ trình &amp; Phụ thuộc</th>
+              <th>Khuyến nghị</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>Phương án 1 (Khuyến nghị)</strong><br />Full Package
+                <code>8D</code> (<code>8D.1 + 8D.2 + 8D.3</code>)
+              </td>
+              <td>
+                Triển khai đủ cả 3 cụm: MCP v1.1 (7 tools) + Web Conversion
+                &amp; Combo OG PNG + Extension 3.1 (0 quyền mới).
+              </td>
+              <td>
+                Nhịp 1: <code>8D.1</code> + <code>8D.3</code> chạy song song
+                ngay; Nhịp 2: <code>8D.2</code> chạy ngay sau
+                <code>#1887</code> và <code>8D.1</code>. <code>0</code> DDL,
+                <code>0</code> Secret Prod.
+              </td>
+              <td>
+                <span class="rec">Khuyến nghị số 1:</span> Tận dụng tối đa thành
+                quả 8A-8C trên đủ 3 kênh AI, Web và Chrome Extension mà 0 xung
+                đột file.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Phương án 2</strong><br />Chỉ chạy
+                <code>8D.1 + 8D.2</code> (Web &amp; AI trước)
+              </td>
+              <td>
+                Mở rộng MCP v1.1 + Web cross-feature CTA + Combo OG Truth Card;
+                tạm giữ Extension ở v2.0.0.
+              </td>
+              <td>
+                <code>8D.1</code> xong -&gt; <code>8D.2</code>. Giữ ổn định gói
+                Extension đang chờ review/publish Chrome Web Store.
+              </td>
+              <td>
+                Hợp lý nếu JOY muốn chốt đóng gói bản Extension 2.0.0 lên Chrome
+                Web Store trước rồi mới lên bản 3.1.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Phương án 3</strong><br />Ưu tiên mở khóa hạ tầng Prod
+                (<code>F5</code> / <code>M2</code> / <code>#1890</code>)
+              </td>
+              <td>
+                Tạm hoãn <code>8D</code> để nạp secrets Prod cho
+                <code>F5</code> (Resend/HMAC), kiểm tra M2 bật
+                <code>RATE_EXTENSION_OBSERVATIONS=1</code>, và duyệt migration
+                <code>#1890</code> trên <code>DOS-Me</code>.
+              </td>
+              <td>
+                Đòi hỏi JOY duyệt bước Production, cấu hình secrets và PR
+                liên-repo <code>DOS-Me</code>.
+              </td>
+              <td>
+                Phù hợp nếu JOY muốn đưa email cảnh báo giá và thu thập crowd M2
+                chạy thật trên Production trước khi thêm tính năng cầu nối mới.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Phương án 4</strong><br />Tạm hoãn Package
+                <code>8D</code>
+              </td>
+              <td>
+                Chốt xong <code>#1887</code> rồi chạy đợt promote
+                <code>dev -&gt; main</code> đưa toàn bộ <code>8A - 8C</code> lên
+                <code>rate.vn</code> trước.
+              </td>
+              <td>Không tạo thêm backlog mới trong đợt này.</td>
+              <td>
+                An toàn nếu JOY muốn kiểm chứng tải thực tế của
+                <code>8A - 8C</code> trên <code>rate.vn</code> trước khi nối
+                tiếp.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="muted" style="margin-top: 28px; font-size: 13px">
+        Tài liệu tự chứa 100% (không phụ thuộc CDN hay tài nguyên ngoài). Kiểm
+        chứng mã nguồn tại nhánh <code>docs/1892-package-8d-proposal</code> (dựa
+        trên <code>origin/dev</code> commit <code>1f0492b1</code>).
+      </p>
+    </div>
+
+    <script>
+      (function () {
+        // 1. Workstream filter (8D.1 / 8D.2 / 8D.3) across detail cards & ownership table
+        var filterBtns = document.querySelectorAll('[data-stream-filter]');
+        var cards = document.querySelectorAll('[data-stream-card]');
+        var rows = document.querySelectorAll('[data-stream-row]');
+
+        function applyStreamFilter(stream) {
+          for (var i = 0; i < filterBtns.length; i++) {
+            var btn = filterBtns[i];
+            var active = btn.getAttribute('data-stream-filter') === stream;
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+          }
+          for (var c = 0; c < cards.length; c++) {
+            var cardStream = cards[c].getAttribute('data-stream-card');
+            if (stream === 'all' || cardStream === stream) {
+              cards[c].classList.remove('hidden-by-filter');
+            } else {
+              cards[c].classList.add('hidden-by-filter');
+            }
+          }
+          for (var r = 0; r < rows.length; r++) {
+            var rowStream = rows[r].getAttribute('data-stream-row');
+            rows[r].style.display =
+              stream === 'all' || rowStream === stream ? '' : 'none';
+          }
+        }
+
+        for (var f = 0; f < filterBtns.length; f++) {
+          filterBtns[f].addEventListener('click', function () {
+            applyStreamFilter(this.getAttribute('data-stream-filter') || 'all');
+          });
+        }
+
+        // 2. Interactive Combo OG Truth Card mode preview inside 8D.2 (textContent only, zero raw-HTML assignment)
+        var ogModes = {
+          all: {
+            badge: 'Tiết kiệm -1.450.000 đ (-3,7%)',
+            planAPrice: '39.340.000 đ',
+            planAMeta: '1 chuỗi gom đủ 3 món - Verified Safe',
+            planBPrice: '37.890.000 đ',
+            planBMeta: '2 chuỗi uy tín (Trust TB 93/100) - 2/2 Verified Safe',
+          },
+          official: {
+            badge: 'Tiết kiệm -820.000 đ (-2,0%)',
+            planAPrice: '40.190.000 đ',
+            planAMeta: '1 chuỗi Official / Ủy quyền - Verified Safe',
+            planBPrice: '39.370.000 đ',
+            planBMeta: '2 chuỗi Official (Trust TB 96/100) - 2/2 Verified Safe',
+          },
+        };
+
+        var ogBtns = document.querySelectorAll('.og-demo-btn');
+        var ogBadge = document.getElementById('og-demo-badge');
+        var ogPlanAPrice = document.getElementById('og-demo-plan-a-price');
+        var ogPlanAMeta = document.getElementById('og-demo-plan-a-meta');
+        var ogPlanBPrice = document.getElementById('og-demo-plan-b-price');
+        var ogPlanBMeta = document.getElementById('og-demo-plan-b-meta');
+
+        for (var g = 0; g < ogBtns.length; g++) {
+          ogBtns[g].addEventListener('click', function () {
+            var mode = this.getAttribute('data-og-mode') || 'all';
+            var data = ogModes[mode] || ogModes.all;
+            for (var k = 0; k < ogBtns.length; k++) {
+              ogBtns[k].setAttribute(
+                'aria-pressed',
+                ogBtns[k] === this ? 'true' : 'false'
+              );
+            }
+            if (ogBadge) ogBadge.textContent = data.badge;
+            if (ogPlanAPrice) ogPlanAPrice.textContent = data.planAPrice;
+            if (ogPlanAMeta) ogPlanAMeta.textContent = data.planAMeta;
+            if (ogPlanBPrice) ogPlanBPrice.textContent = data.planBPrice;
+            if (ogPlanBMeta) ogPlanBMeta.textContent = data.planBMeta;
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
