@@ -832,10 +832,33 @@ export async function GET(request: NextRequest) {
             l.discount_analysis?.verdict === 'fake_discount' ||
             l.discount_analysis?.verdict === 'suspicious_discount'
         ).length;
-        activeFakeDiscountCount = Math.max(
+        // An active listing advertising a strikethrough discount without a
+        // resolved verdict (e.g. unclustered cluster_id = null) cannot earn
+        // clean merchant-wide discount clearance.
+        const hasUnauditedActiveDiscount = activeListings.some((l) => {
+          const validOrig = normalizeOfferOriginalPrice(
+            l.price_current,
+            l.price_original
+          );
+          const advertisesDiscount =
+            (validOrig !== null && validOrig > l.price_current) ||
+            (typeof l.price_original === 'number' &&
+              Number.isFinite(l.price_original) &&
+              l.price_original > Math.max(0, l.price_current));
+          const hasVerdict = Boolean(l.discount_analysis?.verdict);
+          return advertisesDiscount && !hasVerdict;
+        });
+        const knownFakeCount = Math.max(
           profileFakeCount,
           agg.cartFakeDiscountCount
         );
+        if (knownFakeCount > 0) {
+          activeFakeDiscountCount = knownFakeCount;
+        } else if (hasUnauditedActiveDiscount) {
+          activeFakeDiscountCount = null;
+        } else {
+          activeFakeDiscountCount = 0;
+        }
         auditScope = 'merchant_wide';
       } else {
         merchantOfferCount = agg.cartOfferCount;

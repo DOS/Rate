@@ -933,6 +933,106 @@ async function main() {
       noProfBadge.failedReasons.includes('missing_fake_discount_audit')
     );
 
+    // 5d-2. Merchant profile containing an unclustered/unaudited advertised discount fails closed
+    const MERCHANT_UNCLUSTERED = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7';
+    trustViewRows.push(
+      makeTrustOfferRow({
+        id: 'off-w-unclustered-clean',
+        clusterId: MASTER_WATCH_ID,
+        merchantId: MERCHANT_UNCLUSTERED,
+        merchantName: 'Unclustered Discount Mall',
+        platform: 'lazada',
+        priceCurrent: 7_500_000,
+        isOfficial: true,
+        dosafeRisk: 4,
+        reviewRisk: 8,
+        threatRisk: 8,
+      })
+    );
+    productRows.push(
+      {
+        id: 'off-w-unclustered-clean',
+        cluster_id: MASTER_WATCH_ID,
+        merchant_id: MERCHANT_UNCLUSTERED,
+        platform: 'lazada',
+        platform_item_id: 'item-off-w-unclustered-clean',
+        title: 'Clean watch offer',
+        price_current: 7_500_000,
+        price_original: null,
+        stock: 10,
+        historical_sold: 50,
+        rating_star: 4.9,
+        rating_count: 100,
+        url: 'https://shopee.vn/product/100/clean',
+        availability: 'in_stock',
+      },
+      {
+        // Active listing with cluster_id = null -> no discount_analysis verdict,
+        // yet advertises a strikethrough discount (price_original > price_current).
+        id: 'off-unclustered-sale',
+        cluster_id: null,
+        merchant_id: MERCHANT_UNCLUSTERED,
+        platform: 'lazada',
+        platform_item_id: 'item-off-unclustered-sale',
+        title: 'Unclustered discounted accessory',
+        price_current: 500_000,
+        price_original: 900_000,
+        stock: 10,
+        historical_sold: 10,
+        rating_star: 4.8,
+        rating_count: 20,
+        url: 'https://shopee.vn/product/100/unclustered-sale',
+        availability: 'in_stock',
+      }
+    );
+    merchantRows.push({
+      id: MERCHANT_UNCLUSTERED,
+      platform: 'lazada',
+      platform_shop_id: `shop-${MERCHANT_UNCLUSTERED}`,
+      name: 'Unclustered Discount Mall',
+      slug: null,
+      url: `https://shopee.vn/shop/${MERCHANT_UNCLUSTERED}`,
+      is_official: true,
+      rating_star: 4.9,
+      follower_count: 25_000,
+      location: 'TP.HCM',
+      risk_score: 4,
+      review_risk_score: 8,
+      review_risk_breakdown: { total_reviews: 40 },
+      metadata: { dosafe_risk_score: 4 },
+      metadata_dosafe_risk_score: 4,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+    const resUnclustered = await GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/combo-cart?items=apple-airpods-pro-2-usb-c,apple-watch-series-10-42mm&shippingVnd=0',
+        { headers: { 'x-forwarded-for': '203.0.113.62' } }
+      )
+    );
+    assert.equal(resUnclustered.status, 200);
+    const unclusteredBody = (await resUnclustered.json()) as {
+      data: {
+        merchantBadges: Array<{
+          storeKey: string;
+          verifiedSafe: boolean;
+          auditScope: string;
+          signals: { activeFakeDiscountCount: number | null };
+          failedReasons: string[];
+        }>;
+      };
+    };
+    const unclusteredBadge = unclusteredBody.data.merchantBadges.find(
+      (b) => b.storeKey === MERCHANT_UNCLUSTERED
+    );
+    assert.ok(unclusteredBadge);
+    assert.equal(unclusteredBadge.auditScope, 'merchant_wide');
+    assert.equal(unclusteredBadge.verifiedSafe, false);
+    assert.equal(unclusteredBadge.signals.activeFakeDiscountCount, null);
+    assert.ok(
+      unclusteredBadge.failedReasons.includes('missing_fake_discount_audit')
+    );
+
     // 5e. Order-invariant reviewRisk + breakdown pairing across cart items
     const MERCHANT_MIXED_REV = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa8';
     trustViewRows.push(
