@@ -39,6 +39,24 @@ import { productRatingScore5 } from '@/lib/rate-domain';
 import { roundScore } from '@/lib/rating-display';
 import { listingCountForSaleState, saleStateOfMaster } from '@/lib/sale-state';
 import {
+  COMBO_CART_DEFAULT_MAX_STORES,
+  COMBO_CART_DEFAULT_MIN_TRUST,
+  COMBO_CART_DEFAULT_SHIPPING_VND,
+  COMBO_CART_MAX_ITEMS,
+  COMBO_CART_MAX_MAX_STORES,
+  COMBO_CART_MAX_SHIPPING_VND,
+  COMBO_CART_MIN_ITEMS,
+  COMBO_CART_MIN_MAX_STORES,
+} from '@/lib/combo-cart-optimizer';
+import {
+  MAX_INSTALLMENT_FEE_PERCENT,
+  MAX_VOUCHER_PERCENT,
+  computeEffectivePrice,
+  selectEffectivePriceBaseOffers,
+  type EffectivePriceResult,
+  type SelectedOfferCandidate,
+} from '@/lib/effective-price';
+import {
   getCachedCompareMasterProducts,
   getCachedFilteredReviewCountsByMaster,
   getCachedInspectProductOrShopUrl,
@@ -48,6 +66,8 @@ import {
   getCachedMasterProductReviewSummary,
   getCachedMasterProductReviews,
   getCachedMasterProducts,
+  getCachedMerchantProfileById,
+  getMasterProductOffersBatch,
   sanitizeCachedEntityId,
 } from './index';
 import {
@@ -63,6 +83,14 @@ import {
   withPublicReviewRisk,
 } from './api-handler';
 import {
+  deduplicateComboSlugs,
+  executeComboCartOptimization,
+  isSafeComboSlugToken,
+  type ComboCartApiMerchantBadge,
+  type ComboCartApiPlan,
+  type ComboCartDataReaders,
+} from './combo-cart';
+import {
   computeProductRadarSignal,
   getCrossPlatformDealRadar,
   type CrossPlatformDealRadarResponse,
@@ -73,9 +101,11 @@ import {
   detectPlatformFromInput,
   evaluateExtensionPriceVerdict,
 } from './extension';
+import { resolveWatchlistSlug } from './item-compare';
 import { isItemModelOn } from './item-model';
 import {
   getCachedCatalogSlugResolution,
+  getCachedCategorySlugById,
   getCachedItemVariants,
 } from './item-route';
 
@@ -124,11 +154,11 @@ const DB_INTERNAL_ERROR_REGEX =
 export const MCP_SERVER_INFO = {
   name: 'rate-vn-shopping-mcp',
   title: 'Rate.vn Verified Shopping & Price Truth MCP Server',
-  version: '1.0.0',
+  version: '1.1.0',
 } as const;
 
 export const MCP_SERVER_INSTRUCTIONS =
-  'Read-only Vietnamese tech shopping intelligence across 22 retail platforms and 5 device categories (smartphones, tablets, laptops, smartwatches, earbuds). Always cite canonical_citation_url (https://rate.vn/...) and freshness timestamps (observed_at / price_observed_at) when presenting prices, specifications, or 6-axis review trust verdicts to users. Sold-out and implausibly low bait-price listings are excluded from market floor calculations.';
+  'Read-only Vietnamese tech shopping intelligence across 22 retail platforms and 5 device categories (smartphones, tablets, laptops, smartwatches, earbuds). Always cite canonical_citation_url (https://rate.vn/...) and freshness timestamps (observed_at / price_observed_at) when presenting prices, specifications, combo-cart store plans (including verified_safe audit_scope), or 6-axis review trust verdicts to users. Sold-out and implausibly low bait-price listings are excluded from market floor calculations. Effective price estimates are reference estimates (is_reference_estimate: true) rather than binding retailer quotes.';
 
 export const MCP_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -179,6 +209,8 @@ function isValidSlugToken(raw: string, maxLength = 120): boolean {
     /^[a-zA-Z0-9._-]+$/.test(raw) &&
     /[a-zA-Z0-9]/.test(raw) &&
     !/^0+$/.test(raw) &&
+    !Object.prototype.hasOwnProperty.call(Object.prototype, raw) &&
+    !Object.prototype.hasOwnProperty.call(Object.prototype, lower) &&
     !DISALLOWED_IDENTIFIER_TOKENS.has(lower) &&
     !raw.startsWith('.') &&
     !raw.endsWith('.') &&
@@ -457,12 +489,161 @@ export const GetGenuineDealsInputSchema = z.strictObject({
     .describe('Maximum genuine deals to return (1 to 10, default 10).'),
 });
 
+export const OptimizeComboCartInputSchema = z
+  .strictObject({
+    items: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(120)
+          .refine(isSafeComboSlugToken, 'Invalid product or item slug')
+      )
+      .min(COMBO_CART_MIN_ITEMS)
+      .max(COMBO_CART_MAX_ITEMS)
+      .describe(
+        '2 to 5 distinct canonical product or Item slugs (for example ["apple-iphone-16-128gb", "apple-airpods-pro-2-usb-c"]).'
+      ),
+    officialOnly: z
+      .boolean()
+      .default(false)
+      .describe(
+        'When true, keep only verified Official Mall / authorized retail chain listings.'
+      ),
+    minTrust: z
+      .number()
+      .min(0)
+      .max(100)
+      .default(COMBO_CART_DEFAULT_MIN_TRUST)
+      .describe(
+        'Minimum seller trust score (0 to 100, default 80). Sellers without a measured risk score are excluded when minTrust > 0.'
+      ),
+    maxStores: z
+      .number()
+      .int()
+      .min(COMBO_CART_MIN_MAX_STORES)
+      .max(COMBO_CART_MAX_MAX_STORES)
+      .default(COMBO_CART_DEFAULT_MAX_STORES)
+      .describe(
+        'Maximum number of distinct stores allowed in Plan B multi-store optimization (1 to 5, default 3).'
+      ),
+    shippingVndPerOrder: z
+      .number()
+      .int()
+      .min(0)
+      .max(COMBO_CART_MAX_SHIPPING_VND)
+      .default(COMBO_CART_DEFAULT_SHIPPING_VND)
+      .describe(
+        'Estimated shipping fee in VND applied once per distinct store order (0 to 500000, default 0).'
+      ),
+  })
+  .refine(
+    (v) => deduplicateComboSlugs(v.items).length >= COMBO_CART_MIN_ITEMS,
+    {
+      message: `Provide at least ${COMBO_CART_MIN_ITEMS} distinct product slugs`,
+    }
+  );
+
+export const CalculateEffectivePriceInputSchema = z.strictObject({
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(185)
+    .refine(isValidCompareSlugOrPin, 'Invalid product or item slug')
+    .describe(
+      'Canonical product, Item, or variant-pinned slug (for example "apple-iphone-16-pro-max-256gb" or "iphone-16-pro-max@256gb").'
+    ),
+  discountMode: z
+    .enum(['fixed', 'percent'])
+    .default('fixed')
+    .describe(
+      'Voucher discount mode: "fixed" (VND amount) or "percent" (percentage with optional VND cap).'
+    ),
+  discountAmountVnd: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_VALID_VND_PRICE)
+    .default(0)
+    .describe(
+      `Fixed voucher discount in VND when discountMode is "fixed" (0 to ${MAX_VALID_VND_PRICE}).`
+    ),
+  discountPercent: z
+    .number()
+    .min(0)
+    .max(MAX_VOUCHER_PERCENT)
+    .default(0)
+    .describe(
+      'Percentage voucher discount (0 to 80) when discountMode is "percent".'
+    ),
+  discountMaxCapVnd: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_VALID_VND_PRICE)
+    .nullable()
+    .optional()
+    .describe(
+      'Optional maximum VND discount cap when discountMode is "percent" (null or 0 for uncapped).'
+    ),
+  tradeInEnabled: z
+    .boolean()
+    .default(false)
+    .describe(
+      'When true, factor in store trade-in credit and bonus against private self-resale benchmark.'
+    ),
+  oldDeviceResaleBenchmarkVnd: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_VALID_VND_PRICE)
+    .default(0)
+    .describe(
+      'Estimated private self-resale market benchmark in VND for the trade-in device.'
+    ),
+  tradeInConditionTier: z
+    .enum(['grade_1_mint', 'grade_2_light_wear', 'grade_3_battery_under_85'])
+    .default('grade_1_mint')
+    .describe(
+      'Trade-in device condition multiplier: grade_1_mint (100%), grade_2_light_wear (85%), grade_3_battery_under_85 (70%).'
+    ),
+  tradeInBonusVnd: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_VALID_VND_PRICE)
+    .default(0)
+    .describe('Retailer trade-in subsidy bonus in VND.'),
+  installmentTerm: z
+    .union([
+      z.literal('cash'),
+      z.literal(3),
+      z.literal(6),
+      z.literal(9),
+      z.literal(12),
+    ])
+    .default('cash')
+    .describe('Payment plan: "cash" or installment months (3, 6, 9, 12).'),
+  installmentFeePercent: z
+    .number()
+    .min(0)
+    .max(MAX_INSTALLMENT_FEE_PERCENT)
+    .default(0)
+    .describe(
+      'Card conversion / installment fee percentage (0 to 15, ignored when installmentTerm is "cash").'
+    ),
+});
+
 export type McpToolName =
   | 'search_verified_catalog'
   | 'get_22_store_offers_and_price_truth'
   | 'compare_devices_by_use_case'
   | 'audit_listing_url'
-  | 'get_genuine_deals';
+  | 'get_genuine_deals'
+  | 'optimize_combo_cart'
+  | 'calculate_effective_price';
 
 export interface McpToolAnnotations {
   title: string;
@@ -544,6 +725,24 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = [
     inputSchema: exportToolInputJsonSchema(GetGenuineDealsInputSchema),
     annotations: READ_ONLY_ANNOTATIONS('Get Genuine Multi-Store Floor Deals'),
   },
+  {
+    name: 'optimize_combo_cart',
+    title: 'Optimize Multi-Store Combo Cart',
+    description:
+      'Compute exact single-store (Plan A) and bounded multi-store (Plan B, up to 5 stores) purchasing plans for 2 to 5 product or Item slugs, excluding sold-out/bait offers, preserving retired-variant selection safety, and auditing merchant-wide verified_safe trust badges.',
+    inputSchema: exportToolInputJsonSchema(OptimizeComboCartInputSchema),
+    annotations: READ_ONLY_ANNOTATIONS('Optimize Multi-Store Combo Cart'),
+  },
+  {
+    name: 'calculate_effective_price',
+    title: 'Calculate Effective Price & VN/A Spread',
+    description:
+      'Estimate net cash payable, monthly installment payments, and store trade-in vs self-resale delta after vouchers and card fees for both the cheapest plausible offer (with origin and seller_channel) and the Official VN/A offer (marked is_reference_estimate: true).',
+    inputSchema: exportToolInputJsonSchema(CalculateEffectivePriceInputSchema),
+    annotations: READ_ONLY_ANNOTATIONS(
+      'Calculate Effective Price & VN/A Spread'
+    ),
+  },
 ] as const;
 
 export interface McpResolvedCompareTarget {
@@ -585,6 +784,11 @@ export interface McpDataReaders {
   resolveCompareTokenTarget?: (
     rawToken: string
   ) => Promise<McpResolvedCompareTarget>;
+  resolveWatchlistSlug?: ComboCartDataReaders['resolveWatchlistSlug'];
+  getMasterProductOffersBatch?: ComboCartDataReaders['getMasterProductOffersBatch'];
+  getCachedMerchantProfileById?: ComboCartDataReaders['getCachedMerchantProfileById'];
+  getCachedCategorySlugById?: ComboCartDataReaders['getCachedCategorySlugById'];
+  getCategorySlugByIdUncached?: ComboCartDataReaders['getCategorySlugByIdUncached'];
   nowIso?: () => string;
 }
 
@@ -652,6 +856,10 @@ const DEFAULT_MCP_READERS: McpDataReaders = {
   getCachedInspectProductOrShopUrl,
   getCrossPlatformDealRadar,
   resolveCompareTokenTarget: defaultResolveCompareTokenTarget,
+  resolveWatchlistSlug,
+  getMasterProductOffersBatch,
+  getCachedMerchantProfileById,
+  getCachedCategorySlugById,
   nowIso: () => new Date().toISOString(),
 };
 
@@ -1989,6 +2197,514 @@ async function executeGetGenuineDeals(
   });
 }
 
+function buildComboCartCitationUrl(params: {
+  items: readonly string[];
+  officialOnly: boolean;
+  minTrust: number;
+  maxStores: number;
+  shippingVndPerOrder: number;
+}): string {
+  const encodedItems = params.items.map((s) => encodeURIComponent(s)).join(',');
+  const qs = new URLSearchParams();
+  if (params.officialOnly) qs.set('officialOnly', '1');
+  if (params.minTrust !== COMBO_CART_DEFAULT_MIN_TRUST) {
+    qs.set('minTrust', String(params.minTrust));
+  }
+  if (params.maxStores !== COMBO_CART_DEFAULT_MAX_STORES) {
+    qs.set('maxStores', String(params.maxStores));
+  }
+  if (params.shippingVndPerOrder !== COMBO_CART_DEFAULT_SHIPPING_VND) {
+    qs.set('shippingVnd', String(params.shippingVndPerOrder));
+  }
+  const suffix = qs.toString();
+  return buildCanonicalRateUrl(
+    `/watchlist?items=${encodedItems}${suffix ? `&${suffix}` : ''}`
+  );
+}
+
+function formatMcpMerchantBadge(
+  badge: ComboCartApiMerchantBadge,
+  fallbackCitationUrl: string
+) {
+  return {
+    store_key: sanitizeMcpPublicText(badge.storeKey, 160),
+    merchant_id: badge.merchantId
+      ? sanitizeMcpPublicText(badge.merchantId, 128)
+      : null,
+    merchant_name: sanitizeMcpPublicText(badge.merchantName, 160),
+    platform: sanitizeMcpPublicText(badge.platform, 32).toLowerCase(),
+    verified_safe: badge.verifiedSafe,
+    badge_code: badge.badgeCode,
+    audit_scope: badge.auditScope,
+    cart_offer_count: badge.cartOfferCount,
+    cart_fake_discount_count: badge.cartFakeDiscountCount,
+    failed_reasons: badge.failedReasons,
+    signals: {
+      dosafe_risk_score: badge.signals.dosafeRiskScore,
+      review_risk_score: badge.signals.reviewRiskScore,
+      combined_trust_score: badge.signals.combinedTrustScore,
+      is_official: badge.signals.isOfficial,
+      offer_count: badge.signals.offerCount,
+      active_fake_discount_count: badge.signals.activeFakeDiscountCount,
+    },
+    canonical_citation_url: buildSafeMerchantCitationUrl(
+      badge.merchantId,
+      fallbackCitationUrl
+    ),
+  };
+}
+
+function formatMcpComboPlan(
+  plan: ComboCartApiPlan | null,
+  fallbackCitationUrl: string
+) {
+  if (!plan) return null;
+  return {
+    kind: plan.kind,
+    distinct_store_count: plan.distinctStoreCount,
+    items_subtotal_vnd: plan.itemsSubtotalVnd,
+    shipping_vnd: plan.shippingVnd,
+    total_vnd: plan.totalVnd,
+    all_official: plan.allOfficial,
+    avg_trust_score: plan.avgTrustScore,
+    allocations: plan.allocations.map((alloc) => ({
+      item_slug: sanitizeMcpPublicText(alloc.itemSlug, 160),
+      item_name: sanitizeMcpPublicText(alloc.itemName, 240),
+      offer_id: sanitizeMcpPublicText(alloc.offerId, 128),
+      offer_title: sanitizeMcpPublicText(alloc.offerTitle, 280),
+      offer_url: sanitizeExternalOfferUrl(alloc.offerUrl),
+      platform: sanitizeMcpPublicText(alloc.platform, 32).toLowerCase(),
+      store_key: sanitizeMcpPublicText(alloc.storeKey, 160),
+      merchant_id: alloc.merchantId
+        ? sanitizeMcpPublicText(alloc.merchantId, 128)
+        : null,
+      merchant_name: sanitizeMcpPublicText(alloc.merchantName, 160),
+      is_official_mall: alloc.isOfficial,
+      risk_score: alloc.riskScore,
+      trust_score: alloc.trustScore,
+      price_vnd: alloc.priceVnd,
+      canonical_citation_url: buildSafeMerchantCitationUrl(
+        alloc.merchantId,
+        fallbackCitationUrl
+      ),
+    })),
+    store_groups: plan.storeGroups.map((group) => ({
+      store_key: sanitizeMcpPublicText(group.storeKey, 160),
+      merchant_id: group.merchantId
+        ? sanitizeMcpPublicText(group.merchantId, 128)
+        : null,
+      merchant_name: sanitizeMcpPublicText(group.merchantName, 160),
+      platform: sanitizeMcpPublicText(group.platform, 32).toLowerCase(),
+      is_official_mall: group.isOfficial,
+      risk_score: group.riskScore,
+      trust_score: group.trustScore,
+      item_count: group.itemCount,
+      items_subtotal_vnd: group.itemsSubtotalVnd,
+      shipping_vnd: group.shippingVnd,
+      store_total_vnd: group.storeTotalVnd,
+      canonical_citation_url: buildSafeMerchantCitationUrl(
+        group.merchantId,
+        fallbackCitationUrl
+      ),
+      trust_badge: formatMcpMerchantBadge(
+        group.trustBadge,
+        fallbackCitationUrl
+      ),
+      items: group.items.map((alloc) => ({
+        item_slug: sanitizeMcpPublicText(alloc.itemSlug, 160),
+        item_name: sanitizeMcpPublicText(alloc.itemName, 240),
+        offer_id: sanitizeMcpPublicText(alloc.offerId, 128),
+        offer_title: sanitizeMcpPublicText(alloc.offerTitle, 280),
+        offer_url: sanitizeExternalOfferUrl(alloc.offerUrl),
+        price_vnd: alloc.priceVnd,
+      })),
+    })),
+  };
+}
+
+async function executeOptimizeComboCart(
+  rawArgs: z.infer<typeof OptimizeComboCartInputSchema>,
+  readers: McpDataReaders
+): Promise<McpToolCallResult> {
+  const snapshotAt = (readers.nowIso ?? DEFAULT_MCP_READERS.nowIso!)();
+  const dedupedInputItems = deduplicateComboSlugs(rawArgs.items);
+  const comboReaders: ComboCartDataReaders = {
+    resolveWatchlistSlug: readers.resolveWatchlistSlug,
+    getCachedMasterProductBySlug: readers.getCachedMasterProductBySlug,
+    getMasterProductOffersBatch:
+      readers.getMasterProductOffersBatch ??
+      (async (ids) => {
+        const entries = await Promise.all(
+          ids.map(
+            async (id) =>
+              [id, await readers.getCachedMasterProductOffers(id)] as const
+          )
+        );
+        return new Map(entries);
+      }),
+    getCachedMerchantProfileById: readers.getCachedMerchantProfileById,
+    getCachedCategorySlugById: readers.getCachedCategorySlugById,
+    getCategorySlugByIdUncached: readers.getCategorySlugByIdUncached,
+  };
+
+  const result = await executeComboCartOptimization(
+    {
+      items: dedupedInputItems,
+      officialOnly: rawArgs.officialOnly,
+      minTrust: rawArgs.minTrust,
+      maxStores: rawArgs.maxStores,
+      shippingVnd: rawArgs.shippingVndPerOrder,
+    },
+    comboReaders
+  );
+
+  const fallbackCitationUrl = buildComboCartCitationUrl({
+    items: dedupedInputItems,
+    officialOnly: rawArgs.officialOnly,
+    minTrust: rawArgs.minTrust,
+    maxStores: rawArgs.maxStores,
+    shippingVndPerOrder: rawArgs.shippingVndPerOrder,
+  });
+
+  if (!result.ok) {
+    return buildToolCallResult(
+      {
+        ok: false,
+        tool: 'optimize_combo_cart',
+        error: result.error,
+        requested_items: dedupedInputItems,
+        canonical_citation_url: fallbackCitationUrl,
+        observed_at: snapshotAt,
+      },
+      true
+    );
+  }
+
+  const { data, masterUpdatedAtById } = result;
+  const canonicalCitationUrl = buildComboCartCitationUrl({
+    items: data.query.items,
+    officialOnly: data.query.officialOnly,
+    minTrust: data.query.minTrust,
+    maxStores: data.query.maxStores,
+    shippingVndPerOrder: data.query.shippingVnd,
+  });
+
+  const items = data.items.map((item) => {
+    const rawUpdated =
+      item.masterProductId &&
+      Object.hasOwn(masterUpdatedAtById, item.masterProductId)
+        ? masterUpdatedAtById[item.masterProductId]
+        : null;
+    const { observedAt, freshnessSource } = resolveProductObservedAt(
+      rawUpdated ? { updated_at: rawUpdated } : null,
+      snapshotAt
+    );
+    const itemCitation = item.productHref
+      ? buildCanonicalRateUrl(item.productHref)
+      : canonicalCitationUrl;
+    return {
+      requested_slug: sanitizeMcpPublicText(item.requestedSlug, 160),
+      resolved_slug: item.resolvedSlug
+        ? sanitizeMcpPublicText(item.resolvedSlug, 160)
+        : null,
+      item_slug: item.itemSlug
+        ? sanitizeMcpPublicText(item.itemSlug, 160)
+        : null,
+      name: sanitizeMcpPublicText(item.name, 240),
+      brand: item.brand ? sanitizeMcpPublicText(item.brand, 80) : null,
+      category: item.categorySlug,
+      size_required: item.sizeRequired,
+      retired_variant: item.retiredVariant,
+      found: item.found,
+      offer_count: item.offerCount,
+      deal_radar: item.dealRadar,
+      canonical_citation_url: itemCitation,
+      observed_at: observedAt,
+      price_observed_at: observedAt,
+      freshness_source: freshnessSource,
+    };
+  });
+
+  return buildToolCallResult({
+    ok: true,
+    tool: 'optimize_combo_cart',
+    query: {
+      items: data.query.items,
+      official_only: data.query.officialOnly,
+      min_trust: data.query.minTrust,
+      max_stores: data.query.maxStores,
+      shipping_vnd_per_order: data.query.shippingVnd,
+    },
+    canonical_citation_url: canonicalCitationUrl,
+    observed_at: snapshotAt,
+    price_observed_at: snapshotAt,
+    items,
+    missing_slugs: data.missingSlugs,
+    uncovered_slugs: data.uncoveredSlugs,
+    single_store_best: formatMcpComboPlan(
+      data.singleStoreBest,
+      canonicalCitationUrl
+    ),
+    multi_store_optimal: formatMcpComboPlan(
+      data.multiStoreOptimal,
+      canonicalCitationUrl
+    ),
+    savings_vs_single_store_vnd: data.savingsVsSingleStoreVnd,
+    savings_vs_single_store_pct: data.savingsVsSingleStorePct,
+    cheapest_per_item_subtotal_vnd: data.cheapestPerItemSubtotalVnd,
+    merchant_badges: data.merchantBadges.map((b) =>
+      formatMcpMerchantBadge(b, canonicalCitationUrl)
+    ),
+    diagnostics: {
+      item_count: data.diagnostics.itemCount,
+      max_stores: data.diagnostics.maxStores,
+      min_trust: data.diagnostics.minTrust,
+      official_only: data.diagnostics.officialOnly,
+      shipping_vnd_per_order: data.diagnostics.shippingVndPerOrder,
+      search_nodes_visited: data.diagnostics.searchNodesVisited,
+      max_search_nodes: data.diagnostics.maxSearchNodes,
+      node_cap_reached: data.diagnostics.nodeCapReached,
+      candidate_cap_per_item: data.diagnostics.candidateCapPerItem,
+      candidate_trimmed: data.diagnostics.candidateTrimmed,
+      search_complete: data.diagnostics.searchComplete,
+      item_diagnostics: data.diagnostics.itemDiagnostics.map((diag) => ({
+        slug: sanitizeMcpPublicText(diag.slug, 160),
+        name: sanitizeMcpPublicText(diag.name, 240),
+        total_offers: diag.totalOffers,
+        in_stock_valid_offers: diag.inStockValidOffers,
+        bait_excluded_count: diag.baitExcludedCount,
+        qualifying_offer_count: diag.qualifyingOfferCount,
+        candidate_store_count: diag.candidateStoreCount,
+        covered: diag.covered,
+      })),
+    },
+  });
+}
+
+function formatSelectedEffectiveOffer(
+  candidate: SelectedOfferCandidate<MerchantOffer>,
+  productCitationUrl: string,
+  observedAt: string
+) {
+  const publicOffer = withPublicOfferReviewRisk(candidate.offer);
+  const platformSlug = sanitizeMcpPublicText(
+    publicOffer.merchant?.platform || publicOffer.platform || 'shopee',
+    32
+  ).toLowerCase();
+
+  return {
+    id: sanitizeMcpPublicText(publicOffer.id, 128),
+    platform: platformSlug,
+    title: sanitizeMcpPublicText(publicOffer.title, 280),
+    price_current_vnd: candidate.priceVnd,
+    origin: candidate.origin,
+    seller_channel: candidate.sellerChannel,
+    trust_score: candidate.trustScore,
+    merchant: {
+      id: sanitizeMcpPublicText(publicOffer.merchant?.id, 128),
+      name: sanitizeMcpPublicText(publicOffer.merchant?.name, 160),
+      is_official_mall: Boolean(publicOffer.merchant?.is_official),
+      risk_score: publicOffer.merchant?.risk_score ?? null,
+      dosafe_risk_score: publicOffer.merchant?.dosafe_risk_score ?? null,
+      review_risk_score: publicOffer.merchant?.review_risk_score ?? null,
+    },
+    offer_url: sanitizeExternalOfferUrl(publicOffer.url),
+    canonical_citation_url: `${productCitationUrl}#offers-table`,
+    observed_at: observedAt,
+    price_observed_at: observedAt,
+  };
+}
+
+function formatEffectivePriceResult(result: EffectivePriceResult) {
+  return {
+    base_price_vnd: result.basePriceVnd,
+    discount_mode: result.discountMode,
+    discount_percent_applied: result.discountPercentApplied,
+    discount_cap_applied_vnd: result.discountCapAppliedVnd,
+    voucher_savings_vnd: result.voucherSavingsVnd,
+    price_after_voucher_vnd: result.priceAfterVoucherVnd,
+    trade_in_enabled: result.tradeInEnabled,
+    trade_in_condition_tier: result.tradeInConditionTier,
+    trade_in_condition_pct: result.tradeInConditionPct,
+    old_device_benchmark_vnd: result.oldDeviceBenchmarkVnd,
+    condition_adjusted_trade_in_vnd: result.conditionAdjustedTradeInVnd,
+    trade_in_bonus_vnd: result.tradeInBonusVnd,
+    store_trade_in_credit_vnd: result.storeTradeInCreditVnd,
+    self_resale_comparison_delta_vnd: result.selfResaleComparisonDeltaVnd,
+    net_cash_payable_vnd: result.netCashPayableVnd,
+    self_resale_net_payable_vnd: result.selfResaleNetPayableVnd,
+    installment_term: result.installmentTerm,
+    installment_months: result.installmentMonths,
+    installment_fee_percent: result.installmentFeePercent,
+    conversion_fee_vnd: result.conversionFeeVnd,
+    total_paid_vnd: result.totalPaidVnd,
+    monthly_payment_vnd: result.monthlyPaymentVnd,
+    total_diff_vs_cash_vnd: result.totalDiffVsCashVnd,
+  };
+}
+
+async function executeCalculateEffectivePrice(
+  rawArgs: z.infer<typeof CalculateEffectivePriceInputSchema>,
+  readers: McpDataReaders
+): Promise<McpToolCallResult> {
+  const snapshotAt = (readers.nowIso ?? DEFAULT_MCP_READERS.nowIso!)();
+  let resolvedSlug = rawArgs.slug;
+  let unresolvedVariantPin = false;
+
+  if (readers.resolveCompareTokenTarget) {
+    const resolved = await readers.resolveCompareTokenTarget(rawArgs.slug);
+    if (resolved.variantSlug) {
+      resolvedSlug = resolved.variantSlug;
+    } else if (rawArgs.slug.includes('@')) {
+      unresolvedVariantPin = true;
+    }
+  } else if (rawArgs.slug.includes('@')) {
+    unresolvedVariantPin = true;
+  }
+
+  const storedProduct = unresolvedVariantPin
+    ? null
+    : await readers.getCachedMasterProductBySlug(resolvedSlug);
+  if (!storedProduct) {
+    return buildToolCallResult(
+      {
+        ok: false,
+        tool: 'calculate_effective_price',
+        error: 'Product not found in Rate.vn verified catalog',
+        requested_slug: rawArgs.slug,
+        is_reference_estimate: true,
+        canonical_citation_url: CANONICAL_RATE_ORIGIN,
+        observed_at: snapshotAt,
+        price_observed_at: snapshotAt,
+      },
+      true
+    );
+  }
+
+  const category = getMasterProductCategorySlug(storedProduct);
+  const product = applyCategorySpecTemplate(category, storedProduct);
+  const rawOffers = await readers.getCachedMasterProductOffers(product.id);
+  const publicOffers = (Array.isArray(rawOffers) ? rawOffers : []).map(
+    withPublicOfferReviewRisk
+  );
+  const { excludedUnavailableCount, excludedBaitCount } =
+    getPlausibleInStockMerchantOffers(publicOffers);
+  const { observedAt: productObservedAt, freshnessSource } =
+    resolveProductObservedAt(product, snapshotAt);
+  const productCitationUrl = buildCanonicalRateUrl(
+    getMasterProductHref(product)
+  );
+
+  const selection = selectEffectivePriceBaseOffers(
+    publicOffers,
+    product.min_price ?? 0
+  );
+  if (selection.bestPlausiblePriceVnd <= 0) {
+    return buildToolCallResult(
+      {
+        ok: false,
+        tool: 'calculate_effective_price',
+        error:
+          'No verified in-stock offers or valid catalog base price available for this product.',
+        requested_slug: rawArgs.slug,
+        is_reference_estimate: true,
+        canonical_citation_url: productCitationUrl,
+        observed_at: productObservedAt,
+        price_observed_at: productObservedAt,
+      },
+      true
+    );
+  }
+
+  const sharedInput = {
+    discountMode: rawArgs.discountMode,
+    discountAmountVnd: rawArgs.discountAmountVnd,
+    discountPercent: rawArgs.discountPercent,
+    discountMaxCapVnd: rawArgs.discountMaxCapVnd ?? null,
+    tradeInEnabled: rawArgs.tradeInEnabled,
+    oldDeviceResaleBenchmarkVnd: rawArgs.oldDeviceResaleBenchmarkVnd,
+    tradeInConditionTier: rawArgs.tradeInConditionTier,
+    tradeInBonusVnd: rawArgs.tradeInBonusVnd,
+    installmentTerm: rawArgs.installmentTerm,
+    installmentFeePercent: rawArgs.installmentFeePercent,
+  };
+
+  const bestPlausibleCalc = computeEffectivePrice({
+    ...sharedInput,
+    basePriceVnd: selection.bestPlausiblePriceVnd,
+  });
+  const bestOfficialVnaCalc =
+    selection.bestOfficialVnaOffer !== null
+      ? computeEffectivePrice({
+          ...sharedInput,
+          basePriceVnd: selection.bestOfficialVnaOffer.priceVnd,
+        })
+      : null;
+
+  return buildToolCallResult({
+    ok: true,
+    tool: 'calculate_effective_price',
+    is_reference_estimate: true,
+    canonical_citation_url: productCitationUrl,
+    observed_at: productObservedAt,
+    price_observed_at: productObservedAt,
+    freshness_source: freshnessSource,
+    product: {
+      slug: sanitizeMcpPublicText(product.slug, 120),
+      name: sanitizeMcpPublicText(product.name, 240),
+      brand: sanitizeMcpPublicText(product.brand, 80),
+      category,
+      canonical_citation_url: productCitationUrl,
+      observed_at: productObservedAt,
+    },
+    inputs: {
+      discount_mode: rawArgs.discountMode,
+      discount_amount_vnd: rawArgs.discountAmountVnd,
+      discount_percent: rawArgs.discountPercent,
+      discount_max_cap_vnd: rawArgs.discountMaxCapVnd ?? null,
+      trade_in_enabled: rawArgs.tradeInEnabled,
+      old_device_resale_benchmark_vnd: rawArgs.oldDeviceResaleBenchmarkVnd,
+      trade_in_condition_tier: rawArgs.tradeInConditionTier,
+      trade_in_bonus_vnd: rawArgs.tradeInBonusVnd,
+      installment_term: rawArgs.installmentTerm,
+      installment_fee_percent: rawArgs.installmentFeePercent,
+    },
+    base_price_source: selection.bestPlausibleOffer
+      ? 'plausible_offer'
+      : 'catalog_min_price_fallback',
+    excluded_unavailable_offer_count: excludedUnavailableCount,
+    excluded_bait_offer_count: excludedBaitCount,
+    best_plausible_offer: selection.bestPlausibleOffer
+      ? formatSelectedEffectiveOffer(
+          selection.bestPlausibleOffer,
+          productCitationUrl,
+          productObservedAt
+        )
+      : null,
+    best_official_vna_offer: selection.bestOfficialVnaOffer
+      ? formatSelectedEffectiveOffer(
+          selection.bestOfficialVnaOffer,
+          productCitationUrl,
+          productObservedAt
+        )
+      : null,
+    best_plausible_effective_price:
+      formatEffectivePriceResult(bestPlausibleCalc),
+    best_official_vna_effective_price: bestOfficialVnaCalc
+      ? formatEffectivePriceResult(bestOfficialVnaCalc)
+      : null,
+    vna_vs_cheapest_base_delta_vnd:
+      selection.bestOfficialVnaOffer !== null
+        ? selection.bestOfficialVnaOffer.priceVnd -
+          selection.bestPlausiblePriceVnd
+        : null,
+    vna_vs_cheapest_effective_delta_vnd:
+      bestOfficialVnaCalc !== null
+        ? bestOfficialVnaCalc.totalPaidVnd - bestPlausibleCalc.totalPaidVnd
+        : null,
+  });
+}
+
 class JsonPayloadGuardError extends Error {
   public readonly rpcCode: number;
   constructor(rpcCode: number, message: string) {
@@ -2614,10 +3330,37 @@ export async function handleMcpHttpPost(
       );
     }
 
+    const customReaders = options?.readers;
     const readers: McpDataReaders = {
       ...DEFAULT_MCP_READERS,
-      ...(options?.readers ?? {}),
+      ...(customReaders ?? {}),
     };
+    if (customReaders) {
+      if (!customReaders.resolveWatchlistSlug) {
+        readers.resolveWatchlistSlug = async () => null;
+      }
+      if (
+        !customReaders.getMasterProductOffersBatch &&
+        customReaders.getCachedMasterProductOffers
+      ) {
+        const singleOfferReader = customReaders.getCachedMasterProductOffers;
+        readers.getMasterProductOffersBatch = async (ids) => {
+          const entries = await Promise.all(
+            ids.map(async (id) => [id, await singleOfferReader(id)] as const)
+          );
+          return new Map(entries);
+        };
+      }
+      if (!customReaders.getCachedMerchantProfileById) {
+        readers.getCachedMerchantProfileById = async () => null;
+      }
+      if (!customReaders.getCachedCategorySlugById) {
+        readers.getCachedCategorySlugById = async () => new Map();
+      }
+      if (!customReaders.getCategorySlugByIdUncached) {
+        readers.getCategorySlugByIdUncached = async () => undefined;
+      }
+    }
 
     if (method === 'initialize') {
       const parsedInit = InitializeParamsSchema.safeParse(rawParams ?? {});
@@ -2862,6 +3605,52 @@ export async function handleMcpHttpPost(
             );
           }
 
+          case 'optimize_combo_cart': {
+            const parsed = OptimizeComboCartInputSchema.safeParse(safeToolArgs);
+            if (!parsed.success) {
+              return jsonRpcErrorResponse(
+                200,
+                requestId,
+                -32602,
+                formatZodIssuesForMcp(parsed.error.issues),
+                undefined,
+                undefined,
+                activeProtocolVersion
+              );
+            }
+            const result = await executeOptimizeComboCart(parsed.data, readers);
+            return jsonRpcResultResponse(
+              requestId,
+              result as unknown as Record<string, unknown>,
+              activeProtocolVersion
+            );
+          }
+
+          case 'calculate_effective_price': {
+            const parsed =
+              CalculateEffectivePriceInputSchema.safeParse(safeToolArgs);
+            if (!parsed.success) {
+              return jsonRpcErrorResponse(
+                200,
+                requestId,
+                -32602,
+                formatZodIssuesForMcp(parsed.error.issues),
+                undefined,
+                undefined,
+                activeProtocolVersion
+              );
+            }
+            const result = await executeCalculateEffectivePrice(
+              parsed.data,
+              readers
+            );
+            return jsonRpcResultResponse(
+              requestId,
+              result as unknown as Record<string, unknown>,
+              activeProtocolVersion
+            );
+          }
+
           default:
             return jsonRpcErrorResponse(
               200,
@@ -2914,7 +3703,7 @@ export function buildRateWellKnownMcpDescriptor(): Record<string, unknown> {
     name: 'io.github.dos/rate-vn',
     serverInfo: MCP_SERVER_INFO,
     description:
-      'Stateless read-only Streamable HTTP Model Context Protocol (MCP) server for Rate.vn: verified tech prices across 22 Vietnamese retail platforms, 10-group standardized hardware specs, historical fake-discount audits, DOSafe scam risk, and 6-axis Review Trust Model v2 scores.',
+      'Stateless read-only Streamable HTTP Model Context Protocol (MCP) server for Rate.vn: verified tech prices across 22 Vietnamese retail platforms, 10-group standardized hardware specs, historical fake-discount audits, DOSafe scam risk, 6-axis Review Trust Model v2 scores, multi-store combo cart optimization, and VN/A effective price estimation.',
     transport: 'streamable-http',
     url: `${CANONICAL_RATE_ORIGIN}/api/mcp`,
     endpoints: {
@@ -2969,6 +3758,7 @@ export function buildRateLlmsTxt(): string {
     '',
     '## Model Context Protocol (MCP) Server',
     '',
+    `- Server Version: \`${MCP_SERVER_INFO.version}\``,
     '- Endpoint (`POST` JSON-RPC 2.0, stateless Streamable HTTP): https://rate.vn/api/mcp',
     '- Discovery Descriptor: https://rate.vn/.well-known/mcp.json',
     '- Supported MCP Protocol Versions: `2025-06-18`, `2025-03-26`, `2024-11-05`',
@@ -2982,6 +3772,8 @@ export function buildRateLlmsTxt(): string {
     '3. `compare_devices_by_use_case`: Compare 2 to 4 same-category product slugs side-by-side across 10-group hardware specs, verified floor prices, and 5-criterion JReviews scores (`screen`, `performance`, `camera`, `battery`, `value`) with optional persona or custom weight overrides.',
     '4. `audit_listing_url`: Inspect a marketplace product URL across the 22 supported Vietnamese stores and return catalog match, 5-level fake-discount verdict, accessory gatekeeper status, and DOSafe + AI review seller risk scores.',
     '5. `get_genuine_deals`: List verified below-median and cross-platform floor deals (`limit <= 10`, optional category/platform/budget filter) with fake strikethrough markups and high-risk sellers filtered out.',
+    '6. `optimize_combo_cart`: Solve exact single-store (Plan A) and bounded multi-store (Plan B, `maxStores` 1..5) combo cart plans across 2 to 5 product or Item slugs, filtering unavailable/bait offers, enforcing retired-variant size selection safety, and auditing merchant-wide `verified_safe` trust badges (`audit_scope`: `merchant_wide` vs `cart_only_unverified`).',
+    '7. `calculate_effective_price`: Estimate net cash payable, monthly installment payments, and store trade-in vs self-resale delta after vouchers and card fees on both the cheapest plausible offer (`origin`, `seller_channel`) and the Official VN/A offer (marked `is_reference_estimate: true`).',
     '',
     '## 22 Tracked Vietnamese Retail Platforms',
     '',
@@ -2998,7 +3790,9 @@ export function buildRateLlmsTxt(): string {
     '## REST API v1 & Developer Documentation',
     '',
     '- [Developer Portal & Interactive Playground](https://rate.vn/developers): Live REST API v1 playground, 10-group schema docs, and MCP quick-connect snippets.',
-    '- [OpenAPI 3.1.0 Specification](https://rate.vn/api/v1/rate/openapi.json): Full machine-readable specification for `/api/v1/rate/*` endpoints (`/products`, `/products/{slug}`, `/compare`, `/versus`, `/deals`, `/inspect`, `/lookup`, `/leaderboard`, `/merchants`, `/stats`).',
+    '- [OpenAPI 3.1.0 Specification](https://rate.vn/api/v1/rate/openapi.json): Full machine-readable specification for `/api/v1/rate/*` endpoints (`/products`, `/products/{slug}`, `/compare`, `/versus`, `/combo-cart`, `/deals`, `/inspect`, `/lookup`, `/leaderboard`, `/merchants`, `/stats`).',
+    '- [Combo Cart Optimizer API](https://rate.vn/api/v1/rate/combo-cart): Solve single-store and bounded multi-store cart splits across 2 to 5 slugs with live merchant-wide `verified_safe` trust badges (`GET /api/v1/rate/combo-cart`).',
+    '- [Truth Card OG Image API](https://rate.vn/api/v1/rate/og): Render verified PNG social/OG truth cards for products (`type=product`), head-to-head versus (`type=versus`), and deal radar (`type=deals`) via `GET /api/v1/rate/og`.',
     '- [Deal Hub](https://rate.vn/deals): Cross-platform genuine deals and inflated list-price warnings.',
     '- [URL & Fake-Discount Inspector](https://rate.vn/inspect): Verify any listing URL across the 22 supported Vietnamese stores.',
     '- [Category Leaderboard](https://rate.vn/leaderboard): JReviews dual-rating rankings across all 5 tech categories.',

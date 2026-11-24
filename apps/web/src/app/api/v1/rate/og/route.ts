@@ -46,10 +46,17 @@ import {
   versusCriteriaHeadToHead,
 } from '@/lib/versus-score';
 import {
+  executeComboCartOptimization,
+  type ComboCartApiPlan,
+} from '@/server/rate/combo-cart';
+import {
   parseOgTruthCardQuery,
   renderOgTruthCardHttpResponse,
+  type ComboTruthCardData,
+  type ComboTruthCardPlanSummary,
   type DealsTruthCardData,
   type OgTruthCardData,
+  type ParsedOgTruthCardQuery,
   type ProductTruthCardData,
   type VersusTruthCardData,
 } from '@/lib/og-truth-card';
@@ -71,6 +78,9 @@ export interface OgTruthCardResolvers {
     pair: readonly [string, string]
   ) => Promise<VersusTruthCardData | null>;
   readonly resolveDeals: () => Promise<DealsTruthCardData>;
+  readonly resolveCombo?: (
+    query: Extract<ParsedOgTruthCardQuery, { type: 'combo' }>
+  ) => Promise<ComboTruthCardData | null>;
   readonly rateLimiter?: BoundedSlidingWindowRateLimiter;
 }
 
@@ -352,10 +362,66 @@ async function defaultResolveDealsTruthCard(): Promise<DealsTruthCardData> {
   };
 }
 
+function toComboPlanSummary(
+  plan: ComboCartApiPlan | null
+): ComboTruthCardPlanSummary | null {
+  if (!plan) return null;
+  return {
+    distinctStoreCount: plan.distinctStoreCount,
+    itemsSubtotalVnd: plan.itemsSubtotalVnd,
+    shippingVnd: plan.shippingVnd,
+    totalVnd: plan.totalVnd,
+    allOfficial: plan.allOfficial,
+    avgTrustScore: plan.avgTrustScore,
+    verifiedSafeStoreCount: plan.storeGroups.filter(
+      (g) => g.trustBadge?.verifiedSafe === true
+    ).length,
+    storeNames: plan.storeGroups.map((g) => g.merchantName).filter(Boolean),
+  };
+}
+
+async function defaultResolveComboTruthCard(
+  query: Extract<ParsedOgTruthCardQuery, { type: 'combo' }>
+): Promise<ComboTruthCardData | null> {
+  const res = await executeComboCartOptimization({
+    items: [...query.items],
+    officialOnly: query.officialOnly,
+    minTrust: query.minTrust,
+    maxStores: query.maxStores,
+    shippingVnd: query.shippingVnd,
+  });
+  if (!res.ok) {
+    return null;
+  }
+  const foundItems = res.data.items.filter((item) => item.found);
+  if (foundItems.length < 2 || res.data.missingSlugs.length > 0) {
+    return null;
+  }
+  return {
+    type: 'combo',
+    items: foundItems.map((item) => ({
+      slug: item.requestedSlug,
+      name: item.name,
+    })),
+    query: {
+      officialOnly: res.data.query.officialOnly,
+      minTrust: res.data.query.minTrust,
+      maxStores: res.data.query.maxStores,
+      shippingVnd: res.data.query.shippingVnd,
+    },
+    singleStoreBest: toComboPlanSummary(res.data.singleStoreBest),
+    multiStoreOptimal: toComboPlanSummary(res.data.multiStoreOptimal),
+    savingsVsSingleStoreVnd: res.data.savingsVsSingleStoreVnd,
+    savingsVsSingleStorePct: res.data.savingsVsSingleStorePct,
+    snapshotTimestampIso: new Date().toISOString(),
+  };
+}
+
 const DEFAULT_RESOLVERS: OgTruthCardResolvers = {
   resolveProduct: defaultResolveProductTruthCard,
   resolveVersus: defaultResolveVersusTruthCard,
   resolveDeals: defaultResolveDealsTruthCard,
+  resolveCombo: defaultResolveComboTruthCard,
 };
 
 export async function OPTIONS() {
@@ -401,6 +467,10 @@ export async function handleOgTruthCardRequest(
       cardData = await resolvers.resolveProduct(parsed.slug, parsed.variant);
     } else if (parsed.type === 'versus') {
       cardData = await resolvers.resolveVersus(parsed.pair);
+    } else if (parsed.type === 'combo') {
+      const resolveCombo =
+        resolvers.resolveCombo ?? defaultResolveComboTruthCard;
+      cardData = await resolveCombo(parsed);
     } else {
       cardData = await resolvers.resolveDeals();
     }

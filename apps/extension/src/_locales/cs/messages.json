@@ -803,5 +803,36 @@
   },
   "pinnedAlertUnpinShort": {
     "message": "Odepnout"
+  },
+  "offerChannelAuthorizedVat": {
+    "message": "Autorizovaný DPH"
+  },
+  "offerChannelOfficialMall": {
+    "message": "Official Mall"
+  },
+  "offerOriginOfficialVna": {
+    "message": "VN/A"
+  },
+  "offerOriginImported": {
+    "message": "Dovoz"
+  },
+  "offerHighTrust": {
+    "message": "Vysoká důvěra"
+  },
+  "pinnedAlertsComboCta": {
+    "message": "Optimalizovat košík ($COUNT$ ks)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "pinnedAlertsComboCtaCapped": {
+    "message": "Optimalizovat $COUNT$ nejnovějších položek",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   }
 }

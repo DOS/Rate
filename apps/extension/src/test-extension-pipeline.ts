@@ -14575,6 +14575,774 @@ async function runTests() {
       '  ✅ [MV3 22-store checkout price-trap guard & 1-click Side Panel alert pin (#1876)] Verified'
     );
   }
+
+  // --- DOS/Rate#1897 (8D.3): MV3 3.1 Side Panel VN/A Origin, Seller Channel Badges & 1-Click Combo Cart Bridge ---
+  {
+    const {
+      EXTENSION_COMBO_MAX_ITEMS,
+      EXTENSION_COMBO_MIN_ITEMS,
+      PINNED_ALERTS_STORAGE_KEY,
+      buildWatchlistComboCartUrl,
+      extractValidPinnedComboSlugs,
+      merchantTrustColor,
+      renderOfferChannelBadgeHtml,
+      renderOfferOriginBadgeHtml,
+      renderOffersCardHtml,
+      renderPinnedAlertsCardHtml,
+    } = await import('./sidepanel/panel-view.js');
+    const { formatCatalogueEntry } = await import('./i18n.js');
+
+    assert.equal(EXTENSION_COMBO_MAX_ITEMS, 5);
+    assert.equal(EXTENSION_COMBO_MIN_ITEMS, 2);
+
+    // 1. Pure @repo/shared-data/rules imports & zero apps/web imports or zodiac/supabase bloat in sidepanel bundle.
+    const panelViewSrc = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/panel-view.ts'),
+      'utf8'
+    );
+    const sidepanelSrc = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.ts'),
+      'utf8'
+    );
+    assert.ok(
+      panelViewSrc.includes("from '@repo/shared-data/rules'"),
+      'panel-view.ts must import rules strictly from @repo/shared-data/rules'
+    );
+    for (const src of [panelViewSrc, sidepanelSrc]) {
+      const importLines = src
+        .split('\n')
+        .filter((line) => /\bfrom\s+['"]|\bimport\s*\(/.test(line))
+        .join('\n');
+      assert.equal(
+        /apps\/web|rate-domain|supabase|\bzod\b/.test(importLines),
+        false,
+        'extension sidepanel modules must never import apps/web, zod, or supabase'
+      );
+    }
+
+    const builtSidepanelPath = path.resolve(
+      __dirname,
+      '../dist/sidepanel/sidepanel.js'
+    );
+    if (fs.existsSync(builtSidepanelPath)) {
+      const builtBundle = fs.readFileSync(builtSidepanelPath, 'utf8');
+      assert.equal(
+        builtBundle.includes('createClient') ||
+          builtBundle.includes('ZodError'),
+        false,
+        'built sidepanel bundle must not pull in supabase or zod'
+      );
+    }
+
+    // 2. Origin & Seller Channel Badges, Deduplication against officialBadgeHtml(), and Truthful High-Trust Indicator.
+    const allCats1897 = readLocaleCatalogues();
+    const make1897I18n = (locale: 'vi' | 'en' | 'cs') => ({
+      getMessage: (name: string, subs?: string[]) => {
+        const entry = allCats1897[locale][name];
+        return entry ? formatCatalogueEntry(entry, subs ?? []) : '';
+      },
+    });
+    const g = globalThis as Record<string, unknown>;
+    const savedChromeDesc = Object.getOwnPropertyDescriptor(g, 'chrome');
+
+    const makeOffer1897 = (
+      id: string,
+      overrides: Partial<ExtensionOfferItem> = {}
+    ): ExtensionOfferItem => ({
+      id,
+      platform: 'shopee',
+      title: 'iPhone 16 Pro Max 256GB',
+      price_current: 28_990_000,
+      price_original: null,
+      rating_star: 4.9,
+      rating_count: 100,
+      historical_sold: 250,
+      url: `https://shopee.vn/${id}-i.1.2`,
+      availability: 'in_stock',
+      merchant: {
+        id: `m-${id}`,
+        name: `Shop ${id}`,
+        is_official: false,
+        risk_score: 25,
+        dosafe_risk_score: 5,
+        review_risk_score: 25,
+      },
+      ...overrides,
+    });
+
+    try {
+      const expectedByLocale = {
+        vi: {
+          vat: 'Ủy quyền VAT',
+          mall: 'Official Mall',
+          vna: 'VN/A',
+          imported: 'Xách tay',
+          highTrust: 'Tin cậy cao',
+          officialGeneric: 'Chính hãng',
+          combo3: 'Tối ưu giỏ combo (3 món đã ghim)',
+          comboCapped: 'Tối ưu 5 món mới ghim nhất',
+        },
+        en: {
+          vat: 'Authorized VAT',
+          mall: 'Official Mall',
+          vna: 'VN/A',
+          imported: 'Imported',
+          highTrust: 'High Trust',
+          officialGeneric: 'Official',
+          combo3: 'Optimize combo cart (3 pinned items)',
+          comboCapped: 'Optimize 5 newest pinned items',
+        },
+        cs: {
+          vat: 'Autorizovaný DPH',
+          mall: 'Official Mall',
+          vna: 'VN/A',
+          imported: 'Dovoz',
+          highTrust: 'Vysoká důvěra',
+          officialGeneric: 'Oficiální',
+          combo3: 'Optimalizovat košík (3 ks)',
+          comboCapped: 'Optimalizovat 5 nejnovějších položek',
+        },
+      } as const;
+
+      for (const loc of ['vi', 'en', 'cs'] as const) {
+        g.chrome = { i18n: make1897I18n(loc) };
+        const copy = expectedByLocale[loc];
+
+        // (a) Direct VAT retail chain + VN/A + risk_score 4 (High Trust) + is_official: true -> deduplicated!
+        const cpsOffer = makeOffer1897('cps', {
+          platform: 'cellphones',
+          title: 'Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+          url: 'https://cellphones.com.vn/iphone-16-pro-max.html',
+          merchant: {
+            id: 'm-cps',
+            name: 'CellphoneS',
+            is_official: true,
+            risk_score: 4,
+            dosafe_risk_score: 0,
+            review_risk_score: 4,
+          },
+        });
+        assert.equal(merchantTrustColor(cpsOffer.merchant), '#34d399');
+        const cpsHtml = renderOffersCardHtml([cpsOffer], loc);
+        assert.ok(
+          cpsHtml.includes(copy.vat),
+          `${loc}: CellphoneS shows VAT badge`
+        );
+        assert.ok(cpsHtml.includes(copy.vna), `${loc}: CellphoneS shows VN/A`);
+        assert.ok(
+          cpsHtml.includes(copy.highTrust),
+          `${loc}: risk_score 4 (#34d399) shows truthful high-trust indicator`
+        );
+        assert.equal(
+          cpsHtml.includes(copy.officialGeneric),
+          false,
+          `${loc}: must deduplicate generic officialBadgeHtml() against VAT channel badge`
+        );
+        assert.equal(
+          /Verified Safe|verified_safe|Gian hàng chuẩn an toàn/i.test(cpsHtml),
+          false,
+          `${loc}: must NEVER fabricate Verified Safe without server activeFakeDiscountCount`
+        );
+
+        // (b) Marketplace Official Mall + VN/A + boundary risk_score 19 -> no "Chính hãng Official Mall"
+        const mallOffer = makeOffer1897('mall', {
+          platform: 'shopee',
+          title: 'iPhone 16 Pro Max 256GB VN/A',
+          merchant: {
+            id: 'm-mall',
+            name: 'Apple Flagship Store',
+            is_official: true,
+            risk_score: 19,
+            dosafe_risk_score: 0,
+            review_risk_score: 19,
+          },
+        });
+        const mallHtml = renderOffersCardHtml([mallOffer], loc);
+        assert.ok(
+          mallHtml.includes(copy.mall),
+          `${loc}: Mall shows Official Mall`
+        );
+        assert.ok(mallHtml.includes(copy.vna), `${loc}: Mall shows VN/A`);
+        assert.ok(
+          mallHtml.includes(copy.highTrust),
+          `${loc}: boundary risk_score 19 (#34d399) shows high-trust`
+        );
+        assert.equal(
+          mallHtml.includes(`${copy.officialGeneric} ${copy.mall}`) ||
+            mallHtml.includes(`${copy.officialGeneric}<`) ||
+            mallHtml.includes(`>${copy.officialGeneric}<`),
+          false,
+          `${loc}: must never duplicate generic official pill alongside Official Mall`
+        );
+
+        // (c) Parallel-import listing with risk_score 20 (#fbbf24) -> Xách tay only, NO high-trust, NO VN/A
+        const importOffer = makeOffer1897('imp', {
+          platform: 'shopee',
+          title: 'iPhone 16 Pro Max 256GB LL/A Xách tay',
+          merchant: {
+            id: 'm-imp',
+            name: 'Shop Tech Import HN',
+            is_official: false,
+            risk_score: 20,
+            dosafe_risk_score: 10,
+            review_risk_score: 20,
+          },
+        });
+        assert.equal(merchantTrustColor(importOffer.merchant), '#fbbf24');
+        const impHtml = renderOffersCardHtml([importOffer], loc);
+        assert.ok(
+          impHtml.includes(copy.imported),
+          `${loc}: shows imported badge`
+        );
+        assert.equal(impHtml.includes(copy.vna), false);
+        assert.equal(impHtml.includes(copy.vat), false);
+        assert.equal(impHtml.includes(copy.mall), false);
+        assert.equal(
+          impHtml.includes(copy.highTrust),
+          false,
+          `${loc}: risk_score 20 (#fbbf24) must NOT show high-trust`
+        );
+
+        // (d) Imported listing even with is_official: true -> downgraded to Xách tay, NO Official Mall / generic official pill
+        const importedMallOffer = makeOffer1897('imp-mall', {
+          platform: 'tiktok',
+          title: 'iPhone 16 Bản Nhật J/A Xách tay',
+          merchant: {
+            id: 'm-imp-mall',
+            name: 'Demo Mall',
+            is_official: true,
+            risk_score: null,
+            dosafe_risk_score: null,
+            review_risk_score: null,
+          },
+        });
+        assert.equal(renderOfferChannelBadgeHtml(importedMallOffer), '');
+        assert.ok(
+          renderOfferOriginBadgeHtml(importedMallOffer).includes(copy.imported)
+        );
+        const importedMallHtml = renderOffersCardHtml([importedMallOffer], loc);
+        assert.equal(importedMallHtml.includes(copy.mall), false);
+        assert.equal(importedMallHtml.includes(copy.officialGeneric), false);
+        assert.equal(importedMallHtml.includes(copy.highTrust), false);
+
+        // (e) Official store with null risk_score -> Official Mall only, NO High Trust, NO VN/A when unknown
+        const nullRiskMall = makeOffer1897('null-risk', {
+          platform: 'lazada',
+          title: 'Samsung Galaxy S25 Ultra 256GB',
+          merchant: {
+            id: 'm-null',
+            name: 'Samsung Official Store',
+            is_official: true,
+            risk_score: null,
+            dosafe_risk_score: null,
+            review_risk_score: null,
+          },
+        });
+        const nullRiskHtml = renderOffersCardHtml([nullRiskMall], loc);
+        assert.ok(nullRiskHtml.includes(copy.mall));
+        assert.equal(nullRiskHtml.includes(copy.vna), false);
+        assert.equal(nullRiskHtml.includes(copy.imported), false);
+        assert.equal(nullRiskHtml.includes(copy.highTrust), false);
+
+        // 3. Combo Cart Optimizer URL builder & Pinned Alerts card CTA across locales.
+        const makePin1897 = (slug: string, name?: string) => ({
+          slug,
+          productName: name ?? slug,
+          categorySlug: 'smartphones' as const,
+          targetPriceVnd: 20_000_000,
+          bestPriceAtPinVnd: 21_500_000,
+          pinnedAt: '2026-11-24T00:00:00.000Z',
+        });
+
+        const threePins = [
+          makePin1897('iphone-16-pro-max-256gb', 'iPhone 16 Pro Max 256GB'),
+          makePin1897('airpods-pro-2-usb-c', 'AirPods Pro 2 USB-C'),
+          makePin1897('apple-watch-s10-42mm', 'Apple Watch Series 10 42mm'),
+        ];
+        const threeCardHtml = renderPinnedAlertsCardHtml(threePins, {
+          apiBaseUrl: 'https://rate.vn',
+          locale: loc,
+        });
+        assert.ok(
+          threeCardHtml.includes(
+            `href="https://rate.vn/${loc}/watchlist?items=iphone-16-pro-max-256gb,airpods-pro-2-usb-c,apple-watch-s10-42mm"`
+          ),
+          `${loc}: 3 pinned items must build localized combo bridge URL`
+        );
+        assert.ok(
+          threeCardHtml.includes('data-combo-cart-bridge="true"'),
+          `${loc}: combo CTA must have data-combo-cart-bridge`
+        );
+        assert.ok(
+          threeCardHtml.includes('target="_blank" rel="noopener noreferrer"'),
+          `${loc}: combo CTA must open safely in new tab`
+        );
+        assert.ok(
+          threeCardHtml.includes(copy.combo3),
+          `${loc}: expected localized 3-item CTA copy "${copy.combo3}"`
+        );
+
+        const sevenPins = Array.from({ length: 7 }, (_, i) =>
+          makePin1897(`device-slug-${i + 1}`, `Device ${i + 1}`)
+        );
+        const sevenCardHtml = renderPinnedAlertsCardHtml(sevenPins, {
+          apiBaseUrl: 'https://rate.vn',
+          locale: loc,
+        });
+        assert.ok(
+          sevenCardHtml.includes(
+            `href="https://rate.vn/${loc}/watchlist?items=device-slug-1,device-slug-2,device-slug-3,device-slug-4,device-slug-5"`
+          ),
+          `${loc}: >5 pinned items must cap combo URL at 5 newest items`
+        );
+        assert.equal(sevenCardHtml.includes('device-slug-6'), true); // still shown in pinned list
+        assert.equal(
+          sevenCardHtml.includes(
+            'items=device-slug-1,device-slug-2,device-slug-3,device-slug-4,device-slug-5,device-slug-6'
+          ),
+          false,
+          `${loc}: 6th item must not appear in ?items= query`
+        );
+        assert.ok(
+          sevenCardHtml.includes(copy.comboCapped),
+          `${loc}: >5 pinned items must show capped copy "${copy.comboCapped}"`
+        );
+      }
+    } finally {
+      if (savedChromeDesc) Object.defineProperty(g, 'chrome', savedChromeDesc);
+      else delete g.chrome;
+    }
+
+    // 4. Security & edge-case tests for buildWatchlistComboCartUrl / extractValidPinnedComboSlugs.
+    assert.equal(buildWatchlistComboCartUrl('https://rate.vn', [], 'vi'), null);
+    assert.equal(
+      buildWatchlistComboCartUrl(
+        'https://rate.vn',
+        [{ slug: 'iphone-16' }],
+        'vi'
+      ),
+      null,
+      'single pinned item must not emit a combo URL'
+    );
+    assert.equal(
+      buildWatchlistComboCartUrl(
+        'https://rate.vn',
+        [{ slug: 'iPhone-16' }, { slug: 'iphone-16' }],
+        'vi'
+      ),
+      null,
+      'case-insensitive duplicates collapsing to 1 unique slug must return null'
+    );
+    const protoComboObj = Object.create({ slug: 'inherited-slug' });
+    assert.equal(
+      buildWatchlistComboCartUrl(
+        'https://rate.vn',
+        [
+          protoComboObj,
+          { slug: '../admin' },
+          { slug: '__proto__' },
+          { slug: 'valid-one' },
+        ],
+        'vi'
+      ),
+      null,
+      'prototype-inherited and invalid slugs must be filtered before >= 2 check'
+    );
+    assert.equal(
+      buildWatchlistComboCartUrl(
+        'https://evil.example.com/steal',
+        [
+          { slug: 'iphone-16\uD800' },
+          { slug: 'IPHONE-16' },
+          { slug: 'galaxy-s25' },
+        ],
+        'en-US\uDFFF'
+      ),
+      'https://rate.vn/en/watchlist?items=iphone-16,galaxy-s25',
+      'untrusted apiBaseUrl falls back to https://rate.vn, lone surrogates stripped, case-insensitive dedupe preserved'
+    );
+    assert.equal(
+      buildWatchlistComboCartUrl(
+        'http://localhost:3000/',
+        [{ slug: 'item-1' }, { slug: 'item-2' }],
+        'cs-CZ'
+      ),
+      'http://localhost:3000/cs/watchlist?items=item-1,item-2'
+    );
+    assert.deepEqual(
+      extractValidPinnedComboSlugs([
+        { slug: 's1' },
+        { slug: 'S1' },
+        { slug: 's2' },
+        { slug: 's3' },
+        { slug: 's4' },
+        { slug: 's5' },
+        { slug: 's6' },
+      ]),
+      ['s1', 's2', 's3', 's4', 's5']
+    );
+
+    // Web Combo Cart contract parity: <= 120-char slug limit, UNSAFE_SLUG_TOKENS parity,
+    // <= 1000-char joined ?items= limit, and CTA count coupling against eligible slugs.
+    const exact120Slug = `p-${'a'.repeat(118)}`;
+    const over120Slug = `p-${'a'.repeat(119)}`;
+    assert.equal(exact120Slug.length, 120);
+    assert.equal(over120Slug.length, 121);
+    assert.deepEqual(
+      extractValidPinnedComboSlugs([
+        { slug: over120Slug },
+        { slug: 'none' },
+        { slug: 'na' },
+        { slug: 'hasOwnProperty' },
+        { slug: 'toLocaleString' },
+        { slug: 'isPrototypeOf' },
+        { slug: exact120Slug },
+        { slug: 'valid-second-slug' },
+      ]),
+      [exact120Slug, 'valid-second-slug'],
+      'combo slug extractor must drop >120-char slugs and web UNSAFE_SLUG_TOKENS'
+    );
+    assert.equal(
+      buildWatchlistComboCartUrl(
+        'https://rate.vn',
+        [
+          { slug: over120Slug },
+          { slug: 'none' },
+          { slug: 'valid-second-slug' },
+        ],
+        'vi'
+      ),
+      null,
+      'fewer than 2 web-combo-eligible slugs must return null'
+    );
+    const mixedPinCard = renderPinnedAlertsCardHtml(
+      [
+        {
+          slug: over120Slug,
+          productName: 'Very Long Slug Product',
+          categorySlug: 'smartphones',
+          targetPriceVnd: 20_000_000,
+          bestPriceAtPinVnd: 21_000_000,
+          pinnedAt: '2026-11-24T00:00:00.000Z',
+        },
+        {
+          slug: 'iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          categorySlug: 'smartphones',
+          targetPriceVnd: 24_690_000,
+          bestPriceAtPinVnd: 25_990_000,
+          pinnedAt: '2026-11-24T00:00:00.000Z',
+        },
+        {
+          slug: 'airpods-pro-2-usb-c',
+          productName: 'AirPods Pro 2 USB-C',
+          categorySlug: 'earbuds',
+          targetPriceVnd: 5_200_000,
+          bestPriceAtPinVnd: 5_490_000,
+          pinnedAt: '2026-11-24T00:00:00.000Z',
+        },
+      ],
+      { apiBaseUrl: 'https://rate.vn', locale: 'vi' }
+    );
+    assert.ok(
+      mixedPinCard.includes(
+        'href="https://rate.vn/vi/watchlist?items=iphone-16-pro-256gb,airpods-pro-2-usb-c"'
+      ),
+      'combo bridge URL must exclude >120-char slug'
+    );
+    assert.ok(
+      mixedPinCard.includes('Tối ưu giỏ combo (2 món đã ghim)'),
+      'combo CTA count must match eligible URL slugs (2), not raw pinned alerts (3)'
+    );
+
+    const singlePinCard = renderPinnedAlertsCardHtml(
+      [
+        {
+          slug: 'iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          categorySlug: 'smartphones',
+          targetPriceVnd: 24_690_000,
+          bestPriceAtPinVnd: 25_990_000,
+          pinnedAt: '2026-11-24T00:00:00.000Z',
+        },
+      ],
+      { apiBaseUrl: 'https://rate.vn', locale: 'vi' }
+    );
+    assert.equal(
+      singlePinCard.includes('data-combo-cart-bridge'),
+      false,
+      '1 pinned item must not render the combo optimizer CTA'
+    );
+
+    // 5. Interactive Side Panel combo bridge integration: 1 -> 2 pinned alerts shows bridge, unpin back to 1 removes it.
+    const savedComboGlobals = ['chrome', 'document', 'fetch'].map(
+      (k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const
+    );
+    try {
+      let spDomReady: (() => void) | undefined;
+      const spStoredLocal: Record<string, unknown> = {
+        apiBaseUrl: 'https://rate.vn',
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 0,
+        checkoutGuardEnabled: true,
+        [PINNED_ALERTS_STORAGE_KEY]: [
+          {
+            slug: 'airpods-pro-2-usb-c',
+            productName: 'AirPods Pro 2 USB-C',
+            categorySlug: 'earbuds',
+            targetPriceVnd: 5_200_000,
+            bestPriceAtPinVnd: 5_490_000,
+            pinnedAt: '2026-11-24T00:00:00.000Z',
+          },
+        ],
+      };
+      let pinToggleClickCb: (() => void) | undefined;
+      let unpinClickCb: (() => void) | undefined;
+      const pinBtnMock = {
+        className: '',
+        innerHTML: '',
+        setAttribute() {},
+        addEventListener(ev: string, cb: () => void) {
+          if (ev === 'click') pinToggleClickCb = cb;
+        },
+      };
+      const unpinBtnMock = {
+        getAttribute: (n: string) =>
+          n === 'data-unpin-slug' ? 'iphone-16-pro-max-256gb' : null,
+        addEventListener(ev: string, cb: () => void) {
+          if (ev === 'click') unpinClickCb = cb;
+        },
+      };
+      const spRoot = {
+        innerHTML: '',
+        querySelector: () => null,
+        querySelectorAll: (sel: string) =>
+          sel === '[data-pin-alert-toggle="true"]' ? [pinBtnMock] : [],
+      };
+      const spPinnedSlot = {
+        innerHTML: '',
+        querySelectorAll: (sel: string) =>
+          sel === '[data-unpin-slug]' &&
+          spPinnedSlot.innerHTML.includes('iphone-16-pro-max-256gb')
+            ? [unpinBtnMock]
+            : [],
+      };
+
+      g.fetch = async () => ({
+        ok: true,
+        json: async () => ({ ok: true, data: [] }),
+      });
+      g.chrome = {
+        runtime: {
+          sendMessage: async (msg: Record<string, unknown>) => {
+            if (msg.type === 'RATE_SIDEPANEL_FETCH_FULL') {
+              return {
+                ok: true,
+                settings: {
+                  apiBaseUrl: 'https://rate.vn',
+                  crowdContributeOptIn: false,
+                  checkoutGuardEnabled: true,
+                },
+                signal: {
+                  platform: 'cellphones',
+                  canonicalUrl:
+                    'https://cellphones.com.vn/iphone-16-pro-max.html',
+                  externalItemId: 'iphone-16-pro-max',
+                  externalShopId: null,
+                  title: 'iPhone 16 Pro Max 256GB Chính hãng VN/A',
+                  selectedVariant: null,
+                  price: 28_990_000,
+                  originalPrice: null,
+                  ratingStar: null,
+                  ratingCount: null,
+                },
+                data: {
+                  matchStatus: 'exact_listing',
+                  platform: 'cellphones',
+                  canonicalUrl: null,
+                  detectedStorageGb: 256,
+                  isAccessoryOrPart: false,
+                  accessoryReason: null,
+                  variantCandidates: [],
+                  masterProduct: {
+                    id: 'mp-1897',
+                    slug: 'iphone-16-pro-max-256gb',
+                    name: 'iPhone 16 Pro Max 256GB',
+                    brand: 'Apple',
+                    model: 'iPhone 16 Pro Max',
+                    storage_gb: 256,
+                    ram_gb: 8,
+                    min_price: 28_990_000,
+                    max_price: 30_990_000,
+                    merchant_count: 2,
+                    average_rating: 4.9,
+                    user_rating_weighted: 4.9,
+                    expert_rating: null,
+                    authentic_review_count: 10,
+                    total_reviews: 12,
+                  },
+                  matchedOffer: null,
+                  topCheaperOffers: [],
+                  allOffers: [
+                    makeOffer1897('cps', {
+                      platform: 'cellphones',
+                      title: 'iPhone 16 Pro Max 256GB Chính hãng VN/A',
+                      url: 'https://cellphones.com.vn/iphone-16-pro-max.html',
+                      price_current: 28_990_000,
+                      merchant: {
+                        id: 'm-cps',
+                        name: 'CellphoneS',
+                        is_official: true,
+                        risk_score: 4,
+                        dosafe_risk_score: 0,
+                        review_risk_score: 4,
+                      },
+                    }),
+                  ],
+                  merchantProfile: null,
+                  reviewSummary: null,
+                  priceHistory: null,
+                  categorySlug: 'smartphones',
+                  compareUrl: '/compare?category=smartphones',
+                  productDetailUrl: '/smartphones/iphone-16-pro-max-256gb',
+                  priceAssessment: {
+                    verdict: 'fair_market_price',
+                    badgeLabel: 'Fair',
+                    explanation: 'Fair',
+                    observedPrice: 28_990_000,
+                    observedOriginalPrice: null,
+                    claimedDiscountPct: 0,
+                    vsMarketMedianPct: 0,
+                    marketMinPrice: 28_990_000,
+                    marketMedianPrice: 29_990_000,
+                    marketMaxPrice: 30_990_000,
+                    historicalMinPrice: 28_990_000,
+                    historicalMaxPrice: 31_990_000,
+                    cheaperOfferCount: 0,
+                    maxSavingsAmount: 0,
+                  },
+                } satisfies ExtensionLookupData,
+              };
+            }
+            return { ok: false };
+          },
+        },
+        storage: {
+          local: {
+            get: async () => ({ ...spStoredLocal }),
+            set: async (obj: Record<string, unknown>) => {
+              Object.assign(spStoredLocal, obj);
+            },
+          },
+          onChanged: { addListener() {} },
+        },
+      };
+      g.document = {
+        documentElement: {},
+        title: '',
+        querySelectorAll: () => [],
+        getElementById: (id: string) => {
+          if (id === 'panel-root') return spRoot;
+          if (id === 'pinned-alerts-slot') return spPinnedSlot;
+          return null;
+        },
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'DOMContentLoaded') spDomReady = cb;
+        },
+      };
+
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1897combo', import.meta.url).href
+      );
+      spDomReady!();
+      await new Promise((r) => setTimeout(r, 20));
+
+      assert.ok(
+        spRoot.innerHTML.includes('Ủy quyền VAT') &&
+          spRoot.innerHTML.includes('VN/A') &&
+          spRoot.innerHTML.includes('Tin cậy cao'),
+        'sidepanel offer card must display VAT channel, VN/A origin, and High Trust badges'
+      );
+      assert.equal(
+        spPinnedSlot.innerHTML.includes('data-combo-cart-bridge'),
+        false,
+        '1 hydrated pinned alert must not show combo bridge yet'
+      );
+
+      // Pin 2nd product -> immediately renders 2-item combo cart URL
+      pinToggleClickCb!();
+      await new Promise((r) => setTimeout(r, 20));
+      assert.ok(
+        spPinnedSlot.innerHTML.includes(
+          'href="https://rate.vn/vi/watchlist?items=iphone-16-pro-max-256gb,airpods-pro-2-usb-c"'
+        ),
+        'pinning 2nd alert must render 1-click combo cart bridge URL'
+      );
+
+      // Unpin back to 1 item -> combo bridge disappears
+      assert.ok(unpinClickCb);
+      unpinClickCb!();
+      await new Promise((r) => setTimeout(r, 20));
+      assert.equal(
+        spPinnedSlot.innerHTML.includes('data-combo-cart-bridge'),
+        false,
+        'unpinning down to 1 alert must hide combo bridge CTA'
+      );
+    } finally {
+      for (const [key, desc] of savedComboGlobals) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+
+    // 6. Locale key & placeholder parity across vi/en/cs for all 7 #1897 keys + zero em/en-dashes + manifest permissions unchanged.
+    const manifest1897 = JSON.parse(
+      fs.readFileSync(path.resolve(__dirname, '../manifest.json'), 'utf8')
+    ) as { permissions?: string[] };
+    assert.deepEqual(
+      manifest1897.permissions,
+      ['storage', 'sidePanel'],
+      'manifest.json must keep strictly storage + sidePanel permissions for #1897'
+    );
+    const required1897Keys = [
+      'offerChannelAuthorizedVat',
+      'offerChannelOfficialMall',
+      'offerOriginOfficialVna',
+      'offerOriginImported',
+      'offerHighTrust',
+      'pinnedAlertsComboCta',
+      'pinnedAlertsComboCtaCapped',
+    ] as const;
+    const cats1897 = readLocaleCatalogues();
+    for (const key of required1897Keys) {
+      for (const loc of ['vi', 'en', 'cs'] as const) {
+        const entry = cats1897[loc][key];
+        assert.ok(
+          entry?.message,
+          `missing ${key} in _locales/${loc}/messages.json`
+        );
+        assert.equal(
+          /[\u2013\u2014]/.test(entry.message),
+          false,
+          `zero em/en-dashes allowed in ${loc}.${key}`
+        );
+      }
+      assert.deepEqual(
+        Object.keys(cats1897.vi[key]?.placeholders ?? {}).sort(),
+        Object.keys(cats1897.en[key]?.placeholders ?? {}).sort(),
+        `placeholder parity vi vs en on ${key}`
+      );
+      assert.deepEqual(
+        Object.keys(cats1897.vi[key]?.placeholders ?? {}).sort(),
+        Object.keys(cats1897.cs[key]?.placeholders ?? {}).sort(),
+        `placeholder parity vi vs cs on ${key}`
+      );
+    }
+
+    console.log(
+      '  ✅ [MV3 3.1 Side Panel VN/A origin, seller channel badges & 1-click combo cart bridge (#1897)] Verified'
+    );
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

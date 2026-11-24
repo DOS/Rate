@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { BsChevronDown, BsChevronUp, BsPhone } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
+import { buildWatchlistComboHref } from '@/lib/combo-cart-links';
 import type { CanonicalCategorySlug } from '@/lib/rate-domain';
 import {
   clearCompareTray,
@@ -147,6 +148,13 @@ export default function CompareTrayBar({ initialItems }: CompareTrayBarProps) {
   }
 
   const compareHref = buildCompareTrayHref(items);
+  const comboCartHref =
+    items.length >= 2
+      ? buildWatchlistComboHref(
+          items.map((item) => item.slug),
+          { minItems: 2 }
+        )
+      : null;
 
   const handleRemove = (slug: string) => {
     setCompareTray(items.filter((x) => x.slug !== slug));
@@ -200,6 +208,16 @@ export default function CompareTrayBar({ initialItems }: CompareTrayBarProps) {
                 >
                   {t('trayClearAll')}
                 </button>
+              )}
+              {!collapsed && comboCartHref && (
+                <Link
+                  href={comboCartHref}
+                  prefetch={false}
+                  data-testid="compare-tray-combo-btn"
+                  className="btn btn-sm btn-outline-light rounded-pill fw-semibold text-nowrap px-3 py-1"
+                >
+                  {t('trayComboCartBtn', { count: items.length })}
+                </Link>
               )}
               <Link
                 href={compareHref}

@@ -3,7 +3,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { NextRequest } from 'next/server';
 import { buildRateOpenApiSpec } from '@/server/rate/openapi';
+import {
+  deduplicateComboSlugs,
+  executeComboCartOptimization,
+  isSafeComboSlugToken,
+} from '@/server/rate/combo-cart';
 import * as comboCartRouteModule from '../combo-cart/route';
+import { GET as ogGet } from '../og/route';
+import { OG_TRUTH_CARD_CACHE_CONTROL } from '@/lib/og-truth-card';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.test';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
@@ -175,6 +182,7 @@ async function main() {
   for (const relPath of [
     '../../../../../lib/combo-cart-optimizer.ts',
     '../../../../../lib/merchant-trust-badge.ts',
+    '../../../../../server/rate/combo-cart.ts',
     '../combo-cart/route.ts',
     '../../../../../server/rate/openapi.ts',
     '../../../../../lib/__tests__/combo-cart-optimizer.test.ts',
@@ -187,24 +195,44 @@ async function main() {
       `${relPath} must not contain em-dash or en-dash`
     );
   }
+  const serverServiceSrc = readFileSync(
+    path.resolve(__dirname, '../../../../../server/rate/combo-cart.ts'),
+    'utf8'
+  );
+  assert.ok(serverServiceSrc.startsWith("import 'server-only';"));
+  assert.equal(serverServiceSrc.includes('@repo/shared-data/server'), false);
+  assert.equal(serverServiceSrc.includes('SUPABASE_SECRET_KEY'), false);
   const routeSrc = readFileSync(
     path.resolve(__dirname, '../combo-cart/route.ts'),
     'utf8'
   );
   assert.equal(routeSrc.includes('@repo/shared-data/server'), false);
   assert.equal(routeSrc.includes('SUPABASE_SECRET_KEY'), false);
+  const ogRouteSrc = readFileSync(
+    path.resolve(__dirname, '../og/route.ts'),
+    'utf8'
+  );
+  assert.equal(ogRouteSrc.includes('@repo/shared-data/server'), false);
+  assert.equal(ogRouteSrc.includes('SUPABASE_SECRET_KEY'), false);
+  assert.ok(ogRouteSrc.includes('executeComboCartOptimization'));
 
   const origFetch = globalThis.fetch;
   const prevItemModelFlag = process.env.RATE_ITEM_MODEL;
 
   try {
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
       const url =
         typeof input === 'string'
           ? input
           : input instanceof URL
             ? input.href
             : input.url;
+      if (url.startsWith('data:')) {
+        return origFetch(input, init);
+      }
       const { pathname, searchParams } = new URL(url);
 
       if (pathname === '/rest/v1/categories') {
@@ -1283,6 +1311,305 @@ async function main() {
     assert.ok(itemsSchemaProps?.retiredVariant);
     assert.ok(spec.components.schemas.ComboCartPlan);
     assert.ok(spec.components.schemas.MerchantTrustBadge);
+
+    // 10. Direct server/rate/combo-cart.ts unit tests: slug helpers, validation,
+    //     retired-variant guard, and strictly bounded merchant profile fan-out
+    assert.equal(isSafeComboSlugToken('apple-iphone-16-128gb'), true);
+    assert.equal(isSafeComboSlugToken('__proto__'), false);
+    assert.equal(isSafeComboSlugToken('constructor'), false);
+    assert.equal(isSafeComboSlugToken('bad..slug'), false);
+    assert.deepEqual(
+      deduplicateComboSlugs([
+        'apple-iphone-16',
+        'APPLE-IPHONE-16',
+        'apple-airpods-pro-2-usb-c',
+      ]),
+      ['apple-iphone-16', 'apple-airpods-pro-2-usb-c']
+    );
+
+    const invalidServiceRes = await executeComboCartOptimization(
+      { items: ['only-one'] },
+      {
+        resolveWatchlistSlug: async () => null,
+        getCachedMasterProductBySlug: async () => null,
+        getMasterProductOffersBatch: async () => new Map(),
+        getCachedMerchantProfileById: async () => null,
+        getCachedCategorySlugById: async () => new Map(),
+      }
+    );
+    assert.equal(invalidServiceRes.ok, false);
+    if (!invalidServiceRes.ok) {
+      assert.equal(invalidServiceRes.code, 'INVALID_QUERY');
+    }
+
+    const fanOutProfileLookups: string[] = [];
+    const PLAN_A_MERCHANT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+    const PLAN_B_MERCHANT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+    const UNREFERENCED_EXPENSIVE_MERCHANT =
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3';
+    const fanOutPhone = makeMaster(
+      '55555555-5555-4555-8555-555555555551',
+      'fanout-phone',
+      'Fanout Phone',
+      'cat-phone',
+      'smartphones'
+    );
+    const fanOutBuds = makeMaster(
+      '55555555-5555-4555-8555-555555555552',
+      'fanout-buds',
+      'Fanout Buds',
+      'cat-earbud',
+      'earbuds'
+    );
+
+    const makeOfferForFanOut = (
+      id: string,
+      merchantId: string,
+      merchantName: string,
+      platform: string,
+      price: number
+    ) => ({
+      id,
+      platform,
+      title: `${merchantName} ${id}`,
+      price_current: price,
+      price_original: null,
+      stock: 5,
+      rating_star: 4.9,
+      rating_count: 40,
+      url: `https://shopee.vn/product/1/${id}`,
+      availability: 'in_stock' as const,
+      merchant: {
+        id: merchantId,
+        name: merchantName,
+        platform,
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: 50_000,
+        location: 'TP.HCM',
+        risk_score: 5,
+        dosafe_risk_score: 5,
+        review_risk_score: 5,
+        review_risk_breakdown: { total_reviews: 30 },
+      },
+    });
+
+    const fanOutRes = await executeComboCartOptimization(
+      {
+        items: ['fanout-phone', 'fanout-buds'],
+        officialOnly: false,
+        minTrust: 80,
+        maxStores: 2,
+        shippingVnd: 0,
+      },
+      {
+        resolveWatchlistSlug: async () => null,
+        getCachedMasterProductBySlug: async (slug) =>
+          slug === 'fanout-phone'
+            ? (fanOutPhone as never)
+            : slug === 'fanout-buds'
+              ? (fanOutBuds as never)
+              : null,
+        getMasterProductOffersBatch: async () =>
+          new Map([
+            [
+              fanOutPhone.id,
+              [
+                makeOfferForFanOut(
+                  'fo-p-a',
+                  PLAN_A_MERCHANT,
+                  'Plan A Store',
+                  'cellphones',
+                  20_000_000
+                ),
+                makeOfferForFanOut(
+                  'fo-p-b',
+                  PLAN_B_MERCHANT,
+                  'Plan B Store',
+                  'shopee',
+                  18_000_000
+                ),
+                makeOfferForFanOut(
+                  'fo-p-c',
+                  UNREFERENCED_EXPENSIVE_MERCHANT,
+                  'Expensive Unpicked Store',
+                  'tiki',
+                  25_000_000
+                ),
+              ],
+            ],
+            [
+              fanOutBuds.id,
+              [
+                makeOfferForFanOut(
+                  'fo-b-a',
+                  PLAN_A_MERCHANT,
+                  'Plan A Store',
+                  'cellphones',
+                  5_000_000
+                ),
+                makeOfferForFanOut(
+                  'fo-b-c',
+                  UNREFERENCED_EXPENSIVE_MERCHANT,
+                  'Expensive Unpicked Store',
+                  'tiki',
+                  6_500_000
+                ),
+              ],
+            ],
+          ]),
+        getCachedMerchantProfileById: async (merchantId) => {
+          fanOutProfileLookups.push(merchantId);
+          return {
+            listings: [
+              {
+                id: `listing-${merchantId}`,
+                platform: 'cellphones',
+                title: 'Clean listing',
+                price_current: 10_000_000,
+                price_original: null,
+                availability: 'in_stock',
+                discount_analysis: null,
+              },
+            ],
+          } as never;
+        },
+        getCachedCategorySlugById: async () =>
+          new Map([
+            ['cat-phone', 'smartphones'],
+            ['cat-earbud', 'earbuds'],
+          ]),
+      }
+    );
+    assert.equal(fanOutRes.ok, true);
+    if (fanOutRes.ok) {
+      assert.equal(fanOutRes.data.singleStoreBest?.totalVnd, 25_000_000);
+      assert.equal(fanOutRes.data.multiStoreOptimal?.totalVnd, 23_000_000);
+      assert.equal(
+        fanOutProfileLookups.includes(UNREFERENCED_EXPENSIVE_MERCHANT),
+        false,
+        'bounded fan-out must NOT query merchant profiles outside Plan A / Plan B'
+      );
+      assert.deepEqual(
+        [...fanOutProfileLookups].sort(),
+        [PLAN_A_MERCHANT, PLAN_B_MERCHANT].sort()
+      );
+    }
+
+    // End-to-end GET /api/v1/rate/og?type=combo via shared combo-cart reader (#1898)
+    const OG_PHONE_ID = '55555555-5555-4555-8555-555555555551';
+    const OG_BUDS_ID = '55555555-5555-4555-8555-555555555552';
+    const OG_MERCHANT_A = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+    const OG_MERCHANT_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+    itemRows = [];
+    masterRows = [
+      makeMaster(
+        OG_PHONE_ID,
+        'og-combo-phone-256gb',
+        'OG Combo Phone 256GB',
+        'cat-phone',
+        'smartphones'
+      ),
+      makeMaster(
+        OG_BUDS_ID,
+        'og-combo-buds-pro',
+        'OG Combo Buds Pro',
+        'cat-earbud',
+        'earbuds'
+      ),
+    ];
+    trustViewRows = [
+      makeTrustOfferRow({
+        id: 'og-o1',
+        clusterId: OG_PHONE_ID,
+        merchantId: OG_MERCHANT_A,
+        merchantName: 'CellphoneS',
+        platform: 'cellphones',
+        priceCurrent: 21_000_000,
+        isOfficial: true,
+        dosafeRisk: 5,
+        reviewRisk: 5,
+      }),
+      makeTrustOfferRow({
+        id: 'og-o2',
+        clusterId: OG_BUDS_ID,
+        merchantId: OG_MERCHANT_A,
+        merchantName: 'CellphoneS',
+        platform: 'cellphones',
+        priceCurrent: 5_500_000,
+        isOfficial: true,
+        dosafeRisk: 5,
+        reviewRisk: 5,
+      }),
+      makeTrustOfferRow({
+        id: 'og-o3',
+        clusterId: OG_PHONE_ID,
+        merchantId: OG_MERCHANT_B,
+        merchantName: 'Tiki Trading',
+        platform: 'tiki',
+        priceCurrent: 19_000_000,
+        isOfficial: true,
+        dosafeRisk: 5,
+        reviewRisk: 5,
+      }),
+    ];
+    syncDerivedProductAndMerchantRows([
+      {
+        id: OG_MERCHANT_A,
+        platform: 'cellphones',
+        name: 'CellphoneS',
+        isOfficial: true,
+        dosafeRisk: 5,
+        reviewRisk: 5,
+        reviewBreakdown: { total_reviews: 30 },
+        followerCount: 100_000,
+      },
+      {
+        id: OG_MERCHANT_B,
+        platform: 'tiki',
+        name: 'Tiki Trading',
+        isOfficial: true,
+        dosafeRisk: 5,
+        reviewRisk: 5,
+        reviewBreakdown: { total_reviews: 30 },
+        followerCount: 100_000,
+      },
+    ]);
+
+    const ogComboRes = await ogGet(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/og?type=combo&items=og-combo-phone-256gb,og-combo-buds-pro&officialOnly=0&minTrust=80&maxStores=3&shippingVnd=30000&locale=vi&format=social&download=1',
+        { headers: { 'x-forwarded-for': '203.0.113.88' } }
+      )
+    );
+    assert.equal(ogComboRes.status, 200);
+    assert.equal(ogComboRes.headers.get('content-type'), 'image/png');
+    assert.equal(
+      ogComboRes.headers.get('cache-control'),
+      OG_TRUTH_CARD_CACHE_CONTROL
+    );
+    const ogPngBytes = Buffer.from(await ogComboRes.arrayBuffer());
+    assert.ok(
+      ogPngBytes
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    );
+
+    const ogBadPresetRes = await ogGet(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/og?type=combo&items=og-combo-phone-256gb,og-combo-buds-pro&shippingVnd=12345',
+        { headers: { 'x-forwarded-for': '203.0.113.89' } }
+      )
+    );
+    assert.equal(ogBadPresetRes.status, 400);
+
+    const ogMissingRes = await ogGet(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/og?type=combo&items=og-combo-phone-256gb,does-not-exist',
+        { headers: { 'x-forwarded-for': '203.0.113.90' } }
+      )
+    );
+    assert.equal(ogMissingRes.status, 404);
 
     console.warn('All GET /api/v1/rate/combo-cart tests passed');
   } finally {

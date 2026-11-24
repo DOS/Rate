@@ -803,5 +803,36 @@
   },
   "pinnedAlertUnpinShort": {
     "message": "Bỏ ghim"
+  },
+  "offerChannelAuthorizedVat": {
+    "message": "Ủy quyền VAT"
+  },
+  "offerChannelOfficialMall": {
+    "message": "Official Mall"
+  },
+  "offerOriginOfficialVna": {
+    "message": "VN/A"
+  },
+  "offerOriginImported": {
+    "message": "Xách tay"
+  },
+  "offerHighTrust": {
+    "message": "Tin cậy cao"
+  },
+  "pinnedAlertsComboCta": {
+    "message": "Tối ưu giỏ combo ($COUNT$ món đã ghim)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "pinnedAlertsComboCtaCapped": {
+    "message": "Tối ưu $COUNT$ món mới ghim nhất",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   }
 }

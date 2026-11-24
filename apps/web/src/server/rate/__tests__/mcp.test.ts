@@ -8,12 +8,14 @@ import {
   MAX_MCP_BODY_BYTES,
   MAX_MCP_RESULT_ITEMS,
   MCP_LATEST_PROTOCOL_VERSION,
+  MCP_SERVER_INFO,
   MCP_TOOL_DEFINITIONS,
   buildRateLlmsTxt,
   buildRateWellKnownMcpDescriptor,
   handleMcpHttpPost,
   type McpDataReaders,
 } from '../mcp';
+import { computeEffectivePrice } from '../../../lib/effective-price';
 import {
   DELETE as deleteMcpRoute,
   GET as getMcpRoute,
@@ -566,7 +568,7 @@ async function runMcpTestSuite() {
     result: {
       protocolVersion: string;
       capabilities: { tools: { listChanged: boolean } };
-      serverInfo: { name: string };
+      serverInfo: { name: string; version: string };
     };
   };
   assert.equal(initBody.jsonrpc, '2.0');
@@ -574,6 +576,8 @@ async function runMcpTestSuite() {
   assert.equal(initBody.result.protocolVersion, '2025-06-18');
   assert.equal(initBody.result.capabilities.tools.listChanged, false);
   assert.equal(initBody.result.serverInfo.name, 'rate-vn-shopping-mcp');
+  assert.equal(initBody.result.serverInfo.version, '1.1.0');
+  assert.equal(MCP_SERVER_INFO.version, '1.1.0');
 
   const initLegacyRes = await handleMcpHttpPost(
     makeMcpRequest(
@@ -658,7 +662,7 @@ async function runMcpTestSuite() {
   const listJson = (await listRes.json()) as {
     result: { tools: typeof MCP_TOOL_DEFINITIONS };
   };
-  assert.equal(listJson.result.tools.length, 5);
+  assert.equal(listJson.result.tools.length, 7);
   assert.deepEqual(
     listJson.result.tools.map((t) => t.name),
     [
@@ -667,6 +671,8 @@ async function runMcpTestSuite() {
       'compare_devices_by_use_case',
       'audit_listing_url',
       'get_genuine_deals',
+      'optimize_combo_cart',
+      'calculate_effective_price',
     ]
   );
   for (const tool of listJson.result.tools) {
@@ -683,6 +689,26 @@ async function runMcpTestSuite() {
   };
   assert.deepEqual(offersSchema.required, ['slug']);
   assert.equal(offersSchema.properties.limit?.maximum, MAX_MCP_RESULT_ITEMS);
+
+  const comboSchema = listJson.result.tools.find(
+    (t) => t.name === 'optimize_combo_cart'
+  )!.inputSchema as {
+    required?: string[];
+    properties: Record<string, { minItems?: number; maxItems?: number }>;
+  };
+  assert.deepEqual(comboSchema.required, ['items']);
+  assert.equal(comboSchema.properties.items?.minItems, 2);
+  assert.equal(comboSchema.properties.items?.maxItems, 5);
+
+  const effPriceSchema = listJson.result.tools.find(
+    (t) => t.name === 'calculate_effective_price'
+  )!.inputSchema as {
+    required?: string[];
+    properties: Record<string, { maximum?: number }>;
+  };
+  assert.deepEqual(effPriceSchema.required, ['slug']);
+  assert.equal(effPriceSchema.properties.discountPercent?.maximum, 80);
+  assert.equal(effPriceSchema.properties.installmentFeePercent?.maximum, 15);
 
   // 5. Tool 1: search_verified_catalog (caps <= 10, excludes bait/sold-out, includes citations + freshness)
   const searchRes = await handleMcpHttpPost(
@@ -1412,14 +1438,19 @@ async function runMcpTestSuite() {
   assert.match(llmsAllowHeaders, /Accept/);
   const llmsBody = await llmsRes.text();
   for (const expectedFragment of [
+    'Server Version: `1.1.0`',
     'https://rate.vn/api/mcp',
     'https://rate.vn/.well-known/mcp.json',
     'https://rate.vn/api/v1/rate/openapi.json',
+    'https://rate.vn/api/v1/rate/combo-cart',
+    'https://rate.vn/api/v1/rate/og',
     'search_verified_catalog',
     'get_22_store_offers_and_price_truth',
     'compare_devices_by_use_case',
     'audit_listing_url',
     'get_genuine_deals',
+    'optimize_combo_cart',
+    'calculate_effective_price',
     '6-axis Review Trust Model v2',
     'anphatpc',
     'availability',
@@ -1452,17 +1483,31 @@ async function runMcpTestSuite() {
   );
   const wkJson = (await wkRes.json()) as {
     mcpVersion: string;
+    serverInfo: { name: string; version: string };
     transport: string;
     url: string;
     endpoints: { mcp: string; transport: string };
     tools: Array<{ name: string }>;
   };
   assert.equal(wkJson.mcpVersion, '2025-06-18');
+  assert.equal(wkJson.serverInfo.version, '1.1.0');
   assert.equal(wkJson.transport, 'streamable-http');
   assert.equal(wkJson.url, 'https://rate.vn/api/mcp');
   assert.equal(wkJson.endpoints.mcp, 'https://rate.vn/api/mcp');
   assert.equal(wkJson.endpoints.transport, 'streamable-http');
-  assert.equal(wkJson.tools.length, 5);
+  assert.equal(wkJson.tools.length, 7);
+  assert.deepEqual(
+    wkJson.tools.map((t) => t.name),
+    [
+      'search_verified_catalog',
+      'get_22_store_offers_and_price_truth',
+      'compare_devices_by_use_case',
+      'audit_listing_url',
+      'get_genuine_deals',
+      'optimize_combo_cart',
+      'calculate_effective_price',
+    ]
+  );
 
   // 12. Round-1 review regressions (protocol headers, stream errors, IDs, price filters, synthetic points, DOSafe masking, compare deduplication)
   // 12a. audit_listing_url canonicalizes tracking params BEFORE getCachedInspectProductOrShopUrl and handles rate.vn dotted paths safely
@@ -1914,8 +1959,1025 @@ async function runMcpTestSuite() {
     null
   );
 
+  // 13. Tool 6: optimize_combo_cart (v1.1.0 - Plan A/B, bounded fan-out, retired variant guard, validation, DB sanitization)
+  const comboEarbudProduct = makeProduct({
+    id: '11111111-1111-4111-8111-000000000010',
+    slug: 'apple-airpods-pro-2-usb-c',
+    name: 'Apple AirPods Pro 2 USB-C',
+    metadata: { category_slug: 'earbuds' },
+    updated_at: '2026-11-22T10:15:00.000Z',
+  });
+  const comboWatchProduct = makeProduct({
+    id: '11111111-1111-4111-8111-000000000011',
+    slug: 'apple-watch-series-10-42mm',
+    name: 'Apple Watch Series 10 42mm',
+    metadata: { category_slug: 'smartwatches' },
+    updated_at: '2026-11-22T10:20:00.000Z',
+  });
+
+  const COMBO_CPS_ID = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1';
+  const COMBO_MALL_ID = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2';
+  const COMBO_EXPENSIVE_ID = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3';
+  const comboProfileLookups: string[] = [];
+
+  const comboReaders: McpDataReaders = {
+    ...readers,
+    resolveWatchlistSlug: async (slug) => {
+      const lower = slug.toLowerCase();
+      if (lower === 'apple-iphone-16') {
+        return {
+          variantSlug: iphoneProduct.slug,
+          itemSlug: 'apple-iphone-16',
+          itemCategoryId: 'cat-phone',
+          sizeRequired: true,
+        };
+      }
+      if (lower === 'apple-iphone-16-512gb-retired') {
+        return {
+          variantSlug: iphoneProduct.slug,
+          itemSlug: 'apple-iphone-16',
+          itemCategoryId: 'cat-phone',
+          sizeRequired: true,
+        };
+      }
+      return null;
+    },
+    getCachedMasterProductBySlug: async (slug) => {
+      const lower = slug.toLowerCase();
+      if (lower === iphoneProduct.slug) return iphoneProduct;
+      if (lower === comboEarbudProduct.slug) return comboEarbudProduct;
+      if (lower === comboWatchProduct.slug) return comboWatchProduct;
+      return null;
+    },
+    getMasterProductOffersBatch: async () =>
+      new Map<string, MerchantOffer[]>([
+        [
+          iphoneProduct.id,
+          [
+            makeOffer({
+              id: 'c-p-bait',
+              platform: 'shopee',
+              price_current: 99_000,
+              merchant: {
+                id: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc9',
+                name: 'Bait Shop',
+                platform: 'shopee',
+                is_official: false,
+                rating_star: 4.2,
+                follower_count: 100,
+                location: 'Hanoi',
+                risk_score: 5,
+                dosafe_risk_score: 5,
+                review_risk_score: 5,
+                review_risk_breakdown: { total_reviews: 20 },
+              },
+            }),
+            makeOffer({
+              id: 'c-p-oos',
+              platform: 'tiki',
+              price_current: 20_000_000,
+              availability: 'out_of_stock',
+              merchant: {
+                id: COMBO_MALL_ID,
+                name: 'Apple Flagship Store',
+                platform: 'shopee',
+                is_official: true,
+                rating_star: 4.9,
+                follower_count: 200_000,
+                location: 'Ho Chi Minh City',
+                risk_score: 6,
+                dosafe_risk_score: 4,
+                review_risk_score: 6,
+                review_risk_breakdown: { total_reviews: 30 },
+              },
+            }),
+            makeOffer({
+              id: 'c-p-cps',
+              platform: 'cellphones',
+              price_current: 28_990_000,
+              price_original: null,
+              merchant: {
+                id: COMBO_CPS_ID,
+                name: 'CellphoneS Official',
+                platform: 'cellphones',
+                is_official: true,
+                rating_star: 4.9,
+                follower_count: 150_000,
+                location: 'Ho Chi Minh City',
+                risk_score: 5,
+                dosafe_risk_score: 3,
+                review_risk_score: 5,
+                review_risk_breakdown: { total_reviews: 40 },
+              },
+            }),
+            makeOffer({
+              id: 'c-p-mall',
+              platform: 'shopee',
+              price_current: 27_500_000,
+              price_original: null,
+              merchant: {
+                id: COMBO_MALL_ID,
+                name: 'Apple Flagship Store',
+                platform: 'shopee',
+                is_official: true,
+                rating_star: 4.9,
+                follower_count: 200_000,
+                location: 'Ho Chi Minh City',
+                risk_score: 6,
+                dosafe_risk_score: 4,
+                review_risk_score: 6,
+                review_risk_breakdown: { total_reviews: 30 },
+              },
+            }),
+            makeOffer({
+              id: 'c-p-exp',
+              platform: 'tiki',
+              price_current: 33_000_000,
+              price_original: null,
+              merchant: {
+                id: COMBO_EXPENSIVE_ID,
+                name: 'Overpriced Tiki Mall',
+                platform: 'tiki',
+                is_official: true,
+                rating_star: 4.8,
+                follower_count: 80_000,
+                location: 'Ho Chi Minh City',
+                risk_score: 5,
+                dosafe_risk_score: 5,
+                review_risk_score: 5,
+                review_risk_breakdown: { total_reviews: 25 },
+              },
+            }),
+          ],
+        ],
+        [
+          comboEarbudProduct.id,
+          [
+            makeOffer({
+              id: 'c-e-cps',
+              platform: 'cellphones',
+              title: 'Apple AirPods Pro 2 USB-C Chính hãng VN/A',
+              price_current: 5_600_000,
+              price_original: null,
+              merchant: {
+                id: COMBO_CPS_ID,
+                name: 'CellphoneS Official',
+                platform: 'cellphones',
+                is_official: true,
+                rating_star: 4.9,
+                follower_count: 150_000,
+                location: 'Ho Chi Minh City',
+                risk_score: 5,
+                dosafe_risk_score: 3,
+                review_risk_score: 5,
+                review_risk_breakdown: { total_reviews: 40 },
+              },
+            }),
+            makeOffer({
+              id: 'c-e-exp',
+              platform: 'tiki',
+              title: 'Apple AirPods Pro 2 USB-C',
+              price_current: 6_500_000,
+              price_original: null,
+              merchant: {
+                id: COMBO_EXPENSIVE_ID,
+                name: 'Overpriced Tiki Mall',
+                platform: 'tiki',
+                is_official: true,
+                rating_star: 4.8,
+                follower_count: 80_000,
+                location: 'Ho Chi Minh City',
+                risk_score: 5,
+                dosafe_risk_score: 5,
+                review_risk_score: 5,
+                review_risk_breakdown: { total_reviews: 25 },
+              },
+            }),
+          ],
+        ],
+        [
+          comboWatchProduct.id,
+          [
+            makeOffer({
+              id: 'c-w-cps',
+              platform: 'cellphones',
+              title: 'Apple Watch Series 10 42mm Chính hãng VN/A',
+              price_current: 10_500_000,
+              price_original: null,
+              merchant: {
+                id: COMBO_CPS_ID,
+                name: 'CellphoneS Official',
+                platform: 'cellphones',
+                is_official: true,
+                rating_star: 4.9,
+                follower_count: 150_000,
+                location: 'Ho Chi Minh City',
+                risk_score: 5,
+                dosafe_risk_score: 3,
+                review_risk_score: 5,
+                review_risk_breakdown: { total_reviews: 40 },
+              },
+            }),
+            makeOffer({
+              id: 'c-w-mall',
+              platform: 'shopee',
+              title: 'Apple Watch Series 10 42mm',
+              price_current: 9_800_000,
+              price_original: null,
+              merchant: {
+                id: COMBO_MALL_ID,
+                name: 'Apple Flagship Store',
+                platform: 'shopee',
+                is_official: true,
+                rating_star: 4.9,
+                follower_count: 200_000,
+                location: 'Ho Chi Minh City',
+                risk_score: 6,
+                dosafe_risk_score: 4,
+                review_risk_score: 6,
+                review_risk_breakdown: { total_reviews: 30 },
+              },
+            }),
+          ],
+        ],
+      ]),
+    getCachedMerchantProfileById: async (merchantId) => {
+      comboProfileLookups.push(merchantId);
+      if (merchantId === COMBO_CPS_ID) {
+        return {
+          listings: [
+            {
+              id: 'l-cps-1',
+              platform: 'cellphones',
+              title: 'Clean listing',
+              price_current: 28_990_000,
+              price_original: null,
+              availability: 'in_stock',
+              discount_analysis: null,
+            },
+          ],
+        } as never;
+      }
+      if (merchantId === COMBO_MALL_ID) {
+        return {
+          listings: [
+            {
+              id: 'l-mall-fake',
+              platform: 'shopee',
+              title: 'Fake sale outside cart',
+              price_current: 5_000_000,
+              price_original: 9_000_000,
+              availability: 'in_stock',
+              discount_analysis: { verdict: 'fake_discount' },
+            },
+          ],
+        } as never;
+      }
+      return null;
+    },
+    getCachedCategorySlugById: async () =>
+      new Map([
+        ['cat-phone', 'smartphones'],
+        ['cat-earbud', 'earbuds'],
+      ]),
+  };
+
+  const comboRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'call-combo',
+        method: 'tools/call',
+        params: {
+          name: 'optimize_combo_cart',
+          arguments: {
+            items: [
+              'apple-iphone-16',
+              'apple-airpods-pro-2-usb-c',
+              'apple-watch-series-10-42mm',
+            ],
+            officialOnly: true,
+            minTrust: 80,
+            maxStores: 2,
+            shippingVndPerOrder: 30_000,
+          },
+        },
+      })
+    ),
+    {
+      readers: comboReaders,
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  assert.equal(comboRes.status, 200);
+  const comboJson = (await comboRes.json()) as {
+    result: {
+      isError?: boolean;
+      structuredContent: {
+        ok: boolean;
+        tool: string;
+        canonical_citation_url: string;
+        observed_at: string;
+        items: Array<{
+          requested_slug: string;
+          resolved_slug: string | null;
+          size_required: boolean;
+          retired_variant: boolean;
+          canonical_citation_url: string;
+          observed_at: string;
+        }>;
+        single_store_best: {
+          total_vnd: number;
+          distinct_store_count: number;
+          store_groups: Array<{
+            merchant_id: string | null;
+            trust_badge: { verified_safe: boolean; audit_scope: string };
+          }>;
+        } | null;
+        multi_store_optimal: {
+          total_vnd: number;
+          distinct_store_count: number;
+          shipping_vnd: number;
+        } | null;
+        savings_vs_single_store_vnd: number;
+        merchant_badges: Array<{
+          merchant_id: string | null;
+          verified_safe: boolean;
+          audit_scope: string;
+        }>;
+      };
+    };
+  };
+  assert.equal(comboJson.result.isError, undefined);
+  const comboData = comboJson.result.structuredContent;
+  assert.equal(comboData.ok, true);
+  assert.equal(comboData.tool, 'optimize_combo_cart');
+  assert.ok(
+    comboData.canonical_citation_url.startsWith(
+      'https://rate.vn/watchlist?items='
+    )
+  );
+  assert.equal(comboData.observed_at, FIXED_NOW_ISO);
+  assert.equal(comboData.items[0]!.resolved_slug, iphoneProduct.slug);
+  assert.equal(
+    comboData.items[0]!.canonical_citation_url,
+    'https://rate.vn/smartphones/apple-iphone-16'
+  );
+  // Plan A: CellphoneS covers all 3 = 28,990,000 + 5,600,000 + 10,500,000 + 30,000 = 45,120,000
+  assert.equal(comboData.single_store_best?.total_vnd, 45_120_000);
+  assert.equal(
+    comboData.single_store_best?.store_groups[0]!.trust_badge.verified_safe,
+    true
+  );
+  assert.equal(
+    comboData.single_store_best?.store_groups[0]!.trust_badge.audit_scope,
+    'merchant_wide'
+  );
+  // Plan B: Flagship Store (phone 27.5M + watch 9.8M) + CellphoneS (earbud 5.6M) + 2*30k shipping = 42,960,000
+  assert.equal(comboData.multi_store_optimal?.total_vnd, 42_960_000);
+  assert.equal(comboData.multi_store_optimal?.distinct_store_count, 2);
+  assert.equal(comboData.multi_store_optimal?.shipping_vnd, 60_000);
+  assert.equal(comboData.savings_vs_single_store_vnd, 2_160_000);
+  const mallBadge = comboData.merchant_badges.find(
+    (b) => b.merchant_id === COMBO_MALL_ID
+  );
+  assert.equal(mallBadge?.verified_safe, false);
+  assert.equal(mallBadge?.audit_scope, 'merchant_wide');
+  // Bounded fan-out: COMBO_EXPENSIVE_ID was never in Plan A or Plan B, so never queried
+  assert.equal(comboProfileLookups.includes(COMBO_EXPENSIVE_ID), false);
+  assert.deepEqual(
+    [...comboProfileLookups].sort(),
+    [COMBO_CPS_ID, COMBO_MALL_ID].sort()
+  );
+
+  // Retired variant slug triggers retired_variant: true without sibling offer substitution
+  const comboRetiredRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'call-combo-retired',
+        method: 'tools/call',
+        params: {
+          name: 'optimize_combo_cart',
+          arguments: {
+            items: [
+              'apple-iphone-16-512gb-retired',
+              'apple-airpods-pro-2-usb-c',
+            ],
+          },
+        },
+      })
+    ),
+    {
+      readers: comboReaders,
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const comboRetiredJson = (await comboRetiredRes.json()) as {
+    result: {
+      structuredContent: {
+        ok: boolean;
+        missing_slugs: string[];
+        uncovered_slugs: string[];
+        single_store_best: unknown;
+        multi_store_optimal: unknown;
+        items: Array<{
+          retired_variant: boolean;
+          size_required: boolean;
+          found: boolean;
+          canonical_citation_url: string;
+        }>;
+      };
+    };
+  };
+  assert.equal(comboRetiredJson.result.structuredContent.ok, true);
+  assert.equal(
+    comboRetiredJson.result.structuredContent.items[0]!.retired_variant,
+    true
+  );
+  assert.equal(
+    comboRetiredJson.result.structuredContent.items[0]!.size_required,
+    true
+  );
+  assert.equal(
+    comboRetiredJson.result.structuredContent.items[0]!.found,
+    false
+  );
+  assert.equal(
+    comboRetiredJson.result.structuredContent.items[0]!.canonical_citation_url,
+    'https://rate.vn/smartphones/apple-iphone-16'
+  );
+  assert.equal(
+    comboRetiredJson.result.structuredContent.single_store_best,
+    null
+  );
+  assert.equal(
+    comboRetiredJson.result.structuredContent.multi_store_optimal,
+    null
+  );
+
+  // Duplicate resolved products (Item slug + its default variant) -> domain isError: true
+  const comboDupRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'call-combo-dup-resolved',
+        method: 'tools/call',
+        params: {
+          name: 'optimize_combo_cart',
+          arguments: {
+            items: ['apple-iphone-16', iphoneProduct.slug],
+          },
+        },
+      })
+    ),
+    {
+      readers: comboReaders,
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const comboDupJson = (await comboDupRes.json()) as {
+    result: { isError: boolean; structuredContent: { ok: boolean } };
+  };
+  assert.equal(comboDupJson.result.isError, true);
+  assert.equal(comboDupJson.result.structuredContent.ok, false);
+
+  // Strict validation on optimize_combo_cart (-32602)
+  for (const badComboArgs of [
+    { items: ['apple-iphone-16'] },
+    { items: ['apple-iphone-16', 'APPLE-IPHONE-16'] },
+    { items: ['s1', 's2', 's3', 's4', 's5', 's6'] },
+    { items: ['apple-iphone-16', '__proto__'] },
+    { items: ['apple-iphone-16', 'constructor'] },
+    { items: ['apple-iphone-16', 'apple-airpods-pro-2-usb-c'], maxStores: 6 },
+    { items: ['apple-iphone-16', 'apple-airpods-pro-2-usb-c'], minTrust: 101 },
+    {
+      items: ['apple-iphone-16', 'apple-airpods-pro-2-usb-c'],
+      shippingVndPerOrder: -1,
+    },
+    {
+      items: ['apple-iphone-16', 'apple-airpods-pro-2-usb-c'],
+      unexpectedKey: true,
+    },
+  ]) {
+    const badRes = await handleMcpHttpPost(
+      makeMcpRequest(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'bad-combo',
+          method: 'tools/call',
+          params: { name: 'optimize_combo_cart', arguments: badComboArgs },
+        })
+      ),
+      {
+        readers: comboReaders,
+        rateLimiter: limiter,
+        auditUrlRateLimiter: auditLimiter,
+      }
+    );
+    assert.equal(
+      ((await badRes.json()) as { error: { code: number } }).error.code,
+      -32602,
+      `must reject invalid optimize_combo_cart args: ${JSON.stringify(badComboArgs)}`
+    );
+  }
+
+  // DB error sanitization on optimize_combo_cart
+  const comboDbErrRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'combo-db-err',
+        method: 'tools/call',
+        params: {
+          name: 'optimize_combo_cart',
+          arguments: {
+            items: ['apple-iphone-16', 'apple-airpods-pro-2-usb-c'],
+          },
+        },
+      })
+    ),
+    {
+      readers: {
+        ...comboReaders,
+        getMasterProductOffersBatch: async () => {
+          throw new Error('PGRST500: relation "rate.products" failed');
+        },
+      },
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const comboDbErrText = await comboDbErrRes.text();
+  assert.doesNotMatch(comboDbErrText, /PGRST|rate\.products/i);
+  assert.equal(
+    (JSON.parse(comboDbErrText) as { result: { isError: boolean } }).result
+      .isError,
+    true
+  );
+
+  // 14. Tool 7: calculate_effective_price (v1.1.0 - VN/A spread, voucher cap, trade-in, installment, @variant pin, validation)
+  const effectiveOffersMixed: MerchantOffer[] = [
+    // Sold-out cheap offer (excluded)
+    makeOffer({
+      id: 'eff-oos',
+      platform: 'tiki',
+      title: 'Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+      price_current: 24_000_000,
+      availability: 'out_of_stock',
+    }),
+    // Bait offer (excluded)
+    makeOffer({
+      id: 'eff-bait',
+      platform: 'shopee',
+      title: 'Cường lực iPhone 16 Pro Max',
+      price_current: 99_000,
+      merchant: {
+        id: 'm-bait',
+        name: 'Accessory Bait',
+        platform: 'shopee',
+        is_official: false,
+        rating_star: 4.1,
+        follower_count: 100,
+        location: 'Hanoi',
+        risk_score: 50,
+        dosafe_risk_score: 40,
+        review_risk_score: 50,
+        review_risk_breakdown: null,
+      },
+    }),
+    // Cheapest plausible imported offer
+    makeOffer({
+      id: 'eff-imported',
+      platform: 'shopee',
+      title: 'iPhone 16 Pro Max 256GB Bản Mỹ LL/A Xách tay',
+      price_current: 26_500_000,
+      merchant: {
+        id: 'm-imported',
+        name: 'Global Import Shop',
+        platform: 'shopee',
+        is_official: false,
+        rating_star: 4.7,
+        follower_count: 25_000,
+        location: 'Ho Chi Minh City',
+        risk_score: 20,
+        dosafe_risk_score: 15,
+        review_risk_score: 20,
+        review_risk_breakdown: { total_reviews: 18 },
+      },
+    }),
+    // Best Official VN/A offer
+    makeOffer({
+      id: 'eff-vna-cps',
+      platform: 'cellphones',
+      title: 'Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+      price_current: 28_990_000,
+      merchant: {
+        id: 'm-cps',
+        name: 'CellphoneS Official',
+        platform: 'cellphones',
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: 150_000,
+        location: 'Ho Chi Minh City',
+        risk_score: 5,
+        dosafe_risk_score: 0,
+        review_risk_score: 5,
+        review_risk_breakdown: { total_reviews: 50 },
+      },
+    }),
+  ];
+
+  const effCalcArgs = {
+    slug: 'iphone-16-pro-max@256gb',
+    discountMode: 'percent' as const,
+    discountPercent: 10,
+    discountMaxCapVnd: 1_500_000,
+    tradeInEnabled: true,
+    oldDeviceResaleBenchmarkVnd: 12_000_000,
+    tradeInConditionTier: 'grade_2_light_wear' as const,
+    tradeInBonusVnd: 1_000_000,
+    installmentTerm: 6 as const,
+    installmentFeePercent: 3,
+  };
+
+  const expectedCheapestCalc = computeEffectivePrice({
+    ...effCalcArgs,
+    basePriceVnd: 26_500_000,
+  });
+  const expectedVnaCalc = computeEffectivePrice({
+    ...effCalcArgs,
+    basePriceVnd: 28_990_000,
+  });
+
+  const effRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'call-eff-price',
+        method: 'tools/call',
+        params: {
+          name: 'calculate_effective_price',
+          arguments: effCalcArgs,
+        },
+      })
+    ),
+    {
+      readers: {
+        ...readers,
+        getCachedMasterProductOffers: async () => effectiveOffersMixed,
+      },
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  assert.equal(effRes.status, 200);
+  const effJson = (await effRes.json()) as {
+    result: {
+      isError?: boolean;
+      structuredContent: {
+        ok: boolean;
+        tool: string;
+        is_reference_estimate: boolean;
+        canonical_citation_url: string;
+        observed_at: string;
+        price_observed_at: string;
+        excluded_unavailable_offer_count: number;
+        excluded_bait_offer_count: number;
+        best_plausible_offer: {
+          id: string;
+          origin: string;
+          seller_channel: string;
+          price_current_vnd: number;
+        } | null;
+        best_official_vna_offer: {
+          id: string;
+          origin: string;
+          seller_channel: string;
+          price_current_vnd: number;
+        } | null;
+        best_plausible_effective_price: {
+          voucher_savings_vnd: number;
+          store_trade_in_credit_vnd: number;
+          self_resale_comparison_delta_vnd: number;
+          conversion_fee_vnd: number;
+          total_paid_vnd: number;
+          monthly_payment_vnd: number;
+        };
+        best_official_vna_effective_price: {
+          total_paid_vnd: number;
+          monthly_payment_vnd: number;
+        } | null;
+        vna_vs_cheapest_base_delta_vnd: number | null;
+        vna_vs_cheapest_effective_delta_vnd: number | null;
+      };
+    };
+  };
+  assert.equal(effJson.result.isError, undefined);
+  const effData = effJson.result.structuredContent;
+  assert.equal(effData.ok, true);
+  assert.equal(effData.tool, 'calculate_effective_price');
+  assert.equal(effData.is_reference_estimate, true);
+  assert.equal(
+    effData.canonical_citation_url,
+    'https://rate.vn/smartphones/apple-iphone-16-pro-max-256gb'
+  );
+  assert.equal(effData.observed_at, iphoneProduct.updated_at);
+  assert.equal(effData.price_observed_at, iphoneProduct.updated_at);
+  assert.equal(effData.excluded_unavailable_offer_count, 1);
+  assert.equal(effData.excluded_bait_offer_count, 1);
+  assert.equal(effData.best_plausible_offer?.id, 'eff-imported');
+  assert.equal(effData.best_plausible_offer?.origin, 'imported');
+  assert.equal(
+    effData.best_plausible_offer?.seller_channel,
+    'independent_shop'
+  );
+  assert.equal(effData.best_official_vna_offer?.id, 'eff-vna-cps');
+  assert.equal(effData.best_official_vna_offer?.origin, 'official_vna');
+  assert.equal(
+    effData.best_official_vna_offer?.seller_channel,
+    'authorized_vat'
+  );
+  assert.equal(
+    effData.best_plausible_effective_price.voucher_savings_vnd,
+    expectedCheapestCalc.voucherSavingsVnd
+  );
+  assert.equal(
+    effData.best_plausible_effective_price.store_trade_in_credit_vnd,
+    expectedCheapestCalc.storeTradeInCreditVnd
+  );
+  assert.equal(
+    effData.best_plausible_effective_price.conversion_fee_vnd,
+    expectedCheapestCalc.conversionFeeVnd
+  );
+  assert.equal(
+    effData.best_plausible_effective_price.total_paid_vnd,
+    expectedCheapestCalc.totalPaidVnd
+  );
+  assert.equal(
+    effData.best_plausible_effective_price.monthly_payment_vnd,
+    expectedCheapestCalc.monthlyPaymentVnd
+  );
+  assert.equal(
+    effData.best_official_vna_effective_price?.total_paid_vnd,
+    expectedVnaCalc.totalPaidVnd
+  );
+  assert.equal(effData.vna_vs_cheapest_base_delta_vnd, 2_490_000);
+  assert.equal(
+    effData.vna_vs_cheapest_effective_delta_vnd,
+    expectedVnaCalc.totalPaidVnd - expectedCheapestCalc.totalPaidVnd
+  );
+
+  // Imported-only offers -> best_official_vna_offer is null
+  const effNoVnaRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'call-eff-no-vna',
+        method: 'tools/call',
+        params: {
+          name: 'calculate_effective_price',
+          arguments: { slug: iphoneProduct.slug },
+        },
+      })
+    ),
+    {
+      readers: {
+        ...readers,
+        getCachedMasterProductOffers: async () => [effectiveOffersMixed[2]!],
+      },
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const effNoVnaJson = (await effNoVnaRes.json()) as {
+    result: {
+      structuredContent: {
+        best_official_vna_offer: unknown;
+        best_official_vna_effective_price: unknown;
+        vna_vs_cheapest_effective_delta_vnd: unknown;
+      };
+    };
+  };
+  assert.equal(
+    effNoVnaJson.result.structuredContent.best_official_vna_offer,
+    null
+  );
+  assert.equal(
+    effNoVnaJson.result.structuredContent.best_official_vna_effective_price,
+    null
+  );
+  assert.equal(
+    effNoVnaJson.result.structuredContent.vna_vs_cheapest_effective_delta_vnd,
+    null
+  );
+
+  // Invalid @variant pin or unknown slug -> isError: true + is_reference_estimate: true
+  for (const missingPin of [
+    'iphone-16-pro-max@999tb',
+    'nonexistent-phone-2026',
+  ]) {
+    const missingPinRes = await handleMcpHttpPost(
+      makeMcpRequest(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'eff-missing',
+          method: 'tools/call',
+          params: {
+            name: 'calculate_effective_price',
+            arguments: { slug: missingPin },
+          },
+        })
+      ),
+      { readers, rateLimiter: limiter, auditUrlRateLimiter: auditLimiter }
+    );
+    const missingPinJson = (await missingPinRes.json()) as {
+      result: {
+        isError: boolean;
+        structuredContent: { ok: boolean; is_reference_estimate: boolean };
+      };
+    };
+    assert.equal(missingPinJson.result.isError, true);
+    assert.equal(missingPinJson.result.structuredContent.ok, false);
+    assert.equal(
+      missingPinJson.result.structuredContent.is_reference_estimate,
+      true
+    );
+  }
+
+  // Strict validation on calculate_effective_price (-32602)
+  for (const badEffArgs of [
+    { slug: '__proto__' },
+    { slug: 'constructor' },
+    { slug: 'toString' },
+    { slug: 'bad..slug' },
+    { slug: iphoneProduct.slug, discountPercent: 81 },
+    { slug: iphoneProduct.slug, installmentFeePercent: 16 },
+    { slug: iphoneProduct.slug, installmentTerm: 24 },
+    { slug: iphoneProduct.slug, discountAmountVnd: -1 },
+    { slug: iphoneProduct.slug, extraField: 'nope' },
+  ]) {
+    const badEffRes = await handleMcpHttpPost(
+      makeMcpRequest(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'bad-eff',
+          method: 'tools/call',
+          params: {
+            name: 'calculate_effective_price',
+            arguments: badEffArgs,
+          },
+        })
+      ),
+      { readers, rateLimiter: limiter, auditUrlRateLimiter: auditLimiter }
+    );
+    assert.equal(
+      ((await badEffRes.json()) as { error: { code: number } }).error.code,
+      -32602,
+      `must reject invalid calculate_effective_price args: ${JSON.stringify(badEffArgs)}`
+    );
+  }
+
+  // Existing product with zero plausible offers and min_price <= 0 -> isError: true + is_reference_estimate: true
+  const unpricedProduct = makeProduct({
+    id: '11111111-1111-4111-8111-000000000095',
+    slug: 'unpriced-phone',
+    name: 'Unpriced Phone',
+    min_price: 0,
+    max_price: 0,
+  });
+  const unpricedEffRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'eff-unpriced',
+        method: 'tools/call',
+        params: {
+          name: 'calculate_effective_price',
+          arguments: { slug: unpricedProduct.slug },
+        },
+      })
+    ),
+    {
+      readers: {
+        ...readers,
+        getCachedMasterProductBySlug: async () => unpricedProduct,
+        getCachedMasterProductOffers: async () => [],
+      },
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const unpricedEffJson = (await unpricedEffRes.json()) as {
+    result: {
+      isError: boolean;
+      structuredContent: { ok: boolean; is_reference_estimate: boolean };
+    };
+  };
+  assert.equal(unpricedEffJson.result.isError, true);
+  assert.equal(unpricedEffJson.result.structuredContent.ok, false);
+  assert.equal(
+    unpricedEffJson.result.structuredContent.is_reference_estimate,
+    true
+  );
+
+  // dosafe_risk_known: false & unmeasured review_risk_score masking on best_plausible_offer.merchant
+  const maskedEffRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'eff-masked',
+        method: 'tools/call',
+        params: {
+          name: 'calculate_effective_price',
+          arguments: { slug: iphoneProduct.slug },
+        },
+      })
+    ),
+    {
+      readers: {
+        ...readers,
+        getCachedMasterProductOffers: async () => [sampleOffersForIphone[3]!],
+      },
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const maskedEffJson = (await maskedEffRes.json()) as {
+    result: {
+      structuredContent: {
+        best_plausible_offer: {
+          id: string;
+          merchant: {
+            dosafe_risk_score: number | null;
+            review_risk_score: number | null;
+          };
+        } | null;
+        best_official_vna_offer: { id: string } | null;
+        vna_vs_cheapest_effective_delta_vnd: number | null;
+      };
+    };
+  };
+  assert.equal(
+    maskedEffJson.result.structuredContent.best_plausible_offer?.id,
+    'offer-shopee-mall'
+  );
+  assert.equal(
+    maskedEffJson.result.structuredContent.best_official_vna_offer?.id,
+    'offer-shopee-mall'
+  );
+  assert.equal(
+    maskedEffJson.result.structuredContent.vna_vs_cheapest_effective_delta_vnd,
+    0
+  );
+  assert.equal(
+    maskedEffJson.result.structuredContent.best_plausible_offer?.merchant
+      .dosafe_risk_score,
+    null
+  );
+  assert.equal(
+    maskedEffJson.result.structuredContent.best_plausible_offer?.merchant
+      .review_risk_score,
+    null
+  );
+
+  // DB error sanitization on calculate_effective_price
+  const effDbErrRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'eff-db-err',
+        method: 'tools/call',
+        params: {
+          name: 'calculate_effective_price',
+          arguments: { slug: iphoneProduct.slug },
+        },
+      })
+    ),
+    {
+      readers: {
+        ...readers,
+        getCachedMasterProductOffers: async () => {
+          throw new Error('PGRST501: relation "rate.master_products" failed');
+        },
+      },
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const effDbErrText = await effDbErrRes.text();
+  assert.doesNotMatch(effDbErrText, /PGRST|master_products/i);
+  assert.equal(
+    (JSON.parse(effDbErrText) as { result: { isError: boolean } }).result
+      .isError,
+    true
+  );
+
   console.warn(
-    '  ✅ Rate Shopping MCP Server (/api/mcp), /llms.txt & /.well-known/mcp.json suite passed (#1866)'
+    '  ✅ Rate Shopping MCP Server v1.1.0 (/api/mcp), /llms.txt & /.well-known/mcp.json suite passed (#1896)'
   );
 }
 
