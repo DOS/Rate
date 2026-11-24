@@ -1479,18 +1479,18 @@ export function getMasterProductCategorySlug(
     return 'earbuds';
   }
   if (
-    /(?<![\p{L}\d])(?:thực phẩm chức năng|tpcn|viên uống|collagen|omega[\s-]?3|vitamin[\s-]?[a-z0-9]+|glucosamine|men vi sinh|bổ sung dinh dưỡng|supplements?|blackmores|doppelherz)(?![\p{L}\d])/iu.test(
-      haystack
-    )
-  ) {
-    return 'supplements';
-  }
-  if (
     /(?<![\p{L}\d])(?:mỹ phẩm|kem chống nắng|sữa rửa mặt|nước tẩy trang|kem dưỡng|son môi|tinh chất|serum|toner|retinol|niacinamide|cosmetics?|skincare|la roche-posay|bioderma|cerave)(?![\p{L}\d])/iu.test(
       haystack
     )
   ) {
     return 'cosmetics';
+  }
+  if (
+    /(?<![\p{L}\d])(?:thực phẩm chức năng|tpcn|viên uống|collagen|omega[\s-]?3|vitamin[\s-]?[a-z0-9]+|glucosamine|men vi sinh|bổ sung dinh dưỡng|supplements?|blackmores|doppelherz)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'supplements';
   }
   if (
     /(?<![\p{L}\d])(?:mẹ và bé|mẹ & bé|mother[- ]?baby|tã dán|tã quần|bỉm|sữa bột|sữa công thức|bình sữa|xe đẩy em bé|xe đẩy trẻ em|huggies|pampers|merries|moony|enfamil|similac|aptamil)(?![\p{L}\d])/iu.test(

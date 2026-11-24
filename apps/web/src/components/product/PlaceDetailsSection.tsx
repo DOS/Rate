@@ -13,13 +13,9 @@ import { Link } from '@/lib/navigation';
 import { formatDecimal } from '@/lib/locale-format';
 import { formatScoreFixed } from '@/lib/rating-display';
 import {
+  extractPlaceDisplayFacts,
   formatPlaceLocationBadge,
-  formatPlaceReferencePriceRange,
-  sanitizePlaceCoordinates,
-  sanitizePlacePhone,
-  sanitizePlacePriceTier,
   sanitizePlaceText,
-  sanitizePlaceWebsiteUrl,
   type PlaceBranchSibling,
   type PlaceDetail,
 } from '@/lib/place-details';
@@ -43,65 +39,27 @@ export default async function PlaceDetailsSection({
 }: PlaceDetailsSectionProps) {
   const t = await getTranslations({ locale, namespace: 'placeDetail' });
 
-  const locationBadge = placeDetail
-    ? formatPlaceLocationBadge(
-        placeDetail.district_code,
-        placeDetail.province_code
-      )
-    : null;
-  const cleanAddress = sanitizePlaceText(placeDetail?.address, 400);
-  const cleanCuisine = sanitizePlaceText(placeDetail?.cuisine, 160);
-  const cleanOpeningHours = sanitizePlaceText(placeDetail?.opening_hours, 400);
-  const safePhone = placeDetail ? sanitizePlacePhone(placeDetail.phone) : null;
-  const safeWebsite = placeDetail
-    ? sanitizePlaceWebsiteUrl(placeDetail.website)
-    : null;
-  const coords = placeDetail
-    ? sanitizePlaceCoordinates(placeDetail.geo_lat, placeDetail.geo_lng)
-    : null;
-  const safeTier = placeDetail
-    ? sanitizePlacePriceTier(placeDetail.price_tier)
-    : null;
-  const safeStarRating =
-    placeDetail &&
-    typeof placeDetail.star_rating === 'number' &&
-    Number.isFinite(placeDetail.star_rating) &&
-    placeDetail.star_rating >= 1 &&
-    placeDetail.star_rating <= 5
-      ? placeDetail.star_rating
-      : null;
-
-  const formattedPriceRange = formatPlaceReferencePriceRange({
-    priceMin: placeDetail?.price_min ?? fallbackPriceMin ?? null,
-    priceMax: placeDetail?.price_max ?? fallbackPriceMax ?? null,
+  const {
+    locationBadge,
+    cleanAddress,
+    cleanCuisine,
+    cleanOpeningHours,
+    safePhone,
+    safeWebsite,
+    coords,
+    safeTier,
+    safeStarRating,
+    formattedPriceRange,
+    safeWebsiteHost,
+    hasPlaceFacts,
+  } = extractPlaceDisplayFacts({
+    placeDetail,
+    branches,
     categorySlug,
-    priceUnit: placeDetail?.price_unit ?? null,
     locale,
+    fallbackPriceMin,
+    fallbackPriceMax,
   });
-
-  const safeWebsiteHost = safeWebsite
-    ? (() => {
-        try {
-          return new URL(safeWebsite).hostname.replace(/^www\./, '');
-        } catch {
-          return safeWebsite;
-        }
-      })()
-    : null;
-
-  const hasPlaceFacts = Boolean(
-    locationBadge ||
-    cleanAddress ||
-    cleanCuisine ||
-    cleanOpeningHours ||
-    safePhone ||
-    safeWebsite ||
-    coords ||
-    safeTier ||
-    safeStarRating !== null ||
-    formattedPriceRange ||
-    branches.length > 0
-  );
 
   if (!hasPlaceFacts) {
     return null;

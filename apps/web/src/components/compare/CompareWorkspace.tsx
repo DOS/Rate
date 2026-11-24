@@ -102,7 +102,10 @@ import {
   MAX_COMPARE_ITEMS,
   setCompareTray,
 } from './compare-tray';
-import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
+import {
+  computeWatchlistTargetPrice,
+  upsertWatchlistItem,
+} from '@/components/watchlist/watchlist-store';
 import {
   getSpecUiDictionary,
   localizeSpecValue,
@@ -3147,9 +3150,7 @@ export default function CompareWorkspace({
           ? minP > 0
             ? Number((minP * 1.05).toFixed(2))
             : 0
-          : minP > 0
-            ? Math.max(100_000, Math.round((minP * 0.95) / 100_000) * 100_000)
-            : 10_000_000;
+          : computeWatchlistTargetPrice(minP, 5, pCur);
       const thumb = resolveProductImageUrl(p.slug, productImageUrl(p));
       const resolvedHref = getMasterProductHref(p);
       const resolvedCategoryPath =

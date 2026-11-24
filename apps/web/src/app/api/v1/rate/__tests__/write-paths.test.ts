@@ -899,7 +899,7 @@ async function testReviewsV2() {
       status: 400,
       json: {
         code: 'P0002',
-        message: 'Không tìm thấy listing liên kết cho sản phẩm chuẩn hóa này',
+        message: 'Linked listing not found for canonical product entry',
       },
     });
     res = await POST(post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req);
@@ -908,7 +908,7 @@ async function testReviewsV2() {
     assert.equal(noListingBody.ok, false);
     assert.equal(noListingBody.code, 'NO_LINKED_LISTING');
     assert.equal(
-      noListingBody.error.includes('listing liên kết cho sản phẩm chuẩn hóa'),
+      noListingBody.error.includes('canonical product entry'),
       false,
       'raw postgres message must not be echoed to clients'
     );

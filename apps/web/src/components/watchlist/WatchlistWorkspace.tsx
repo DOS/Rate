@@ -522,10 +522,12 @@ export function buildWatchlistPortfolioMarkdown(params: {
     ...items.map((item) => {
       const liveProd = productBySlug.get(item.slug);
       const liveDeal = liveDeals[item.slug];
+      const itemCategorySlug =
+        item.categoryPath?.replace(/^\/+/, '').split('/')[0] || undefined;
       const itemCurrency =
         item.currency ??
         resolveListingPriceCurrency({
-          categorySlug: item.categoryPath?.replace(/^\/+/, '').split('/')[0],
+          categorySlug: itemCategorySlug,
           master: liveProd,
         });
       const rSig =
@@ -563,7 +565,7 @@ export function buildWatchlistPortfolioMarkdown(params: {
             }),
             locale
           );
-      return `| ${sanitizeWatchlistMarkdownCell(item.name, locale)} | ${sanitizeWatchlistMarkdownCell(item.brand, locale)} | ${formatWatchlistPrice(curMin, itemCurrency, locale)} | ${formatWatchlistPrice(safeTarget, itemCurrency, locale)} | ${spreadStr} | ${radarMarkdownCell(rSig, locale)} | ${hit ? t('mdStatusReached') : t('mdStatusWatching')} | ${bestOfferStr} |`;
+      return `| ${sanitizeWatchlistMarkdownCell(item.name, locale)} | ${sanitizeWatchlistMarkdownCell(item.brand, locale)} | ${formatWatchlistPrice(curMin, itemCurrency, locale, itemCategorySlug)} | ${formatWatchlistPrice(safeTarget, itemCurrency, locale, itemCategorySlug)} | ${spreadStr} | ${radarMarkdownCell(rSig, locale)} | ${hit ? t('mdStatusReached') : t('mdStatusWatching')} | ${bestOfferStr} |`;
     }),
   ];
   return lines.join('\n');
@@ -1047,10 +1049,12 @@ export default function WatchlistWorkspace({
     (acc, item) => {
       const liveProd = productBySlug.get(item.slug);
       const liveDeal = liveDeals[item.slug];
+      const itemCategorySlug =
+        item.categoryPath?.replace(/^\/+/, '').split('/')[0] || undefined;
       const itemCurrency =
         item.currency ??
         resolveListingPriceCurrency({
-          categorySlug: item.categoryPath?.replace(/^\/+/, '').split('/')[0],
+          categorySlug: itemCategorySlug,
           master: liveProd,
         });
       const { currentMin: curMin, currentMax: curMax } =
@@ -1129,10 +1133,12 @@ export default function WatchlistWorkspace({
     const rows = items.map((item) => {
       const liveProd = productBySlug.get(item.slug);
       const liveDeal = liveDeals[item.slug];
+      const itemCategorySlug =
+        item.categoryPath?.replace(/^\/+/, '').split('/')[0] || undefined;
       const itemCurrency =
         item.currency ??
         resolveListingPriceCurrency({
-          categorySlug: item.categoryPath?.replace(/^\/+/, '').split('/')[0],
+          categorySlug: itemCategorySlug,
           master: liveProd,
         });
       const rSig =
@@ -1863,7 +1869,8 @@ export default function WatchlistWorkspace({
                           {formatWatchlistPrice(
                             currentMin,
                             itemCurrency,
-                            locale
+                            locale,
+                            itemCategorySlug
                           )}
                         </div>
                         <div
@@ -1970,7 +1977,8 @@ export default function WatchlistWorkspace({
                           {formatWatchlistPrice(
                             item.targetPrice,
                             itemCurrency,
-                            locale
+                            locale,
+                            itemCategorySlug
                           )}
                         </div>
                         <button

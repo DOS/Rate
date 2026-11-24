@@ -34,8 +34,10 @@ import {
 } from '../locale-format';
 import {
   buildPlaceStructuredData,
+  extractPlaceDisplayFacts,
   formatPlaceLocationBadge,
   formatPlaceReferencePriceRange,
+  resolveCardPricePair,
   resolvePlaceJsonLdType,
   sanitizePlaceBranchGroupKey,
   sanitizePlaceCoordinates,
@@ -50,6 +52,8 @@ import {
 } from '../rate-api';
 import { leaderboardCriteriaForCategory } from '../leaderboard-engine';
 import { CLIENT_MESSAGE_SCOPES } from '../client-messages';
+import { parseProductsFilterBounds } from '../../server/rate/api-handler';
+import { computeWatchlistTargetPrice } from '../../components/watchlist/watchlist-store';
 import { computeCrossPlatformDealRadarFromData } from '../../server/rate/deals';
 import { buildRateOpenApiSpec } from '../../server/rate/openapi';
 import { MCP_TOOL_DEFINITIONS } from '../../server/rate/mcp';
@@ -79,6 +83,8 @@ for (const slug of WAVE_E4_PLACE_CATEGORY_SLUGS) {
 const keywordSamples: Array<[string, string]> = [
   ['Blackmores Omega-3 Double Strength 90 viên', 'supplements'],
   ['La Roche-Posay Cicaplast Baume B5 Serum', 'cosmetics'],
+  ['Collagen serum', 'cosmetics'],
+  ['Vitamin C serum', 'cosmetics'],
   ['Bỉm quần Huggies Platinum Nature Made M54', 'mother-baby'],
   ['Nhà hàng Phở Thìn 13 Lò Đúc', 'restaurants'],
   ['Quán cà phê Katinat Saigon Kafe', 'cafes'],
@@ -609,13 +615,14 @@ assert.equal(/[\u2013\u2014]/.test(placeSectionSrc), false);
 const IntlProvider = NextIntlClientProvider as React.ComponentType<{
   locale: string;
   messages: typeof localeCatalogs.en;
+  timeZone?: string;
   children?: React.ReactNode;
 }>;
 
 const noStockCardHtml = renderToStaticMarkup(
   React.createElement(
     IntlProvider,
-    { locale: 'en', messages: localeCatalogs.en },
+    { locale: 'en', messages: localeCatalogs.en, timeZone: 'Asia/Ho_Chi_Minh' },
     React.createElement(ProductCard, {
       slug: 'pho-thin',
       href: '/restaurants/pho-thin',
@@ -645,7 +652,7 @@ assert.equal(
 const pricedPlaceCardHtml = renderToStaticMarkup(
   React.createElement(
     IntlProvider,
-    { locale: 'en', messages: localeCatalogs.en },
+    { locale: 'en', messages: localeCatalogs.en, timeZone: 'Asia/Ho_Chi_Minh' },
     React.createElement(ProductCard, {
       slug: 'pho-thin',
       href: '/restaurants/pho-thin',
@@ -668,6 +675,73 @@ const pricedPlaceCardHtml = renderToStaticMarkup(
 );
 assert.equal(pricedPlaceCardHtml.includes('150.000 ₫/person'), true);
 assert.equal(pricedPlaceCardHtml.includes('350.000 ₫/person'), true);
+
+// 10. CodeRabbit regression checks: card pairing, up-to-only place price, empty facts, brand apostrophe, target floor
+assert.deepEqual(
+  resolveCardPricePair({
+    masterMinPrice: 0,
+    masterMaxPrice: 999_000,
+    placeSummary: { price_min: 150_000, price_max: null },
+  }),
+  { minPrice: 150_000, maxPrice: 0, fromPlace: true }
+);
+assert.deepEqual(
+  resolveCardPricePair({
+    masterMinPrice: 0,
+    masterMaxPrice: 0,
+    placeSummary: { price_min: null, price_max: 350_000 },
+  }),
+  { minPrice: 0, maxPrice: 350_000, fromPlace: true }
+);
+
+const upToOnlyPlaceCardHtml = renderToStaticMarkup(
+  React.createElement(
+    IntlProvider,
+    { locale: 'en', messages: localeCatalogs.en, timeZone: 'Asia/Ho_Chi_Minh' },
+    React.createElement(ProductCard, {
+      slug: 'pho-thin',
+      href: '/restaurants/pho-thin',
+      categoryPath: '/restaurants',
+      name: 'Pho Thin',
+      brand: 'Pho Thin',
+      thumbnail: null,
+      userScore: 4.6,
+      reviewCount: 10,
+      expertScore: null,
+      radarSignal: EMPTY_RADAR_SIGNAL,
+      minPrice: 0,
+      maxPrice: 350_000,
+      currency: 'VND',
+      priceUnit: 'vnd_per_person',
+      merchantCount: 0,
+      saleState: 'on_sale',
+    })
+  )
+);
+assert.equal(upToOnlyPlaceCardHtml.includes('350.000 ₫/person'), true);
+assert.equal(upToOnlyPlaceCardHtml.includes('data-sale-state'), false);
+
+assert.equal(
+  extractPlaceDisplayFacts({
+    placeDetail: null,
+    branches: [],
+    categorySlug: 'restaurants',
+    locale: 'en',
+    fallbackPriceMin: 0,
+    fallbackPriceMax: 0,
+  }).hasPlaceFacts,
+  false
+);
+
+const brandBounds = parseProductsFilterBounds(
+  new URLSearchParams({
+    category: 'cosmetics',
+    brands: "L'Oreal,Kiehl's,',Apple'--",
+  })
+);
+assert.deepEqual(brandBounds?.brands, ["L'Oreal", "Kiehl's"]);
+
+assert.equal(computeWatchlistTargetPrice(30_000, 5, 'VND'), 20_000);
 
 verifyPlaceDbReaders()
   .then(() => {

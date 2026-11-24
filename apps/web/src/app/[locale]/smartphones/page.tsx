@@ -7,7 +7,10 @@ import {
   resolveCompareEffectiveUserRating,
   resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
-import { formatPlaceLocationBadge } from '@/lib/place-details';
+import {
+  formatPlaceLocationBadge,
+  resolveCardPricePair,
+} from '@/lib/place-details';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
@@ -1249,20 +1252,21 @@ export async function CategoryCatalogContent({
                         });
                       }
 
-                      const cardMinPrice = Number(
-                        item.min_price || placeSummary?.price_min || 0
-                      );
-                      const cardMaxPrice = Number(
-                        item.max_price || placeSummary?.price_max || 0
-                      );
-                      const cardSaleState =
-                        cardMinPrice > 0 && Number(item.min_price || 0) <= 0
-                          ? saleStateOfMaster({
-                              min_price: cardMinPrice,
-                              metadata: item.metadata,
-                              specifications: item.specifications,
-                            })
-                          : saleStateOfMaster(item);
+                      const cardPricing = resolveCardPricePair({
+                        masterMinPrice: item.min_price,
+                        masterMaxPrice: item.max_price,
+                        placeSummary,
+                      });
+                      const cardSaleState = cardPricing.fromPlace
+                        ? saleStateOfMaster({
+                            min_price:
+                              cardPricing.minPrice > 0
+                                ? cardPricing.minPrice
+                                : cardPricing.maxPrice,
+                            metadata: item.metadata,
+                            specifications: item.specifications,
+                          })
+                        : saleStateOfMaster(item);
 
                       return (
                         <div key={item.id}>
@@ -1289,8 +1293,8 @@ export async function CategoryCatalogContent({
                             )}
                             expertScore={expertScore}
                             radarSignal={getRadarSignal(radarIndex, item.slug)}
-                            minPrice={cardMinPrice}
-                            maxPrice={cardMaxPrice}
+                            minPrice={cardPricing.minPrice}
+                            maxPrice={cardPricing.maxPrice}
                             currency={resolveListingPriceCurrency({
                               categorySlug,
                               metadata: item.metadata,

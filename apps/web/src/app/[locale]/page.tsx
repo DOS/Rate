@@ -6,7 +6,10 @@ import {
   resolveCompareEffectiveUserRating,
   resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
-import { formatPlaceLocationBadge } from '@/lib/place-details';
+import {
+  formatPlaceLocationBadge,
+  resolveCardPricePair,
+} from '@/lib/place-details';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import PageShell from './components/page-shell';
@@ -1537,20 +1540,21 @@ export default async function Home({
                         homePlaceSummary.province_code
                       )
                     : null;
-                  const cardMinPrice = Number(
-                    item.min_price || homePlaceSummary?.price_min || 0
-                  );
-                  const cardMaxPrice = Number(
-                    item.max_price || homePlaceSummary?.price_max || 0
-                  );
-                  const cardSaleState =
-                    cardMinPrice > 0 && Number(item.min_price || 0) <= 0
-                      ? saleStateOfMaster({
-                          min_price: cardMinPrice,
-                          metadata: item.metadata,
-                          specifications: item.specifications,
-                        })
-                      : saleStateOfMaster(item);
+                  const cardPricing = resolveCardPricePair({
+                    masterMinPrice: item.min_price,
+                    masterMaxPrice: item.max_price,
+                    placeSummary: homePlaceSummary,
+                  });
+                  const cardSaleState = cardPricing.fromPlace
+                    ? saleStateOfMaster({
+                        min_price:
+                          cardPricing.minPrice > 0
+                            ? cardPricing.minPrice
+                            : cardPricing.maxPrice,
+                        metadata: item.metadata,
+                        specifications: item.specifications,
+                      })
+                    : saleStateOfMaster(item);
 
                   return (
                     <div key={item.id} className="col-lg-4 col-md-6 col-12">
@@ -1587,8 +1591,8 @@ export default async function Home({
                         )}
                         expertScore={expertScore}
                         radarSignal={getRadarSignal(radarIndex, item.slug)}
-                        minPrice={cardMinPrice}
-                        maxPrice={cardMaxPrice}
+                        minPrice={cardPricing.minPrice}
+                        maxPrice={cardPricing.maxPrice}
                         currency={resolveListingPriceCurrency({
                           categorySlug: getMasterProductCategorySlug(
                             item,

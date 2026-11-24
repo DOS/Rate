@@ -140,8 +140,15 @@ export default function ProductCard({
   const locale = useLocale();
   const safeMinPrice = sanitizeProductCardPriceVnd(minPrice, currency);
   const safeMaxPrice = sanitizeProductCardPriceVnd(maxPrice, currency);
+  const hasMinPrice = safeMinPrice > 0;
   const hasRange =
-    saleState === 'on_sale' && safeMinPrice > 0 && safeMaxPrice > safeMinPrice;
+    saleState === 'on_sale' && hasMinPrice && safeMaxPrice > safeMinPrice;
+  const hasUpToOnly =
+    saleState === 'on_sale' &&
+    !hasMinPrice &&
+    safeMaxPrice > 0 &&
+    (Boolean(priceUnit) ||
+      /^\/(?:restaurants|cafes|hotels|homestays)(?:\/|$)/.test(categoryPath));
   const safeUserScore = sanitizeProductCardScore(userScore, 5);
   const safeExpertScore = sanitizeProductCardScore(expertScore, 10);
   const safeReviewCount = sanitizeProductCardCount(reviewCount);
@@ -265,7 +272,7 @@ export default function ProductCard({
         <div className="rate-product-card-footer">
           <div className="rate-product-card-price-row">
             <div>
-              {saleState === 'on_sale' && safeMinPrice > 0 ? (
+              {saleState === 'on_sale' && hasMinPrice ? (
                 <>
                   <div className="rate-product-card-muted">
                     {sizeChips.length > 0 ? t('fromPrice') : t('refPrice')}
@@ -278,6 +285,21 @@ export default function ProductCard({
                       categoryPath,
                       priceUnit
                     )}
+                  </div>
+                </>
+              ) : hasUpToOnly ? (
+                <>
+                  <div className="rate-product-card-muted">{t('refPrice')}</div>
+                  <div className="rate-product-card-price">
+                    {t('priceUpTo', {
+                      price: formatProductCardVnd(
+                        safeMaxPrice,
+                        locale,
+                        currency,
+                        categoryPath,
+                        priceUnit
+                      ),
+                    })}
                   </div>
                 </>
               ) : (

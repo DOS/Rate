@@ -146,6 +146,7 @@ import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExpo
 import PlaceDetailsSection from '@/components/product/PlaceDetailsSection';
 import {
   buildPlaceStructuredData,
+  extractPlaceDisplayFacts,
   formatPlaceReferencePriceRange,
 } from '@/lib/place-details';
 import { pickEffectivePriceCandidates } from '@/lib/effective-price';
@@ -697,6 +698,16 @@ export async function ProductDetailView({
     isPlace && heroStats.minPrice <= 0
       ? (placeDetail?.price_min ?? 0)
       : heroStats.minPrice;
+  const showPlaceDetails =
+    isPlace &&
+    extractPlaceDisplayFacts({
+      placeDetail,
+      branches: placeBranches,
+      categorySlug,
+      locale,
+      fallbackPriceMin: marketStats.minPrice,
+      fallbackPriceMax: marketStats.maxPrice,
+    }).hasPlaceFacts;
   const heroPlacePriceFormatted = isPlace
     ? formatPlaceReferencePriceRange({
         priceMin:
@@ -1431,9 +1442,13 @@ export async function ProductDetailView({
                 aria-label={t('jumpNavAria')}
                 data-testid="pdv-jump-nav"
               >
-                <a href={isPlace ? '#place-details-section' : '#specs-section'}>
-                  {t('jumpNavSpecs')}
-                </a>
+                {(!isPlace || showPlaceDetails) && (
+                  <a
+                    href={isPlace ? '#place-details-section' : '#specs-section'}
+                  >
+                    {t('jumpNavSpecs')}
+                  </a>
+                )}
                 <a href="#jreviews-section">
                   {t('jumpNavReviews', { count: authenticCount })}
                 </a>
@@ -1705,12 +1720,16 @@ export async function ProductDetailView({
                   >
                     {t('readAndSubmitReviewsBtn', { count: authenticCount })}
                   </a>
-                  <a
-                    href={isPlace ? '#place-details-section' : '#specs-section'}
-                    className="btn btn-outline-light"
-                  >
-                    {isPlace ? tPlace('heading') : t('tenSpecGroupsBtn')}
-                  </a>
+                  {(!isPlace || showPlaceDetails) && (
+                    <a
+                      href={
+                        isPlace ? '#place-details-section' : '#specs-section'
+                      }
+                      className="btn btn-outline-light"
+                    >
+                      {isPlace ? tPlace('heading') : t('tenSpecGroupsBtn')}
+                    </a>
+                  )}
                   <Link
                     href={singleCompareHref}
                     className="btn btn-outline-light"
@@ -1773,7 +1792,7 @@ export async function ProductDetailView({
             </div>
           </div>
 
-          {isPlace && (
+          {showPlaceDetails && (
             <PlaceDetailsSection
               locale={locale}
               categorySlug={categorySlug}

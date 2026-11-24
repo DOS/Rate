@@ -369,3 +369,154 @@ export function buildPlaceStructuredData(params: {
       : {}),
   };
 }
+
+export interface PlaceDisplayFacts {
+  readonly locationBadge: string | null;
+  readonly cleanAddress: string | null;
+  readonly cleanCuisine: string | null;
+  readonly cleanOpeningHours: string | null;
+  readonly safePhone: SanitizedPlacePhone | null;
+  readonly safeWebsite: string | null;
+  readonly coords: SanitizedPlaceCoordinates | null;
+  readonly safeTier: PlacePriceTier | null;
+  readonly safeStarRating: number | null;
+  readonly formattedPriceRange: string | null;
+  readonly safeWebsiteHost: string | null;
+  readonly hasPlaceFacts: boolean;
+}
+
+export function extractPlaceDisplayFacts(options: {
+  readonly placeDetail: PlaceDetail | null;
+  readonly branches: readonly PlaceBranchSibling[];
+  readonly categorySlug: string;
+  readonly locale?: string | null;
+  readonly fallbackPriceMin?: number | null;
+  readonly fallbackPriceMax?: number | null;
+}): PlaceDisplayFacts {
+  const { placeDetail } = options;
+  const locationBadge = placeDetail
+    ? formatPlaceLocationBadge(
+        placeDetail.district_code,
+        placeDetail.province_code
+      )
+    : null;
+  const cleanAddress = sanitizePlaceText(placeDetail?.address, 400);
+  const cleanCuisine = sanitizePlaceText(placeDetail?.cuisine, 160);
+  const cleanOpeningHours = sanitizePlaceText(placeDetail?.opening_hours, 400);
+  const safePhone = placeDetail ? sanitizePlacePhone(placeDetail.phone) : null;
+  const safeWebsite = placeDetail
+    ? sanitizePlaceWebsiteUrl(placeDetail.website)
+    : null;
+  const coords = placeDetail
+    ? sanitizePlaceCoordinates(placeDetail.geo_lat, placeDetail.geo_lng)
+    : null;
+  const safeTier = placeDetail
+    ? sanitizePlacePriceTier(placeDetail.price_tier)
+    : null;
+  const safeStarRating =
+    placeDetail &&
+    typeof placeDetail.star_rating === 'number' &&
+    Number.isFinite(placeDetail.star_rating) &&
+    placeDetail.star_rating >= 1 &&
+    placeDetail.star_rating <= 5
+      ? placeDetail.star_rating
+      : null;
+
+  const formattedPriceRange = formatPlaceReferencePriceRange({
+    priceMin: placeDetail?.price_min ?? options.fallbackPriceMin ?? null,
+    priceMax: placeDetail?.price_max ?? options.fallbackPriceMax ?? null,
+    categorySlug: options.categorySlug,
+    priceUnit: placeDetail?.price_unit ?? null,
+    locale: options.locale,
+  });
+
+  const safeWebsiteHost = safeWebsite
+    ? (() => {
+        try {
+          return new URL(safeWebsite).hostname.replace(/^www\./, '');
+        } catch {
+          return safeWebsite;
+        }
+      })()
+    : null;
+
+  const hasPlaceFacts = Boolean(
+    locationBadge ||
+    cleanAddress ||
+    cleanCuisine ||
+    cleanOpeningHours ||
+    safePhone ||
+    safeWebsite ||
+    coords ||
+    safeTier ||
+    safeStarRating !== null ||
+    formattedPriceRange ||
+    options.branches.length > 0
+  );
+
+  return {
+    locationBadge,
+    cleanAddress,
+    cleanCuisine,
+    cleanOpeningHours,
+    safePhone,
+    safeWebsite,
+    coords,
+    safeTier,
+    safeStarRating,
+    formattedPriceRange,
+    safeWebsiteHost,
+    hasPlaceFacts,
+  };
+}
+
+export interface CardPricePairResult {
+  readonly minPrice: number;
+  readonly maxPrice: number;
+  readonly fromPlace: boolean;
+}
+
+/**
+ * Picks both displayed card endpoints from one source so a master min_price
+ * is never paired with a place summary max_price (or vice versa), while
+ * preserving place reference pricing when master min_price is zero.
+ */
+export function resolveCardPricePair(options: {
+  readonly masterMinPrice: number | null | undefined;
+  readonly masterMaxPrice: number | null | undefined;
+  readonly placeSummary?: {
+    readonly price_min: number | null;
+    readonly price_max: number | null;
+  } | null;
+}): CardPricePairResult {
+  const rawMMin = Number(options.masterMinPrice || 0);
+  const rawMMax = Number(options.masterMaxPrice || 0);
+  const mMin = Number.isFinite(rawMMin) && rawMMin > 0 ? rawMMin : 0;
+  const mMax = Number.isFinite(rawMMax) && rawMMax > 0 ? rawMMax : 0;
+
+  const rawPMin = Number(options.placeSummary?.price_min || 0);
+  const rawPMax = Number(options.placeSummary?.price_max || 0);
+  const pMin = Number.isFinite(rawPMin) && rawPMin > 0 ? rawPMin : 0;
+  const pMax = Number.isFinite(rawPMax) && rawPMax > 0 ? rawPMax : 0;
+  const hasPlacePricing = pMin > 0 || pMax > 0;
+
+  if (mMin > 0 && (mMax > 0 || !hasPlacePricing)) {
+    return {
+      minPrice: mMin,
+      maxPrice: mMax,
+      fromPlace: false,
+    };
+  }
+  if (hasPlacePricing) {
+    return {
+      minPrice: pMin,
+      maxPrice: pMax,
+      fromPlace: true,
+    };
+  }
+  return {
+    minPrice: 0,
+    maxPrice: mMax,
+    fromPlace: false,
+  };
+}
