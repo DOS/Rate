@@ -81,6 +81,17 @@ const PHONE_TEMPLATE: CategorySpecTemplate = {
   has5g: true,
 };
 
+const NON_HARDWARE_TEMPLATE: CategorySpecTemplate = {
+  groups: ['availability', 'regulatory'],
+  hiddenFields: {},
+  displayHiddenFields: {},
+  keySpecs: [],
+  ram: false,
+  storage: false,
+  screen: false,
+  has5g: false,
+};
+
 const SPEC_TEMPLATES: Readonly<Record<string, CategorySpecTemplate>> = {
   smartphones: PHONE_TEMPLATE,
   tablets: PHONE_TEMPLATE,
@@ -214,26 +225,15 @@ const SPEC_TEMPLATES: Readonly<Record<string, CategorySpecTemplate>> = {
     screen: false,
     has5g: false,
   },
-  'bank-savings': {
-    groups: ['availability', 'regulatory'],
-    hiddenFields: {},
-    displayHiddenFields: {},
-    keySpecs: [],
-    ram: false,
-    storage: false,
-    screen: false,
-    has5g: false,
-  },
-  'internet-telecom': {
-    groups: ['availability', 'regulatory'],
-    hiddenFields: {},
-    displayHiddenFields: {},
-    keySpecs: [],
-    ram: false,
-    storage: false,
-    screen: false,
-    has5g: false,
-  },
+  'bank-savings': NON_HARDWARE_TEMPLATE,
+  'internet-telecom': NON_HARDWARE_TEMPLATE,
+  supplements: NON_HARDWARE_TEMPLATE,
+  cosmetics: NON_HARDWARE_TEMPLATE,
+  'mother-baby': NON_HARDWARE_TEMPLATE,
+  restaurants: NON_HARDWARE_TEMPLATE,
+  cafes: NON_HARDWARE_TEMPLATE,
+  hotels: NON_HARDWARE_TEMPLATE,
+  homestays: NON_HARDWARE_TEMPLATE,
 };
 
 const normalizeSlug = (categorySlug: unknown): string =>

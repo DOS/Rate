@@ -9,6 +9,7 @@ import {
 } from '../rules/model-key.js';
 import { HttpUrlSchema, StatusSchema } from './common.schema.js';
 import {
+  EntityTypeSchema,
   KeySpecsSchema,
   MasterProductSchema,
   ProductSpecificationsSchema,
@@ -59,7 +60,7 @@ export const ItemSchema = z.object({
   model: z.string().min(1).max(200),
   category_id: z.string().uuid().nullable().optional(),
   status: StatusSchema.default('draft'),
-  entity_type: z.enum(['product', 'service']).default('product'),
+  entity_type: EntityTypeSchema.default('product'),
   description: z.string().max(50_000).nullable().optional(),
   specifications: ProductSpecificationsSchema.default({}),
   key_specs: KeySpecsSchema.default({}),
