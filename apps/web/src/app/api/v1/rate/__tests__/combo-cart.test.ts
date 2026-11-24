@@ -3,6 +3,11 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { NextRequest } from 'next/server';
 import { buildRateOpenApiSpec } from '@/server/rate/openapi';
+import {
+  deduplicateComboSlugs,
+  executeComboCartOptimization,
+  isSafeComboSlugToken,
+} from '@/server/rate/combo-cart';
 import * as comboCartRouteModule from '../combo-cart/route';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.test';
@@ -175,6 +180,7 @@ async function main() {
   for (const relPath of [
     '../../../../../lib/combo-cart-optimizer.ts',
     '../../../../../lib/merchant-trust-badge.ts',
+    '../../../../../server/rate/combo-cart.ts',
     '../combo-cart/route.ts',
     '../../../../../server/rate/openapi.ts',
     '../../../../../lib/__tests__/combo-cart-optimizer.test.ts',
@@ -187,6 +193,13 @@ async function main() {
       `${relPath} must not contain em-dash or en-dash`
     );
   }
+  const serverServiceSrc = readFileSync(
+    path.resolve(__dirname, '../../../../../server/rate/combo-cart.ts'),
+    'utf8'
+  );
+  assert.ok(serverServiceSrc.startsWith("import 'server-only';"));
+  assert.equal(serverServiceSrc.includes('@repo/shared-data/server'), false);
+  assert.equal(serverServiceSrc.includes('SUPABASE_SECRET_KEY'), false);
   const routeSrc = readFileSync(
     path.resolve(__dirname, '../combo-cart/route.ts'),
     'utf8'
@@ -1283,6 +1296,190 @@ async function main() {
     assert.ok(itemsSchemaProps?.retiredVariant);
     assert.ok(spec.components.schemas.ComboCartPlan);
     assert.ok(spec.components.schemas.MerchantTrustBadge);
+
+    // 10. Direct server/rate/combo-cart.ts unit tests: slug helpers, validation,
+    //     retired-variant guard, and strictly bounded merchant profile fan-out
+    assert.equal(isSafeComboSlugToken('apple-iphone-16-128gb'), true);
+    assert.equal(isSafeComboSlugToken('__proto__'), false);
+    assert.equal(isSafeComboSlugToken('constructor'), false);
+    assert.equal(isSafeComboSlugToken('bad..slug'), false);
+    assert.deepEqual(
+      deduplicateComboSlugs([
+        'apple-iphone-16',
+        'APPLE-IPHONE-16',
+        'apple-airpods-pro-2-usb-c',
+      ]),
+      ['apple-iphone-16', 'apple-airpods-pro-2-usb-c']
+    );
+
+    const invalidServiceRes = await executeComboCartOptimization(
+      { items: ['only-one'] },
+      {
+        resolveWatchlistSlug: async () => null,
+        getCachedMasterProductBySlug: async () => null,
+        getMasterProductOffersBatch: async () => new Map(),
+        getCachedMerchantProfileById: async () => null,
+        getCachedCategorySlugById: async () => new Map(),
+      }
+    );
+    assert.equal(invalidServiceRes.ok, false);
+    if (!invalidServiceRes.ok) {
+      assert.equal(invalidServiceRes.code, 'INVALID_QUERY');
+    }
+
+    const fanOutProfileLookups: string[] = [];
+    const PLAN_A_MERCHANT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+    const PLAN_B_MERCHANT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+    const UNREFERENCED_EXPENSIVE_MERCHANT =
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3';
+    const fanOutPhone = makeMaster(
+      '55555555-5555-4555-8555-555555555551',
+      'fanout-phone',
+      'Fanout Phone',
+      'cat-phone',
+      'smartphones'
+    );
+    const fanOutBuds = makeMaster(
+      '55555555-5555-4555-8555-555555555552',
+      'fanout-buds',
+      'Fanout Buds',
+      'cat-earbud',
+      'earbuds'
+    );
+
+    const makeOfferForFanOut = (
+      id: string,
+      merchantId: string,
+      merchantName: string,
+      platform: string,
+      price: number
+    ) => ({
+      id,
+      platform,
+      title: `${merchantName} ${id}`,
+      price_current: price,
+      price_original: null,
+      stock: 5,
+      rating_star: 4.9,
+      rating_count: 40,
+      url: `https://shopee.vn/product/1/${id}`,
+      availability: 'in_stock' as const,
+      merchant: {
+        id: merchantId,
+        name: merchantName,
+        platform,
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: 50_000,
+        location: 'TP.HCM',
+        risk_score: 5,
+        dosafe_risk_score: 5,
+        review_risk_score: 5,
+        review_risk_breakdown: { total_reviews: 30 },
+      },
+    });
+
+    const fanOutRes = await executeComboCartOptimization(
+      {
+        items: ['fanout-phone', 'fanout-buds'],
+        officialOnly: false,
+        minTrust: 80,
+        maxStores: 2,
+        shippingVnd: 0,
+      },
+      {
+        resolveWatchlistSlug: async () => null,
+        getCachedMasterProductBySlug: async (slug) =>
+          slug === 'fanout-phone'
+            ? (fanOutPhone as never)
+            : slug === 'fanout-buds'
+              ? (fanOutBuds as never)
+              : null,
+        getMasterProductOffersBatch: async () =>
+          new Map([
+            [
+              fanOutPhone.id,
+              [
+                makeOfferForFanOut(
+                  'fo-p-a',
+                  PLAN_A_MERCHANT,
+                  'Plan A Store',
+                  'cellphones',
+                  20_000_000
+                ),
+                makeOfferForFanOut(
+                  'fo-p-b',
+                  PLAN_B_MERCHANT,
+                  'Plan B Store',
+                  'shopee',
+                  18_000_000
+                ),
+                makeOfferForFanOut(
+                  'fo-p-c',
+                  UNREFERENCED_EXPENSIVE_MERCHANT,
+                  'Expensive Unpicked Store',
+                  'tiki',
+                  25_000_000
+                ),
+              ],
+            ],
+            [
+              fanOutBuds.id,
+              [
+                makeOfferForFanOut(
+                  'fo-b-a',
+                  PLAN_A_MERCHANT,
+                  'Plan A Store',
+                  'cellphones',
+                  5_000_000
+                ),
+                makeOfferForFanOut(
+                  'fo-b-c',
+                  UNREFERENCED_EXPENSIVE_MERCHANT,
+                  'Expensive Unpicked Store',
+                  'tiki',
+                  6_500_000
+                ),
+              ],
+            ],
+          ]),
+        getCachedMerchantProfileById: async (merchantId) => {
+          fanOutProfileLookups.push(merchantId);
+          return {
+            listings: [
+              {
+                id: `listing-${merchantId}`,
+                platform: 'cellphones',
+                title: 'Clean listing',
+                price_current: 10_000_000,
+                price_original: null,
+                availability: 'in_stock',
+                discount_analysis: null,
+              },
+            ],
+          } as never;
+        },
+        getCachedCategorySlugById: async () =>
+          new Map([
+            ['cat-phone', 'smartphones'],
+            ['cat-earbud', 'earbuds'],
+          ]),
+      }
+    );
+    assert.equal(fanOutRes.ok, true);
+    if (fanOutRes.ok) {
+      assert.equal(fanOutRes.data.singleStoreBest?.totalVnd, 25_000_000);
+      assert.equal(fanOutRes.data.multiStoreOptimal?.totalVnd, 23_000_000);
+      assert.equal(
+        fanOutProfileLookups.includes(UNREFERENCED_EXPENSIVE_MERCHANT),
+        false,
+        'bounded fan-out must NOT query merchant profiles outside Plan A / Plan B'
+      );
+      assert.deepEqual(
+        [...fanOutProfileLookups].sort(),
+        [PLAN_A_MERCHANT, PLAN_B_MERCHANT].sort()
+      );
+    }
 
     console.warn('All GET /api/v1/rate/combo-cart tests passed');
   } finally {

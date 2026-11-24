@@ -3500,6 +3500,8 @@ async function runCoreArchitectureSuite() {
     'api-handler.ts',
     'cache-tags.ts',
     'product-points.ts',
+    'combo-cart.ts',
+    'mcp.ts',
   ];
   for (const modName of serverRateModules58) {
     const modSource = fs58.readFileSync(
