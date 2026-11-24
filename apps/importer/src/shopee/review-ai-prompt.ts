@@ -16,18 +16,20 @@ import { createHash } from 'node:crypto';
 import {
   comparablePoint,
   getRatingCriteria,
+  getRatingCriteriaVersion,
   hasRatingCriteria,
   isEvasiveCon,
   hasContent,
   storedPoint,
   RATING_CRITERIA_VERSION,
+  RATING_CRITERIA_V2_VERSION,
   REVIEW_POINT_MAX,
   REVIEW_POINT_MIN,
 } from '@repo/shared-data/rules';
 
 /** Bump on any change to the instructions, examples or schema (design 4). */
 export const REVIEW_AI_PROMPT_VERSION = 'v1';
-export { RATING_CRITERIA_VERSION };
+export { RATING_CRITERIA_VERSION, RATING_CRITERIA_V2_VERSION, getRatingCriteriaVersion };
 
 /** Reviews per request: one category, one instruction block (a shared prefix). */
 export const REVIEWS_PER_REQUEST = 20;
@@ -74,7 +76,13 @@ export function isReviewAiModel(value: unknown): value is ReviewAiModel {
 
 /** Categories the job extracts for: a criteria list, and not services (design 1). */
 export function aiCategoryOpen(slug: string | null | undefined): slug is string {
-  return typeof slug === 'string' && slug !== 'services' && hasRatingCriteria(slug);
+  return (
+    typeof slug === 'string' &&
+    slug !== 'services' &&
+    slug !== 'bank-savings' &&
+    slug !== 'internet-telecom' &&
+    hasRatingCriteria(slug)
+  );
 }
 
 /** The text hash the writer compares: sha256 hex of the comment in NFC. */
@@ -141,6 +149,16 @@ const CRITERION_HINTS: Readonly<Record<string, string>> = {
   anc: 'chống ồn chủ động, chế độ xuyên âm',
   comfort: 'đeo lâu có đau không, vừa tai, chắc chắn',
   calls: 'micro, gọi điện, người nghe có rõ không',
+  connectivity: 'cổng HDMI, eARC, USB, Wi-Fi, kết nối thiết bị ngoài',
+  cooling: 'tốc độ làm lạnh, giữ nhiệt, bảo quản thực phẩm',
+  energy_efficiency: 'tiêu thụ điện, tiết kiệm điện inverter, tiền điện',
+  noise: 'độ ồn khi vận hành, độ rung, êm ái',
+  durability: 'độ bền linh kiện, máy nén, bảo hành',
+  features: 'chế độ thông minh, hẹn giờ, tự vệ sinh, cảm biến',
+  capacity: 'dung tích sử dụng, bố trí ngăn kệ, sức chứa',
+  wash_quality: 'hiệu quả giặt sạch, vắt khô, bảo vệ sợi vải',
+  filtration: 'hiệu quả lọc bụi mịn PM2.5, khử mùi, màng HEPA',
+  filter_cost: 'chi phí và chu kỳ thay lõi lọc, màng lọc',
 };
 
 const EXAMPLES = `Ví dụ (minh hoạ, không phải review thật):

@@ -15,6 +15,13 @@ const VALID_BADGE_CATEGORIES = new Set<CanonicalCategorySlug>([
   'laptops',
   'smartwatches',
   'earbuds',
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
 ]);
 
 const VALID_BADGE_CRITERIA = new Set<LeaderboardCriterionKey>([
@@ -99,6 +106,13 @@ export default async function ProductLeaderboardBadges({
     laptops: t('catLaptops'),
     smartwatches: t('catSmartwatches'),
     earbuds: t('catEarbuds'),
+    tvs: t('catTvs'),
+    'air-conditioners': t('catAirConditioners'),
+    refrigerators: t('catRefrigerators'),
+    'washing-machines': t('catWashingMachines'),
+    'air-purifiers': t('catAirPurifiers'),
+    'bank-savings': t('catBankSavings'),
+    'internet-telecom': t('catInternetTelecom'),
   };
 
   const critLabels: Record<LeaderboardCriterionKey, string> = {

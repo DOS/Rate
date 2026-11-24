@@ -399,6 +399,285 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
       },
     ],
   },
+  tvs: {
+    categorySlug: 'tvs',
+    directorySlug: 'tech_electronics',
+    directoryName: 'Công nghệ & thiết bị số',
+    categoryTitle: 'Smart TV',
+    categorySubtitle:
+      'Đối chiếu chất lượng hiển thị, âm thanh, hệ điều hành và lịch sử giá TV chính hãng',
+    searchPlaceholder: 'Tìm Samsung QLED, LG OLED, Sony Bravia, TCL...',
+    defaultBrands: ['Samsung', 'LG', 'Sony', 'TCL', 'Hisense', 'Xiaomi'],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 60,
+      step: 1,
+    },
+    pricePresets: [
+      {
+        id: 'under-10m',
+        label: 'Dưới 10 triệu',
+        minVnd: 0,
+        maxVnd: 10_000_000,
+      },
+      {
+        id: '10m-20m',
+        label: '10 - 20 triệu',
+        minVnd: 10_000_000,
+        maxVnd: 20_000_000,
+      },
+      {
+        id: 'over-20m',
+        label: 'Trên 20 triệu',
+        minVnd: 20_000_000,
+        maxVnd: 60_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  'air-conditioners': {
+    categorySlug: 'air-conditioners',
+    directorySlug: 'tech_electronics',
+    directoryName: 'Công nghệ & thiết bị số',
+    categoryTitle: 'Điều hòa - Máy lạnh',
+    categorySubtitle:
+      'Đối chiếu khả năng làm lạnh, tiết kiệm điện Inverter, độ ồn và lịch sử giá thực tế',
+    searchPlaceholder:
+      'Tìm Daikin Inverter, Panasonic, LG Dual Cool, Casper...',
+    defaultBrands: [
+      'Daikin',
+      'Panasonic',
+      'LG',
+      'Casper',
+      'Samsung',
+      'Mitsubishi',
+    ],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 35,
+      step: 1,
+    },
+    pricePresets: [
+      {
+        id: 'under-8m',
+        label: 'Dưới 8 triệu',
+        minVnd: 0,
+        maxVnd: 8_000_000,
+      },
+      {
+        id: '8m-15m',
+        label: '8 - 15 triệu',
+        minVnd: 8_000_000,
+        maxVnd: 15_000_000,
+      },
+      {
+        id: 'over-15m',
+        label: 'Trên 15 triệu',
+        minVnd: 15_000_000,
+        maxVnd: 35_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  refrigerators: {
+    categorySlug: 'refrigerators',
+    directorySlug: 'tech_electronics',
+    directoryName: 'Công nghệ & thiết bị số',
+    categoryTitle: 'Tủ lạnh',
+    categorySubtitle:
+      'Đối chiếu dung tích sử dụng, tiết kiệm điện, độ ồn và giá bán tủ lạnh chính hãng',
+    searchPlaceholder:
+      'Tìm Samsung Bespoke, LG, Panasonic, Toshiba, Hitachi...',
+    defaultBrands: [
+      'Samsung',
+      'LG',
+      'Panasonic',
+      'Toshiba',
+      'Hitachi',
+      'Electrolux',
+    ],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 50,
+      step: 1,
+    },
+    pricePresets: [
+      {
+        id: 'under-10m',
+        label: 'Dưới 10 triệu',
+        minVnd: 0,
+        maxVnd: 10_000_000,
+      },
+      {
+        id: '10m-20m',
+        label: '10 - 20 triệu',
+        minVnd: 10_000_000,
+        maxVnd: 20_000_000,
+      },
+      {
+        id: 'over-20m',
+        label: 'Trên 20 triệu',
+        minVnd: 20_000_000,
+        maxVnd: 50_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  'washing-machines': {
+    categorySlug: 'washing-machines',
+    directorySlug: 'tech_electronics',
+    directoryName: 'Công nghệ & thiết bị số',
+    categoryTitle: 'Máy giặt',
+    categorySubtitle:
+      'Đối chiếu hiệu quả giặt sạch, độ ồn vắt, tiết kiệm điện nước và giá bán máy giặt chính hãng',
+    searchPlaceholder:
+      'Tìm LG AI DD, Electrolux, Samsung EcoBubble, Toshiba...',
+    defaultBrands: [
+      'LG',
+      'Samsung',
+      'Electrolux',
+      'Toshiba',
+      'Aqua',
+      'Panasonic',
+    ],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 30,
+      step: 1,
+    },
+    pricePresets: [
+      {
+        id: 'under-8m',
+        label: 'Dưới 8 triệu',
+        minVnd: 0,
+        maxVnd: 8_000_000,
+      },
+      {
+        id: '8m-15m',
+        label: '8 - 15 triệu',
+        minVnd: 8_000_000,
+        maxVnd: 15_000_000,
+      },
+      {
+        id: 'over-15m',
+        label: 'Trên 15 triệu',
+        minVnd: 15_000_000,
+        maxVnd: 30_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  'air-purifiers': {
+    categorySlug: 'air-purifiers',
+    directorySlug: 'tech_electronics',
+    directoryName: 'Công nghệ & thiết bị số',
+    categoryTitle: 'Máy lọc không khí',
+    categorySubtitle:
+      'Đối chiếu hiệu suất lọc HEPA/CADR, chi phí thay màng lọc, độ ồn và lịch sử giá thực tế',
+    searchPlaceholder:
+      'Tìm Xiaomi Air Purifier, Sharp, Coway, Philips, Dyson...',
+    defaultBrands: ['Xiaomi', 'Sharp', 'Coway', 'Philips', 'Dyson', 'LG'],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 20,
+      step: 1,
+    },
+    pricePresets: [
+      {
+        id: 'under-3m',
+        label: 'Dưới 3 triệu',
+        minVnd: 0,
+        maxVnd: 3_000_000,
+      },
+      {
+        id: '3m-7m',
+        label: '3 - 7 triệu',
+        minVnd: 3_000_000,
+        maxVnd: 7_000_000,
+      },
+      {
+        id: 'over-7m',
+        label: 'Trên 7 triệu',
+        minVnd: 7_000_000,
+        maxVnd: 20_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  'bank-savings': {
+    categorySlug: 'bank-savings',
+    directorySlug: 'services',
+    directoryName: 'Dịch vụ công & tài chính',
+    categoryTitle: 'Tiết kiệm ngân hàng',
+    categorySubtitle:
+      'So sánh lãi suất niêm yết theo kỳ hạn, chất lượng phục vụ và đánh giá thực tế từ khách hàng',
+    searchPlaceholder: 'Tìm Vietcombank, ACB, tiết kiệm 6 tháng, 12 tháng...',
+    defaultBrands: [
+      'Vietcombank',
+      'ACB',
+      'Techcombank',
+      'MB Bank',
+      'BIDV',
+      'VietinBank',
+    ],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 0,
+      step: 1,
+    },
+    pricePresets: [],
+    featureCheckboxes: [],
+  },
+  'internet-telecom': {
+    categorySlug: 'internet-telecom',
+    directorySlug: 'services',
+    directoryName: 'Dịch vụ công & tài chính',
+    categoryTitle: 'Internet & Viễn thông',
+    categorySubtitle:
+      'So sánh gói cước Internet cáp quang, tốc độ xử lý sự cố và cước hàng tháng minh bạch',
+    searchPlaceholder: 'Tìm VNPT Home, FPT Telecom Sky, Viettel Fiber...',
+    defaultBrands: ['VNPT', 'FPT Telecom', 'Viettel'],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 2,
+      step: 0.05,
+    },
+    pricePresets: [
+      {
+        id: 'under-200k',
+        label: 'Dưới 200K',
+        minVnd: 0,
+        maxVnd: 200_000,
+      },
+      {
+        id: '200k-350k',
+        label: '200K - 350K',
+        minVnd: 200_000,
+        maxVnd: 350_000,
+      },
+      {
+        id: 'over-350k',
+        label: 'Trên 350K',
+        minVnd: 350_000,
+        maxVnd: 2_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
 };
 
 const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {
@@ -568,7 +847,10 @@ export function localizeCategoryFilterSchema(
 
   return {
     ...safeSchema,
-    directoryName: t('schemas.directoryTech'),
+    directoryName:
+      safeSchema.directorySlug === 'services'
+        ? t('schemas.directoryServices')
+        : t('schemas.directoryTech'),
     categoryTitle: t(`schemas.${slug}.title`),
     categorySubtitle: t(`schemas.${slug}.subtitle`),
     searchPlaceholder: t(`schemas.${slug}.searchPlaceholder`),

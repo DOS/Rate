@@ -8,8 +8,13 @@ import {
   specFieldApplies,
 } from '@repo/shared-data/rules';
 import {
+  normalizePriceCurrency,
+  sanitizeCurrencyPriceValue,
+} from '@/lib/locale-format';
+import {
   MAX_VALID_VND_PRICE,
   normalizeOfferOriginalPrice,
+  resolveListingPriceCurrency,
   type MasterProductFilterParams,
 } from '@/lib/rate-api';
 import {
@@ -290,23 +295,26 @@ export function parseBoundedStringParam(
 }
 
 /**
- * Parses an optional VND price query parameter (`?price=` or `?originalPrice=`),
- * returning a positive integer capped at `maxVnd` (default 500,000,000 VND) or `null` if invalid/missing.
+ * Parses an optional listing price query parameter (`?price=` or `?originalPrice=`),
+ * returning a positive VND integer by default, or up to 2 decimal places when `currency === 'PCT'`,
+ * capped at `maxVnd` (default 500,000,000) or `null` if invalid/missing.
  */
 export function parseOptionalVndPriceParam(
   raw: string | null | undefined,
-  maxVnd = 500_000_000
+  maxVnd = 500_000_000,
+  currency?: string | null
 ): number | null {
   if (typeof raw !== 'string') return null;
   const n = parseFiniteDecimalInput(raw);
   if (!Number.isFinite(n) || n <= 0) return null;
-  const rounded = Math.round(n);
-  if (rounded <= 0) return null;
+  const normalizedCurrency = normalizePriceCurrency(currency);
+  const sanitized = sanitizeCurrencyPriceValue(n, normalizedCurrency);
+  if (sanitized <= 0) return null;
   const safeMaxVnd =
     typeof maxVnd === 'number' && Number.isFinite(maxVnd) && maxVnd > 0
       ? Math.round(maxVnd)
       : 500_000_000;
-  return Math.min(rounded, safeMaxVnd);
+  return Math.min(sanitized, safeMaxVnd);
 }
 
 /**
@@ -582,6 +590,8 @@ export function resolveInspectObservedPrices(input: {
   matchedOfferPriceCurrent?: unknown;
   matchedOfferPriceOriginal?: unknown;
   masterMinPrice?: unknown;
+  currency?: string | null;
+  categorySlug?: string | null;
   maxVnd?: number;
 }): { observedPrice: number; observedOriginalPrice: number } {
   const safeMaxVnd =
@@ -590,9 +600,14 @@ export function resolveInspectObservedPrices(input: {
     input.maxVnd > 0
       ? Math.round(input.maxVnd)
       : MAX_VALID_VND_PRICE;
+  const resolvedCurrency = resolveListingPriceCurrency({
+    categorySlug: input.categorySlug,
+    currency: input.currency,
+  });
   const toPositiveBoundedPrice = (val: unknown): number => {
     const n = parseFiniteDecimalInput(val);
-    return Number.isFinite(n) && n > 0 && n <= safeMaxVnd ? Math.round(n) : 0;
+    if (!Number.isFinite(n) || n <= 0 || n > safeMaxVnd) return 0;
+    return sanitizeCurrencyPriceValue(n, resolvedCurrency);
   };
 
   const queryPriceVal = toPositiveBoundedPrice(input.queryPrice);
@@ -1218,6 +1233,13 @@ const VALID_PRODUCT_CATEGORY_SLUGS = new Set([
   'laptops',
   'smartwatches',
   'earbuds',
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
 ]);
 
 const VALID_BRAND_TOKEN_REGEX = /^[\p{L}\p{N}\s.+-]+$/u;

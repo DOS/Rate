@@ -1,7 +1,10 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { getCachedInspectProductOrShopUrl } from '@/server/rate';
+import {
+  getCachedInspectProductOrShopUrl,
+  getCachedPopulatedCategorySlugs,
+} from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
@@ -57,13 +60,19 @@ export default async function InspectPage({
   // Without ?q= the workspace shows the first sample link. Inspect it here too,
   // so the result renders with the page instead of growing after hydration
   // and pushing the footer down (DOS/Rate#763).
-  const initialInspection = await getCachedInspectProductOrShopUrl(
-    initialQuery || SAMPLE_AUDIT_URLS[0]!.query
-  ).catch(() => null);
+  const [initialInspection, populatedCategorySlugs] = await Promise.all([
+    getCachedInspectProductOrShopUrl(
+      initialQuery || SAMPLE_AUDIT_URLS[0]!.query
+    ).catch(() => null),
+    getCachedPopulatedCategorySlugs(),
+  ]);
 
   return (
     <ClientMessages scope="inspect">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedCategorySlugs}
+      >
         <Suspense
           fallback={
             <div className="rate-island-fallback container py-5 text-center">

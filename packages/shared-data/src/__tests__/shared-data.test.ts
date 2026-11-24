@@ -3,9 +3,12 @@ import * as sharedDataRoot from '../index.js';
 import {
   SHARED_DATA_VERSION,
   ProductSpecificationsSchema,
+  KeySpecsSchema,
   MasterProductSchema,
   ScrapedProductSchema,
   SupportedEcommercePlatformSchema,
+  SupportedServicePlatformSchema,
+  SupportedIngestionPlatformSchema,
   PaginationSchema,
   ApiResponseSchema,
   RATE_ROUTES,
@@ -1727,7 +1730,7 @@ function testLlmReviewSummaryScope(): void {
 function testRatingCriteriaAndReviewForm(): void {
   // D1: every list is weighted to 100, with unique keys, all three locale
   // labels (vi, en, cs) and exactly one required criterion (#1837).
-  for (const slug of rules.RATING_CRITERIA_CATEGORIES) {
+  for (const slug of rules.RATING_CRITERIA_ALL_CATEGORIES) {
     const criteria = rules.getRatingCriteria(slug);
     assert.equal(
       criteria.reduce((sum, criterion) => sum + criterion.weight, 0),
@@ -1846,7 +1849,7 @@ function testRatingCriteriaAndReviewForm(): void {
   );
   assert.equal(rules.getRatingCriterionLabel(sampleCrit, ''), 'Hiệu năng');
   assert.equal(rules.getRatingCriterionLabel(sampleCrit, '   '), 'Hiệu năng');
-  assert.equal(rules.RATING_CRITERION_KEYS.length, 19);
+  assert.equal(rules.RATING_CRITERION_KEYS.length, 29);
   for (const key of rules.RATING_CRITERION_KEYS) {
     assert.equal(rules.isRatingCriterionKey(key), true, key);
   }
@@ -3341,7 +3344,7 @@ function testReviewValue(): void {
   );
   // A category without its own criteria list has no criteria to complete.
   assert.equal(completeness({ categorySlug: null }), 15);
-  assert.equal(completeness({ categorySlug: 'tvs' }), 15);
+  assert.equal(completeness({ categorySlug: 'monitors' }), 15);
   // A verdict that repeats a line, or longer than the form allows, earns nothing.
   const longLine = 'Pin dùng cả ngày với nhu cầu vừa phải';
   assert.equal(
@@ -3536,6 +3539,263 @@ function testRatingUseCasePresets(): void {
   );
 }
 
+function testWaveE1E2Readiness(): void {
+  assert.equal(rules.RATING_CRITERIA_VERSION, 1);
+  assert.equal(rules.RATING_CRITERIA_V2_VERSION, 2);
+  assert.equal(rules.RATING_CRITERIA_CATEGORIES.length, 6);
+  assert.equal(rules.RATING_CRITERIA_ALL_CATEGORIES.length, 13);
+
+  const expectedWeights: Record<string, Record<string, number>> = {
+    tvs: {
+      display: 30,
+      sound: 15,
+      software: 15,
+      connectivity: 10,
+      design: 10,
+      value: 20,
+    },
+    'air-conditioners': {
+      cooling: 30,
+      energy_efficiency: 20,
+      noise: 15,
+      durability: 10,
+      features: 10,
+      value: 15,
+    },
+    refrigerators: {
+      cooling: 25,
+      energy_efficiency: 20,
+      capacity: 15,
+      noise: 15,
+      design: 10,
+      value: 15,
+    },
+    'washing-machines': {
+      wash_quality: 30,
+      noise: 15,
+      energy_efficiency: 15,
+      durability: 15,
+      features: 10,
+      value: 15,
+    },
+    'air-purifiers': {
+      filtration: 30,
+      noise: 20,
+      filter_cost: 15,
+      features: 10,
+      design: 10,
+      value: 15,
+    },
+    'bank-savings': {
+      service_quality: 35,
+      price: 25,
+      attitude: 20,
+      speed: 20,
+    },
+    'internet-telecom': {
+      service_quality: 35,
+      price: 25,
+      attitude: 20,
+      speed: 20,
+    },
+  };
+
+  for (const slug of [
+    'smartphones',
+    'tablets',
+    'laptops',
+    'smartwatches',
+    'earbuds',
+    'services',
+    'unknown-category',
+    null,
+  ]) {
+    assert.equal(
+      rules.getRatingCriteriaVersion(slug),
+      1,
+      `Expected v1 for ${String(slug)}`
+    );
+  }
+
+  for (const [slug, weights] of Object.entries(expectedWeights)) {
+    assert.equal(
+      rules.getRatingCriteriaVersion(slug),
+      2,
+      `Expected v2 for ${slug}`
+    );
+    assert.equal(rules.hasRatingCriteria(slug), true);
+    const list = rules.getRatingCriteria(slug);
+    const sum = list.reduce((acc, item) => acc + item.weight, 0);
+    assert.equal(sum, 100, `Expected sum 100 for ${slug}`);
+    const requiredList = list.filter((item) => item.required);
+    assert.equal(
+      requiredList.length,
+      1,
+      `Expected exactly 1 required criterion for ${slug}`
+    );
+    assert.deepEqual(
+      Object.fromEntries(list.map((item) => [item.key, item.weight])),
+      weights,
+      `Weights mismatch for ${slug}`
+    );
+    for (const item of list) {
+      assert.ok(item.label.vi && item.label.en && item.label.cs);
+    }
+    const presets = rules.getRatingUseCasePresets(slug);
+    assert.ok(presets.length >= 1);
+    const presetSum = Object.values(presets[0]!.weights).reduce<number>(
+      (acc, w) => acc + (w ?? 0),
+      0
+    );
+    assert.equal(presetSum, 100);
+  }
+
+  assert.equal(SupportedEcommercePlatformSchema.options.length, 22);
+  assert.deepEqual(SupportedServicePlatformSchema.options, [
+    'vietcombank',
+    'acb',
+    'vnpt',
+    'fpttelecom',
+  ]);
+  for (const p of ['shopee', 'vietcombank', 'acb', 'vnpt', 'fpttelecom']) {
+    assert.equal(SupportedIngestionPlatformSchema.safeParse(p).success, true);
+  }
+  assert.equal(
+    SupportedEcommercePlatformSchema.safeParse('vietcombank').success,
+    false
+  );
+
+  const serviceScraped = ScrapedProductSchema.parse({
+    platform: 'vietcombank',
+    itemId: 'vcb-12m',
+    shopId: 'vietcombank',
+    url: 'https://www.vietcombank.com.vn/rates',
+    title: 'Vietcombank 12M Online Savings',
+    entity_type: 'service',
+    category_slug: 'bank-savings',
+    priceMin: 4.75,
+    priceMax: 5.4,
+    currency: 'PCT',
+    metadata: { term_months: 12 },
+    shop: {
+      shopId: 'vietcombank',
+      name: 'Vietcombank',
+      isMall: true,
+    },
+  });
+  assert.equal(serviceScraped.platform, 'vietcombank');
+  assert.equal(serviceScraped.entity_type, 'service');
+  assert.equal(serviceScraped.category_slug, 'bank-savings');
+  assert.equal(serviceScraped.currency, 'PCT');
+  assert.equal(serviceScraped.priceMin, 4.75);
+  assert.equal(serviceScraped.priceMax, 5.4);
+
+  const passthroughSpecs = ProductSpecificationsSchema.parse({
+    category_slug: 'air-conditioners',
+    cooling: { capacity_btu: 9000, refrigerant: 'R32' },
+  });
+  assert.deepEqual((passthroughSpecs as Record<string, unknown>).cooling, {
+    capacity_btu: 9000,
+    refrigerant: 'R32',
+  });
+
+  const passthroughKeySpecs = KeySpecsSchema.parse({
+    cooling_btu: '9000 BTU',
+    inverter: 'Yes',
+  });
+  assert.equal(
+    (passthroughKeySpecs as Record<string, unknown>).cooling_btu,
+    '9000 BTU'
+  );
+
+  const tvScoped = rules.applyCategorySpecTemplate(
+    'tvs',
+    {
+      specifications: {
+        display: { size: '55 inch', protection: 'Gorilla Glass' },
+        camera: { main: '50MP' },
+        cellular: { has_5g: true },
+        multimedia: { speakers: '20W' },
+      },
+      key_specs: { screen: '55 inch 4K OLED', ram: '8GB', camera: '50MP' },
+      ram_gb: 8,
+      storage_gb: 128,
+      screen_size_inch: 55,
+      has_5g: true,
+    },
+    { forStorage: true }
+  );
+  assert.equal(tvScoped.screen_size_inch, 55);
+  assert.equal(tvScoped.ram_gb, null);
+  assert.equal(tvScoped.storage_gb, null);
+  assert.equal(tvScoped.has_5g, false);
+  assert.deepEqual(tvScoped.key_specs, { screen: '55 inch 4K OLED' });
+  assert.equal(
+    (tvScoped.specifications as Record<string, unknown>).camera,
+    undefined
+  );
+  assert.deepEqual(
+    (tvScoped.specifications as Record<string, unknown>).display,
+    { size: '55 inch' }
+  );
+
+  const acScoped = rules.applyCategorySpecTemplate(
+    'air-conditioners',
+    {
+      specifications: {
+        camera: { main: '50MP' },
+        cooling: { btu: 12000 },
+      },
+      key_specs: { ram: '8GB', cooling_btu: '12000 BTU' },
+      ram_gb: 8,
+      storage_gb: 128,
+      screen_size_inch: 6.7,
+      has_5g: true,
+    },
+    { forStorage: true }
+  );
+  assert.equal(acScoped.screen_size_inch, null);
+  assert.equal(acScoped.ram_gb, null);
+  assert.equal(acScoped.storage_gb, null);
+  assert.equal(acScoped.has_5g, false);
+  assert.deepEqual(acScoped.key_specs, { cooling_btu: '12000 BTU' });
+  assert.deepEqual(
+    (acScoped.specifications as Record<string, unknown>).cooling,
+    { btu: 12000 }
+  );
+
+  assert.equal(
+    rules.minimumListingPriceVnd(['Vietcombank 12M'], {
+      categorySlug: 'bank-savings',
+      entityType: 'service',
+      currency: 'PCT',
+    }),
+    0
+  );
+  assert.equal(
+    rules.minimumListingPriceVnd(['VNPT Home Net'], {
+      categorySlug: 'internet-telecom',
+    }),
+    0
+  );
+  assert.equal(
+    rules.minimumListingPriceVnd(['Xiaomi Smart Air Purifier'], {
+      categorySlug: 'air-purifiers',
+    }),
+    rules.MINIMUM_APPLIANCE_PRICE_FLOOR_VND
+  );
+  assert.equal(
+    rules.minimumListingPriceVnd(['LG DualCool'], {
+      categorySlug: 'air-conditioners',
+    }),
+    rules.MINIMUM_DEVICE_PRICE_FLOOR_VND
+  );
+  assert.equal(
+    rules.minimumListingPriceVnd(['Op lung iPhone 16']),
+    rules.MINIMUM_DEVICE_PRICE_FLOOR_VND
+  );
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
@@ -3585,6 +3845,8 @@ function main(): void {
   );
   testExtensionObservation();
   console.log('  ✅ [14/14] ExtensionObservation v1 (DOS/Rate#1606) verified');
+  testWaveE1E2Readiness();
+  console.log('  ✅ [15/15] Wave E1/E2 schemas and rules verified');
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 

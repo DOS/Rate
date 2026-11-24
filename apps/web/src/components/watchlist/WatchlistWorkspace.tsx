@@ -9,12 +9,16 @@ import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MasterProduct } from '@repo/shared-data';
 import {
   MAX_VALID_VND_PRICE,
+  getMasterProductCategorySlug,
   getMasterProductHref,
   resolveCompareEffectiveUserRating,
+  resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
 import { formatScoreFixed } from '@/lib/rating-display';
 import {
+  MIN_WATCHLIST_TARGET_PRICE_PCT,
   computeWatchlistTargetPrice,
+  formatWatchlistPrice,
   getWatchlist,
   removeWatchlistItem,
   resolveWatchlistItemCurrentPrices,
@@ -53,10 +57,12 @@ import {
   collapseWhitespace,
   formatDate,
   formatDecimal,
+  formatListingPrice,
   formatNumber,
   formatPercent,
   formatPlainNumber,
   formatPriceVnd,
+  normalizePriceCurrency,
   toFormatLocale,
 } from '@/lib/locale-format';
 import StarRating from '@/components/elementary/StarRating';
@@ -101,11 +107,24 @@ export function parseWatchlistTargetQueryParam(raw: unknown): number | null {
 
 export function resolveBoundedWatchlistTargetInput(
   customTarget: unknown,
-  fallbackBasePrice?: unknown
+  fallbackBasePrice?: unknown,
+  currency?: string | null
 ): number {
+  const resolvedCurrency = normalizePriceCurrency(currency);
   const num = Number(customTarget);
   if (!Number.isFinite(num) || num <= 0) {
-    return sanitizeWatchlistTargetPrice(customTarget, fallbackBasePrice);
+    return sanitizeWatchlistTargetPrice(
+      customTarget,
+      fallbackBasePrice,
+      resolvedCurrency
+    );
+  }
+  if (resolvedCurrency === 'PCT') {
+    const rounded = Math.round(num * 100) / 100;
+    return Math.max(
+      MIN_WATCHLIST_TARGET_PRICE_PCT,
+      Math.min(MAX_VALID_VND_PRICE, rounded)
+    );
   }
   return Math.max(
     MIN_WATCHLIST_QUERY_TARGET_VND,
@@ -165,12 +184,25 @@ export function addProductToLocalWatchlist(
   customTargetVnd?: number | null
 ): WatchlistItem[] {
   const minP = Number(p.min_price || 0);
-  const targetP =
+  const categorySlug = getMasterProductCategorySlug(p);
+  const currency = resolveListingPriceCurrency({
+    categorySlug,
+    metadata: p.metadata,
+  });
+  const hasValidCustomTarget =
     typeof customTargetVnd === 'number' &&
-    Number.isSafeInteger(customTargetVnd) &&
-    customTargetVnd >= MIN_WATCHLIST_QUERY_TARGET_VND &&
-    customTargetVnd <= MAX_VALID_VND_PRICE
-      ? customTargetVnd
+    Number.isFinite(customTargetVnd) &&
+    customTargetVnd <= MAX_VALID_VND_PRICE &&
+    (currency === 'PCT'
+      ? customTargetVnd >= MIN_WATCHLIST_TARGET_PRICE_PCT
+      : Number.isSafeInteger(customTargetVnd) &&
+        customTargetVnd >= MIN_WATCHLIST_QUERY_TARGET_VND);
+  const targetP = hasValidCustomTarget
+    ? currency === 'PCT'
+      ? Math.round(customTargetVnd * 100) / 100
+      : customTargetVnd
+    : currency === 'PCT'
+      ? computeWatchlistTargetPrice(minP, 5, currency)
       : computeWatchlistTargetPrice(minP, 5);
   const thumb = productImageUrl(p);
   const resolvedHref = getMasterProductHref(p);
@@ -181,6 +213,7 @@ export function addProductToLocalWatchlist(
     name: p.name,
     brand: p.brand,
     categoryPath: resolvedCategoryPath,
+    currency,
     thumbnail: thumb,
     priceWhenAdded: minP,
     targetPrice: targetP,
@@ -372,7 +405,7 @@ export function handleWatchlistInlineTargetKeyDown(
 }
 
 const VALID_WATCHLIST_PRODUCT_HREF_RE =
-  /^\/([a-z]+)\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,255})$/;
+  /^\/([a-z][a-z0-9-]+)\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,255})$/;
 const UNSAFE_WATCHLIST_HREF_SLUG_RE =
   /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i;
 
@@ -488,25 +521,36 @@ export function buildWatchlistPortfolioMarkdown(params: {
     ...items.map((item) => {
       const liveProd = productBySlug.get(item.slug);
       const liveDeal = liveDeals[item.slug];
+      const itemCurrency =
+        item.currency ??
+        resolveListingPriceCurrency({
+          categorySlug: item.categoryPath?.replace(/^\/+/, '').split('/')[0],
+          master: liveProd,
+        });
       const rSig =
         liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
       const { currentMin: curMin, currentMax: curMax } =
         resolveWatchlistItemCurrentPrices(item, liveDeal, liveProd);
-      const fallbackSpreadVnd = Math.max(0, curMax - curMin);
+      const fallbackSpreadVnd =
+        itemCurrency === 'PCT'
+          ? Math.round(Math.max(0, curMax - curMin) * 100) / 100
+          : Math.max(0, curMax - curMin);
       const rawSpreadPct = Number(rSig?.priceSpread?.spreadPct);
       const safeSpreadPct =
         Number.isFinite(rawSpreadPct) && rawSpreadPct > 0
           ? Math.min(10_000, rawSpreadPct)
           : 0;
+      const spreadCurrency = rSig?.priceSpread?.currency ?? itemCurrency;
       const safeSpreadVnd = sanitizeWatchlistPrice(
-        rSig?.priceSpread?.spreadVnd
+        rSig?.priceSpread?.spreadVnd,
+        spreadCurrency
       );
       const spreadStr = rSig?.priceSpread
-        ? `+${formatPercent(safeSpreadPct, locale)} (${formatPriceVnd(safeSpreadVnd, locale)})`
+        ? `+${formatPercent(safeSpreadPct, locale)} (${formatWatchlistPrice(safeSpreadVnd, spreadCurrency, locale)})`
         : fallbackSpreadVnd > 0
-          ? formatPriceVnd(fallbackSpreadVnd, locale)
-          : formatPriceVnd(0, locale);
-      const safeTarget = sanitizeWatchlistPrice(item.targetPrice);
+          ? formatWatchlistPrice(fallbackSpreadVnd, itemCurrency, locale)
+          : formatWatchlistPrice(0, itemCurrency, locale);
+      const safeTarget = sanitizeWatchlistPrice(item.targetPrice, itemCurrency);
       const hit = curMin > 0 && curMin <= safeTarget;
       const bestOfferStr = liveDeal?.best_offer
         ? `${sanitizeWatchlistMarkdownCell(liveDeal.best_offer.merchant_name, locale)} (${sanitizeWatchlistMarkdownCell(String(liveDeal.best_offer.platform ?? '').toUpperCase(), locale)})`
@@ -518,7 +562,7 @@ export function buildWatchlistPortfolioMarkdown(params: {
             }),
             locale
           );
-      return `| ${sanitizeWatchlistMarkdownCell(item.name, locale)} | ${sanitizeWatchlistMarkdownCell(item.brand, locale)} | ${formatPriceVnd(curMin, locale)} | ${formatPriceVnd(safeTarget, locale)} | ${spreadStr} | ${radarMarkdownCell(rSig, locale)} | ${hit ? t('mdStatusReached') : t('mdStatusWatching')} | ${bestOfferStr} |`;
+      return `| ${sanitizeWatchlistMarkdownCell(item.name, locale)} | ${sanitizeWatchlistMarkdownCell(item.brand, locale)} | ${formatWatchlistPrice(curMin, itemCurrency, locale)} | ${formatWatchlistPrice(safeTarget, itemCurrency, locale)} | ${spreadStr} | ${radarMarkdownCell(rSig, locale)} | ${hit ? t('mdStatusReached') : t('mdStatusWatching')} | ${bestOfferStr} |`;
     }),
   ];
   return lines.join('\n');
@@ -578,7 +622,13 @@ export default function WatchlistWorkspace({
     initialEditItem
       ? resolveBoundedWatchlistTargetInput(
           initialEditItem.targetPrice,
-          initialEditItem.priceWhenAdded
+          initialEditItem.priceWhenAdded,
+          initialEditItem.currency ??
+            resolveListingPriceCurrency({
+              categorySlug: initialEditItem.categoryPath
+                ?.replace(/^\/+/, '')
+                .split('/')[0],
+            })
         )
       : 0
   );
@@ -819,14 +869,20 @@ export default function WatchlistWorkspace({
     const already = getWatchlist().find((x) => x.slug === choice.slug);
     removeWatchlistItem(item.slug);
     if (already) return;
+    const itemCurrency =
+      item.currency ??
+      resolveListingPriceCurrency({
+        categorySlug: item.categoryPath?.replace(/^\/+/, '').split('/')[0],
+      });
     const targetPrice =
       choice.minPrice > 0
-        ? computeWatchlistTargetPrice(choice.minPrice, 5)
+        ? computeWatchlistTargetPrice(choice.minPrice, 5, itemCurrency)
         : item.targetPrice;
     upsertWatchlistItem({
       ...item,
       slug: choice.slug,
       name: choice.name,
+      currency: itemCurrency,
       priceWhenAdded: choice.minPrice || item.priceWhenAdded,
       targetPrice,
     });
@@ -849,12 +905,20 @@ export default function WatchlistWorkspace({
   };
 
   const handleUpdateTarget = async (item: WatchlistItem) => {
+    const itemCurrency =
+      item.currency ??
+      resolveListingPriceCurrency({
+        categorySlug: item.categoryPath?.replace(/^\/+/, '').split('/')[0],
+        master: productBySlug.get(item.slug),
+      });
     const cleanTarget = resolveBoundedWatchlistTargetInput(
       editTarget,
-      item.priceWhenAdded
+      item.priceWhenAdded,
+      itemCurrency
     );
     upsertWatchlistItem({
       ...item,
+      currency: itemCurrency,
       targetPrice: cleanTarget,
     });
     setEditingSlug(null);
@@ -892,6 +956,14 @@ export default function WatchlistWorkspace({
     try {
       const results = await Promise.all(
         items.map(async (item) => {
+          const itemCurrency =
+            item.currency ??
+            resolveListingPriceCurrency({
+              categorySlug: item.categoryPath
+                ?.replace(/^\/+/, '')
+                .split('/')[0],
+              master: productBySlug.get(item.slug),
+            });
           const res = await fetch('/api/v1/rate/watchlist', {
             method: 'POST',
             headers,
@@ -899,7 +971,8 @@ export default function WatchlistWorkspace({
               slug: item.slug,
               targetPrice: resolveBoundedWatchlistTargetInput(
                 item.targetPrice,
-                item.priceWhenAdded
+                item.priceWhenAdded,
+                itemCurrency
               ),
               locale: locale || 'vi',
             }),
@@ -973,12 +1046,20 @@ export default function WatchlistWorkspace({
     (acc, item) => {
       const liveProd = productBySlug.get(item.slug);
       const liveDeal = liveDeals[item.slug];
+      const itemCurrency =
+        item.currency ??
+        resolveListingPriceCurrency({
+          categorySlug: item.categoryPath?.replace(/^\/+/, '').split('/')[0],
+          master: liveProd,
+        });
       const { currentMin: curMin, currentMax: curMax } =
         resolveWatchlistItemCurrentPrices(item, liveDeal, liveProd);
       const userR = liveProd ? resolveCompareEffectiveUserRating(liveProd) : 0;
-      acc.totalMinVnd += curMin;
-      acc.totalTargetVnd += item.targetPrice;
-      acc.totalSpreadSavingsVnd += Math.max(0, curMax - curMin);
+      if (itemCurrency !== 'PCT') {
+        acc.totalMinVnd += curMin;
+        acc.totalTargetVnd += item.targetPrice;
+        acc.totalSpreadSavingsVnd += Math.max(0, curMax - curMin);
+      }
       if (userR > 0) {
         acc.ratingSum =
           (Math.round(acc.ratingSum * 1000) + Math.round(userR * 1000)) / 1000;
@@ -1047,12 +1128,22 @@ export default function WatchlistWorkspace({
     const rows = items.map((item) => {
       const liveProd = productBySlug.get(item.slug);
       const liveDeal = liveDeals[item.slug];
+      const itemCurrency =
+        item.currency ??
+        resolveListingPriceCurrency({
+          categorySlug: item.categoryPath?.replace(/^\/+/, '').split('/')[0],
+          master: liveProd,
+        });
       const rSig =
         liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
       const { currentMin: curMin, currentMax: curMax } =
         resolveWatchlistItemCurrentPrices(item, liveDeal, liveProd);
+      const spreadDiffRaw = Math.max(0, curMax - curMin);
       const spreadVnd =
-        rSig?.priceSpread?.spreadVnd ?? Math.max(0, curMax - curMin);
+        rSig?.priceSpread?.spreadVnd ??
+        (itemCurrency === 'PCT'
+          ? Math.round(spreadDiffRaw * 100) / 100
+          : spreadDiffRaw);
       const spreadPct =
         rSig?.priceSpread?.spreadPct ??
         (curMin > 0 ? Math.round(((curMax - curMin) / curMin) * 1000) / 10 : 0);
@@ -1094,16 +1185,27 @@ export default function WatchlistWorkspace({
       items: items.map((item) => {
         const liveProd = productBySlug.get(item.slug);
         const liveDeal = liveDeals[item.slug];
+        const itemCurrency =
+          item.currency ??
+          resolveListingPriceCurrency({
+            categorySlug: item.categoryPath?.replace(/^\/+/, '').split('/')[0],
+            master: liveProd,
+          });
         const rSig =
           liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
         const { currentMin: curMin, currentMax: curMax } =
           resolveWatchlistItemCurrentPrices(item, liveDeal, liveProd);
+        const fallbackSpread =
+          itemCurrency === 'PCT'
+            ? Math.round(Math.max(0, curMax - curMin) * 100) / 100
+            : Math.max(0, curMax - curMin);
         return {
           ...item,
+          currency: itemCurrency,
           currentMinPriceVnd: curMin,
           currentMaxPriceVnd: curMax,
           priceSpread10Platform: rSig?.priceSpread ?? {
-            spreadVnd: Math.max(0, curMax - curMin),
+            spreadVnd: fallbackSpread,
             spreadPct:
               curMin > 0
                 ? Math.round(((curMax - curMin) / curMin) * 1000) / 10
@@ -1447,6 +1549,19 @@ export default function WatchlistWorkspace({
             <div className="row g-3 justify-content-center mt-2 text-start">
               {catalogProducts.slice(0, 3).map((p) => {
                 const minP = Number(p.min_price || 0);
+                const quickCategorySlug = getMasterProductCategorySlug(p);
+                const quickCurrency = resolveListingPriceCurrency({
+                  categorySlug: quickCategorySlug,
+                  metadata: p.metadata,
+                });
+                const quickHasUnit =
+                  quickCurrency === 'PCT' ||
+                  quickCategorySlug === 'internet-telecom';
+                const quickTarget = computeWatchlistTargetPrice(
+                  minP,
+                  5,
+                  quickCurrency
+                );
                 const thumb = productImageUrl(p) || '/img/placeholder.png';
                 return (
                   <div key={p.id} className="col-lg-4 col-md-6 col-12">
@@ -1470,7 +1585,12 @@ export default function WatchlistWorkspace({
                           </span>
                           <h3 className="h6 fw-bold mb-1">{p.name}</h3>
                           <div className="text-danger fw-bold small">
-                            {formatPriceVnd(minP, locale)}
+                            {formatWatchlistPrice(
+                              minP,
+                              quickCurrency,
+                              locale,
+                              quickCategorySlug
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1479,12 +1599,21 @@ export default function WatchlistWorkspace({
                         onClick={() => handleQuickAddCatalog(p)}
                         className="btn btn-sm btn-primary rounded-pill fw-medium w-100"
                       >
-                        {t('quickWatch5PctBtn', {
-                          price: formatNumber(
-                            computeWatchlistTargetPrice(minP, 5),
-                            locale
-                          ),
-                        })}
+                        {t(
+                          quickHasUnit
+                            ? 'quickWatch5PctBtnCurrency'
+                            : 'quickWatch5PctBtn',
+                          {
+                            price: quickHasUnit
+                              ? formatListingPrice(
+                                  quickTarget,
+                                  quickCurrency,
+                                  locale,
+                                  { categorySlug: quickCategorySlug }
+                                )
+                              : formatNumber(quickTarget, locale),
+                          }
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1498,13 +1627,31 @@ export default function WatchlistWorkspace({
           {items.map((item, itemIndex) => {
             const live = productBySlug.get(item.slug);
             const dealInfo = liveDeals[item.slug];
+            const itemCategorySlug =
+              item.categoryPath?.replace(/^\/+/, '').split('/')[0] ?? '';
+            const itemCurrency =
+              item.currency ??
+              resolveListingPriceCurrency({
+                categorySlug: itemCategorySlug,
+                master: live,
+              });
+            const itemHasUnit =
+              itemCurrency === 'PCT' || itemCategorySlug === 'internet-telecom';
             const { currentMin, currentMax } =
               resolveWatchlistItemCurrentPrices(item, dealInfo, live);
-            const diffFromAdded =
+            const rawDiffFromAdded =
               currentMin > 0 && item.priceWhenAdded > 0
                 ? currentMin - item.priceWhenAdded
                 : 0;
-            const diffFromTarget = currentMin - item.targetPrice;
+            const diffFromAdded =
+              itemCurrency === 'PCT'
+                ? Math.round(rawDiffFromAdded * 100) / 100
+                : rawDiffFromAdded;
+            const rawDiffFromTarget = currentMin - item.targetPrice;
+            const diffFromTarget =
+              itemCurrency === 'PCT'
+                ? Math.round(rawDiffFromTarget * 100) / 100
+                : rawDiffFromTarget;
             const targetReached =
               currentMin > 0 && currentMin <= item.targetPrice;
             // Canonical Item product_href from /api/v1/rate/watchlist (#1836)
@@ -1568,12 +1715,25 @@ export default function WatchlistWorkspace({
                             </span>
                           ) : (
                             <span className="badge bg-warning-subtle text-warning-emphasis border-warning-subtle rounded-pill border">
-                              {t('badgeWaitingDrop', {
-                                diff: formatNumber(
-                                  Math.max(0, diffFromTarget),
-                                  locale
-                                ),
-                              })}
+                              {t(
+                                itemCurrency === 'PCT'
+                                  ? 'badgeWaitingDropCurrency'
+                                  : 'badgeWaitingDrop',
+                                {
+                                  diff:
+                                    itemCurrency === 'PCT'
+                                      ? formatListingPrice(
+                                          Math.max(0, diffFromTarget),
+                                          itemCurrency,
+                                          locale,
+                                          { includeUnitSuffix: false }
+                                        )
+                                      : formatNumber(
+                                          Math.max(0, diffFromTarget),
+                                          locale
+                                        ),
+                                }
+                              )}
                             </span>
                           )}
                         </div>
@@ -1615,27 +1775,48 @@ export default function WatchlistWorkspace({
                               </span>
                             )}
                             {radarSignal.priceSpread &&
-                              radarSignal.priceSpread.spreadPct >= 3 && (
-                                <span
-                                  className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill small border"
-                                  data-testid="watchlist-price-spread-badge"
-                                >
-                                  {t('radarSpreadBadge', {
-                                    pct: formatPlainNumber(
-                                      radarSignal.priceSpread.spreadPct,
-                                      locale
-                                    ),
-                                    vnd: formatNumber(
-                                      radarSignal.priceSpread.spreadVnd,
-                                      locale
-                                    ),
-                                    cheapest:
-                                      radarSignal.priceSpread.cheapestPlatform.toUpperCase(),
-                                    priciest:
-                                      radarSignal.priceSpread.priciestPlatform.toUpperCase(),
-                                  })}
-                                </span>
-                              )}
+                              radarSignal.priceSpread.spreadPct >= 3 &&
+                              (() => {
+                                const spreadCurrency =
+                                  radarSignal.priceSpread.currency ??
+                                  itemCurrency;
+                                return (
+                                  <span
+                                    className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill small border"
+                                    data-testid="watchlist-price-spread-badge"
+                                  >
+                                    {t(
+                                      spreadCurrency === 'PCT'
+                                        ? 'radarSpreadBadgeCurrency'
+                                        : 'radarSpreadBadge',
+                                      {
+                                        pct: formatPlainNumber(
+                                          radarSignal.priceSpread.spreadPct,
+                                          locale
+                                        ),
+                                        vnd:
+                                          spreadCurrency === 'PCT'
+                                            ? formatListingPrice(
+                                                radarSignal.priceSpread
+                                                  .spreadVnd,
+                                                spreadCurrency,
+                                                locale,
+                                                { includeUnitSuffix: false }
+                                              )
+                                            : formatNumber(
+                                                radarSignal.priceSpread
+                                                  .spreadVnd,
+                                                locale
+                                              ),
+                                        cheapest:
+                                          radarSignal.priceSpread.cheapestPlatform.toUpperCase(),
+                                        priciest:
+                                          radarSignal.priceSpread.priciestPlatform.toUpperCase(),
+                                      }
+                                    )}
+                                  </span>
+                                );
+                              })()}
                           </div>
                         )}
                         <h2 className="h5 fw-bold mb-1">
@@ -1675,16 +1856,32 @@ export default function WatchlistWorkspace({
                           {t('colCurrentLowest')}
                         </div>
                         <div className="fw-bold text-danger">
-                          {formatPriceVnd(currentMin, locale)}
+                          {formatWatchlistPrice(
+                            currentMin,
+                            itemCurrency,
+                            locale
+                          )}
                         </div>
                         <div
                           className="text-muted"
                           style={{ fontSize: '0.8125rem' }}
                         >
                           {currentMin !== currentMax
-                            ? t('highestPriceSub', {
-                                price: formatNumber(currentMax, locale),
-                              })
+                            ? t(
+                                itemHasUnit
+                                  ? 'highestPriceSubCurrency'
+                                  : 'highestPriceSub',
+                                {
+                                  price: itemHasUnit
+                                    ? formatListingPrice(
+                                        currentMax,
+                                        itemCurrency,
+                                        locale,
+                                        { categorySlug: itemCategorySlug }
+                                      )
+                                    : formatNumber(currentMax, locale),
+                                }
+                              )
                             : t('sellersCountSub', {
                                 count:
                                   sanitizeWatchlistCount(
@@ -1701,7 +1898,12 @@ export default function WatchlistWorkspace({
                           {t('colPriceWhenAdded')}
                         </div>
                         <div className="fw-semibold text-dark">
-                          {formatPriceVnd(item.priceWhenAdded, locale)}
+                          {formatWatchlistPrice(
+                            item.priceWhenAdded,
+                            itemCurrency,
+                            locale,
+                            itemCategorySlug
+                          )}
                         </div>
                         <div
                           className={
@@ -1716,15 +1918,41 @@ export default function WatchlistWorkspace({
                           {diffFromAdded === 0
                             ? t('diffUnchanged')
                             : diffFromAdded < 0
-                              ? t('diffDropped', {
-                                  diff: formatNumber(
-                                    Math.abs(diffFromAdded),
-                                    locale
-                                  ),
-                                })
-                              : t('diffIncreased', {
-                                  diff: formatNumber(diffFromAdded, locale),
-                                })}
+                              ? t(
+                                  itemCurrency === 'PCT'
+                                    ? 'diffDroppedCurrency'
+                                    : 'diffDropped',
+                                  {
+                                    diff:
+                                      itemCurrency === 'PCT'
+                                        ? formatListingPrice(
+                                            Math.abs(diffFromAdded),
+                                            itemCurrency,
+                                            locale,
+                                            { includeUnitSuffix: false }
+                                          )
+                                        : formatNumber(
+                                            Math.abs(diffFromAdded),
+                                            locale
+                                          ),
+                                  }
+                                )
+                              : t(
+                                  itemCurrency === 'PCT'
+                                    ? 'diffIncreasedCurrency'
+                                    : 'diffIncreased',
+                                  {
+                                    diff:
+                                      itemCurrency === 'PCT'
+                                        ? formatListingPrice(
+                                            diffFromAdded,
+                                            itemCurrency,
+                                            locale,
+                                            { includeUnitSuffix: false }
+                                          )
+                                        : formatNumber(diffFromAdded, locale),
+                                  }
+                                )}
                         </div>
                       </div>
                     </div>
@@ -1734,7 +1962,12 @@ export default function WatchlistWorkspace({
                           {t('colTargetPrice')}
                         </div>
                         <div className="fw-bold text-primary">
-                          ≤ {formatPriceVnd(item.targetPrice, locale)}
+                          ≤{' '}
+                          {formatWatchlistPrice(
+                            item.targetPrice,
+                            itemCurrency,
+                            locale
+                          )}
                         </div>
                         <button
                           ref={(el) => {
@@ -1760,7 +1993,8 @@ export default function WatchlistWorkspace({
                             setEditTarget(
                               resolveBoundedWatchlistTargetInput(
                                 item.targetPrice,
-                                currentMin || item.priceWhenAdded
+                                currentMin || item.priceWhenAdded,
+                                itemCurrency
                               )
                             );
                           }}
@@ -1808,7 +2042,7 @@ export default function WatchlistWorkspace({
                             >
                               {choice.label}
                               {choice.minPrice > 0 &&
-                                ` · ${formatPriceVnd(choice.minPrice, locale)}`}
+                                ` · ${formatWatchlistPrice(choice.minPrice, itemCurrency, locale)}`}
                             </button>
                           ))}
                         </div>
@@ -1874,13 +2108,28 @@ export default function WatchlistWorkspace({
                           rel="noopener noreferrer"
                           className="small fw-semibold text-primary text-decoration-none"
                         >
-                          {t('openDealLink', {
-                            price: formatNumber(
-                              sanitizeWatchlistPrice(bestOffer.price) ||
-                                currentMin,
-                              locale
-                            ),
-                          })}
+                          {t(
+                            itemHasUnit
+                              ? 'openDealLinkCurrency'
+                              : 'openDealLink',
+                            {
+                              price: (() => {
+                                const offerAmount =
+                                  sanitizeWatchlistPrice(
+                                    bestOffer.price,
+                                    itemCurrency
+                                  ) || currentMin;
+                                return itemHasUnit
+                                  ? formatListingPrice(
+                                      offerAmount,
+                                      itemCurrency,
+                                      locale,
+                                      { categorySlug: itemCategorySlug }
+                                    )
+                                  : formatNumber(offerAmount, locale);
+                              })(),
+                            }
+                          )}
                         </a>
                       )}
                     </div>
@@ -1898,16 +2147,20 @@ export default function WatchlistWorkspace({
                           item.name
                         )}
                         step={
-                          editTarget > 0 && editTarget % 10_000 !== 0
-                            ? 1000
-                            : currentMin > 0 && currentMin < 2_000_000
-                              ? 10000
-                              : 100000
+                          itemCurrency === 'PCT'
+                            ? 0.05
+                            : editTarget > 0 && editTarget % 10_000 !== 0
+                              ? 1000
+                              : currentMin > 0 && currentMin < 2_000_000
+                                ? 10000
+                                : 100000
                         }
                         min={
-                          editTarget > 0 && editTarget < 10_000
-                            ? MIN_WATCHLIST_QUERY_TARGET_VND
-                            : 10000
+                          itemCurrency === 'PCT'
+                            ? MIN_WATCHLIST_TARGET_PRICE_PCT
+                            : editTarget > 0 && editTarget < 10_000
+                              ? MIN_WATCHLIST_QUERY_TARGET_VND
+                              : 10000
                         }
                         value={editTarget}
                         onChange={(e) =>

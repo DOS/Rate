@@ -43,6 +43,7 @@ import {
   getCachedMasterProductReviewSummary,
   getCachedMasterProductSiblings,
   getCachedMasterProducts,
+  getCachedPopulatedCategorySlugs,
   groupCatalogRowsByItemWithStatus,
   computeProductRadarSignal,
 } from '@/server/rate';
@@ -61,11 +62,22 @@ import {
 } from '@/lib/product-competitors';
 import { isFilteredOutReview } from '@/lib/review-display';
 import {
+  BsBank,
+  BsBoxSeam,
   BsCardChecklist,
   BsCheckCircleFill,
+  BsDroplet,
+  BsEarbuds,
+  BsLaptop,
   BsPhone,
   BsShieldCheck,
   BsShieldExclamation,
+  BsSmartwatch,
+  BsSnow,
+  BsTabletLandscape,
+  BsTv,
+  BsWifi,
+  BsWind,
 } from 'react-icons/bs';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { getRadarSignal, type RadarIndex } from '@/lib/deal-radar';
@@ -127,6 +139,8 @@ import ClientMessages from '@/components/providers/ClientMessages';
 import {
   applyCategorySpecTemplate,
   getCategorySpecTemplate,
+  getRatingCriteria,
+  getRatingCriterionLabel,
 } from '@repo/shared-data/rules';
 import {
   isOfferUnavailable,
@@ -136,12 +150,15 @@ import {
   firstImageUrl,
   foreignCategoryProductHref,
   isCanonicalCategorySlug,
+  isWaveE2ServiceCategorySlug,
+  resolveListingPriceCurrency,
   usableImageUrls,
   productImageUrl,
   storeImageSrcSet,
 } from '@/lib/rate-domain-core';
 import {
   formatDecimal,
+  formatListingPrice,
   formatNumber,
   formatPercent,
   formatPriceVnd,
@@ -248,7 +265,18 @@ export async function generateCategoryProductMetadata(
       : productMarketStats(product);
   const hasPrice = marketStats.minPrice > 0;
   const name = (isItemGroup ? itemMeta?.name : null) || product.name;
-  const minPrice = formatNumber(marketStats.minPrice, locale);
+  const metaCategorySlug = categoryBasePath.replace(/^\/+/, '');
+  const metaCurrency = resolveListingPriceCurrency({
+    master: product,
+    categorySlug: metaCategorySlug,
+  });
+  const metaHasUnitSuffix =
+    metaCurrency === 'PCT' || metaCategorySlug === 'internet-telecom';
+  const minPrice = metaHasUnitSuffix
+    ? formatListingPrice(marketStats.minPrice, metaCurrency, locale, {
+        categorySlug: metaCategorySlug,
+      })
+    : formatNumber(marketStats.minPrice, locale);
   const canonicalSlug =
     itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug;
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${canonicalSlug}`;
@@ -266,8 +294,14 @@ export async function generateCategoryProductMetadata(
       [
         ...(hasPrice
           ? [
-              t('metaTitle', { name, minPrice }),
-              t('metaTitleShort', { name, minPrice }),
+              t(metaHasUnitSuffix ? 'metaTitleCurrency' : 'metaTitle', {
+                name,
+                minPrice,
+              }),
+              t(
+                metaHasUnitSuffix ? 'metaTitleShortCurrency' : 'metaTitleShort',
+                { name, minPrice }
+              ),
             ]
           : []),
         `${name} | Rate.vn`,
@@ -292,7 +326,11 @@ export async function generateCategoryProductMetadata(
     openGraph: {
       ...defaultOpenGraph(lang),
       title: t('ogTitle', { name }),
-      description: hasPrice ? t('ogDesc', { minPrice }) : t('ogDescNoStock'),
+      description: hasPrice
+        ? t(metaHasUnitSuffix ? 'ogDescCurrency' : 'ogDesc', {
+            minPrice,
+          })
+        : t('ogDescNoStock'),
       url: canonicalUrl,
       images: [ogImage],
     },
@@ -435,14 +473,9 @@ export async function ProductDetailView({
   // no screen, RAM or camera, watches no 5G (DOS/Rate#1142).
   const specTemplate = getCategorySpecTemplate(categorySlug);
   const product = applyCategorySpecTemplate(categorySlug, storedProduct);
-  const localizedCategoryLabel =
-    categorySlug === 'smartphones' ||
-    categorySlug === 'laptops' ||
-    categorySlug === 'tablets' ||
-    categorySlug === 'smartwatches' ||
-    categorySlug === 'earbuds'
-      ? tNav(categorySlug)
-      : categoryLabel;
+  const localizedCategoryLabel = isCanonicalCategorySlug(categorySlug)
+    ? tNav(categorySlug)
+    : categoryLabel;
   // Three independent chains, each started as soon as its input is known:
   // offers -> price history, reviews -> review summary, and peers ->
   // competitors -> their offers. Awaited in one stage after the product read
@@ -540,6 +573,7 @@ export async function ProductDetailView({
       peerItemLinksDegraded,
     },
     siblings,
+    populatedCategorySlugs,
   ] = await Promise.all([
     offersRead,
     reviewsRead,
@@ -548,6 +582,7 @@ export async function ProductDetailView({
     reviewSummaryRead,
     competitorsRead,
     siblingsRead,
+    timing.time('populatedCategories', getCachedPopulatedCategorySlugs()),
   ]);
   timing.done();
   // With review form v2 on, the category the RPC rates (DOS/Rate#1544).
@@ -587,7 +622,18 @@ export async function ProductDetailView({
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
   const sellerCount = marketStats.sellerCount;
-  const heroMinPriceFormatted = formatNumber(heroStats.minPrice, locale);
+  const effectiveCurrency = resolveListingPriceCurrency({
+    categorySlug,
+    currency: offers[0]?.currency,
+    metadata: product.metadata,
+  });
+  const effectiveHasUnitSuffix =
+    effectiveCurrency === 'PCT' || categorySlug === 'internet-telecom';
+  const heroMinPriceFormatted = effectiveHasUnitSuffix
+    ? formatListingPrice(heroStats.minPrice, effectiveCurrency, locale, {
+        categorySlug,
+      })
+    : formatNumber(heroStats.minPrice, locale);
   // Why there is no price, when there is none (DOS/Rate#1188).
   const saleState = masterSaleState({
     minPrice: currentMinPrice,
@@ -740,8 +786,8 @@ export async function ProductDetailView({
         ...(jsonLdProductImages.length > 0
           ? { image: jsonLdProductImages }
           : {}),
-        // Only with a buyable price: a lowPrice of 0 is not an offer.
-        ...(currentMinPrice > 0
+        // Only with a buyable VND price: a lowPrice of 0 or PCT rate is not a VND offer.
+        ...(currentMinPrice > 0 && effectiveCurrency === 'VND'
           ? {
               offers: {
                 '@type': 'AggregateOffer',
@@ -759,8 +805,7 @@ export async function ProductDetailView({
     ],
   };
 
-  // The history chart and the offer table of one size; the variant page
-  // renders them for its own master, an Item page once per size (#1154).
+  // Neutral Market Price Reference Strip targets
   const renderPriceHistory = (v: {
     product: { name: string };
     offers: typeof offers;
@@ -770,6 +815,12 @@ export async function ProductDetailView({
   }) => (
     <PriceHistorySection
       productName={v.product.name}
+      categorySlug={categorySlug}
+      currency={resolveListingPriceCurrency({
+        categorySlug,
+        currency: v.offers[0]?.currency ?? effectiveCurrency,
+        metadata: product.metadata,
+      })}
       // Its "current lowest" is the page's "from" price (DOS/Rate#1141).
       history={{
         ...v.priceHistory,
@@ -846,7 +897,9 @@ export async function ProductDetailView({
           </div>
           <div className="fw-bold text-dark rate-tabular fs-5">
             {v.stats.minPrice > 0 ? (
-              formatPriceVnd(v.stats.minPrice, locale)
+              formatListingPrice(v.stats.minPrice, effectiveCurrency, locale, {
+                categorySlug,
+              })
             ) : v.saleStateKey ? (
               <span data-sale-state={v.saleState}>{tSale(v.saleStateKey)}</span>
             ) : (
@@ -854,15 +907,33 @@ export async function ProductDetailView({
             )}
             {v.stats.minPrice > 0 && v.stats.minPrice !== v.stats.maxPrice && (
               <span className="small fw-normal text-muted ms-2">
-                ~ {formatPriceVnd(v.stats.maxPrice, locale)}
+                ~{' '}
+                {formatListingPrice(
+                  v.stats.maxPrice,
+                  effectiveCurrency,
+                  locale,
+                  { categorySlug }
+                )}
               </span>
             )}
             {v.priceHistory.lowestEverPrice != null &&
               v.priceHistory.lowestEverPrice > 0 && (
                 <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                  {t('allTimeLowBadge', {
-                    price: formatNumber(v.priceHistory.lowestEverPrice, locale),
-                  })}
+                  {effectiveHasUnitSuffix
+                    ? t('allTimeLowBadgeCurrency', {
+                        price: formatListingPrice(
+                          v.priceHistory.lowestEverPrice,
+                          effectiveCurrency,
+                          locale,
+                          { categorySlug }
+                        ),
+                      })
+                    : t('allTimeLowBadge', {
+                        price: formatNumber(
+                          v.priceHistory.lowestEverPrice,
+                          locale
+                        ),
+                      })}
                 </span>
               )}
           </div>
@@ -876,6 +947,7 @@ export async function ProductDetailView({
               categoryPath={categoryBasePath}
               thumbnail={productImageUrl(v.product)}
               currentMinPrice={v.stats.minPrice}
+              currency={effectiveCurrency}
               size="sm"
             />
           )}
@@ -894,6 +966,8 @@ export async function ProductDetailView({
             expertScore10={expertRating10}
             authenticReviews={authenticCount}
             minPriceVnd={v.stats.minPrice}
+            currency={effectiveCurrency}
+            categorySlug={categorySlug}
             offerCount={v.stats.sellerCount}
             keySpecLine={keySpecLine}
             radarSignal={v.radarSignal}
@@ -1029,7 +1103,10 @@ export async function ProductDetailView({
 
   return (
     <ClientMessages scope="productDetail">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedCategorySlugs}
+      >
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -1138,13 +1215,18 @@ export async function ProductDetailView({
             (DOS/Rate#605); the full price strip stays further down. */}
               {heroStats.minPrice > 0 && heroStats.sellerCount > 0 && (
                 <p className="rate-pdv-price-line mb-3">
-                  {t.rich('heroPriceLine', {
-                    price: heroMinPriceFormatted,
-                    count: heroStats.sellerCount,
-                    strong: (chunks) => (
-                      <strong className="rate-tabular">{chunks}</strong>
-                    ),
-                  })}
+                  {t.rich(
+                    effectiveHasUnitSuffix
+                      ? 'heroPriceLineCurrency'
+                      : 'heroPriceLine',
+                    {
+                      price: heroMinPriceFormatted,
+                      count: heroStats.sellerCount,
+                      strong: (chunks) => (
+                        <strong className="rate-tabular">{chunks}</strong>
+                      ),
+                    }
+                  )}
                 </p>
               )}
               {/* The other variants of this model, not the quick-spec cards
@@ -1157,9 +1239,18 @@ export async function ProductDetailView({
                   unknownSizeLabel={t('variantLinksUnknownSize')}
                   priceLabel={(minPrice) =>
                     minPrice > 0
-                      ? t('itemVariantPrice', {
-                          price: formatNumber(minPrice, locale),
-                        })
+                      ? effectiveHasUnitSuffix
+                        ? t('itemVariantPriceCurrency', {
+                            price: formatListingPrice(
+                              minPrice,
+                              effectiveCurrency,
+                              locale,
+                              { categorySlug }
+                            ),
+                          })
+                        : t('itemVariantPrice', {
+                            price: formatNumber(minPrice, locale),
+                          })
                       : t('itemVariantNoPrice')
                   }
                 />
@@ -1175,9 +1266,18 @@ export async function ProductDetailView({
                       label: itemVariantLabel(v.variant),
                       priceLabel:
                         stats.minPrice > 0
-                          ? t('itemVariantPrice', {
-                              price: formatNumber(stats.minPrice, locale),
-                            })
+                          ? effectiveHasUnitSuffix
+                            ? t('itemVariantPriceCurrency', {
+                                price: formatListingPrice(
+                                  stats.minPrice,
+                                  effectiveCurrency,
+                                  locale,
+                                  { categorySlug }
+                                ),
+                              })
+                            : t('itemVariantPrice', {
+                                price: formatNumber(stats.minPrice, locale),
+                              })
                           : t('itemVariantNoPrice'),
                     };
                   })}
@@ -1347,10 +1447,32 @@ export async function ProductDetailView({
                             r.helpfulness_weight > 0 &&
                             r.criteria_ratings
                         );
+                        const effectiveCriteriaSlug = isCanonicalCategorySlug(
+                          reviewCategory
+                        )
+                          ? reviewCategory
+                          : categorySlug;
                         const expertCrit = product.expert_criteria_scores || {};
                         const avgCrit = (key: string): number | null => {
+                          const legacyKey =
+                            key === 'display'
+                              ? 'screen'
+                              : key === 'anc'
+                                ? 'camera'
+                                : effectiveCriteriaSlug === 'earbuds' &&
+                                    key === 'sound'
+                                  ? 'screen'
+                                  : null;
                           const vals = validCriteriaReviews
-                            .map((r) => Number(r.criteria_ratings?.[key] || 0))
+                            .map((r) =>
+                              Number(
+                                r.criteria_ratings?.[key] ??
+                                  (legacyKey
+                                    ? r.criteria_ratings?.[legacyKey]
+                                    : undefined) ??
+                                  0
+                              )
+                            )
                             .filter((v) => v >= 1 && v <= 5);
                           if (vals.length > 0) {
                             return (
@@ -1358,7 +1480,13 @@ export async function ProductDetailView({
                             );
                           }
                           const expVal = Number(
-                            (expertCrit as Record<string, unknown>)[key] || 0
+                            (expertCrit as Record<string, unknown>)[key] ??
+                              (legacyKey
+                                ? (expertCrit as Record<string, unknown>)[
+                                    legacyKey
+                                  ]
+                                : undefined) ??
+                              0
                           );
                           if (expVal > 0) {
                             return expVal > 5 ? expVal / 2 : expVal;
@@ -1366,34 +1494,12 @@ export async function ProductDetailView({
                           return null;
                         };
 
-                        const criteria = [
-                          {
-                            label:
-                              categorySlug === 'earbuds'
-                                ? t('critSoundstage')
-                                : t('critDisplay'),
-                            score: avgCrit('screen'),
-                          },
-                          {
-                            label: t('critPerformance'),
-                            score: avgCrit('performance'),
-                          },
-                          {
-                            label:
-                              categorySlug === 'earbuds'
-                                ? t('critAncMic')
-                                : t('critCamera'),
-                            score: avgCrit('camera'),
-                          },
-                          {
-                            label: t('critBattery'),
-                            score: avgCrit('battery'),
-                          },
-                          {
-                            label: t('critValue'),
-                            score: avgCrit('value'),
-                          },
-                        ];
+                        const criteria = getRatingCriteria(
+                          effectiveCriteriaSlug
+                        ).map((crit) => ({
+                          label: getRatingCriterionLabel(crit, locale),
+                          score: avgCrit(crit.key),
+                        }));
                         // No criterion scored yet: one line instead of five
                         // empty bars (#719).
                         if (criteria.every((crit) => crit.score == null)) {
@@ -1705,29 +1811,31 @@ export async function ProductDetailView({
           )}
 
           {/* Interactive Value Efficiency & 2-Year Ownership Calculator (#62) */}
-          {(() => {
-            const lbScored = scoreMasterProductForLeaderboard(
-              product,
-              'combined'
-            );
-            return (
-              <ProductValueCalculator
-                productName={product.name}
-                brand={product.brand}
-                categorySlug={categorySlug}
-                minPriceVnd={currentMinPrice}
-                maxPriceVnd={marketStats.maxPrice}
-                userScore5={lbScored.userScore5}
-                expertScore10={lbScored.expertScore10}
-                valueCriterionScore5={lbScored.criteria.value ?? 0}
-                radarSignal={radarSignal}
-                offers={pickEffectivePriceCandidates(
-                  defaultSize?.offers ?? offers,
-                  currentMinPrice
-                )}
-              />
-            );
-          })()}
+          {effectiveCurrency !== 'PCT' &&
+            !isWaveE2ServiceCategorySlug(categorySlug) &&
+            (() => {
+              const lbScored = scoreMasterProductForLeaderboard(
+                product,
+                'combined'
+              );
+              return (
+                <ProductValueCalculator
+                  productName={product.name}
+                  brand={product.brand}
+                  categorySlug={categorySlug}
+                  minPriceVnd={currentMinPrice}
+                  maxPriceVnd={marketStats.maxPrice}
+                  userScore5={lbScored.userScore5}
+                  expertScore10={lbScored.expertScore10}
+                  valueCriterionScore5={lbScored.criteria.value ?? 0}
+                  radarSignal={radarSignal}
+                  offers={pickEffectivePriceCandidates(
+                    defaultSize?.offers ?? offers,
+                    currentMinPrice
+                  )}
+                />
+              );
+            })()}
 
           {/* Related Competitors & 1-Click Head-to-Head Compare */}
           {relatedCompetitors.length > 0 && (
@@ -1809,12 +1917,15 @@ export async function ProductDetailView({
                   const peerRating = resolveCompareEffectiveUserRating(peer);
                   const peerScore10 = peerRating * 2;
                   const currentScore10 = displayUserRating * 2;
+                  const isVndCompetitor =
+                    effectiveCurrency === 'VND' &&
+                    !isWaveE2ServiceCategorySlug(categorySlug);
                   const peerCostPerPoint =
-                    peerScore10 > 0 && peerPrice > 0
+                    isVndCompetitor && peerScore10 > 0 && peerPrice > 0
                       ? Math.round(peerPrice / peerScore10)
                       : 0;
                   const currentCostPerPoint =
-                    currentScore10 > 0
+                    isVndCompetitor && currentScore10 > 0
                       ? Math.round(currentMinPrice / currentScore10)
                       : 0;
                   const costPerPointDelta =
@@ -1848,10 +1959,38 @@ export async function ProductDetailView({
                                 }}
                               />
                             ) : (
-                              <BsPhone
-                                aria-hidden="true"
-                                className="text-muted"
-                              />
+                              (() => {
+                                const iconProps = {
+                                  'aria-hidden': true as const,
+                                  className: 'text-muted',
+                                };
+                                switch (categorySlug) {
+                                  case 'laptops':
+                                    return <BsLaptop {...iconProps} />;
+                                  case 'tablets':
+                                    return <BsTabletLandscape {...iconProps} />;
+                                  case 'smartwatches':
+                                    return <BsSmartwatch {...iconProps} />;
+                                  case 'earbuds':
+                                    return <BsEarbuds {...iconProps} />;
+                                  case 'tvs':
+                                    return <BsTv {...iconProps} />;
+                                  case 'air-conditioners':
+                                    return <BsSnow {...iconProps} />;
+                                  case 'refrigerators':
+                                    return <BsBoxSeam {...iconProps} />;
+                                  case 'washing-machines':
+                                    return <BsDroplet {...iconProps} />;
+                                  case 'air-purifiers':
+                                    return <BsWind {...iconProps} />;
+                                  case 'bank-savings':
+                                    return <BsBank {...iconProps} />;
+                                  case 'internet-telecom':
+                                    return <BsWifi {...iconProps} />;
+                                  default:
+                                    return <BsPhone {...iconProps} />;
+                                }
+                              })()
                             )}
                           </div>
                           <div className="overflow-hidden">
@@ -1882,7 +2021,12 @@ export async function ProductDetailView({
                             <div className="d-flex align-items-center flex-wrap gap-2">
                               {peerPrice > 0 ? (
                                 <span className="text-danger fw-bold small rate-tabular">
-                                  {formatPriceVnd(peerPrice, locale)}
+                                  {formatListingPrice(
+                                    peerPrice,
+                                    effectiveCurrency,
+                                    locale,
+                                    { categorySlug }
+                                  )}
                                 </span>
                               ) : (
                                 <span className="text-muted small">
@@ -1898,14 +2042,21 @@ export async function ProductDetailView({
                                   }`}
                                   style={{ fontSize: '0.8125rem' }}
                                 >
-                                  {priceDelta < 0
-                                    ? t('cheaperByBadge', {
-                                        amount: formatNumber(
-                                          Math.abs(priceDelta),
-                                          locale
-                                        ),
-                                      })
-                                    : `+${formatPriceVnd(priceDelta, locale)}`}
+                                  {effectiveCurrency === 'PCT'
+                                    ? `${priceDelta < 0 ? '-' : '+'}${formatListingPrice(
+                                        Math.abs(priceDelta),
+                                        'PCT',
+                                        locale,
+                                        { includeUnitSuffix: false }
+                                      )}`
+                                    : priceDelta < 0
+                                      ? t('cheaperByBadge', {
+                                          amount: formatNumber(
+                                            Math.abs(priceDelta),
+                                            locale
+                                          ),
+                                        })
+                                      : `+${formatPriceVnd(priceDelta, locale)}`}
                                 </span>
                               )}
                             </div>

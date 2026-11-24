@@ -4,6 +4,7 @@ import { Link } from '@/lib/navigation';
 import type { MasterProduct } from '@repo/shared-data';
 import {
   getCachedMasterProducts,
+  getCachedPopulatedCategorySlugs,
   getCrossPlatformDealRadar,
   groupCatalogRowsByItem,
   type ItemCatalogRow,
@@ -93,18 +94,23 @@ export default async function DealsPage({ params }: PageProps) {
   setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'deals' });
-  const [products, dealRadar] = await Promise.all([
+  const [products, dealRadar, populatedCategorySlugs] = await Promise.all([
     loadDealsCatalogProducts(),
     getCrossPlatformDealRadar({
       categorySlug: 'all',
       // Max page size so every ranked card gets its own Radar badge.
       limit: 50,
     }),
+    getCachedPopulatedCategorySlugs(),
   ]);
 
   return (
     <ClientMessages scope="deals">
-      <PageShell locale={locale} mainClassName="bg-light">
+      <PageShell
+        locale={locale}
+        mainClassName="bg-light"
+        populatedCategorySlugs={populatedCategorySlugs}
+      >
         <section className="py-4">
           <div className="container">
             <div className="rate-scoreboard-dark rate-surface-dark rounded-4 mb-4 p-4">

@@ -11,11 +11,16 @@ import {
   radarLabel,
   type RadarSignal,
 } from '@/lib/deal-radar';
-import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
+import {
+  ALL_CANONICAL_CATEGORY_SLUGS,
+  MAX_VALID_VND_PRICE,
+} from '@/lib/rate-domain';
 import {
   collapseWhitespace,
+  formatListingPrice,
   formatNumber,
   localizeDecimalPoints,
+  sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import { formatScoreFixed, roundScore } from '@/lib/rating-display';
 import {
@@ -33,13 +38,17 @@ interface ProductShareAuditButtonProps {
   readonly expertScore10: number | null;
   readonly authenticReviews: number;
   readonly minPriceVnd: number;
+  readonly currency?: 'VND' | 'PCT';
+  readonly categorySlug?: string | null;
   readonly offerCount: number;
   readonly keySpecLine?: string;
   readonly radarSignal?: RadarSignal;
 }
 
-const PRODUCT_DETAIL_PATH_SLUG_RE =
-  /^\/(?:(?:vi|en|cs)\/)?(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([^/?#]+)\/?$/i;
+const PRODUCT_DETAIL_PATH_SLUG_RE = new RegExp(
+  `^\\/(?:(?:vi|en|cs)\\/)?(?:${ALL_CANONICAL_CATEGORY_SLUGS.join('|')})\\/([^/?#]+)\\/?$`,
+  'i'
+);
 
 export function resolveShareAuditOgDownloadUrl(input: {
   readonly slug?: string | null;
@@ -109,6 +118,7 @@ export function sanitizeShareAuditCodeSpan(
 
 export type ShareAuditMarkdownTranslatorKey =
   | 'shareAuditPriceSources'
+  | 'shareAuditPriceSourcesCurrency'
   | 'shareAuditUpdating'
   | 'shareAuditMdUserScoreVal'
   | 'shareAuditMdNoReviews'
@@ -130,6 +140,8 @@ export function buildShareAuditMarkdown(params: {
   readonly expertScore10: number | null;
   readonly authenticReviews: number;
   readonly minPriceVnd: number;
+  readonly currency?: string | null;
+  readonly categorySlug?: string | null;
   readonly offerCount: number;
   readonly keySpecLine?: string;
   readonly radarSignal?: RadarSignal | null;
@@ -156,6 +168,7 @@ export function buildShareAuditMarkdown(params: {
     expertScore10: params.expertScore10,
     authenticReviews: params.authenticReviews,
     minPriceVnd: params.minPriceVnd,
+    currency: params.currency,
     offerCount: params.offerCount,
   });
   const safeName = sanitizeShareAuditText(params.name, 160, locale);
@@ -163,12 +176,24 @@ export function buildShareAuditMarkdown(params: {
   const safeKeySpecLine = params.keySpecLine
     ? sanitizeShareAuditText(params.keySpecLine, 240, locale)
     : '';
+  const hasCustomUnit =
+    params.currency === 'PCT' || params.categorySlug === 'internet-telecom';
   const priceStr =
     safeMinPriceVnd > 0
-      ? params.t('shareAuditPriceSources', {
-          price: formatNumber(safeMinPriceVnd, locale),
-          count: safeOfferCount,
-        })
+      ? hasCustomUnit
+        ? params.t('shareAuditPriceSourcesCurrency', {
+            price: formatListingPrice(
+              safeMinPriceVnd,
+              params.currency,
+              locale,
+              { categorySlug: params.categorySlug }
+            ),
+            count: safeOfferCount,
+          })
+        : params.t('shareAuditPriceSources', {
+            price: formatNumber(safeMinPriceVnd, locale),
+            count: safeOfferCount,
+          })
       : params.t('shareAuditUpdating');
   const userScoreStr =
     safeUserScore5 > 0
@@ -213,6 +238,7 @@ export function normalizeShareAuditFields(input: {
   readonly expertScore10: number | null;
   readonly authenticReviews: number;
   readonly minPriceVnd: number;
+  readonly currency?: string | null;
   readonly offerCount: number;
 }) {
   const rawUser = Number(input.userScore5);
@@ -232,7 +258,7 @@ export function normalizeShareAuditFields(input: {
   const rawPrice = Number(input.minPriceVnd);
   const safeMinPriceVnd =
     Number.isFinite(rawPrice) && rawPrice > 0 && rawPrice <= MAX_VALID_VND_PRICE
-      ? Math.round(rawPrice)
+      ? sanitizeCurrencyPriceValue(rawPrice, input.currency)
       : 0;
   const rawOffers = Number(input.offerCount);
   const safeOfferCount =
@@ -268,6 +294,8 @@ export default function ProductShareAuditButton({
   expertScore10,
   authenticReviews,
   minPriceVnd,
+  currency,
+  categorySlug,
   offerCount,
   keySpecLine,
   radarSignal,
@@ -290,6 +318,7 @@ export default function ProductShareAuditButton({
     expertScore10,
     authenticReviews,
     minPriceVnd,
+    currency,
     offerCount,
   });
 
@@ -311,6 +340,8 @@ export default function ProductShareAuditButton({
         expertScore10,
         authenticReviews,
         minPriceVnd,
+        currency,
+        categorySlug,
         offerCount,
         keySpecLine,
         radarSignal,
@@ -385,6 +416,8 @@ export default function ProductShareAuditButton({
         userScore5: safeUserScore5 > 0 ? safeUserScore5 : null,
         expertScore10: safeExpertScore10,
         authenticReviews: safeAuthenticReviews,
+        currency: currency ?? 'VND',
+        minPrice: safeMinPriceVnd,
         minPriceVnd: safeMinPriceVnd,
         offerCount: safeOfferCount,
         keySpecLine: safeKeySpecLine || null,

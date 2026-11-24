@@ -121,11 +121,13 @@ export function sanitizeSidebarPriceMillion(
   rawPriceVnd: unknown,
   sliderMin: number,
   sliderMax: number,
-  fallbackMillion: number
+  fallbackMillion: number,
+  step = 1
 ): number {
   const safeMin = Number.isFinite(sliderMin) && sliderMin >= 0 ? sliderMin : 0;
   const safeMax =
     Number.isFinite(sliderMax) && sliderMax >= safeMin ? sliderMax : safeMin;
+  const safeStep = Number.isFinite(step) && step > 0 ? step : 1;
   const safeFallback = Math.min(
     safeMax,
     Math.max(
@@ -139,7 +141,8 @@ export function sanitizeSidebarPriceMillion(
   const num =
     typeof rawPriceVnd === 'number' ? rawPriceVnd : Number(rawPriceVnd);
   if (!Number.isFinite(num) || num <= 0) return safeFallback;
-  const million = Math.round(num / 1_000_000);
+  const stepped = Math.round(num / 1_000_000 / safeStep) * safeStep;
+  const million = Math.round(stepped * 1_000_000) / 1_000_000;
   if (!Number.isFinite(million) || million <= 0) return safeFallback;
   return Math.min(safeMax, Math.max(safeMin, million));
 }
@@ -199,17 +202,20 @@ export default function ListSidebarOne({
 
   const sliderMin = schema.priceRangeMillion.min;
   const sliderMax = schema.priceRangeMillion.max;
+  const sliderStep = schema.priceRangeMillion.step;
   const rawMinMillion = sanitizeSidebarPriceMillion(
     searchParams?.get('minPrice'),
     sliderMin,
     sliderMax,
-    sliderMin
+    sliderMin,
+    sliderStep
   );
   const rawMaxMillion = sanitizeSidebarPriceMillion(
     searchParams?.get('maxPrice'),
     sliderMin,
     sliderMax,
-    sliderMax
+    sliderMax,
+    sliderStep
   );
   const urlMinMillion = Math.min(rawMinMillion, rawMaxMillion);
   const urlMaxMillion = Math.max(rawMinMillion, rawMaxMillion);
@@ -224,6 +230,10 @@ export default function ListSidebarOne({
   useEffect(() => {
     setKeyword(currentQ);
   }, [currentQ]);
+
+  useEffect(() => {
+    setPriceRange([urlMinMillion, urlMaxMillion]);
+  }, [urlMinMillion, urlMaxMillion]);
 
   // The filter drawer on small screens, driven by React state instead of
   // Bootstrap's JS bundle (DOS/Rate#1331); Bootstrap's CSS still styles
@@ -371,12 +381,12 @@ export default function ListSidebarOne({
   const handlePriceSliderComplete = (values: [number, number]) => {
     updateUrlParams((params) => {
       if (values[0] > sliderMin) {
-        params.set('minPrice', String(values[0] * 1_000_000));
+        params.set('minPrice', String(Math.round(values[0] * 1_000_000)));
       } else {
         params.delete('minPrice');
       }
       if (values[1] < sliderMax) {
-        params.set('maxPrice', String(values[1] * 1_000_000));
+        params.set('maxPrice', String(Math.round(values[1] * 1_000_000)));
       } else {
         params.delete('maxPrice');
       }
@@ -431,12 +441,12 @@ export default function ListSidebarOne({
         params.delete('q');
       }
       if (priceRange[0] > sliderMin) {
-        params.set('minPrice', String(priceRange[0] * 1_000_000));
+        params.set('minPrice', String(Math.round(priceRange[0] * 1_000_000)));
       } else {
         params.delete('minPrice');
       }
       if (priceRange[1] < sliderMax) {
-        params.set('maxPrice', String(priceRange[1] * 1_000_000));
+        params.set('maxPrice', String(Math.round(priceRange[1] * 1_000_000)));
       } else {
         params.delete('maxPrice');
       }
@@ -566,14 +576,11 @@ export default function ListSidebarOne({
                                   id={`cat-${cat.slug}`}
                                   checked={active}
                                   onChange={() => {
-                                    const href =
-                                      cat.slug === 'smartphones' ||
-                                      cat.slug === 'tablets' ||
-                                      cat.slug === 'laptops' ||
-                                      cat.slug === 'smartwatches' ||
-                                      cat.slug === 'earbuds'
-                                        ? `/${cat.slug}`
-                                        : `/smartphones?category=${encodeURIComponent(cat.slug)}`;
+                                    const href = isCanonicalCategorySlug(
+                                      cat.slug
+                                    )
+                                      ? `/${cat.slug}`
+                                      : `/smartphones?category=${encodeURIComponent(cat.slug)}`;
                                     // Outside the transition: inside it the bar's
                                     // update would wait for the navigation and never show.
                                     startNavigationProgress(href);
@@ -642,157 +649,177 @@ export default function ListSidebarOne({
                 </div>
 
                 {/* 5. Price Range in Million VND (Presets + rc-slider RangeSlider) */}
-                <div className="filter-search-box mb-4">
-                  <div className="filtersearch-title">
-                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      {t('sidebar.priceRangeHeader')}
-                    </h3>
-                  </div>
-                  <div className="d-flex align-items-center justify-content-center mb-3 flex-wrap gap-2">
-                    {schema.pricePresets.map((preset) => {
-                      const active =
-                        (preset.minVnd
-                          ? Number(searchParams?.get('minPrice') || 0) ===
-                            preset.minVnd
-                          : !searchParams?.get('minPrice')) &&
-                        (preset.maxVnd && preset.maxVnd < sliderMax * 1_000_000
-                          ? Number(searchParams?.get('maxPrice') || 0) ===
-                            preset.maxVnd
-                          : !searchParams?.get('maxPrice') &&
-                            Boolean(preset.minVnd));
-                      return (
-                        <div className="form-checks flex-fill" key={preset.id}>
-                          <input
-                            type="checkbox"
-                            className="btn-check"
-                            id={`price-${preset.id}`}
-                            checked={active}
-                            onChange={() =>
-                              handlePricePresetClick(
-                                preset.minVnd,
-                                preset.maxVnd
-                              )
-                            }
-                          />
-                          <label
-                            className="btn btn-sm btn-secondary rounded-1 fw-medium full-width"
-                            htmlFor={`price-${preset.id}`}
-                          >
-                            {preset.label}
-                          </label>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="row align-items-center justify-content-between">
-                    <div className="col-12">
-                      <RangeSlider
-                        min={sliderMin}
-                        max={sliderMax}
-                        step={schema.priceRangeMillion.step}
-                        value={priceRange}
-                        unitSuffix={t('sidebar.priceMillionUnit')}
-                        onChange={setPriceRange}
-                        onChangeComplete={handlePriceSliderComplete}
-                      />
+                {(schema.pricePresets.length > 0 ||
+                  schema.priceRangeMillion.max > 0) && (
+                  <div className="filter-search-box mb-4">
+                    <div className="filtersearch-title">
+                      <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                        {t('sidebar.priceRangeHeader')}
+                      </h3>
                     </div>
+                    {schema.pricePresets.length > 0 && (
+                      <div className="d-flex align-items-center justify-content-center mb-3 flex-wrap gap-2">
+                        {schema.pricePresets.map((preset) => {
+                          const active =
+                            (preset.minVnd
+                              ? Number(searchParams?.get('minPrice') || 0) ===
+                                preset.minVnd
+                              : !searchParams?.get('minPrice')) &&
+                            (preset.maxVnd &&
+                            preset.maxVnd < sliderMax * 1_000_000
+                              ? Number(searchParams?.get('maxPrice') || 0) ===
+                                preset.maxVnd
+                              : !searchParams?.get('maxPrice') &&
+                                Boolean(preset.minVnd));
+                          return (
+                            <div
+                              className="form-checks flex-fill"
+                              key={preset.id}
+                            >
+                              <input
+                                type="checkbox"
+                                className="btn-check"
+                                id={`price-${preset.id}`}
+                                checked={active}
+                                onChange={() =>
+                                  handlePricePresetClick(
+                                    preset.minVnd,
+                                    preset.maxVnd
+                                  )
+                                }
+                              />
+                              <label
+                                className="btn btn-sm btn-secondary rounded-1 fw-medium full-width"
+                                htmlFor={`price-${preset.id}`}
+                              >
+                                {preset.label}
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {schema.priceRangeMillion.max > 0 && (
+                      <div className="row align-items-center justify-content-between">
+                        <div className="col-12">
+                          <RangeSlider
+                            min={sliderMin}
+                            max={sliderMax}
+                            step={schema.priceRangeMillion.step}
+                            value={priceRange}
+                            unitSuffix={t('sidebar.priceMillionUnit')}
+                            onChange={setPriceRange}
+                            onChangeComplete={handlePriceSliderComplete}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
 
                 {/* 6. Hardware: RAM Filter */}
-                <div className="filter-search-box mb-4">
-                  <div className="filtersearch-title">
-                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      {t('sidebar.ramHeader')}
-                    </h3>
-                  </div>
-                  <div className="d-flex align-items-center justify-content-center flex-wrap gap-2">
-                    {schema.ramOptionsGb.map((ram) => {
-                      const checked = currentRams.includes(ram);
-                      const id = `ram-${ram}gb`;
-                      return (
-                        <div className="form-checks flex-fill" key={id}>
-                          <input
-                            type="checkbox"
-                            className="btn-check"
-                            id={id}
-                            checked={checked}
-                            onChange={() => toggleMultiNumber('ram', ram)}
-                          />
-                          <label
-                            className="btn btn-sm btn-secondary rounded-1 fw-medium full-width"
-                            htmlFor={id}
-                          >
-                            {ram}GB
-                          </label>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 7. Hardware: Storage (ROM) Filter */}
-                <div className="filter-search-box mb-4">
-                  <div className="filtersearch-title">
-                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      {t('sidebar.storageHeader')}
-                    </h3>
-                  </div>
-                  <div className="d-flex align-items-center justify-content-center flex-wrap gap-2">
-                    {schema.storageOptionsGb.map((rom) => {
-                      const checked = currentStorages.includes(rom);
-                      const id = `rom-${rom}gb`;
-                      return (
-                        <div className="form-checks flex-fill" key={id}>
-                          <input
-                            type="checkbox"
-                            className="btn-check"
-                            id={id}
-                            checked={checked}
-                            onChange={() => toggleMultiNumber('storage', rom)}
-                          />
-                          <label
-                            className="btn btn-sm btn-secondary rounded-1 fw-medium full-width"
-                            htmlFor={id}
-                          >
-                            {formatStorageLabel(rom)}
-                          </label>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 8. 10 Field Groups Feature Checkboxes (Display, Battery, Cellular, Connectivity) */}
-                <div className="filter-search-box mb-4">
-                  <div className="filtersearch-title">
-                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      {t('sidebar.featuresHeader')}
-                    </h3>
-                  </div>
-                  <div className="row align-items-center justify-content-between gy-2">
-                    {schema.featureCheckboxes.map((feat) => {
-                      const checked = searchParams?.get(feat.key) === '1';
-                      const id = `feat-${feat.key}`;
-                      return (
-                        <div className="col-6" key={feat.key}>
-                          <div className="form-check" title={feat.description}>
+                {schema.ramOptionsGb.length > 0 && (
+                  <div className="filter-search-box mb-4">
+                    <div className="filtersearch-title">
+                      <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                        {t('sidebar.ramHeader')}
+                      </h3>
+                    </div>
+                    <div className="d-flex align-items-center justify-content-center flex-wrap gap-2">
+                      {schema.ramOptionsGb.map((ram) => {
+                        const checked = currentRams.includes(ram);
+                        const id = `ram-${ram}gb`;
+                        return (
+                          <div className="form-checks flex-fill" key={id}>
                             <input
-                              className="form-check-input"
                               type="checkbox"
+                              className="btn-check"
                               id={id}
                               checked={checked}
-                              onChange={() => toggleFeatureCheckbox(feat.key)}
+                              onChange={() => toggleMultiNumber('ram', ram)}
                             />
-                            <label className="form-check-label" htmlFor={id}>
-                              {feat.label}
+                            <label
+                              className="btn btn-sm btn-secondary rounded-1 fw-medium full-width"
+                              htmlFor={id}
+                            >
+                              {ram}GB
                             </label>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* 7. Hardware: Storage (ROM) Filter */}
+                {schema.storageOptionsGb.length > 0 && (
+                  <div className="filter-search-box mb-4">
+                    <div className="filtersearch-title">
+                      <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                        {t('sidebar.storageHeader')}
+                      </h3>
+                    </div>
+                    <div className="d-flex align-items-center justify-content-center flex-wrap gap-2">
+                      {schema.storageOptionsGb.map((rom) => {
+                        const checked = currentStorages.includes(rom);
+                        const id = `rom-${rom}gb`;
+                        return (
+                          <div className="form-checks flex-fill" key={id}>
+                            <input
+                              type="checkbox"
+                              className="btn-check"
+                              id={id}
+                              checked={checked}
+                              onChange={() => toggleMultiNumber('storage', rom)}
+                            />
+                            <label
+                              className="btn btn-sm btn-secondary rounded-1 fw-medium full-width"
+                              htmlFor={id}
+                            >
+                              {formatStorageLabel(rom)}
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 8. 10 Field Groups Feature Checkboxes (Display, Battery, Cellular, Connectivity) */}
+                {schema.featureCheckboxes.length > 0 && (
+                  <div className="filter-search-box mb-4">
+                    <div className="filtersearch-title">
+                      <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                        {t('sidebar.featuresHeader')}
+                      </h3>
+                    </div>
+                    <div className="row align-items-center justify-content-between gy-2">
+                      {schema.featureCheckboxes.map((feat) => {
+                        const checked = searchParams?.get(feat.key) === '1';
+                        const id = `feat-${feat.key}`;
+                        return (
+                          <div className="col-6" key={feat.key}>
+                            <div
+                              className="form-check"
+                              title={feat.description}
+                            >
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id={id}
+                                checked={checked}
+                                onChange={() => toggleFeatureCheckbox(feat.key)}
+                              />
+                              <label className="form-check-label" htmlFor={id}>
+                                {feat.label}
+                              </label>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* 9. Submit / Reset Actions */}
                 <div className="form-group filter_button d-grid mb-0 gap-2">

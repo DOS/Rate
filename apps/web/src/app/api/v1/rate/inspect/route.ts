@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MAX_VALID_VND_PRICE } from '@/lib/rate-api';
+import {
+  MAX_VALID_VND_PRICE,
+  resolveListingPriceCurrency,
+} from '@/lib/rate-api';
 import {
   getCachedInspectProductOrShopUrl,
   getMasterProductCategorySlug,
@@ -58,18 +61,29 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const queryPrice = parseOptionalVndPriceParam(sp.get('price'));
-    const queryOriginalPrice = parseOptionalVndPriceParam(
-      sp.get('originalPrice')
-    );
-
     const inspection = await getCachedInspectProductOrShopUrl(rawQuery);
+    const masterCategorySlug = inspection.masterProduct
+      ? getMasterProductCategorySlug(inspection.masterProduct)
+      : undefined;
     const masterProduct = inspection.masterProduct
-      ? applyCategorySpecTemplate(
-          getMasterProductCategorySlug(inspection.masterProduct),
-          inspection.masterProduct
-        )
+      ? applyCategorySpecTemplate(masterCategorySlug!, inspection.masterProduct)
       : null;
+    const inspectCurrency = resolveListingPriceCurrency({
+      categorySlug: masterCategorySlug,
+      currency: sp.get('currency') ?? inspection.matchedOffer?.currency,
+      master: masterProduct ?? undefined,
+      offers: inspection.allOffers,
+    });
+    const queryPrice = parseOptionalVndPriceParam(
+      sp.get('price'),
+      undefined,
+      inspectCurrency
+    );
+    const queryOriginalPrice = parseOptionalVndPriceParam(
+      sp.get('originalPrice'),
+      undefined,
+      inspectCurrency
+    );
     const suggestions = inspection.suggestions.map((p) =>
       applyCategorySpecTemplate(getMasterProductCategorySlug(p), p)
     );
@@ -81,6 +95,8 @@ export async function GET(request: NextRequest) {
         matchedOfferPriceCurrent: inspection.matchedOffer?.price_current,
         matchedOfferPriceOriginal: inspection.matchedOffer?.price_original,
         masterMinPrice: masterProduct?.min_price,
+        currency: inspectCurrency,
+        categorySlug: masterCategorySlug,
         maxVnd: MAX_VALID_VND_PRICE,
       });
 

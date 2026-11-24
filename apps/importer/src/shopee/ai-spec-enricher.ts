@@ -321,7 +321,7 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
       })
     : undefined;
 
-  const candidateSpecs: ProductSpecifications = {
+  const candidateSpecs: Record<string, unknown> = {
     category_slug: toStringOrUndefined(root.category_slug, 64),
     availability: availabilityParsed?.success ? availabilityParsed.data : undefined,
     design: designParsed?.success ? designParsed.data : undefined,
@@ -334,6 +334,37 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
     multimedia: multimediaParsed?.success ? multimediaParsed.data : undefined,
     regulatory: regulatoryParsed?.success ? regulatoryParsed.data : undefined,
   };
+
+  for (const [extraKey, extraVal] of Object.entries(root)) {
+    if (
+      extraKey === 'category_slug' ||
+      extraKey === '__proto__' ||
+      extraKey === 'constructor' ||
+      extraKey === 'prototype' ||
+      (SPEC_FIELD_GROUP_KEYS as readonly string[]).includes(extraKey)
+    ) {
+      continue;
+    }
+    const extraRecord = asRecord(extraVal);
+    if (extraRecord) {
+      const sanitizedExtra: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(extraRecord)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+        if (typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))) {
+          sanitizedExtra[k] = v;
+        } else if (typeof v === 'string') {
+          const cleanStr = toStringOrUndefined(v);
+          if (cleanStr) sanitizedExtra[k] = cleanStr;
+        } else if (Array.isArray(v)) {
+          const list = sanitizeColorList(v);
+          if (list) sanitizedExtra[k] = list;
+        }
+      }
+      if (Object.keys(sanitizedExtra).length > 0) {
+        candidateSpecs[extraKey] = sanitizedExtra;
+      }
+    }
+  }
 
   const parsed = ProductSpecificationsSchema.safeParse(candidateSpecs);
   return parsed.success ? parsed.data : {};
@@ -416,6 +447,22 @@ export function mergeProductSpecifications(
     const mergedGroup = mergeSpecGroupRecord(asRecord(safeBase[key]), asRecord(safeIncoming[key]));
     if (mergedGroup) {
       mergedRaw[key] = mergedGroup;
+    }
+  }
+
+  for (const key of new Set([...Object.keys(safeBase), ...Object.keys(safeIncoming)])) {
+    if (
+      key === 'category_slug' ||
+      key === '__proto__' ||
+      key === 'constructor' ||
+      key === 'prototype' ||
+      (SPEC_FIELD_GROUP_KEYS as readonly string[]).includes(key)
+    ) {
+      continue;
+    }
+    const mergedExtra = mergeSpecGroupRecord(asRecord(safeBase[key]), asRecord(safeIncoming[key]));
+    if (mergedExtra) {
+      mergedRaw[key] = mergedExtra;
     }
   }
 

@@ -6,6 +6,7 @@ import { Link } from '@/lib/navigation';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 import {
   MIN_WATCHLIST_TARGET_PRICE,
+  MIN_WATCHLIST_TARGET_PRICE_PCT,
   computeWatchlistTargetPrice,
   getWatchlist,
   removeWatchlistItem,
@@ -16,25 +17,43 @@ import {
   upsertWatchlistItem,
   type WatchlistItem,
 } from './watchlist-store';
-import { formatNumber, formatPriceVnd } from '@/lib/locale-format';
+import {
+  formatListingPrice,
+  formatNumber,
+  formatPriceVnd,
+  normalizePriceCurrency,
+  sanitizeCurrencyPriceValue,
+} from '@/lib/locale-format';
 
-export function resolvePriceWatchStep(currentMinPrice: unknown): number {
+export function resolvePriceWatchStep(
+  currentMinPrice: unknown,
+  currency?: string | null
+): number {
+  if (normalizePriceCurrency(currency) === 'PCT') {
+    return 0.05;
+  }
   const safeCurrent = sanitizeWatchlistPrice(currentMinPrice);
   return safeCurrent > 0 && safeCurrent < 2_000_000 ? 10_000 : 100_000;
 }
 
 export function sanitizePriceWatchInput(
   rawValue: unknown,
-  currentMinPrice: unknown
+  currentMinPrice: unknown,
+  currency?: string | null
 ): number {
+  const resolvedCurrency = normalizePriceCurrency(currency);
   const num = Number(rawValue);
   if (!Number.isFinite(num) || num < 0) {
     return computeWatchlistTargetPrice(
-      sanitizeWatchlistPrice(currentMinPrice),
-      5
+      sanitizeWatchlistPrice(currentMinPrice, resolvedCurrency),
+      5,
+      resolvedCurrency
     );
   }
-  return Math.min(MAX_VALID_VND_PRICE, Math.round(num));
+  return Math.min(
+    MAX_VALID_VND_PRICE,
+    sanitizeCurrencyPriceValue(num, resolvedCurrency)
+  );
 }
 
 export interface PriceWatchKeyEventLike {
@@ -134,6 +153,7 @@ interface PriceWatchButtonProps {
   categoryPath?: string;
   thumbnail: string | null;
   currentMinPrice: number;
+  currency?: 'VND' | 'PCT';
   size?: 'sm' | 'md';
   /** SSR/unit-test fixture override to render the disclosure open (#1693). */
   defaultOpen?: boolean;
@@ -146,6 +166,7 @@ export default function PriceWatchButton({
   categoryPath = '/smartphones',
   thumbnail,
   currentMinPrice,
+  currency,
   size = 'md',
   defaultOpen = false,
 }: PriceWatchButtonProps) {
@@ -156,12 +177,18 @@ export default function PriceWatchButton({
   const targetInputId = `${instanceId}-target-input`;
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerBtnRef = useRef<HTMLButtonElement>(null);
+  const resolvedCurrency =
+    currency === 'PCT' || categoryPath === '/bank-savings' ? 'PCT' : 'VND';
+  const isPercentCurrency = resolvedCurrency === 'PCT';
   const safeSlug = sanitizeWatchlistSlug(slug);
-  const safeCurrentMinPrice = sanitizeWatchlistPrice(currentMinPrice);
+  const safeCurrentMinPrice = sanitizeWatchlistPrice(
+    currentMinPrice,
+    resolvedCurrency
+  );
   const [watchedItem, setWatchedItem] = useState<WatchlistItem | null>(null);
   const [showEditor, setShowEditor] = useState(Boolean(defaultOpen));
   const [targetInput, setTargetInput] = useState<number>(
-    computeWatchlistTargetPrice(safeCurrentMinPrice, 5)
+    computeWatchlistTargetPrice(safeCurrentMinPrice, 5, resolvedCurrency)
   );
 
   useEffect(() => {
@@ -171,12 +198,14 @@ export default function PriceWatchButton({
       if (found) {
         setTargetInput(found.targetPrice);
       } else if (safeCurrentMinPrice > 0) {
-        setTargetInput(computeWatchlistTargetPrice(safeCurrentMinPrice, 5));
+        setTargetInput(
+          computeWatchlistTargetPrice(safeCurrentMinPrice, 5, resolvedCurrency)
+        );
       }
     };
     sync();
     return subscribeWatchlist(sync);
-  }, [safeSlug, safeCurrentMinPrice]);
+  }, [safeSlug, safeCurrentMinPrice, resolvedCurrency]);
 
   useEffect(() => {
     if (!showEditor) return;
@@ -203,7 +232,8 @@ export default function PriceWatchButton({
     if (!safeSlug) return;
     const cleanTarget = sanitizeWatchlistTargetPrice(
       customTarget,
-      safeCurrentMinPrice
+      safeCurrentMinPrice,
+      resolvedCurrency
     );
     upsertWatchlistItem({
       slug: safeSlug,
@@ -213,6 +243,7 @@ export default function PriceWatchButton({
       thumbnail,
       priceWhenAdded: safeCurrentMinPrice,
       targetPrice: cleanTarget,
+      currency: resolvedCurrency,
       addedAt: new Date().toISOString(),
     });
     setShowEditor(false);
@@ -226,8 +257,16 @@ export default function PriceWatchButton({
     triggerBtnRef.current?.focus();
   };
 
-  const preset5Pct = computeWatchlistTargetPrice(safeCurrentMinPrice, 5);
-  const preset10Pct = computeWatchlistTargetPrice(safeCurrentMinPrice, 10);
+  const preset5Pct = computeWatchlistTargetPrice(
+    safeCurrentMinPrice,
+    5,
+    resolvedCurrency
+  );
+  const preset10Pct = computeWatchlistTargetPrice(
+    safeCurrentMinPrice,
+    10,
+    resolvedCurrency
+  );
 
   return (
     <div ref={containerRef} className="position-relative d-inline-block">
@@ -243,12 +282,26 @@ export default function PriceWatchButton({
         title={t('btnTitle')}
       >
         {watchedItem
-          ? t('btnWatching', {
-              price: formatNumber(
-                sanitizeWatchlistPrice(watchedItem.targetPrice),
-                locale
-              ),
-            })
+          ? isPercentCurrency ||
+            categoryPath.replace(/^\/+/, '').split('/')[0] ===
+              'internet-telecom'
+            ? t('btnWatchingCurrency', {
+                price: formatListingPrice(
+                  sanitizeWatchlistPrice(
+                    watchedItem.targetPrice,
+                    resolvedCurrency
+                  ),
+                  resolvedCurrency,
+                  locale,
+                  { categorySlug: categoryPath }
+                ),
+              })
+            : t('btnWatching', {
+                price: formatNumber(
+                  sanitizeWatchlistPrice(watchedItem.targetPrice),
+                  locale
+                ),
+              })
           : t('btnWatch')}
       </button>
 
@@ -279,28 +332,41 @@ export default function PriceWatchButton({
           <p className="text-muted mb-2" style={{ fontSize: '0.8125rem' }}>
             {t('currentBestPrice')}{' '}
             <strong className="text-danger">
-              {formatPriceVnd(safeCurrentMinPrice, locale)}
+              {isPercentCurrency ||
+              categoryPath.replace(/^\/+/, '').split('/')[0] ===
+                'internet-telecom'
+                ? formatListingPrice(
+                    safeCurrentMinPrice,
+                    resolvedCurrency,
+                    locale,
+                    { categorySlug: categoryPath }
+                  )
+                : formatPriceVnd(safeCurrentMinPrice, locale)}
             </strong>
           </p>
 
-          <div className="d-flex mb-2 gap-1">
-            <button
-              type="button"
-              onClick={() => setTargetInput(preset5Pct)}
-              className="btn btn-sm btn-light rounded-pill flex-fill border"
-              style={{ fontSize: '0.8125rem' }}
-            >
-              {t('preset5Pct', { price: formatNumber(preset5Pct, locale) })}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTargetInput(preset10Pct)}
-              className="btn btn-sm btn-light rounded-pill flex-fill border"
-              style={{ fontSize: '0.8125rem' }}
-            >
-              {t('preset10Pct', { price: formatNumber(preset10Pct, locale) })}
-            </button>
-          </div>
+          {!isPercentCurrency && (
+            <div className="d-flex mb-2 gap-1">
+              <button
+                type="button"
+                onClick={() => setTargetInput(preset5Pct)}
+                className="btn btn-sm btn-light rounded-pill flex-fill border"
+                style={{ fontSize: '0.8125rem' }}
+              >
+                {t('preset5Pct', { price: formatNumber(preset5Pct, locale) })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTargetInput(preset10Pct)}
+                className="btn btn-sm btn-light rounded-pill flex-fill border"
+                style={{ fontSize: '0.8125rem' }}
+              >
+                {t('preset10Pct', {
+                  price: formatNumber(preset10Pct, locale),
+                })}
+              </button>
+            </div>
+          )}
 
           <div className="input-group input-group-sm mb-2">
             <label htmlFor={targetInputId} className="input-group-text">
@@ -309,12 +375,23 @@ export default function PriceWatchButton({
             <input
               id={targetInputId}
               type="number"
-              step={resolvePriceWatchStep(safeCurrentMinPrice)}
-              min={MIN_WATCHLIST_TARGET_PRICE}
+              step={resolvePriceWatchStep(
+                safeCurrentMinPrice,
+                resolvedCurrency
+              )}
+              min={
+                isPercentCurrency
+                  ? MIN_WATCHLIST_TARGET_PRICE_PCT
+                  : MIN_WATCHLIST_TARGET_PRICE
+              }
               value={targetInput}
               onChange={(e) =>
                 setTargetInput(
-                  sanitizePriceWatchInput(e.target.value, safeCurrentMinPrice)
+                  sanitizePriceWatchInput(
+                    e.target.value,
+                    safeCurrentMinPrice,
+                    resolvedCurrency
+                  )
                 )
               }
               onKeyDown={(e) => {

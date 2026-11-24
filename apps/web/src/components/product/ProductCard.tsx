@@ -8,7 +8,13 @@ import RadarBadge from '@/components/radar/RadarBadge';
 import type { RadarSignal } from '@/lib/deal-radar';
 import { contentLang } from '@/lib/content-lang';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
-import { formatDecimal, formatPriceVnd } from '@/lib/locale-format';
+import {
+  formatDecimal,
+  formatListingPrice,
+  formatPriceVnd,
+  normalizePriceCurrency,
+  sanitizeCurrencyPriceValue,
+} from '@/lib/locale-format';
 import { deviceImageSrcSet } from '@/lib/device-images';
 import StarRating from '@/components/elementary/StarRating';
 
@@ -36,6 +42,7 @@ export interface ProductCardProps {
   readonly radarSignal: RadarSignal;
   readonly minPrice: number;
   readonly maxPrice: number;
+  readonly currency?: string | null;
   readonly merchantCount: number;
   /**
    * Shown instead of the price when no store has it in stock
@@ -50,19 +57,27 @@ export interface ProductCardProps {
   readonly sizeChips?: readonly { label: string; href: string }[];
 }
 
-export function sanitizeProductCardPriceVnd(value: unknown): number {
+export function sanitizeProductCardPriceVnd(
+  value: unknown,
+  currency?: string | null
+): number {
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  return Math.round(num);
+  return sanitizeCurrencyPriceValue(num, currency);
 }
 
 export function formatProductCardVnd(
   value: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
-  return formatPriceVnd(sanitizeProductCardPriceVnd(value), locale);
+  const safe = sanitizeProductCardPriceVnd(value, currency);
+  return currency || categorySlug
+    ? formatListingPrice(safe, currency ?? 'VND', locale, { categorySlug })
+    : formatPriceVnd(safe, locale);
 }
 
 export function sanitizeProductCardScore(
@@ -108,6 +123,7 @@ export default function ProductCard({
   radarSignal,
   minPrice,
   maxPrice,
+  currency,
   merchantCount,
   saleState = 'on_sale',
   verified = false,
@@ -116,8 +132,8 @@ export default function ProductCard({
   const t = useTranslations('productCard');
   const tSale = useTranslations('saleState');
   const locale = useLocale();
-  const safeMinPrice = sanitizeProductCardPriceVnd(minPrice);
-  const safeMaxPrice = sanitizeProductCardPriceVnd(maxPrice);
+  const safeMinPrice = sanitizeProductCardPriceVnd(minPrice, currency);
+  const safeMaxPrice = sanitizeProductCardPriceVnd(maxPrice, currency);
   const hasRange = safeMinPrice > 0 && safeMaxPrice > safeMinPrice;
   const safeUserScore = sanitizeProductCardScore(userScore, 5);
   const safeExpertScore = sanitizeProductCardScore(expertScore, 10);
@@ -159,6 +175,7 @@ export default function ProductCard({
               brand,
               thumbnail,
               min_price: safeMinPrice,
+              currency: currency ? normalizePriceCurrency(currency) : undefined,
               categoryPath,
             }}
           />
@@ -247,7 +264,12 @@ export default function ProductCard({
                     {sizeChips.length > 0 ? t('fromPrice') : t('refPrice')}
                   </div>
                   <div className="rate-product-card-price">
-                    {formatProductCardVnd(safeMinPrice, locale)}
+                    {formatProductCardVnd(
+                      safeMinPrice,
+                      locale,
+                      currency,
+                      categoryPath
+                    )}
                   </div>
                 </>
               ) : (
@@ -267,7 +289,12 @@ export default function ProductCard({
               {hasRange && (
                 <div>
                   {t('priceUpTo', {
-                    price: formatProductCardVnd(safeMaxPrice, locale),
+                    price: formatProductCardVnd(
+                      safeMaxPrice,
+                      locale,
+                      currency,
+                      categoryPath
+                    ),
                   })}
                 </div>
               )}

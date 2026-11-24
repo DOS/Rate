@@ -35,8 +35,10 @@ import {
   productMarketStats,
 } from '@/lib/product-market-stats';
 import {
+  getMasterProductCategorySlug,
   resolveCompareEffectiveUserRating,
   resolveCompareExpertRating10,
+  resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
 import { scoreMasterProductForLeaderboard } from '@/lib/leaderboard-engine';
 import { withScoringSpecs } from '@/lib/hero-products';
@@ -237,10 +239,18 @@ async function defaultResolveProductTruthCard(
         ? 'fake_sale_trap'
         : 'verified';
 
+  const productCategorySlug = categoryPath.replace(/^\/+/, '');
+  const currency = resolveListingPriceCurrency({
+    categorySlug: productCategorySlug,
+    master: product,
+    offers,
+  });
+
   return {
     type: 'product',
     slug: displaySlug,
     categoryPath,
+    currency,
     name: displayNameOverride || product.name,
     brand: product.brand,
     minPriceVnd: marketStats.minPrice,
@@ -289,7 +299,10 @@ async function defaultResolveVersusTruthCard(
     canonicalVersusSlug = `${resolvedPair[0]}-vs-${resolvedPair[1]}`;
   }
 
-  const compared = await getCachedCompareMasterProducts(resolvedPair.join(','));
+  const [compared, categorySlugById] = await Promise.all([
+    getCachedCompareMasterProducts(resolvedPair.join(',')),
+    getCachedCategorySlugById().catch(() => new Map<string, string>()),
+  ]);
   const [prodA, prodB] = inPairOrder(compared, resolvedPair);
   if (!prodA || !prodB) {
     return null;
@@ -314,12 +327,19 @@ async function defaultResolveVersusTruthCard(
   const winsB = criteriaRows.filter((r) => r.winner === 'B').length;
   const statsA = productMarketStats(prodA);
   const statsB = productMarketStats(prodB);
+  const catA = getMasterProductCategorySlug(prodA, categorySlugById);
+  const catB = getMasterProductCategorySlug(prodB, categorySlugById);
 
   return {
     type: 'versus',
     versusSlug: canonicalVersusSlug,
     itemA: {
       slug: prodA.slug,
+      categoryPath: `/${catA}`,
+      currency: resolveListingPriceCurrency({
+        categorySlug: catA,
+        master: prodA,
+      }),
       name: prodA.name,
       brand: prodA.brand,
       score5: overall.finalA,
@@ -329,6 +349,11 @@ async function defaultResolveVersusTruthCard(
     },
     itemB: {
       slug: prodB.slug,
+      categoryPath: `/${catB}`,
+      currency: resolveListingPriceCurrency({
+        categorySlug: catB,
+        master: prodB,
+      }),
       name: prodB.name,
       brand: prodB.brand,
       score5: overall.finalB,
@@ -355,6 +380,11 @@ async function defaultResolveDealsTruthCard(): Promise<DealsTruthCardData> {
     totalClustersAnalyzed: radar.totalClustersAnalyzed,
     topDeals: radar.genuineDeals.slice(0, 4).map((deal) => ({
       name: deal.productName,
+      categorySlug: deal.categorySlug,
+      categoryPath: `/${deal.categorySlug}`,
+      currency:
+        deal.currency ??
+        resolveListingPriceCurrency({ categorySlug: deal.categorySlug }),
       minPriceVnd: deal.priceCurrent,
       savingsPct: deal.savingsVsMedianPct,
       offerCount: deal.marketOfferCount,

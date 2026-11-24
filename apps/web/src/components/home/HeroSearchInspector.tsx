@@ -33,6 +33,7 @@ import {
   MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
   getMasterProductHref,
+  resolveListingPriceCurrency,
   type OfferDiscountAnalysis,
   type UrlInspectionResult,
 } from '@/lib/rate-domain';
@@ -281,7 +282,13 @@ function resolveHeroListingPriceFloorVnd(params: {
     offerUrl ?? '',
   ].filter(Boolean);
   return texts.length > 0
-    ? minimumListingPriceVnd(texts)
+    ? minimumListingPriceVnd(texts, {
+        categorySlug,
+        currency: resolveListingPriceCurrency({
+          categorySlug,
+          metadata: masterProduct.metadata,
+        }),
+      })
     : MINIMUM_DEVICE_PRICE_FLOOR_VND;
 }
 

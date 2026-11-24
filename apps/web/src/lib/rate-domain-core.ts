@@ -899,13 +899,7 @@ export function getCategoryRouteHref(slug: string): string {
   if (!safeSlug) {
     return '/smartphones';
   }
-  if (
-    safeSlug === 'smartphones' ||
-    safeSlug === 'tablets' ||
-    safeSlug === 'laptops' ||
-    safeSlug === 'smartwatches' ||
-    safeSlug === 'earbuds'
-  ) {
+  if (isCanonicalCategorySlug(safeSlug)) {
     return `/${safeSlug}`;
   }
   return `/smartphones?category=${encodeURIComponent(safeSlug)}`;
@@ -1165,18 +1159,150 @@ export function resolveProductImageUrl(
 }
 
 export type CanonicalCategorySlug =
-  'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
+  | 'smartphones'
+  | 'tablets'
+  | 'laptops'
+  | 'smartwatches'
+  | 'earbuds'
+  | 'tvs'
+  | 'air-conditioners'
+  | 'refrigerators'
+  | 'washing-machines'
+  | 'air-purifiers'
+  | 'bank-savings'
+  | 'internet-telecom';
+
+export const CORE_TECH_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
+  'smartphones',
+  'tablets',
+  'laptops',
+  'smartwatches',
+  'earbuds',
+] as const;
+
+export const WAVE_E1_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+] as const;
+
+export const WAVE_E2_SERVICE_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] =
+  ['bank-savings', 'internet-telecom'] as const;
+
+export const ALL_CANONICAL_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
+  ...CORE_TECH_CATEGORY_SLUGS,
+  ...WAVE_E1_CATEGORY_SLUGS,
+  ...WAVE_E2_SERVICE_CATEGORY_SLUGS,
+] as const;
+
+const CANONICAL_CATEGORY_SLUG_SET = new Set<string>(
+  ALL_CANONICAL_CATEGORY_SLUGS
+);
+const CORE_TECH_CATEGORY_SLUG_SET = new Set<string>(CORE_TECH_CATEGORY_SLUGS);
+const WAVE_E1_CATEGORY_SLUG_SET = new Set<string>(WAVE_E1_CATEGORY_SLUGS);
+const WAVE_E2_SERVICE_CATEGORY_SLUG_SET = new Set<string>(
+  WAVE_E2_SERVICE_CATEGORY_SLUGS
+);
 
 export function isCanonicalCategorySlug(
   value: unknown
 ): value is CanonicalCategorySlug {
+  return typeof value === 'string' && CANONICAL_CATEGORY_SLUG_SET.has(value);
+}
+
+export function isCoreTechCategorySlug(value: unknown): boolean {
+  return typeof value === 'string' && CORE_TECH_CATEGORY_SLUG_SET.has(value);
+}
+
+export function isWaveE1CategorySlug(value: unknown): boolean {
+  return typeof value === 'string' && WAVE_E1_CATEGORY_SLUG_SET.has(value);
+}
+
+export function isWaveE2ServiceCategorySlug(value: unknown): boolean {
   return (
-    value === 'smartphones' ||
-    value === 'tablets' ||
-    value === 'laptops' ||
-    value === 'smartwatches' ||
-    value === 'earbuds'
+    typeof value === 'string' && WAVE_E2_SERVICE_CATEGORY_SLUG_SET.has(value)
   );
+}
+
+/**
+ * Keep the 5 core tech categories, any populated Wave E1/E2 category, or the
+ * explicitly opened category visible while hiding unseeded Wave E1/E2 tabs/cards.
+ */
+export function isCategoryVisibleInDirectory(
+  slug: string,
+  productCount: number,
+  activeSlug?: string | null
+): boolean {
+  if (productCount > 0) return true;
+  if (activeSlug && slug === activeSlug) return true;
+  return isCoreTechCategorySlug(slug);
+}
+
+export function resolveListingPriceCurrency(options: {
+  currency?: string | null;
+  categorySlug?: string | null;
+  metadata?: unknown;
+  master?: {
+    slug?: string | null;
+    name?: string | null;
+    model?: string | null;
+    category_id?: string | null;
+    metadata?: unknown;
+    specifications?: unknown;
+  } | null;
+  offers?: ReadonlyArray<
+    { currency?: string | null } | null | undefined
+  > | null;
+}): 'VND' | 'PCT' {
+  if (typeof options.currency === 'string' && options.currency.trim()) {
+    return options.currency.trim().toUpperCase() === 'PCT' ? 'PCT' : 'VND';
+  }
+  if (Array.isArray(options.offers)) {
+    for (const offer of options.offers) {
+      if (typeof offer?.currency === 'string' && offer.currency.trim()) {
+        return offer.currency.trim().toUpperCase() === 'PCT' ? 'PCT' : 'VND';
+      }
+    }
+  }
+  const ownMeta =
+    options.metadata &&
+    typeof options.metadata === 'object' &&
+    !Array.isArray(options.metadata)
+      ? (options.metadata as Record<string, unknown>)
+      : null;
+  const masterMeta =
+    options.master?.metadata &&
+    typeof options.master.metadata === 'object' &&
+    !Array.isArray(options.master.metadata)
+      ? (options.master.metadata as Record<string, unknown>)
+      : null;
+  const metaCurrency = ownMeta?.currency ?? masterMeta?.currency;
+  if (typeof metaCurrency === 'string' && metaCurrency.trim()) {
+    return metaCurrency.trim().toUpperCase() === 'PCT' ? 'PCT' : 'VND';
+  }
+  const resolvedCategorySlug =
+    options.categorySlug ||
+    (options.master
+      ? getMasterProductCategorySlug({
+          slug: options.master.slug ?? '',
+          name: options.master.name,
+          model: options.master.model,
+          category_id: options.master.category_id,
+          metadata: masterMeta,
+          specifications:
+            options.master.specifications &&
+            typeof options.master.specifications === 'object' &&
+            !Array.isArray(options.master.specifications)
+              ? (options.master.specifications as Record<string, unknown>)
+              : null,
+        })
+      : null);
+  if (resolvedCategorySlug === 'bank-savings') {
+    return 'PCT';
+  }
+  return 'VND';
 }
 
 export function getMasterProductCategorySlug(
@@ -1233,6 +1359,57 @@ export function getMasterProductCategorySlug(
 
   const haystack =
     `${product.name || ''} ${product.model || ''} ${product.slug}`.toLowerCase();
+  if (
+    /(?<![\p{L}\d])(?:gửi tiết kiệm|tiết kiệm trực tuyến|tiết kiệm online|lãi suất tiết kiệm|bank savings?|term deposit|vietcombank|acb)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'bank-savings';
+  }
+  if (
+    /(?<![\p{L}\d])(?:gói cước internet|cáp quang|lắp mạng|home net|internet giga|vnpt|fpt telecom|fpttelecom)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'internet-telecom';
+  }
+  if (
+    /(?<![\p{L}\d])(?:máy lọc không khí|air purifier|lọc không khí)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'air-purifiers';
+  }
+  if (
+    /(?<![\p{L}\d])(?:máy giặt|washing machine|washer)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'washing-machines';
+  }
+  if (
+    /(?<![\p{L}\d])(?:tủ lạnh|refrigerator|fridge)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'refrigerators';
+  }
+  if (
+    /(?<![\p{L}\d])(?:điều hòa|điều hoà|máy lạnh|air conditioner)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'air-conditioners';
+  }
+  if (
+    (/(?<![\p{L}\d])tivi(?![\p{L}\d])/iu.test(haystack) ||
+      /(?<![\p{L}\d])(?:smart|google|android|qled|oled|mini led)\s*tv(?![\p{L}\d])/iu.test(
+        haystack
+      )) &&
+    !/(?<![\p{L}\d])(?:apple tv|tv box)(?![\p{L}\d])/iu.test(haystack)
+  ) {
+    return 'tvs';
+  }
   if (
     /ipad|galaxy tab|xiaomi pad|matepad|redmi pad|tab s\d|tab a\d|tab p\d|tab m\d|oneplus pad|oppo pad|vivo pad|honor pad|surface pro|tablet|máy tính bảng/i.test(
       haystack
@@ -1335,7 +1512,7 @@ export function foreignCategoryProductHref(
   categorySlugById: ReadonlyMap<string, string>
 ): string | null {
   const href = getMasterProductHref(product, categorySlugById);
-  if (!/^\/[a-z]+\/[^/]+$/.test(href)) return null;
+  if (!/^\/[a-z-]+\/[^/]+$/.test(href)) return null;
   return href.startsWith(`${categoryBasePath}/`) ? null : href;
 }
 
@@ -2459,7 +2636,10 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
       parsedHost === '127.0.0.1'
     ) {
       const rateSlugMatch = parsedPathname.match(
-        /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
+        new RegExp(
+          `\\/(?:${ALL_CANONICAL_CATEGORY_SLUGS.join('|')})\\/([a-z0-9-]+)`,
+          'i'
+        )
       );
       if (rateSlugMatch) {
         const candidateSlug = (rateSlugMatch[1] || '').toLowerCase();
@@ -2539,9 +2719,12 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     }
   }
 
-  // Rate.vn internal relative URL: /smartphones/<slug>, /tablets/<slug>, /laptops/<slug>, /smartwatches/<slug>, /earbuds/<slug>
+  // Rate.vn internal relative URL across all canonical categories
   const rateSlugMatch = trimmed.match(
-    /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
+    new RegExp(
+      `\\/(?:${ALL_CANONICAL_CATEGORY_SLUGS.join('|')})\\/([a-z0-9-]+)`,
+      'i'
+    )
   );
   if (rateSlugMatch) {
     const candidateSlug = (rateSlugMatch[1] || '').toLowerCase();
@@ -2684,7 +2867,10 @@ export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
       .replace(/\.html?$/i, '')
       .replace(/^\/collections\/[^/]+\/products\//i, '/')
       .replace(
-        /^\/(?:products?|san-pham|dien-thoai|dien-thoai-di-dong|dtdd|may-tinh-bang|may-tinh-xach-tay|laptop|dong-ho-thong-minh|tai-nghe|smartphones|tablets|laptops|smartwatches|earbuds|apple|iphone|ipad|macbook|watch|airpods)\//i,
+        new RegExp(
+          `^\\/(?:products?|san-pham|dien-thoai|dien-thoai-di-dong|dtdd|may-tinh-bang|may-tinh-xach-tay|laptop|dong-ho-thong-minh|tai-nghe|${ALL_CANONICAL_CATEGORY_SLUGS.join('|')}|apple|iphone|ipad|macbook|watch|airpods)\\/`,
+          'i'
+        ),
         '/'
       );
     const segments = cleanedPath.split('/').filter(Boolean);

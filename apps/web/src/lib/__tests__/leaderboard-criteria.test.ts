@@ -1183,11 +1183,11 @@ assert.equal(
   assert.match(compareSrc, /computeCompareHeadToHeadSummary\(products\)/);
   assert.match(
     compareSrc,
-    /min_price:\s*sanitizeComparePriceVnd\(p\.min_price\)/
+    /min_price:\s*sanitizeComparePriceVnd\(p\.min_price(?:\s*,\s*pCurrency)?\)/
   );
   assert.match(
     compareSrc,
-    /const minP\s*=\s*sanitizeComparePriceVnd\(p\.min_price\)/
+    /const minP\s*=\s*sanitizeComparePriceVnd\(p\.min_price(?:\s*,\s*pCur(?:rency)?)?\)/
   );
   assert.match(compareSrc, /data-compare-slot-trigger="replace"/);
   assert.match(compareSrc, /data-compare-slot-trigger="add"/);
