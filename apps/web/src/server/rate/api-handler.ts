@@ -1240,6 +1240,13 @@ const VALID_PRODUCT_CATEGORY_SLUGS = new Set([
   'air-purifiers',
   'bank-savings',
   'internet-telecom',
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
 ]);
 
 const VALID_BRAND_TOKEN_REGEX = /^[\p{L}\p{N}\s.+-]+$/u;

@@ -62,6 +62,7 @@ import {
   formatPercent,
   formatPlainNumber,
   formatPriceVnd,
+  hasListingUnitSuffix,
   normalizePriceCurrency,
   toFormatLocale,
 } from '@/lib/locale-format';
@@ -1554,9 +1555,10 @@ export default function WatchlistWorkspace({
                   categorySlug: quickCategorySlug,
                   metadata: p.metadata,
                 });
-                const quickHasUnit =
-                  quickCurrency === 'PCT' ||
-                  quickCategorySlug === 'internet-telecom';
+                const quickHasUnit = hasListingUnitSuffix(
+                  quickCurrency,
+                  quickCategorySlug
+                );
                 const quickTarget = computeWatchlistTargetPrice(
                   minP,
                   5,
@@ -1635,8 +1637,10 @@ export default function WatchlistWorkspace({
                 categorySlug: itemCategorySlug,
                 master: live,
               });
-            const itemHasUnit =
-              itemCurrency === 'PCT' || itemCategorySlug === 'internet-telecom';
+            const itemHasUnit = hasListingUnitSuffix(
+              itemCurrency,
+              itemCategorySlug
+            );
             const { currentMin, currentMax } =
               resolveWatchlistItemCurrentPrices(item, dealInfo, live);
             const rawDiffFromAdded =

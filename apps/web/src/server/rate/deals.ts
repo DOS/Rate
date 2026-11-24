@@ -22,7 +22,10 @@ import {
   formatListingPrice,
   sanitizeCurrencyPriceValue,
 } from '../../lib/locale-format';
-import { resolveListingPriceCurrency } from '../../lib/rate-domain-core';
+import {
+  isPlaceCategorySlug,
+  resolveListingPriceCurrency,
+} from '../../lib/rate-domain-core';
 import { isOfferUnavailable } from '../../lib/product-market-stats';
 import { roundScore } from '../../lib/rating-display';
 import { normalizeOfferId, plausibleOffers } from '@repo/shared-data/rules';
@@ -338,6 +341,9 @@ export function computeCrossPlatformDealRadarFromData(
       continue;
     }
     const categorySlug = getMasterProductCategorySlug(master);
+    if (master.entity_type === 'place' || isPlaceCategorySlug(categorySlug)) {
+      continue;
+    }
     if (categoryFilter !== 'all' && categorySlug !== categoryFilter) {
       continue;
     }

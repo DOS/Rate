@@ -63,6 +63,13 @@ export default async function FooterDynamic({
     'air-purifiers',
     'bank-savings',
     'internet-telecom',
+    'supplements',
+    'cosmetics',
+    'mother-baby',
+    'restaurants',
+    'cafes',
+    'hotels',
+    'homestays',
   ]
     .filter((slug) => populatedCategorySlugs?.includes(slug))
     .map((slug) => ({

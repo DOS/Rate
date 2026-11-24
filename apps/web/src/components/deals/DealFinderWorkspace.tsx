@@ -14,6 +14,7 @@ import {
   type CanonicalCategorySlug,
   getMasterProductCategorySlug,
   isCategoryVisibleInDirectory,
+  isPlaceCategorySlug,
   isWaveE2ServiceCategorySlug,
   MAX_VALID_VND_PRICE,
   resolveListingPriceCurrency,
@@ -50,6 +51,7 @@ import {
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
+  hasListingUnitSuffix,
   sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import { formatScoreFixed } from '@/lib/rating-display';
@@ -113,7 +115,7 @@ export function formatDealRadarPriceVnd(
 ): string {
   const safe = sanitizeDealRadarPriceVnd(value, currency);
   if (safe == null) return '-';
-  return currency === 'PCT' || categorySlug === 'internet-telecom'
+  return hasListingUnitSuffix(currency, categorySlug)
     ? formatListingPrice(safe, currency ?? 'VND', locale, { categorySlug })
     : formatPriceVnd(safe, locale);
 }
@@ -172,10 +174,9 @@ export function availableDealPersonas(
   if (Array.isArray(products)) {
     for (const p of products) {
       if (!p || typeof p !== 'object') continue;
-      if (
-        categoryFilter !== 'all' &&
-        getMasterProductCategorySlug(p) !== categoryFilter
-      ) {
+      const cat = getMasterProductCategorySlug(p);
+      if (p.entity_type === 'place' || isPlaceCategorySlug(cat)) continue;
+      if (categoryFilter !== 'all' && cat !== categoryFilter) {
         continue;
       }
       // A persona ranks, so it needs a score past the ranking threshold.
@@ -221,6 +222,7 @@ export function rankProductsForDealFinder(
   for (const p of products) {
     if (!p || typeof p !== 'object') continue;
     const cat = getMasterProductCategorySlug(p);
+    if (p.entity_type === 'place' || isPlaceCategorySlug(cat)) continue;
     if (categoryFilter !== 'all' && cat !== categoryFilter) continue;
     const itemCurrency = resolveListingPriceCurrency({
       categorySlug: cat,
@@ -470,7 +472,7 @@ export function buildDealRadarMarkdown(params: {
       const fmtG = (val: number | null, includeUnit = true) =>
         val == null
           ? '-'
-          : gCur === 'PCT' || g.categorySlug === 'internet-telecom'
+          : hasListingUnitSuffix(gCur, g.categorySlug)
             ? formatListingPrice(val, gCur, locale, {
                 categorySlug: g.categorySlug,
                 includeUnitSuffix: includeUnit,
@@ -493,7 +495,7 @@ export function buildDealRadarMarkdown(params: {
       const fmtT = (val: number | null) =>
         val == null
           ? '-'
-          : tCur === 'PCT' || trap.categorySlug === 'internet-telecom'
+          : hasListingUnitSuffix(tCur, trap.categorySlug)
             ? formatListingPrice(val, tCur, locale, {
                 categorySlug: trap.categorySlug,
               })
@@ -522,7 +524,7 @@ export function buildDealRadarMarkdown(params: {
       const fmtS = (val: number | null, includeUnit = true) =>
         val == null
           ? '-'
-          : sCur === 'PCT' || s.categorySlug === 'internet-telecom'
+          : hasListingUnitSuffix(sCur, s.categorySlug)
             ? formatListingPrice(val, sCur, locale, {
                 categorySlug: s.categorySlug,
                 includeUnitSuffix: includeUnit,
@@ -648,12 +650,11 @@ export function buildDealsMarkdown(params: {
     '| --- | --- | --- | --- | --- | --- | --- | --- |',
     ...rankedDeals.slice(0, 20).map((d) => {
       const personaStr = formatDealPersonaScore(d.personaScore5, persona);
-      const dPriceStr =
-        d.currency === 'PCT' || d.categorySlug === 'internet-telecom'
-          ? formatListingPrice(d.minPrice, d.currency, locale, {
-              categorySlug: d.categorySlug,
-            })
-          : `${formatNumber(d.minPrice, locale)} ₫`;
+      const dPriceStr = hasListingUnitSuffix(d.currency, d.categorySlug)
+        ? formatListingPrice(d.minPrice, d.currency, locale, {
+            categorySlug: d.categorySlug,
+          })
+        : `${formatNumber(d.minPrice, locale)} ₫`;
       const dSpreadStr =
         d.spreadSavingsVnd > 0
           ? d.currency === 'PCT'
@@ -744,6 +745,9 @@ export default function DealFinderWorkspace({
       { slug: 'air-purifiers', label: t('catAirPurifiers') },
       { slug: 'bank-savings', label: t('catBankSavings') },
       { slug: 'internet-telecom', label: t('catInternetTelecom') },
+      { slug: 'supplements', label: t('catSupplements') },
+      { slug: 'cosmetics', label: t('catCosmetics') },
+      { slug: 'mother-baby', label: t('catMotherBaby') },
     ],
     [t]
   );
@@ -1304,8 +1308,10 @@ export default function DealFinderWorkspace({
                                   <>
                                     {' '}
                                     ·{' '}
-                                    {gCurrency === 'PCT' ||
-                                    g.categorySlug === 'internet-telecom'
+                                    {hasListingUnitSuffix(
+                                      gCurrency,
+                                      g.categorySlug
+                                    )
                                       ? t('medianPriceLabelCurrency', {
                                           price: formatListingPrice(
                                             safeMedian,
@@ -1401,8 +1407,10 @@ export default function DealFinderWorkspace({
                                     {' '}
                                     · {t('claimedOrigLabel')}{' '}
                                     <s>
-                                      {tCurrency === 'PCT' ||
-                                      trap.categorySlug === 'internet-telecom'
+                                      {hasListingUnitSuffix(
+                                        tCurrency,
+                                        trap.categorySlug
+                                      )
                                         ? formatListingPrice(
                                             claimedOrig,
                                             tCurrency,
@@ -1666,18 +1674,19 @@ export default function DealFinderWorkspace({
                             {t('campaignCardTrapNote', {
                               platform:
                                 dealSignal.fakeSaleTrap.platform.toUpperCase(),
-                              claimed:
-                                (dealSignal.fakeSaleTrap.currency ??
-                                  dealCurrency) === 'PCT' ||
-                                deal.categorySlug === 'internet-telecom'
-                                  ? formatListingPrice(
-                                      trapOrig,
-                                      dealSignal.fakeSaleTrap.currency ??
-                                        dealCurrency,
-                                      locale,
-                                      { categorySlug: deal.categorySlug }
-                                    )
-                                  : formatPriceVnd(trapOrig, locale),
+                              claimed: hasListingUnitSuffix(
+                                dealSignal.fakeSaleTrap.currency ??
+                                  dealCurrency,
+                                deal.categorySlug
+                              )
+                                ? formatListingPrice(
+                                    trapOrig,
+                                    dealSignal.fakeSaleTrap.currency ??
+                                      dealCurrency,
+                                    locale,
+                                    { categorySlug: deal.categorySlug }
+                                  )
+                                : formatPriceVnd(trapOrig, locale),
                               pct: formatPlainNumber(
                                 dealSignal.fakeSaleTrap.fakeMarkupPct,
                                 locale

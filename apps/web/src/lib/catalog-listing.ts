@@ -28,6 +28,13 @@ const CANONICAL_CATEGORY_SLUGS: ReadonlySet<string> =
     'air-purifiers',
     'bank-savings',
     'internet-telecom',
+    'supplements',
+    'cosmetics',
+    'mother-baby',
+    'restaurants',
+    'cafes',
+    'hotels',
+    'homestays',
   ]);
 
 /**

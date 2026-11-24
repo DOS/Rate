@@ -3,15 +3,18 @@ import {
   MAX_VALID_VND_PRICE,
   isCanonicalCategorySlug,
   isCategoryVisibleInDirectory,
+  isPlaceCategorySlug,
   resolveCompareEffectiveUserRating,
   resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
+import { formatPlaceLocationBadge } from '@/lib/place-details';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { IntentLink } from '@/components/elementary/IntentLink';
 import {
   getCachedCategoryDirectoryFacets,
+  getCachedMasterPlaceDetailsBatch,
   getCachedMasterProducts,
   getCachedRatePlatformStats,
   getItemCatalogPage,
@@ -69,6 +72,7 @@ import {
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
+  hasListingUnitSuffix,
   sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import {
@@ -153,12 +157,16 @@ export function formatCatalogRadarPriceVnd(
   value: unknown,
   locale?: string | null,
   currency?: string | null,
-  categorySlug?: string | null
+  categorySlug?: string | null,
+  priceUnit?: string | null
 ): string {
   const safe = sanitizeCatalogRadarPriceVnd(value, currency);
   if (safe == null) return '-';
-  return currency === 'PCT' || categorySlug === 'internet-telecom'
-    ? formatListingPrice(safe, currency ?? 'VND', locale, { categorySlug })
+  return hasListingUnitSuffix(currency, categorySlug, priceUnit)
+    ? formatListingPrice(safe, currency ?? 'VND', locale, {
+        categorySlug,
+        priceUnit,
+      })
     : formatPriceVnd(safe, locale);
 }
 
@@ -560,6 +568,15 @@ export async function CategoryCatalogContent({
 
   const hasNextPage = pageRows.length > CATALOG_PAGE_SIZE;
   const products = pageRows.slice(0, CATALOG_PAGE_SIZE);
+  const placeMasterIds = isPlaceCategorySlug(categorySlug)
+    ? products.map((p) => p.id)
+    : products.filter((p) => p.entity_type === 'place').map((p) => p.id);
+  const placeDetailsByMaster =
+    placeMasterIds.length > 0
+      ? await getCachedMasterPlaceDetailsBatch(placeMasterIds).catch(
+          () => new Map()
+        )
+      : new Map();
   const pageHref = (target: number) =>
     buildFilterHref(basePath, rawSearch, {
       page: target > 1 ? String(target) : null,
@@ -1174,7 +1191,22 @@ export async function CategoryCatalogContent({
                       ]
                         .filter(Boolean)
                         .join(' / ');
+                      const placeSummary =
+                        placeDetailsByMaster.get(item.id) ?? null;
+                      const placeLocTag = placeSummary
+                        ? formatPlaceLocationBadge(
+                            placeSummary.district_code,
+                            placeSummary.province_code
+                          )
+                        : null;
                       const tags = [
+                        ...(placeSummary?.price_tier
+                          ? [placeSummary.price_tier]
+                          : []),
+                        ...(placeSummary?.cuisine
+                          ? [placeSummary.cuisine]
+                          : []),
+                        ...(placeLocTag ? [placeLocTag] : []),
                         memoryLabel,
                         item.has_5g ? '5G' : '',
                         refreshHz && refreshHz >= 120 ? `${refreshHz}Hz` : '',
@@ -1217,6 +1249,21 @@ export async function CategoryCatalogContent({
                         });
                       }
 
+                      const cardMinPrice = Number(
+                        item.min_price || placeSummary?.price_min || 0
+                      );
+                      const cardMaxPrice = Number(
+                        item.max_price || placeSummary?.price_max || 0
+                      );
+                      const cardSaleState =
+                        cardMinPrice > 0 && Number(item.min_price || 0) <= 0
+                          ? saleStateOfMaster({
+                              min_price: cardMinPrice,
+                              metadata: item.metadata,
+                              specifications: item.specifications,
+                            })
+                          : saleStateOfMaster(item);
+
                       return (
                         <div key={item.id}>
                           <ProductCard
@@ -1242,14 +1289,15 @@ export async function CategoryCatalogContent({
                             )}
                             expertScore={expertScore}
                             radarSignal={getRadarSignal(radarIndex, item.slug)}
-                            minPrice={Number(item.min_price || 0)}
-                            maxPrice={Number(item.max_price || 0)}
+                            minPrice={cardMinPrice}
+                            maxPrice={cardMaxPrice}
                             currency={resolveListingPriceCurrency({
                               categorySlug,
                               metadata: item.metadata,
                             })}
+                            priceUnit={placeSummary?.price_unit ?? null}
                             merchantCount={item.merchant_count || 0}
-                            saleState={saleStateOfMaster(item)}
+                            saleState={cardSaleState}
                             verified
                           />
                         </div>

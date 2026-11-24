@@ -13,7 +13,11 @@ import {
   type ItemSizeStripContext,
 } from '@/lib/item-size-panel';
 import { useSelectedVariant } from './selected-variant';
-import { formatListingPrice, formatNumber } from '@/lib/locale-format';
+import {
+  formatListingPrice,
+  formatNumber,
+  hasListingUnitSuffix,
+} from '@/lib/locale-format';
 import { resolveListingPriceCurrency } from '@/lib/rate-domain';
 
 export type ItemSizePanelKind = 'strip' | 'history' | 'offers';
@@ -113,8 +117,7 @@ export function ItemSizePriceStrip({
             {priceHistory.lowestEverPrice != null &&
               priceHistory.lowestEverPrice > 0 && (
                 <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                  {effectiveCurrency === 'PCT' ||
-                  categorySlug === 'internet-telecom'
+                  {hasListingUnitSuffix(effectiveCurrency, categorySlug)
                     ? t('allTimeLowBadgeCurrency', {
                         price: formatListingPrice(
                           priceHistory.lowestEverPrice,

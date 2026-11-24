@@ -36,6 +36,13 @@ const CANONICAL_TRAY_CATEGORIES = new Set<CanonicalCategorySlug>([
   'air-purifiers',
   'bank-savings',
   'internet-telecom',
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
 ]);
 
 export const MAX_COMPARE_ITEMS = 4;

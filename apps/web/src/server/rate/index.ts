@@ -13,6 +13,9 @@ import {
   getCategoryRouteHref,
   getMasterProductBySlug as _getMasterProductBySlug,
   getMasterProductSiblings as _getMasterProductSiblings,
+  getMasterPlaceDetail as _getMasterPlaceDetail,
+  getPlaceBranchSiblings as _getPlaceBranchSiblings,
+  getMasterPlaceDetailsBatch as _getMasterPlaceDetailsBatch,
   masterSiblingKeyPrefix,
   getMasterProductCategorySlug,
   getMasterProductHref,
@@ -51,6 +54,9 @@ export type {
   CanonicalCategorySlug,
   CategoryDirectoryFacets,
   DiscountVerdictType,
+  PlaceBranchSibling,
+  PlaceDetail,
+  PlaceListingSummary,
   MasterProductFilterParams,
   MasterProductPriceHistorySummary,
   MerchantListFilterParams,
@@ -293,6 +299,74 @@ export function getCachedMasterProductSiblings(modelKey: string) {
   const keyPrefix = masterSiblingKeyPrefix(modelKey);
   if (!keyPrefix) return Promise.resolve([]);
   return _getCachedMasterProductSiblingsByPrefix(keyPrefix);
+}
+
+const _getCachedMasterPlaceDetailById = cache((masterId: string) =>
+  withRateDataCache(
+    _getMasterPlaceDetail,
+    ['rate-master-place-detail', masterId],
+    { revalidate: 300, tags: [RATE_CACHE_TAGS.PRODUCTS] }
+  )(masterId)
+);
+
+export function getCachedMasterPlaceDetail(masterId: string) {
+  const cleanId = masterId.replace(/\p{Cc}+/gu, '').trim();
+  if (!cleanId) return Promise.resolve(null);
+  return _getCachedMasterPlaceDetailById(cleanId);
+}
+
+const _getCachedPlaceBranchSiblingsByKey = cache(
+  (branchGroupKey: string, excludeMasterId: string) =>
+    withRateDataCache(
+      _getPlaceBranchSiblings,
+      ['rate-place-branch-siblings', branchGroupKey, excludeMasterId],
+      { revalidate: 300, tags: [RATE_CACHE_TAGS.PRODUCTS] }
+    )(branchGroupKey, excludeMasterId)
+);
+
+export function getCachedPlaceBranchSiblings(
+  branchGroupKey: string,
+  excludeMasterId: string
+) {
+  const cleanKey = branchGroupKey.replace(/\p{Cc}+/gu, '').trim();
+  const cleanExclude = excludeMasterId.replace(/\p{Cc}+/gu, '').trim();
+  if (!cleanKey || !cleanExclude) return Promise.resolve([]);
+  return _getCachedPlaceBranchSiblingsByKey(cleanKey, cleanExclude);
+}
+
+const _getCachedMasterPlaceDetailsBatchKey = cache((sortedIdsKey: string) =>
+  withRateDataCache(
+    async (idsCsv: string) => {
+      const ids = idsCsv ? idsCsv.split(',').filter(Boolean) : [];
+      const map = await _getMasterPlaceDetailsBatch(ids);
+      return Array.from(map.entries());
+    },
+    ['rate-master-place-details-batch', sortedIdsKey],
+    { revalidate: 300, tags: [RATE_CACHE_TAGS.PRODUCTS] }
+  )(sortedIdsKey)
+);
+
+export async function getCachedMasterPlaceDetailsBatch(
+  masterIds: readonly string[]
+) {
+  const cleanIds = Array.from(
+    new Set(
+      masterIds
+        .map((id) =>
+          typeof id === 'string' ? id.replace(/\p{Cc}+/gu, '').trim() : ''
+        )
+        .filter((id) => id.length > 0 && !id.includes(','))
+    )
+  )
+    .sort()
+    .slice(0, 200);
+  if (cleanIds.length === 0) {
+    return new Map<string, import('@/lib/rate-api').PlaceListingSummary>();
+  }
+  const entries = await _getCachedMasterPlaceDetailsBatchKey(
+    cleanIds.join(',')
+  );
+  return new Map(entries);
 }
 
 const _getCachedCategoryDirectoryFacetsByKey = cache(

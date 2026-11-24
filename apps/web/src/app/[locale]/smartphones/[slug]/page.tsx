@@ -39,6 +39,8 @@ import {
   getCachedMasterProductOffers,
   getCachedMasterProductPoints,
   getCachedMasterProductPriceHistory,
+  getCachedMasterPlaceDetail,
+  getCachedPlaceBranchSiblings,
   getCachedMasterProductReviews,
   getCachedMasterProductReviewSummary,
   getCachedMasterProductSiblings,
@@ -64,16 +66,23 @@ import { isFilteredOutReview } from '@/lib/review-display';
 import {
   BsBank,
   BsBoxSeam,
+  BsBuilding,
+  BsCapsule,
   BsCardChecklist,
   BsCheckCircleFill,
+  BsCupHot,
   BsDroplet,
   BsEarbuds,
+  BsForkKnife,
+  BsHeartPulse,
+  BsHouseHeart,
   BsLaptop,
   BsPhone,
   BsShieldCheck,
   BsShieldExclamation,
   BsSmartwatch,
   BsSnow,
+  BsStars,
   BsTabletLandscape,
   BsTv,
   BsWifi,
@@ -134,6 +143,11 @@ import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditB
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
+import PlaceDetailsSection from '@/components/product/PlaceDetailsSection';
+import {
+  buildPlaceStructuredData,
+  formatPlaceReferencePriceRange,
+} from '@/lib/place-details';
 import { pickEffectivePriceCandidates } from '@/lib/effective-price';
 import ClientMessages from '@/components/providers/ClientMessages';
 import {
@@ -150,7 +164,9 @@ import {
   firstImageUrl,
   foreignCategoryProductHref,
   isCanonicalCategorySlug,
+  isPlaceCategorySlug,
   isWaveE2ServiceCategorySlug,
+  isWaveE3CategorySlug,
   resolveListingPriceCurrency,
   usableImageUrls,
   productImageUrl,
@@ -161,7 +177,7 @@ import {
   formatListingPrice,
   formatNumber,
   formatPercent,
-  formatPriceVnd,
+  hasListingUnitSuffix,
 } from '@/lib/locale-format';
 import { displayedScore5, formatRatingValue } from '@/lib/rating-display';
 import { catalogRowSlug } from '@/lib/item-directory';
@@ -263,20 +279,32 @@ export async function generateCategoryProductMetadata(
     itemPage && isItemGroup
       ? itemFromStats(itemPage.variants.map((v) => v.product))
       : productMarketStats(product);
-  const hasPrice = marketStats.minPrice > 0;
+  const metaPlaceDetail =
+    product.entity_type === 'place'
+      ? await getCachedMasterPlaceDetail(product.id).catch(() => null)
+      : null;
+  const metaMinPriceVal =
+    marketStats.minPrice > 0
+      ? marketStats.minPrice
+      : (metaPlaceDetail?.price_min ?? 0);
+  const hasPrice = metaMinPriceVal > 0;
   const name = (isItemGroup ? itemMeta?.name : null) || product.name;
   const metaCategorySlug = categoryBasePath.replace(/^\/+/, '');
   const metaCurrency = resolveListingPriceCurrency({
     master: product,
     categorySlug: metaCategorySlug,
   });
-  const metaHasUnitSuffix =
-    metaCurrency === 'PCT' || metaCategorySlug === 'internet-telecom';
+  const metaHasUnitSuffix = hasListingUnitSuffix(
+    metaCurrency,
+    metaCategorySlug,
+    metaPlaceDetail?.price_unit
+  );
   const minPrice = metaHasUnitSuffix
-    ? formatListingPrice(marketStats.minPrice, metaCurrency, locale, {
+    ? formatListingPrice(metaMinPriceVal, metaCurrency, locale, {
         categorySlug: metaCategorySlug,
+        priceUnit: metaPlaceDetail?.price_unit,
       })
-    : formatNumber(marketStats.minPrice, locale);
+    : formatNumber(metaMinPriceVal, locale);
   const canonicalSlug =
     itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug;
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${canonicalSlug}`;
@@ -403,10 +431,11 @@ export async function ProductDetailView({
   const productSlug =
     renderedSize?.variant.slug ??
     (itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug);
-  const [t, tNav, tSale, storedProduct] = await Promise.all([
+  const [t, tNav, tSale, tPlace, storedProduct] = await Promise.all([
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
     getTranslations({ locale, namespace: 'saleState' }),
+    getTranslations({ locale, namespace: 'placeDetail' }),
     timing.time('product', getCachedMasterProductBySlug(productSlug)),
   ]);
 
@@ -414,6 +443,7 @@ export async function ProductDetailView({
     timing.done();
     notFound();
   }
+  const isPlace = storedProduct.entity_type === 'place';
   // This product's offers and reviews depend only on its id: start them
   // alongside the category check below rather than after it (DOS/Rate#1344).
   // The rejection is handled where they are awaited; a redirect leaves them
@@ -434,6 +464,16 @@ export async function ProductDetailView({
       categorySlug
     )
   );
+  const placeDetailRead = isPlace
+    ? timing.time('placeDetail', getCachedMasterPlaceDetail(storedProduct.id))
+    : Promise.resolve(null);
+  const placeBranchesRead = placeDetailRead.then((detail) =>
+    detail?.branch_group_key
+      ? getCachedPlaceBranchSiblings(detail.branch_group_key, storedProduct.id)
+      : []
+  );
+  placeDetailRead.catch(() => undefined);
+  placeBranchesRead.catch(() => undefined);
   offersRead.catch(() => undefined);
   reviewsRead.catch(() => undefined);
   productPointsRead.catch(() => undefined);
@@ -441,21 +481,22 @@ export async function ProductDetailView({
   // quick-spec cards used to be; Item routes (flag on) keep the #1154 size
   // picker instead. Cached per model and bounded. A failure fails the render
   // like the reads beside it, so ISR keeps the last good page (DOS/Rate#1436).
-  const siblingsRead = itemRoute
-    ? Promise.resolve([])
-    : timing.time(
-        'siblings',
-        getCachedMasterProductSiblings(storedProduct.model_key).then(
-          async (rows) =>
-            rows.length === 0
-              ? rows
-              : siblingsInCategory(
-                  rows,
-                  categorySlug,
-                  await getCachedCategorySlugById()
-                )
-        )
-      );
+  const siblingsRead =
+    isPlace || itemRoute
+      ? Promise.resolve([])
+      : timing.time(
+          'siblings',
+          getCachedMasterProductSiblings(storedProduct.model_key).then(
+            async (rows) =>
+              rows.length === 0
+                ? rows
+                : siblingsInCategory(
+                    rows,
+                    categorySlug,
+                    await getCachedCategorySlugById()
+                  )
+          )
+        );
   siblingsRead.catch(() => undefined);
   // Master-product route: a product asked for under another category's path
   // goes to its own (DOS/Rate#1366).
@@ -483,12 +524,26 @@ export async function ProductDetailView({
   // product's offers and reviews (DOS/Rate#1344).
   const marketStats = productMarketStats(product);
   const currentMinPrice = marketStats.minPrice;
-  const priceHistoryRead = offersRead.then((offers) =>
-    timing.time(
-      'priceHistory',
-      getCachedMasterProductPriceHistory(product.id, offers)
-    )
-  );
+  const priceHistoryRead: Promise<
+    import('@/lib/rate-api').MasterProductPriceHistorySummary
+  > = isPlace
+    ? Promise.resolve({
+        points: [],
+        byOffer: {},
+        lowestEverPrice: null,
+        lowestEverDate: null,
+        lowestEverMerchant: null,
+        highestEverPrice: null,
+        currentMinPrice: null,
+        fakeDiscountCount: 0,
+        genuineDealCount: 0,
+      })
+    : offersRead.then((offers) =>
+        timing.time(
+          'priceHistory',
+          getCachedMasterProductPriceHistory(product.id, offers)
+        )
+      );
   const reviewSummaryRead = reviewsRead.then((reviews) =>
     timing.time(
       'reviewSummary',
@@ -547,12 +602,13 @@ export async function ProductDetailView({
     );
     // Each competitor card's radar badge comes from that product's own
     // offers, as this product's signal does (DOS/Rate#1344).
-    const competitorOffers = await timing.time(
-      'competitorOffers',
+    const readPeerOffers = () =>
       Promise.all(
         relatedCompetitors.map((peer) => getCachedMasterProductOffers(peer.id))
-      )
-    );
+      );
+    const competitorOffers = isPlace
+      ? relatedCompetitors.map(() => [])
+      : await timing.time('competitorOffers', readPeerOffers());
     return {
       categoryPeers,
       relatedCompetitors,
@@ -574,6 +630,8 @@ export async function ProductDetailView({
     },
     siblings,
     populatedCategorySlugs,
+    placeDetail,
+    placeBranches,
   ] = await Promise.all([
     offersRead,
     reviewsRead,
@@ -583,6 +641,8 @@ export async function ProductDetailView({
     competitorsRead,
     siblingsRead,
     timing.time('populatedCategories', getCachedPopulatedCategorySlugs()),
+    placeDetailRead,
+    placeBranchesRead,
   ]);
   timing.done();
   // With review form v2 on, the category the RPC rates (DOS/Rate#1544).
@@ -627,13 +687,37 @@ export async function ProductDetailView({
     currency: offers[0]?.currency,
     metadata: product.metadata,
   });
-  const effectiveHasUnitSuffix =
-    effectiveCurrency === 'PCT' || categorySlug === 'internet-telecom';
-  const heroMinPriceFormatted = effectiveHasUnitSuffix
-    ? formatListingPrice(heroStats.minPrice, effectiveCurrency, locale, {
+  const effectivePriceUnit = placeDetail?.price_unit ?? null;
+  const effectiveHasUnitSuffix = hasListingUnitSuffix(
+    effectiveCurrency,
+    categorySlug,
+    effectivePriceUnit
+  );
+  const heroResolvedMinPrice =
+    isPlace && heroStats.minPrice <= 0
+      ? (placeDetail?.price_min ?? 0)
+      : heroStats.minPrice;
+  const heroPlacePriceFormatted = isPlace
+    ? formatPlaceReferencePriceRange({
+        priceMin:
+          heroStats.minPrice > 0
+            ? heroStats.minPrice
+            : (placeDetail?.price_min ?? null),
+        priceMax:
+          heroStats.maxPrice > 0
+            ? heroStats.maxPrice
+            : (placeDetail?.price_max ?? null),
         categorySlug,
+        priceUnit: effectivePriceUnit,
+        locale,
       })
-    : formatNumber(heroStats.minPrice, locale);
+    : null;
+  const heroMinPriceFormatted = effectiveHasUnitSuffix
+    ? formatListingPrice(heroResolvedMinPrice, effectiveCurrency, locale, {
+        categorySlug,
+        priceUnit: effectivePriceUnit,
+      })
+    : formatNumber(heroResolvedMinPrice, locale);
   // Why there is no price, when there is none (DOS/Rate#1188).
   const saleState = masterSaleState({
     minPrice: currentMinPrice,
@@ -773,35 +857,46 @@ export async function ProductDetailView({
           },
         ],
       },
-      itemGroupNode ?? {
-        '@type': 'Product',
-        name: product.name,
-        brand: {
-          '@type': 'Brand',
-          name: product.brand,
-        },
-        sku: product.model_key,
-        url: canonicalUrl,
-        description: productDescription,
-        ...(jsonLdProductImages.length > 0
-          ? { image: jsonLdProductImages }
-          : {}),
-        // Only with a buyable VND price: a lowPrice of 0 or PCT rate is not a VND offer.
-        ...(currentMinPrice > 0 && effectiveCurrency === 'VND'
-          ? {
-              offers: {
-                '@type': 'AggregateOffer',
-                priceCurrency: 'VND',
-                lowPrice: currentMinPrice,
-                highPrice: marketStats.maxPrice,
-                // Sellers, like "N nơi bán": one store's several listings of
-                // the model are one offer to a shopper.
-                offerCount: sellerCount,
-              },
-            }
-          : {}),
-        ...(aggregateRating ? { aggregateRating } : {}),
-      },
+      isPlace
+        ? buildPlaceStructuredData({
+            name: displayName,
+            categorySlug,
+            canonicalUrl,
+            imageUrl: mainImage ? absoluteUrl(mainImage) : null,
+            description: productDescription,
+            placeDetail,
+            ratingValue: displayUserRating,
+            ratingCount: authenticCount,
+          })
+        : (itemGroupNode ?? {
+            '@type': 'Product',
+            name: product.name,
+            brand: {
+              '@type': 'Brand',
+              name: product.brand,
+            },
+            sku: product.model_key,
+            url: canonicalUrl,
+            description: productDescription,
+            ...(jsonLdProductImages.length > 0
+              ? { image: jsonLdProductImages }
+              : {}),
+            // Only with a buyable VND price: a lowPrice of 0 or PCT rate is not a VND offer.
+            ...(currentMinPrice > 0 && effectiveCurrency === 'VND'
+              ? {
+                  offers: {
+                    '@type': 'AggregateOffer',
+                    priceCurrency: 'VND',
+                    lowPrice: currentMinPrice,
+                    highPrice: marketStats.maxPrice,
+                    // Sellers, like "N nơi bán": one store's several listings of
+                    // the model are one offer to a shopper.
+                    offerCount: sellerCount,
+                  },
+                }
+              : {}),
+            ...(aggregateRating ? { aggregateRating } : {}),
+          }),
     ],
   };
 
@@ -888,94 +983,111 @@ export async function ProductDetailView({
     stats: typeof marketStats;
     saleState: typeof saleState;
     saleStateKey: typeof saleStateKey;
-  }) => (
-    <div className="rounded-4 bg-light mb-2 border p-3">
-      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
-        <div>
-          <div className="text-muted small">
-            {t('priceReferenceLabel', { count: v.stats.sellerCount })}
-          </div>
-          <div className="fw-bold text-dark rate-tabular fs-5">
-            {v.stats.minPrice > 0 ? (
-              formatListingPrice(v.stats.minPrice, effectiveCurrency, locale, {
-                categorySlug,
-              })
-            ) : v.saleStateKey ? (
-              <span data-sale-state={v.saleState}>{tSale(v.saleStateKey)}</span>
-            ) : (
-              t('priceNoneInStock')
-            )}
-            {v.stats.minPrice > 0 && v.stats.minPrice !== v.stats.maxPrice && (
-              <span className="small fw-normal text-muted ms-2">
-                ~{' '}
-                {formatListingPrice(
-                  v.stats.maxPrice,
+  }) => {
+    if (isPlace && v.offers.length === 0) {
+      return null;
+    }
+    return (
+      <div className="rounded-4 bg-light mb-2 border p-3">
+        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+          <div>
+            <div className="text-muted small">
+              {t('priceReferenceLabel', { count: v.stats.sellerCount })}
+            </div>
+            <div className="fw-bold text-dark rate-tabular fs-5">
+              {v.stats.minPrice > 0 ? (
+                formatListingPrice(
+                  v.stats.minPrice,
                   effectiveCurrency,
                   locale,
-                  { categorySlug }
-                )}
-              </span>
-            )}
-            {v.priceHistory.lowestEverPrice != null &&
-              v.priceHistory.lowestEverPrice > 0 && (
-                <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                  {effectiveHasUnitSuffix
-                    ? t('allTimeLowBadgeCurrency', {
-                        price: formatListingPrice(
-                          v.priceHistory.lowestEverPrice,
-                          effectiveCurrency,
-                          locale,
-                          { categorySlug }
-                        ),
-                      })
-                    : t('allTimeLowBadge', {
-                        price: formatNumber(
-                          v.priceHistory.lowestEverPrice,
-                          locale
-                        ),
-                      })}
+                  {
+                    categorySlug,
+                    priceUnit: effectivePriceUnit,
+                  }
+                )
+              ) : v.saleStateKey ? (
+                <span data-sale-state={v.saleState}>
+                  {tSale(v.saleStateKey)}
                 </span>
+              ) : (
+                t('priceNoneInStock')
               )}
+              {v.stats.minPrice > 0 &&
+                v.stats.minPrice !== v.stats.maxPrice && (
+                  <span className="small fw-normal text-muted ms-2">
+                    ~{' '}
+                    {formatListingPrice(
+                      v.stats.maxPrice,
+                      effectiveCurrency,
+                      locale,
+                      { categorySlug, priceUnit: effectivePriceUnit }
+                    )}
+                  </span>
+                )}
+              {!isPlace &&
+                v.priceHistory.lowestEverPrice != null &&
+                v.priceHistory.lowestEverPrice > 0 && (
+                  <span className="badge bg-success-subtle text-success fw-normal ms-2">
+                    {effectiveHasUnitSuffix
+                      ? t('allTimeLowBadgeCurrency', {
+                          price: formatListingPrice(
+                            v.priceHistory.lowestEverPrice,
+                            effectiveCurrency,
+                            locale,
+                            { categorySlug, priceUnit: effectivePriceUnit }
+                          ),
+                        })
+                      : t('allTimeLowBadge', {
+                          price: formatNumber(
+                            v.priceHistory.lowestEverPrice,
+                            locale
+                          ),
+                        })}
+                  </span>
+                )}
+            </div>
           </div>
-        </div>
-        <div className="d-flex align-items-center flex-wrap gap-2">
-          {v.stats.minPrice > 0 && (
-            <PriceWatchButton
+          <div className="d-flex align-items-center flex-wrap gap-2">
+            {v.stats.minPrice > 0 && (
+              <PriceWatchButton
+                slug={v.product.slug}
+                name={v.product.name}
+                brand={v.product.brand}
+                categoryPath={categoryBasePath}
+                thumbnail={productImageUrl(v.product)}
+                currentMinPrice={v.stats.minPrice}
+                currency={effectiveCurrency}
+                size="sm"
+              />
+            )}
+            {!isPlace && (
+              <a
+                href="#pdv-price-history"
+                className="btn btn-sm btn-outline-secondary rounded-pill px-3"
+              >
+                {t('auditPriceBtn', { count: v.offers.length })}
+              </a>
+            )}
+            <ProductShareAuditButton
               slug={v.product.slug}
               name={v.product.name}
               brand={v.product.brand}
-              categoryPath={categoryBasePath}
-              thumbnail={productImageUrl(v.product)}
-              currentMinPrice={v.stats.minPrice}
+              modelKey={v.product.model_key}
+              userScore5={displayUserRating}
+              expertScore10={expertRating10}
+              authenticReviews={authenticCount}
+              minPriceVnd={v.stats.minPrice}
               currency={effectiveCurrency}
-              size="sm"
+              categorySlug={categorySlug}
+              offerCount={v.stats.sellerCount}
+              keySpecLine={keySpecLine}
+              radarSignal={v.radarSignal}
             />
-          )}
-          <a
-            href="#pdv-price-history"
-            className="btn btn-sm btn-outline-secondary rounded-pill px-3"
-          >
-            {t('auditPriceBtn', { count: v.offers.length })}
-          </a>
-          <ProductShareAuditButton
-            slug={v.product.slug}
-            name={v.product.name}
-            brand={v.product.brand}
-            modelKey={v.product.model_key}
-            userScore5={displayUserRating}
-            expertScore10={expertRating10}
-            authenticReviews={authenticCount}
-            minPriceVnd={v.stats.minPrice}
-            currency={effectiveCurrency}
-            categorySlug={categorySlug}
-            offerCount={v.stats.sellerCount}
-            keySpecLine={keySpecLine}
-            radarSignal={v.radarSignal}
-          />
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
   const variantStripInput = (v: ItemPageVariant) => {
     const inStock = v.offers.filter((o) => !isOfferUnavailable(o));
     const stats = productMarketStats(v.product);
@@ -1213,7 +1325,7 @@ export async function ProductDetailView({
               <h1 className="h2 fw-bold text-dark mb-2">{displayName}</h1>
               {/* Price in the first screen on phones, ahead of the scoreboard
             (DOS/Rate#605); the full price strip stays further down. */}
-              {heroStats.minPrice > 0 && heroStats.sellerCount > 0 && (
+              {heroStats.minPrice > 0 && heroStats.sellerCount > 0 ? (
                 <p className="rate-pdv-price-line mb-3">
                   {t.rich(
                     effectiveHasUnitSuffix
@@ -1228,6 +1340,15 @@ export async function ProductDetailView({
                     }
                   )}
                 </p>
+              ) : (
+                isPlace &&
+                heroPlacePriceFormatted && (
+                  <p className="rate-pdv-price-line mb-3">
+                    <strong className="rate-tabular">
+                      {heroPlacePriceFormatted}
+                    </strong>
+                  </p>
+                )
               )}
               {/* The other variants of this model, not the quick-spec cards
               the specs section already has (DOS/Rate#1436). */}
@@ -1310,14 +1431,20 @@ export async function ProductDetailView({
                 aria-label={t('jumpNavAria')}
                 data-testid="pdv-jump-nav"
               >
-                <a href="#specs-section">{t('jumpNavSpecs')}</a>
+                <a href={isPlace ? '#place-details-section' : '#specs-section'}>
+                  {t('jumpNavSpecs')}
+                </a>
                 <a href="#jreviews-section">
                   {t('jumpNavReviews', { count: authenticCount })}
                 </a>
-                <a href="#pdv-price-history">{t('jumpNavPriceHistory')}</a>
-                <a href="#offers-table">
-                  {t('jumpNavOffers', { count: offers.length })}
-                </a>
+                {!isPlace && (
+                  <a href="#pdv-price-history">{t('jumpNavPriceHistory')}</a>
+                )}
+                {!isPlace && (
+                  <a href="#offers-table">
+                    {t('jumpNavOffers', { count: offers.length })}
+                  </a>
+                )}
               </nav>
               {/* #1 Core Focus Above the Fold: JReviews Dual-Rating & 5-Criteria Scoreboard (DESIGN.md v3.0) */}
               <div className="rate-scoreboard-dark rate-surface-dark rate-pdv-board mb-4">
@@ -1578,8 +1705,11 @@ export async function ProductDetailView({
                   >
                     {t('readAndSubmitReviewsBtn', { count: authenticCount })}
                   </a>
-                  <a href="#specs-section" className="btn btn-outline-light">
-                    {t('tenSpecGroupsBtn')}
+                  <a
+                    href={isPlace ? '#place-details-section' : '#specs-section'}
+                    className="btn btn-outline-light"
+                  >
+                    {isPlace ? tPlace('heading') : t('tenSpecGroupsBtn')}
                   </a>
                   <Link
                     href={singleCompareHref}
@@ -1643,6 +1773,17 @@ export async function ProductDetailView({
             </div>
           </div>
 
+          {isPlace && (
+            <PlaceDetailsSection
+              locale={locale}
+              categorySlug={categorySlug}
+              placeDetail={placeDetail}
+              branches={placeBranches}
+              fallbackPriceMin={marketStats.minPrice}
+              fallbackPriceMax={marketStats.maxPrice}
+            />
+          )}
+
           {/* The product first: spec groups, per category template
           (DOS/Rate#1142), then the reviews, the price history and the sellers
           last (DOS/Rate#1530). The price strip above keeps the best price in
@@ -1659,6 +1800,9 @@ export async function ProductDetailView({
               ui: specUi,
               locale,
             });
+            if (isPlace && specGroups.length === 0) {
+              return null;
+            }
             return (
               <div
                 id="specs-section"
@@ -1675,15 +1819,17 @@ export async function ProductDetailView({
                     </h2>
                   </div>
                   <div className="d-flex align-items-center flex-wrap gap-2">
-                    <ProductSpecsExportToolbar
-                      productName={product.name}
-                      productSlug={product.slug}
-                      brand={product.brand}
-                      specifications={specs || {}}
-                      keySpecs={keySpecs || {}}
-                      categorySlug={categorySlug}
-                      radarSignal={radarSignal}
-                    />
+                    {!isPlace && specGroups.length > 0 && (
+                      <ProductSpecsExportToolbar
+                        productName={product.name}
+                        productSlug={product.slug}
+                        brand={product.brand}
+                        specifications={specs || {}}
+                        keySpecs={keySpecs || {}}
+                        categorySlug={categorySlug}
+                        radarSignal={radarSignal}
+                      />
+                    )}
                     <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
                       {specSectionBadge(specUi, specGroups.length)}
                     </span>
@@ -1755,37 +1901,41 @@ export async function ProductDetailView({
           {/* Time-Series Price History Chart, Fake Discount Detector & Neutral
           Merchant Audit. The wrapper is the jump row's target: a lazy size
           panel has no #price-history-section until it loads (#1469). */}
-          <div id="pdv-price-history">
-            {isItemGroup
-              ? renderSizePanels('history', (v) =>
-                  renderPriceHistory(variantPanelInput(v))
-                )
-              : renderPriceHistory({
-                  product,
-                  offers,
-                  priceHistory,
-                  minPrice: currentMinPrice,
-                  radarSignal,
-                })}
-          </div>
+          {!isPlace && (
+            <div id="pdv-price-history">
+              {isItemGroup
+                ? renderSizePanels('history', (v) =>
+                    renderPriceHistory(variantPanelInput(v))
+                  )
+                : renderPriceHistory({
+                    product,
+                    offers,
+                    priceHistory,
+                    minPrice: currentMinPrice,
+                    radarSignal,
+                  })}
+            </div>
+          )}
 
           {/* Neutral Merchant Reference & Trust Audit Table */}
-          <div
-            id="offers-table"
-            className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
-          >
-            {isItemGroup
-              ? renderSizePanels('offers', (v) =>
-                  renderOffersBody(variantPanelInput(v))
-                )
-              : renderOffersBody({
-                  product,
-                  offers,
-                  priceHistory,
-                  radarSignal,
-                  emptyText: pageEmptyOffersText,
-                })}
-          </div>
+          {(!isPlace || offers.length > 0) && (
+            <div
+              id="offers-table"
+              className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
+            >
+              {isItemGroup
+                ? renderSizePanels('offers', (v) =>
+                    renderOffersBody(variantPanelInput(v))
+                  )
+                : renderOffersBody({
+                    product,
+                    offers,
+                    priceHistory,
+                    radarSignal,
+                    emptyText: pageEmptyOffersText,
+                  })}
+            </div>
+          )}
 
           {/* Listings whose size is not stated: their own group, never part
               of the "from" price (Q2, DOS/Rate#1154). */}
@@ -1811,8 +1961,10 @@ export async function ProductDetailView({
           )}
 
           {/* Interactive Value Efficiency & 2-Year Ownership Calculator (#62) */}
-          {effectiveCurrency !== 'PCT' &&
+          {!isPlace &&
+            effectiveCurrency !== 'PCT' &&
             !isWaveE2ServiceCategorySlug(categorySlug) &&
+            !isWaveE3CategorySlug(categorySlug) &&
             (() => {
               const lbScored = scoreMasterProductForLeaderboard(
                 product,
@@ -1919,7 +2071,10 @@ export async function ProductDetailView({
                   const currentScore10 = displayUserRating * 2;
                   const isVndCompetitor =
                     effectiveCurrency === 'VND' &&
-                    !isWaveE2ServiceCategorySlug(categorySlug);
+                    !isPlace &&
+                    !isWaveE2ServiceCategorySlug(categorySlug) &&
+                    !isWaveE3CategorySlug(categorySlug) &&
+                    !isPlaceCategorySlug(categorySlug);
                   const peerCostPerPoint =
                     isVndCompetitor && peerScore10 > 0 && peerPrice > 0
                       ? Math.round(peerPrice / peerScore10)
@@ -1987,6 +2142,20 @@ export async function ProductDetailView({
                                     return <BsBank {...iconProps} />;
                                   case 'internet-telecom':
                                     return <BsWifi {...iconProps} />;
+                                  case 'supplements':
+                                    return <BsCapsule {...iconProps} />;
+                                  case 'cosmetics':
+                                    return <BsStars {...iconProps} />;
+                                  case 'mother-baby':
+                                    return <BsHeartPulse {...iconProps} />;
+                                  case 'restaurants':
+                                    return <BsForkKnife {...iconProps} />;
+                                  case 'cafes':
+                                    return <BsCupHot {...iconProps} />;
+                                  case 'hotels':
+                                    return <BsBuilding {...iconProps} />;
+                                  case 'homestays':
+                                    return <BsHouseHeart {...iconProps} />;
                                   default:
                                     return <BsPhone {...iconProps} />;
                                 }
@@ -2025,7 +2194,10 @@ export async function ProductDetailView({
                                     peerPrice,
                                     effectiveCurrency,
                                     locale,
-                                    { categorySlug }
+                                    {
+                                      categorySlug,
+                                      priceUnit: effectivePriceUnit,
+                                    }
                                   )}
                                 </span>
                               ) : (
@@ -2056,7 +2228,15 @@ export async function ProductDetailView({
                                             locale
                                           ),
                                         })
-                                      : `+${formatPriceVnd(priceDelta, locale)}`}
+                                      : `+${formatListingPrice(
+                                          priceDelta,
+                                          effectiveCurrency,
+                                          locale,
+                                          {
+                                            categorySlug,
+                                            priceUnit: effectivePriceUnit,
+                                          }
+                                        )}`}
                                 </span>
                               )}
                             </div>

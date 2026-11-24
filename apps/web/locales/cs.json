@@ -18,6 +18,13 @@
       "air-purifiers": "Čističky vzduchu",
       "bank-savings": "Spoření v bankách",
       "internet-telecom": "Internet a telekom",
+      "supplements": "Doplňky",
+      "cosmetics": "Kosmetika",
+      "mother-baby": "Matka a dítě",
+      "restaurants": "Restaurace",
+      "cafes": "Kavárny",
+      "hotels": "Hotely",
+      "homestays": "Homestaye",
       "leaderboard": "Žebříček",
       "merchants": "Obchody",
       "inspect": "Ověřit odkaz",
@@ -60,6 +67,13 @@
         "air-purifiers": "Čističky vzduchu",
         "bank-savings": "Spořicí účty",
         "internet-telecom": "Internet a telekomunikace",
+        "supplements": "Doplňky stravy",
+        "cosmetics": "Kosmetika a péče o pleť",
+        "mother-baby": "Matka a dítě",
+        "restaurants": "Restaurace a bistra",
+        "cafes": "Kavárny a čajovny",
+        "hotels": "Hotely a resorty",
+        "homestays": "Homestaye a vily",
         "leaderboard": "Žebříček produktů",
         "inspect": "Ověřit odkaz na produkt",
         "compare": "Porovnat parametry",
@@ -238,6 +252,20 @@
     "catBankSavingsUnit": "spořicích tarifů",
     "catInternetTelecom": "Internet a telekomunikace",
     "catInternetTelecomUnit": "tarifů internetu",
+    "catSupplements": "Doplňky stravy",
+    "catSupplementsUnit": "doplňků stravy",
+    "catCosmetics": "Kosmetika",
+    "catCosmeticsUnit": "kosmetiky",
+    "catMotherBaby": "Matka a dítě",
+    "catMotherBabyUnit": "položek pro děti",
+    "catRestaurants": "Restaurace",
+    "catRestaurantsUnit": "restaurací",
+    "catCafes": "Kavárny",
+    "catCafesUnit": "kaváren",
+    "catHotels": "Hotely",
+    "catHotelsUnit": "hotelů",
+    "catHomestays": "Homestaye",
+    "catHomestaysUnit": "homestayů",
     "boolYes": "Ano",
     "boolNo": "Ne",
     "group0Title": "Hodnocení a důvěryhodnost",
@@ -450,6 +478,13 @@
     "catAirPurifiers": "Čističky vzduchu",
     "catBankSavings": "Spořicí účty",
     "catInternetTelecom": "Internet a telekomunikace",
+    "catSupplements": "Doplňky stravy",
+    "catCosmetics": "Kosmetika",
+    "catMotherBaby": "Matka a dítě",
+    "catRestaurants": "Restaurace",
+    "catCafes": "Kavárny",
+    "catHotels": "Hotely",
+    "catHomestays": "Homestaye",
     "badgeCombined": "Celkové skóre",
     "badgeUser": "Ověření uživatelé",
     "badgeExpert": "Experti Lab",
@@ -470,6 +505,13 @@
     "tabAirPurifiers": "Čističky vzduchu",
     "tabBankSavings": "Spoření",
     "tabInternetTelecom": "Internet a telekom",
+    "tabSupplements": "Doplňky stravy",
+    "tabCosmetics": "Kosmetika",
+    "tabMotherBaby": "Matka a dítě",
+    "tabRestaurants": "Restaurace",
+    "tabCafes": "Kavárny",
+    "tabHotels": "Hotely",
+    "tabHomestays": "Homestaye",
     "dirLabel": "Technologie a elektronika",
     "chooseCategory": "1. Vyberte kategorii (Uzamčeno v rámci kategorie):",
     "chooseCriterion": "2. Řadit podle kritéria:",
@@ -604,6 +646,7 @@
     "errDuplicateReview": "Tento produkt jste již hodnotili.",
     "errRateLimited": "Za posledních 24 hodin jste odeslali 5 recenzí. Zkuste to prosím později.",
     "errInvalidReview": "Recenze není platná. Zkontrolujte hodnocení hvězdičkami a text (15 až 3 000 znaků).",
+    "errNoLinkedListing": "Tato položka zatím nemá propojenou nabídku ani záznam místa pro recenzi.",
     "errNetworkFailed": "Chyba připojení při odesílání recenze. Zkuste to znovu.",
     "defaultAuthorName": "Uživatel Rate.vn",
     "successPendingModeration": "Vaše recenze byla uložena a do průměru se započítá po schválení.",
@@ -990,6 +1033,9 @@
     "catAirPurifiers": "Čističky vzduchu",
     "catBankSavings": "Spořicí účty",
     "catInternetTelecom": "Internet a telekomunikace",
+    "catSupplements": "Doplňky stravy",
+    "catCosmetics": "Kosmetika",
+    "catMotherBaby": "Matka a dítě",
     "personaValueHunter": "Nejlepší poměr cena/výkon",
     "personaDefault": "Vyvážený výběr",
     "personaPhotography": "Fotoaparát a zvuk",
@@ -1622,6 +1668,13 @@
     "catDescAirPurifiers": "Porovnejte účinnost HEPA/CADR, cenu filtrů, hlučnost a skutečné ceny",
     "catDescBankSavings": "Porovnejte úrokové sazby spořicích účtů dle doby vkladu a recenze klientů",
     "catDescInternetTelecom": "Porovnejte tarify optického internetu, měsíční poplatky a hodnocení podpory",
+    "catDescSupplements": "Porovnejte reálné ceny a komunitní recenze účinnosti, složení a bezpečnosti",
+    "catDescCosmetics": "Ověřte ceny originální kosmetiky spolu s recenzemi složení a snášenlivosti",
+    "catDescMotherBaby": "Porovnejte ceny mléka, plen a dětské výbavy s recenzemi rodičů na bezpečnost",
+    "catDescRestaurants": "Ověřená hodnocení restaurací: kvalita jídla, hygiena, obsluha a útrata na osobu",
+    "catDescCafes": "Hodnocení kaváren pro kvalitu nápojů, prostředí, obsluhu a útratu na osobu",
+    "catDescHotels": "Recenze hotelů a resortů: kvalita pokojů, čistota, poloha a cena za noc",
+    "catDescHomestays": "Porovnejte homestaye a vily podle čistoty, přístupu hostitele, polohy a ceny za noc",
     "popularBattlesBadge": "Souboje 1v1",
     "popularBattlesTitle": "Nejčastěji porovnávané vlajkové modely",
     "leaderboard5CatsBtn": "Žebříček",
@@ -2065,6 +2118,41 @@
         "titleCount": "Srovnání tarifů internetu a telekomunikací ({count, plural, one {# tarif} few {# tarify} other {# tarifů}}) | Rate.vn",
         "titleDefault": "Srovnání tarifů internetu a telekomunikací a recenze | Rate.vn",
         "description": "Porovnejte tarify optického internetu (VNPT, FPT Telecom), měsíční ceny a hodnocení stability a podpory od uživatelů na Rate.vn."
+      },
+      "supplements": {
+        "titleCount": "Srovnání cen doplňků stravy ({count, plural, one {# produkt} few {# produkty} other {# produktů}}) | Rate.vn",
+        "titleDefault": "Ceny doplňků stravy a ověřené recenze | Rate.vn",
+        "description": "Porovnejte ceny doplňků stravy u 22 prodejců spolu s ověřenými recenzemi účinnosti, složení a bezpečnosti na Rate.vn."
+      },
+      "cosmetics": {
+        "titleCount": "Srovnání cen kosmetiky a péče o pleť ({count, plural, one {# produkt} few {# produkty} other {# produktů}}) | Rate.vn",
+        "titleDefault": "Ceny kosmetiky a ověřené recenze složení | Rate.vn",
+        "description": "Ověřte ceny originální kosmetiky a péče o pleť spolu se skutečnými recenzemi složení a snášenlivosti na Rate.vn."
+      },
+      "mother-baby": {
+        "titleCount": "Srovnání produktů pro matku a dítě ({count, plural, one {# produkt} few {# produkty} other {# produktů}}) | Rate.vn",
+        "titleDefault": "Ceny potřeb pro matku a dítě a recenze bezpečnosti | Rate.vn",
+        "description": "Porovnejte ceny kojenecké výživy, plen a dětské výbavy spolu s recenzemi rodičů na Rate.vn."
+      },
+      "restaurants": {
+        "titleCount": "Hodnocení restaurací ({count, plural, one {# restaurace} few {# restaurace} other {# restaurací}}) | Rate.vn",
+        "titleDefault": "Hodnocení restaurací, hygieny a cenové hladiny | Rate.vn",
+        "description": "Prozkoumejte ověřené recenze hostů na kvalitu jídel, hygienu, obsluhu a orientační útratu na osobu na Rate.vn."
+      },
+      "cafes": {
+        "titleCount": "Hodnocení kaváren a čajoven ({count, plural, one {# kavárna} few {# kavárny} other {# kaváren}}) | Rate.vn",
+        "titleDefault": "Hodnocení kaváren, atmosféry a orientačních cen | Rate.vn",
+        "description": "Prohlédněte si recenze kvality nápojů, prostředí pro práci, obsluhy a útraty na osobu v kavárnách na Rate.vn."
+      },
+      "hotels": {
+        "titleCount": "Hodnocení hotelů a resortů ({count, plural, one {# hotel} few {# hotely} other {# hotelů}}) | Rate.vn",
+        "titleDefault": "Hodnocení hotelů, čistoty a cen za noc | Rate.vn",
+        "description": "Porovnejte hodnocení hotelů a resortů v čistotě, kvalitě pokojů, poloze a orientační ceně za noc na Rate.vn."
+      },
+      "homestays": {
+        "titleCount": "Hodnocení homestayů a vil ({count, plural, one {# ubytování} few {# ubytování} other {# ubytování}}) | Rate.vn",
+        "titleDefault": "Hodnocení homestayů, vil a cen za noc | Rate.vn",
+        "description": "Objevte recenze homestayů a vil podle čistoty, služeb, polohy a orientační ceny za noc na Rate.vn."
       }
     },
     "sortOptions": {
@@ -2078,6 +2166,8 @@
     "schemas": {
       "directoryTech": "Technologie a digitální zařízení",
       "directoryServices": "Veřejné a finanční služby",
+      "directoryRetail": "Zdraví, krása a rodina",
+      "directoryPlaces": "Gastronomie a ubytování",
       "smartphones": {
         "title": "Chytré telefony",
         "subtitle": "Prozkoumejte technické parametry v 10 skupinách podle GSMArena a PhoneArena, porovnejte ceny napříč tržišti a filtrujte ověřené recenze pomocí AI",
@@ -2271,6 +2361,83 @@
           "under-200k": "Pod 200K VND",
           "200k-350k": "200K - 350K VND",
           "over-350k": "Nad 350K VND"
+        },
+        "features": {}
+      },
+      "supplements": {
+        "title": "Doplňky stravy",
+        "subtitle": "Ověřte reálné ceny a komunitní recenze účinnosti, složení a bezpečnosti",
+        "searchPlaceholder": "Hledat Omega-3, Collagen, Vitamin D3, Blackmores...",
+        "presets": {
+          "under-300k": "Pod 300K VND",
+          "300k-800k": "300K - 800K VND",
+          "over-800k": "Nad 800K VND"
+        },
+        "features": {}
+      },
+      "cosmetics": {
+        "title": "Kosmetika a péče o pleť",
+        "subtitle": "Porovnejte ceny originální kosmetiky a ověřené recenze složení a snášenlivosti",
+        "searchPlaceholder": "Hledat La Roche-Posay, Bioderma, CeraVe, krém...",
+        "presets": {
+          "under-300k": "Pod 300K VND",
+          "300k-800k": "300K - 800K VND",
+          "over-800k": "Nad 800K VND"
+        },
+        "features": {}
+      },
+      "mother-baby": {
+        "title": "Matka a dítě",
+        "subtitle": "Porovnejte ceny mléka, plen a výbavy s recenzemi rodičů na bezpečnost",
+        "searchPlaceholder": "Hledat Huggies, Merries, Aptamil, Enfamil...",
+        "presets": {
+          "under-300k": "Pod 300K VND",
+          "300k-1m": "300K - 1M VND",
+          "over-1m": "Nad 1M VND"
+        },
+        "features": {}
+      },
+      "restaurants": {
+        "title": "Restaurace a bistra",
+        "subtitle": "Ověřená hodnocení hostů na kvalitu jídel, hygienu, obsluhu a útratu",
+        "searchPlaceholder": "Hledat restauraci, kuchyni, čtvrť nebo město...",
+        "presets": {
+          "under-200k": "Pod 200K/os.",
+          "200k-500k": "200K - 500K/os.",
+          "over-500k": "Nad 500K/os."
+        },
+        "features": {}
+      },
+      "cafes": {
+        "title": "Kavárny a čajovny",
+        "subtitle": "Hodnocení kvality nápojů, prostředí pro práci, obsluhy a útraty na osobu",
+        "searchPlaceholder": "Hledat kavárnu, čajovnu, pražírnu, lokalitu...",
+        "presets": {
+          "under-60k": "Pod 60K/os.",
+          "60k-120k": "60K - 120K/os.",
+          "over-120k": "Nad 120K/os."
+        },
+        "features": {}
+      },
+      "hotels": {
+        "title": "Hotely a resorty",
+        "subtitle": "Porovnejte kvalitu pokojů, čistotu, polohu a orientační ceny za noc",
+        "searchPlaceholder": "Hledat hotel, resort, ulici nebo lokalitu...",
+        "presets": {
+          "under-1m": "Pod 1M/noc",
+          "1m-3m": "1M - 3M/noc",
+          "over-3m": "Nad 3M/noc"
+        },
+        "features": {}
+      },
+      "homestays": {
+        "title": "Homestaye a vily",
+        "subtitle": "Hodnocení pobytů podle čistoty, služeb, polohy a orientační ceny za noc",
+        "searchPlaceholder": "Hledat homestay, vilu, Da Lat, Sa Pa...",
+        "presets": {
+          "under-800k": "Pod 800K/noc",
+          "800k-2m": "800K - 2M/noc",
+          "over-2m": "Nad 2M/noc"
         },
         "features": {}
       }
@@ -2569,5 +2736,15 @@
     "notListedHint": "Rate zatím nenašel obchod ve Vietnamu, který tento model prodává.",
     "noStock": "Nikde skladem",
     "noStockHint": "Žádný obchod ho nemá skladem."
+  },
+  "placeDetail": {
+    "heading": "Informace o místě",
+    "referencePriceLabel": "Orientační cena",
+    "openingHoursLabel": "Otevírací doba",
+    "addressLabel": "Adresa",
+    "viewOnMap": "Zobrazit na mapě",
+    "websiteLabel": "Web",
+    "starRatingBadge": "{stars}★",
+    "otherBranchesHeading": "Další pobočky řetězce"
   }
 }
