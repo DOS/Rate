@@ -9,6 +9,7 @@ import viMessages from '../../../locales/vi.json';
 import ProductPointsBlock from '../../components/reviews/ProductPointsBlock';
 import JReviewsSection from '../../components/reviews/JReviewsSection';
 import { pickClientMessages } from '../client-messages';
+import { RATING_CRITERION_KEYS } from '@repo/shared-data/rules';
 import {
   PRODUCT_POINTS_CRITERION_MAX,
   PRODUCT_POINTS_OVERALL_MAX,
@@ -927,6 +928,33 @@ export async function runProductPointsDisplaySuite(): Promise<void> {
     sectionWithoutPoints,
     /data-testid="product-points-block"/
   );
+
+  // - Every canonical criterion key resolves cleanly in vi, en, and cs locales (no em/en-dashes).
+  for (const key of RATING_CRITERION_KEYS) {
+    const fullKey = pointCriterionMessageKey(key);
+    assert.ok(
+      fullKey,
+      `Expected pointCriterionMessageKey(${key}) to be non-null`
+    );
+    const leaf = fullKey.replace(/^reviews\./, '');
+    for (const [localeCode, bundle] of [
+      ['vi', viMessages],
+      ['en', enMessages],
+      ['cs', csMessages],
+    ] as const) {
+      const value = (bundle.reviews as Record<string, unknown>)[leaf];
+      assert.equal(
+        typeof value,
+        'string',
+        `Expected ${localeCode}.json reviews.${leaf} to be defined`
+      );
+      assert.ok(
+        String(value).trim().length > 0,
+        `Expected ${localeCode}.json reviews.${leaf} to be non-empty`
+      );
+      assert.doesNotMatch(String(value), /[\u2013\u2014]/);
+    }
+  }
 
   console.log('  ✅ Product Points Selection & Render Suite (#1624) passed');
 }

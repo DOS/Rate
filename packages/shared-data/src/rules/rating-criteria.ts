@@ -15,6 +15,9 @@ export const RATING_CRITERIA_VERSION = 1;
 /** Schema version for Wave E1 appliance and Wave E2 service criteria. */
 export const RATING_CRITERIA_V2_VERSION = 2;
 
+/** Schema version for Wave E3 retail and Wave E4 local place criteria. */
+export const RATING_CRITERIA_V3_VERSION = 3;
+
 const V2_RATING_CRITERIA_CATEGORIES = new Set<string>([
   'tvs',
   'air-conditioners',
@@ -24,6 +27,20 @@ const V2_RATING_CRITERIA_CATEGORIES = new Set<string>([
   'bank-savings',
   'internet-telecom',
 ]);
+
+const V3_RATING_CRITERIA_CATEGORIES_SET = new Set<string>([
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
+]);
+
+// Exported as an identifier so the rules-isolation check does not read the strings as module imports.
+export const V3_RATING_CRITERIA_CATEGORIES: ReadonlySet<string> =
+  V3_RATING_CRITERIA_CATEGORIES_SET;
 
 const CRITERION_KEYS = [
   'performance',
@@ -55,6 +72,22 @@ const CRITERION_KEYS = [
   'price',
   'attitude',
   'speed',
+  'effectiveness',
+  'ingredients',
+  'tolerance',
+  'packaging',
+  'skin_feel',
+  'safety',
+  'quality',
+  'ease_of_use',
+  'food_quality',
+  'service_attitude',
+  'hygiene',
+  'ambiance',
+  'room_quality',
+  'cleanliness',
+  'location',
+  'service',
 ] as const;
 
 export type RatingCriterionKey = (typeof CRITERION_KEYS)[number];
@@ -476,23 +509,177 @@ const RATING_CRITERIA: Readonly<Record<string, readonly RatingCriterion[]>> = {
     ),
     c('speed', 'Tốc độ', 'Speed', 'Rychlost', 20, null),
   ],
+  supplements: [
+    c(
+      'effectiveness',
+      'Hiệu quả sử dụng',
+      'Effectiveness',
+      'Účinnost',
+      30,
+      null
+    ),
+    c('ingredients', 'Thành phần', 'Ingredients', 'Složení', 25, null),
+    c(
+      'tolerance',
+      'Độ dung nạp & phản ứng',
+      'Tolerance',
+      'Snášenlivost',
+      15,
+      null
+    ),
+    c('packaging', 'Bao bì & đóng gói', 'Packaging', 'Balení', 10, null),
+    c(
+      'value',
+      'Đáng tiền',
+      'Value for money',
+      'Poměr cena / výkon',
+      20,
+      null,
+      true
+    ),
+  ],
+  cosmetics: [
+    c(
+      'effectiveness',
+      'Hiệu quả sử dụng',
+      'Effectiveness',
+      'Účinnost',
+      30,
+      null
+    ),
+    c('skin_feel', 'Cảm giác trên da', 'Skin feel', 'Pocit na pleti', 25, null),
+    c('ingredients', 'Thành phần', 'Ingredients', 'Složení', 20, null),
+    c('packaging', 'Bao bì & đóng gói', 'Packaging', 'Balení', 10, null),
+    VALUE,
+  ],
+  'mother-baby': [
+    c('safety', 'Độ an toàn', 'Safety', 'Bezpečnost', 35, null),
+    c('quality', 'Chất lượng hoàn thiện', 'Quality', 'Kvalita', 25, null),
+    c('ease_of_use', 'Dễ sử dụng', 'Ease of use', 'Snadnost použití', 15, null),
+    c('packaging', 'Bao bì & đóng gói', 'Packaging', 'Balení', 10, null),
+    VALUE,
+  ],
+  restaurants: [
+    c(
+      'food_quality',
+      'Chất lượng món ăn',
+      'Food quality',
+      'Kvalita jídla',
+      35,
+      null
+    ),
+    c('price', 'Giá cả', 'Price', 'Cena', 20, null, true),
+    c(
+      'service_attitude',
+      'Thái độ phục vụ',
+      'Service attitude',
+      'Přístup obsluhy',
+      20,
+      null
+    ),
+    c('hygiene', 'Vệ sinh', 'Hygiene', 'Hygiena', 15, null),
+    c('ambiance', 'Không gian', 'Ambiance', 'Prostředí', 10, null),
+  ],
+  cafes: [
+    c(
+      'food_quality',
+      'Chất lượng đồ uống',
+      'Drinks and food',
+      'Kvalita nápojů',
+      35,
+      null
+    ),
+    c('price', 'Giá cả', 'Price', 'Cena', 20, null, true),
+    c(
+      'service_attitude',
+      'Thái độ phục vụ',
+      'Service attitude',
+      'Přístup obsluhy',
+      20,
+      null
+    ),
+    c('hygiene', 'Vệ sinh', 'Hygiene', 'Hygiena', 15, null),
+    c('ambiance', 'Không gian', 'Ambiance', 'Prostředí', 10, null),
+  ],
+  hotels: [
+    c(
+      'room_quality',
+      'Chất lượng phòng',
+      'Room quality',
+      'Kvalita pokoje',
+      30,
+      null
+    ),
+    c('cleanliness', 'Vệ sinh & sạch sẽ', 'Cleanliness', 'Čistota', 25, null),
+    c('location', 'Vị trí', 'Location', 'Lokalita', 20, null),
+    c(
+      'service',
+      'Dịch vụ & tiện ích',
+      'Service & amenities',
+      'Služby a zázemí',
+      15,
+      null
+    ),
+    c(
+      'value',
+      'Đáng tiền',
+      'Value for money',
+      'Poměr cena / výkon',
+      10,
+      null,
+      true
+    ),
+  ],
+  homestays: [
+    c(
+      'room_quality',
+      'Chất lượng phòng',
+      'Room quality',
+      'Kvalita pokoje',
+      30,
+      null
+    ),
+    c('cleanliness', 'Vệ sinh & sạch sẽ', 'Cleanliness', 'Čistota', 25, null),
+    c('location', 'Vị trí', 'Location', 'Lokalita', 20, null),
+    c(
+      'service',
+      'Dịch vụ & tiện ích',
+      'Service & amenities',
+      'Služby a zázemí',
+      15,
+      null
+    ),
+    c(
+      'value',
+      'Đáng tiền',
+      'Value for money',
+      'Poměr cena / výkon',
+      10,
+      null,
+      true
+    ),
+  ],
 };
 
 /**
  * Criteria schema version for a category slug.
- * Existing v1 categories stay pinned at 1 while Wave E1/E2 categories use v2.
+ * Existing v1 categories stay pinned at 1 while Wave E1/E2 use v2 and Wave E3/E4 use v3.
  */
 export function getRatingCriteriaVersion(
   categorySlug: string | null | undefined
-): 1 | 2 {
+): 1 | 2 | 3 {
   const raw = categorySlug;
   const normalized =
     typeof raw === 'string'
       ? raw.replace(LOCALE_CONTROL_CHARS_RE, '').trim().toLowerCase()
       : '';
-  return V2_RATING_CRITERIA_CATEGORIES.has(normalized)
-    ? RATING_CRITERIA_V2_VERSION
-    : RATING_CRITERIA_VERSION;
+  if (V3_RATING_CRITERIA_CATEGORIES.has(normalized)) {
+    return RATING_CRITERIA_V3_VERSION;
+  }
+  if (V2_RATING_CRITERIA_CATEGORIES.has(normalized)) {
+    return RATING_CRITERIA_V2_VERSION;
+  }
+  return RATING_CRITERIA_VERSION;
 }
 
 /** V1 categories matching `RATING_CRITERIA_VERSION` (1). */
@@ -500,7 +687,7 @@ export const RATING_CRITERIA_CATEGORIES: readonly string[] = Object.keys(
   RATING_CRITERIA
 ).filter((slug) => getRatingCriteriaVersion(slug) === RATING_CRITERIA_VERSION);
 
-/** All categories (v1 + Wave E1/E2 v2) with their own criteria list. */
+/** All categories (v1 + Wave E1/E2 v2 + Wave E3/E4 v3) with their own criteria list. */
 export const RATING_CRITERIA_ALL_CATEGORIES: readonly string[] =
   Object.keys(RATING_CRITERIA);
 
@@ -667,6 +854,13 @@ const LEGACY_MAP: Readonly<
   'air-purifiers': {},
   'bank-savings': {},
   'internet-telecom': {},
+  supplements: {},
+  cosmetics: {},
+  'mother-baby': {},
+  restaurants: {},
+  cafes: {},
+  hotels: {},
+  homestays: {},
 };
 
 /**
@@ -1139,6 +1333,20 @@ const RATING_USE_CASE_PRESETS: Readonly<
       defaultPresetWeights('internet-telecom')
     ),
   ],
+  ...Object.fromEntries(
+    [...V3_RATING_CRITERIA_CATEGORIES].map((slug) => [
+      slug,
+      [
+        p(
+          'default',
+          'Cân bằng mặc định',
+          'Balanced default',
+          'Vyvážený výchozí',
+          defaultPresetWeights(slug)
+        ),
+      ],
+    ])
+  ),
 };
 
 /**

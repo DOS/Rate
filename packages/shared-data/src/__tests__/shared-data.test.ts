@@ -6,6 +6,10 @@ import {
   KeySpecsSchema,
   MasterProductSchema,
   ScrapedProductSchema,
+  EntityTypeSchema,
+  PlacePriceTierSchema,
+  PlacePriceUnitSchema,
+  PlaceDetailSchema,
   SupportedEcommercePlatformSchema,
   SupportedServicePlatformSchema,
   SupportedIngestionPlatformSchema,
@@ -1849,7 +1853,7 @@ function testRatingCriteriaAndReviewForm(): void {
   );
   assert.equal(rules.getRatingCriterionLabel(sampleCrit, ''), 'Hiệu năng');
   assert.equal(rules.getRatingCriterionLabel(sampleCrit, '   '), 'Hiệu năng');
-  assert.equal(rules.RATING_CRITERION_KEYS.length, 29);
+  assert.equal(rules.RATING_CRITERION_KEYS.length, 45);
   for (const key of rules.RATING_CRITERION_KEYS) {
     assert.equal(rules.isRatingCriterionKey(key), true, key);
   }
@@ -3542,8 +3546,9 @@ function testRatingUseCasePresets(): void {
 function testWaveE1E2Readiness(): void {
   assert.equal(rules.RATING_CRITERIA_VERSION, 1);
   assert.equal(rules.RATING_CRITERIA_V2_VERSION, 2);
+  assert.equal(rules.RATING_CRITERIA_V3_VERSION, 3);
   assert.equal(rules.RATING_CRITERIA_CATEGORIES.length, 6);
-  assert.equal(rules.RATING_CRITERIA_ALL_CATEGORIES.length, 13);
+  assert.equal(rules.RATING_CRITERIA_ALL_CATEGORIES.length, 20);
 
   const expectedWeights: Record<string, Record<string, number>> = {
     tvs: {
@@ -3796,6 +3801,340 @@ function testWaveE1E2Readiness(): void {
   );
 }
 
+function testWaveE3E4Readiness(): void {
+  assert.equal(rules.RATING_CRITERIA_V3_VERSION, 3);
+  assert.equal(rules.RATING_CRITERION_KEYS.length, 45);
+  const expectedV3Slugs = [
+    'supplements',
+    'cosmetics',
+    'mother-baby',
+    'restaurants',
+    'cafes',
+    'hotels',
+    'homestays',
+  ];
+  assert.deepEqual(
+    [...rules.V3_RATING_CRITERIA_CATEGORIES].sort(),
+    [...expectedV3Slugs].sort()
+  );
+
+  const expectedV3Weights: Record<string, Record<string, number>> = {
+    supplements: {
+      effectiveness: 30,
+      ingredients: 25,
+      tolerance: 15,
+      packaging: 10,
+      value: 20,
+    },
+    cosmetics: {
+      effectiveness: 30,
+      skin_feel: 25,
+      ingredients: 20,
+      packaging: 10,
+      value: 15,
+    },
+    'mother-baby': {
+      safety: 35,
+      quality: 25,
+      ease_of_use: 15,
+      packaging: 10,
+      value: 15,
+    },
+    restaurants: {
+      food_quality: 35,
+      price: 20,
+      service_attitude: 20,
+      hygiene: 15,
+      ambiance: 10,
+    },
+    cafes: {
+      food_quality: 35,
+      price: 20,
+      service_attitude: 20,
+      hygiene: 15,
+      ambiance: 10,
+    },
+    hotels: {
+      room_quality: 30,
+      cleanliness: 25,
+      location: 20,
+      service: 15,
+      value: 10,
+    },
+    homestays: {
+      room_quality: 30,
+      cleanliness: 25,
+      location: 20,
+      service: 15,
+      value: 10,
+    },
+  };
+
+  for (const [slug, weights] of Object.entries(expectedV3Weights)) {
+    assert.equal(
+      rules.getRatingCriteriaVersion(slug),
+      3,
+      `Expected v3 for ${slug}`
+    );
+    assert.equal(rules.hasRatingCriteria(slug), true);
+    const list = rules.getRatingCriteria(slug);
+    assert.equal(
+      list.reduce((acc, item) => acc + item.weight, 0),
+      100,
+      `Expected sum 100 for ${slug}`
+    );
+    assert.equal(
+      list.filter((item) => item.required).length,
+      1,
+      `Expected 1 required criterion for ${slug}`
+    );
+    assert.deepEqual(
+      Object.fromEntries(list.map((item) => [item.key, item.weight])),
+      weights,
+      `Weights mismatch for ${slug}`
+    );
+    for (const item of list) {
+      assert.ok(item.label.vi && item.label.en && item.label.cs);
+      assert.doesNotMatch(item.label.vi, /[\u2013\u2014]/);
+      assert.doesNotMatch(item.label.en, /[\u2013\u2014]/);
+      assert.doesNotMatch(item.label.cs, /[\u2013\u2014]/);
+    }
+    const presets = rules.getRatingUseCasePresets(slug);
+    assert.ok(presets.length >= 1);
+    assert.equal(
+      Object.values(presets[0]!.weights).reduce<number>(
+        (acc, w) => acc + (w ?? 0),
+        0
+      ),
+      100
+    );
+    assert.deepEqual(rules.mapLegacyCriteriaRatings(slug, { value: 5 }), {});
+    const tmpl = rules.getCategorySpecTemplate(slug);
+    assert.equal(tmpl.ram, false);
+    assert.equal(tmpl.storage, false);
+    assert.equal(tmpl.screen, false);
+    assert.equal(tmpl.has5g, false);
+  }
+
+  // Keyword assignment works for the 16 new criterion keys.
+  assert.equal(
+    rules.assignPointCriterion(
+      'supplements',
+      null,
+      'Uống thấy hiệu quả rõ rệt'
+    ),
+    'effectiveness'
+  );
+  assert.equal(
+    rules.assignPointCriterion('cosmetics', null, 'Thấm nhanh, không bết dính'),
+    'skin_feel'
+  );
+  assert.equal(
+    rules.assignPointCriterion('mother-baby', null, 'Chất liệu an toàn cho bé'),
+    'safety'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'restaurants',
+      null,
+      'Món ăn rất ngon và đậm đà'
+    ),
+    'food_quality'
+  );
+  assert.equal(
+    rules.assignPointCriterion('hotels', null, 'Phòng rộng, giường nệm êm ái'),
+    'room_quality'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'homestays',
+      null,
+      'Vị trí gần biển rất thuận tiện'
+    ),
+    'location'
+  );
+
+  // Price floor: 20,000 VND for E3 retail consumables, 0 for E4 places.
+  assert.equal(rules.MINIMUM_RETAIL_CONSUMABLE_PRICE_FLOOR_VND, 20_000);
+  for (const e3 of ['supplements', 'cosmetics', 'mother-baby']) {
+    assert.equal(
+      rules.minimumListingPriceVnd(['Serum dưỡng ẩm'], { categorySlug: e3 }),
+      20_000,
+      `Expected 20,000 VND floor for ${e3}`
+    );
+  }
+  for (const e4 of ['restaurants', 'cafes', 'hotels', 'homestays']) {
+    assert.equal(
+      rules.minimumListingPriceVnd(['Phở Thìn'], { categorySlug: e4 }),
+      0,
+      `Expected 0 floor for ${e4}`
+    );
+  }
+  assert.equal(
+    rules.minimumListingPriceVnd(['Nhà hàng mẫu'], { entityType: 'place' }),
+    0
+  );
+
+  // Route constants include all 7 new categories.
+  assert.equal(RATE_ROUTES.SUPPLEMENTS, '/supplements');
+  assert.equal(RATE_ROUTES.COSMETICS, '/cosmetics');
+  assert.equal(RATE_ROUTES.MOTHER_BABY, '/mother-baby');
+  assert.equal(RATE_ROUTES.RESTAURANTS, '/restaurants');
+  assert.equal(RATE_ROUTES.CAFES, '/cafes');
+  assert.equal(RATE_ROUTES.HOTELS, '/hotels');
+  assert.equal(RATE_ROUTES.HOMESTAYS, '/homestays');
+
+  // Platform schemas: avakids is ingestion-only, retail extension stays strictly at 22.
+  assert.equal(SupportedEcommercePlatformSchema.options.length, 22);
+  assert.equal(
+    SupportedEcommercePlatformSchema.safeParse('avakids').success,
+    false
+  );
+  assert.equal(
+    SupportedIngestionPlatformSchema.safeParse('avakids').success,
+    true
+  );
+
+  // EntityTypeSchema & Item/Master/Scraped schemas accept 'place'.
+  for (const et of ['product', 'service', 'place']) {
+    assert.equal(EntityTypeSchema.safeParse(et).success, true);
+  }
+  assert.equal(EntityTypeSchema.safeParse('company').success, false);
+  const placeMasterId = '018f3b2c-1a2b-4c3d-8e4f-5a6b7c8d9e10';
+  assert.equal(
+    MasterProductSchema.parse({
+      id: placeMasterId,
+      brand: 'Phở Thìn',
+      model: '13 Lò Đúc',
+      model_key: 'pho-thin:13-lo-duc:unknown',
+      name: 'Phở Thìn 13 Lò Đúc',
+      slug: 'pho-thin-13-lo-duc',
+      entity_type: 'place',
+    }).entity_type,
+    'place'
+  );
+  assert.equal(
+    sharedDataRoot.ItemSchema.parse({
+      id: placeMasterId,
+      item_key: 'pho-thin:13-lo-duc',
+      slug: 'pho-thin-13-lo-duc',
+      name: 'Phở Thìn 13 Lò Đúc',
+      brand: 'Phở Thìn',
+      model: '13 Lò Đúc',
+      entity_type: 'place',
+    }).entity_type,
+    'place'
+  );
+  assert.equal(
+    ScrapedProductSchema.parse({
+      platform: 'avakids',
+      itemId: 'ava-1001',
+      shopId: 'avakids-official',
+      url: 'https://www.avakids.com/sua-bot/meiji-so-0-800g',
+      title: 'Sữa bột Meiji số 0 800g',
+      entity_type: 'product',
+      category_slug: 'mother-baby',
+      priceMin: 485_000,
+      priceMax: 520_000,
+      shop: { shopId: 'avakids-official', name: 'AvaKids', isMall: true },
+    }).platform,
+    'avakids'
+  );
+
+  // PlaceDetailSchema 1:1 SQL constraint checks.
+  assert.deepEqual(PlacePriceTierSchema.options, ['$', '$$', '$$$', '$$$$']);
+  assert.deepEqual(PlacePriceUnitSchema.options, [
+    'vnd_per_person',
+    'vnd_per_night_ref',
+  ]);
+  const validPlace = PlaceDetailSchema.parse({
+    masterId: placeMasterId,
+    placeKey: 'overture:vn-hcm:pho-hoa-pasteur',
+    branchGroupKey: 'pho-hoa-pasteur',
+    geoLat: 10.7885,
+    geoLng: 106.6881,
+    geohash7: 'w3gvk1z',
+    address: '260C Pasteur, Q3, TP.HCM',
+    provinceCode: 'ho-chi-minh',
+    districtCode: 'quan-3',
+    priceMin: 85_000,
+    priceMax: 150_000,
+    priceTier: '$$',
+    priceUnit: 'vnd_per_person',
+    openingHours: '06:00-22:30',
+    phone: '02838297943',
+    website: 'https://phohoa.example.vn',
+    cuisine: 'Vietnamese, Pho',
+    starRating: 4.5,
+    sourceIds: { overture: '08f6531416123456' },
+    overtureConfidence: 0.942,
+  });
+  assert.equal(validPlace.priceTier, '$$');
+  assert.deepEqual(
+    PlaceDetailSchema.parse({
+      masterId: placeMasterId,
+      placeKey: 'overture:vn-hn:cafe-giang',
+      branchGroupKey: 'cafe-giang',
+      provinceCode: 'ha-noi',
+    }).sourceIds,
+    {}
+  );
+
+  // Reject invalid placeKey, geohash7, unpaired geo, inverted prices, bad website, non-0.1 starRating, non-object sourceIds.
+  const basePlace = {
+    masterId: placeMasterId,
+    placeKey: 'overture:vn-hcm:test-place',
+    branchGroupKey: 'test-place',
+    provinceCode: 'ho-chi-minh',
+  };
+  for (const bad of [
+    { ...basePlace, placeKey: 'bad-key-no-colons' },
+    { ...basePlace, placeKey: 'A:b:c' },
+    { ...basePlace, branchGroupKey: 'invalid spaces!' },
+    { ...basePlace, geohash7: 'w3gvk1a' }, // 'a' is not in base32 geohash alphabet
+    { ...basePlace, geohash7: 'w3gvk1' },
+    { ...basePlace, provinceCode: 'TP HCM' },
+    { ...basePlace, districtCode: 'q/1' },
+    { ...basePlace, geoLat: 10.7, geoLng: null },
+    { ...basePlace, geoLat: null, geoLng: 106.6 },
+    { ...basePlace, geoLat: 91, geoLng: 106.6 },
+    { ...basePlace, geoLat: 10.7, geoLng: 181 },
+    { ...basePlace, priceMin: 200_000, priceMax: 100_000 },
+    { ...basePlace, priceMin: 0 },
+    { ...basePlace, website: 'javascript:alert(1)' },
+    { ...basePlace, starRating: 4.15 },
+    { ...basePlace, starRating: 0.9 },
+    { ...basePlace, starRating: 5.1 },
+    { ...basePlace, overtureConfidence: 1.1 },
+    { ...basePlace, overtureConfidence: -0.1 },
+    { ...basePlace, sourceIds: ['overture'] },
+  ]) {
+    assert.equal(
+      PlaceDetailSchema.safeParse(bad).success,
+      false,
+      `Expected PlaceDetailSchema rejection for ${JSON.stringify(bad)}`
+    );
+  }
+
+  // Specific multi-word criterion phrases win across criteria over shorter nested matches.
+  assert.equal(
+    rules.assignPointCriterion('supplements', null, 'Gây tác dụng phụ nhẹ'),
+    'tolerance'
+  );
+  assert.equal(
+    rules.assignPointCriterion('supplements', null, 'Tác dụng tốt rõ rệt'),
+    'effectiveness'
+  );
+  assert.equal(
+    rules.assignPointCriterion('hotels', null, 'Ga giường mới sạch'),
+    'cleanliness'
+  );
+  assert.equal(
+    rules.assignPointCriterion('hotels', null, 'Giường êm ái'),
+    'room_quality'
+  );
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
@@ -3846,7 +4185,11 @@ function main(): void {
   testExtensionObservation();
   console.log('  ✅ [14/14] ExtensionObservation v1 (DOS/Rate#1606) verified');
   testWaveE1E2Readiness();
-  console.log('  ✅ [15/15] Wave E1/E2 schemas and rules verified');
+  console.log('  ✅ [15/16] Wave E1/E2 schemas and rules verified');
+  testWaveE3E4Readiness();
+  console.log(
+    '  ✅ [16/16] Wave E3/E4 schemas, criteria v3, and place details verified'
+  );
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 

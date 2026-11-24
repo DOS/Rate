@@ -6,6 +6,8 @@
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+import { PlaceDetailSchema, type Database, type Json } from '@repo/shared-data';
+import { minimumListingPriceVnd } from '@repo/shared-data/rules';
 import {
   MAX_VALID_VND_PRICE,
   ScrapedProductSchema,
@@ -22,6 +24,8 @@ import {
   ProductNormalizer,
   UnkeyableProductTitleError,
   WAVE_E2_SERVICE_CATEGORY_SLUGS,
+  WAVE_E3_CATEGORY_SLUGS,
+  WAVE_E4_PLACE_CATEGORY_SLUGS,
 } from './product-normalizer.js';
 import {
   EntityMatcher,
@@ -244,7 +248,7 @@ export function normalizeScrapedProductPrices(
   product: Omit<ValidatedScrapedProduct, 'currency'> & {
     currency?: string;
     categorySlug?: string;
-    entityType?: 'product' | 'service';
+    entityType?: 'product' | 'service' | 'place';
   }
 ): ValidatedScrapedProduct {
   if (!product || typeof product !== 'object' || Array.isArray(product)) {
@@ -622,12 +626,41 @@ export class ShopeeIngestionPipeline {
     );
     if (
       !Number.isFinite(product.priceMin) ||
-      product.priceMin <= 0 ||
+      product.priceMin < 0 ||
       product.priceMin > MAX_VALID_VND_PRICE
     ) {
       throw new Error(
         `Cannot ingest unpriced or out-of-bounds product listing (priceMin=${product.priceMin})`
       );
+    }
+
+    // Normalize first: unpriced check, E3 20k floor, and UnkeyableProductTitleError run
+    // before any category lookup or DB write. With a masterIdHint whose row is gone,
+    // the matcher throws after the merchant upsert instead.
+    const candidate = this.normalizer.normalize(product);
+    const resolvedEntityType: 'product' | 'service' | 'place' =
+      candidate.entity_type ??
+      (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(candidate.category_slug)
+        ? 'service'
+        : WAVE_E4_PLACE_CATEGORY_SLUGS.has(candidate.category_slug)
+          ? 'place'
+          : 'product');
+    if (resolvedEntityType !== 'place' && product.priceMin <= 0) {
+      throw new Error(
+        `Cannot ingest unpriced or out-of-bounds product listing (priceMin=${product.priceMin})`
+      );
+    }
+    if (WAVE_E3_CATEGORY_SLUGS.has(candidate.category_slug) || resolvedEntityType === 'place') {
+      const minListingFloor = minimumListingPriceVnd([product.title, product.url], {
+        categorySlug: candidate.category_slug,
+        entityType: resolvedEntityType,
+        currency: product.currency,
+      });
+      if (minListingFloor > 0 && product.priceMin < minListingFloor) {
+        throw new Error(
+          `Cannot ingest listing below category minimum floor (priceMin=${product.priceMin}, minFloor=${minListingFloor}, category=${candidate.category_slug})`
+        );
+      }
     }
     if (this.categoryIdBySlug.size === 0) {
       await this.init();
@@ -641,14 +674,13 @@ export class ShopeeIngestionPipeline {
       shopId: product.shop.shopId,
     });
 
-    // Normalize first: a title with no keyable brand or model is rejected
-    // (UnkeyableProductTitleError) before anything is written. With a masterIdHint
-    // whose row is gone, the matcher throws it after the merchant upsert instead.
-    const candidate = this.normalizer.normalize(product);
     // With a masterIdHint the title's key is not used; the matcher still rejects
     // the candidate if the hint does not resolve. An accessory is rejected even with a
     // hint: a crawl for a device's master also finds its cases (DOS/Rate#1505).
-    if (candidate.keyable === false && (!options.masterIdHint || isAccessoryTitle(product.title))) {
+    if (
+      candidate.keyable === false &&
+      (!options.masterIdHint || isAccessoryTitle(product.title, candidate.category_slug))
+    ) {
       throw new UnkeyableProductTitleError(product.title);
     }
     // A used, like-new or refurbished listing is rejected even with a hint: with no
@@ -1032,138 +1064,144 @@ export class ShopeeIngestionPipeline {
     // 4. Smart Delta Price Compression + stable observation_id (Audit M7)
     // Prefer single-round-trip `rate.record_price_observation` RPC (performs 7-day delta
     // check + `ON CONFLICT (observation_id) WHERE observation_id IS NOT NULL DO NOTHING`).
-    const dayBucket = new Date().toISOString().slice(0, 10);
-    const observationId =
-      'px-' +
-      crypto
-        .createHash('sha256')
-        .update(
-          `${productId}|${product.priceMin}|${product.priceBeforeDiscount || ''}|${dayBucket}`
-        )
-        .digest('hex');
+    // Unpriced Wave E4 place listings (priceMin === 0) skip price_history writes.
+    if (product.priceMin > 0) {
+      const dayBucket = new Date().toISOString().slice(0, 10);
+      const observationId =
+        'px-' +
+        crypto
+          .createHash('sha256')
+          .update(
+            `${productId}|${product.priceMin}|${product.priceBeforeDiscount || ''}|${dayBucket}`
+          )
+          .digest('hex');
 
-    let handledByObservationRpc = false;
-    if (typeof this.supabase.rpc === 'function') {
-      const { data: obsStatus, error: obsRpcErr } = await this.supabase.rpc(
-        'record_price_observation',
-        {
-          p_product_id: productId,
-          p_price: product.priceMin,
-          p_price_original: product.priceBeforeDiscount || null,
-          p_source: `${platform}_crawler`,
-          p_observation_id: observationId,
-          p_promotion_id: null,
-        }
-      );
-
-      if (!obsRpcErr && typeof obsStatus === 'string') {
-        handledByObservationRpc = true;
-        if (obsStatus === 'unchanged_delta') {
-          const priceLabel =
-            product.currency === 'PCT'
-              ? `${Number(product.priceMin).toFixed(2)}%`
-              : `${Number(product.priceMin).toLocaleString('vi-VN')}₫`;
-          platLogger.info(
-            'ingest.price_delta_unchanged',
-            `Delta Price Compression (RPC): price unchanged (${priceLabel}), skipping redundant history row.`,
-            { productId, observationId, priceMin: product.priceMin, currency: product.currency }
-          );
-        } else if (obsStatus === 'deduped_conflict') {
-          platLogger.info(
-            'ingest.price_deduped_rpc',
-            `Price observation already recorded via RPC (${observationId}), skipping.`,
-            { productId, observationId }
-          );
-        }
-      } else if (
-        obsRpcErr &&
-        !/function .*record_price_observation.* does not exist|PGRST202/i.test(
-          `${obsRpcErr.code || ''} ${obsRpcErr.message || ''}`
-        )
-      ) {
-        platLogger.warn(
-          'ingest.price_rpc_fallback',
-          `record_price_observation RPC warning (${obsRpcErr.message}); falling back to client-side delta check.`,
-          { productId }
+      let handledByObservationRpc = false;
+      if (typeof this.supabase.rpc === 'function') {
+        const { data: obsStatus, error: obsRpcErr } = await this.supabase.rpc(
+          'record_price_observation',
+          {
+            p_product_id: productId,
+            p_price: product.priceMin,
+            p_price_original: product.priceBeforeDiscount || null,
+            p_source: `${platform}_crawler`,
+            p_observation_id: observationId,
+            p_promotion_id: null,
+          }
         );
-      }
-    }
 
-    if (!handledByObservationRpc) {
-      const { data: latestObsRows, error: latestObsErr } = await this.supabase
-        .from('price_history')
-        .select('observation_id, price, price_original, recorded_at')
-        .eq('product_id', productId)
-        .order('recorded_at', { ascending: false })
-        .limit(1);
-      // Without the last observation the unchanged-price check cannot run, and a
-      // blind insert would add a redundant history row (DOS/Rate#1431).
-      if (latestObsErr) {
-        throw new Error(
-          `Failed to read the latest price observation (product ${productId})${errorDetail(latestObsErr)}`
-        );
+        if (!obsRpcErr && typeof obsStatus === 'string') {
+          handledByObservationRpc = true;
+          if (obsStatus === 'unchanged_delta') {
+            const priceLabel =
+              product.currency === 'PCT'
+                ? `${Number(product.priceMin).toFixed(2)}%`
+                : `${Number(product.priceMin).toLocaleString('vi-VN')}₫`;
+            platLogger.info(
+              'ingest.price_delta_unchanged',
+              `Delta Price Compression (RPC): price unchanged (${priceLabel}), skipping redundant history row.`,
+              { productId, observationId, priceMin: product.priceMin, currency: product.currency }
+            );
+          } else if (obsStatus === 'deduped_conflict') {
+            platLogger.info(
+              'ingest.price_deduped_rpc',
+              `Price observation already recorded via RPC (${observationId}), skipping.`,
+              { productId, observationId }
+            );
+          }
+        } else if (
+          obsRpcErr &&
+          !/function .*record_price_observation.* does not exist|PGRST202/i.test(
+            `${obsRpcErr.code || ''} ${obsRpcErr.message || ''}`
+          )
+        ) {
+          platLogger.warn(
+            'ingest.price_rpc_fallback',
+            `record_price_observation RPC warning (${obsRpcErr.message}); falling back to client-side delta check.`,
+            { productId }
+          );
+        }
       }
 
-      const latestObs = Array.isArray(latestObsRows)
-        ? (latestObsRows.find(row => row && typeof row === 'object' && !Array.isArray(row)) ?? null)
-        : null;
-      const currentPrice = Number(product.priceMin);
-      const currentOriginal = Number(product.priceBeforeDiscount || 0);
-      const prevPrice = latestObs ? Number(latestObs.price) : -1;
-      const prevOriginal = latestObs ? Number(latestObs.price_original || 0) : -1;
-      const ageMs =
-        latestObs && latestObs.recorded_at
-          ? Date.now() - new Date(latestObs.recorded_at).getTime()
-          : Number.POSITIVE_INFINITY;
-      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-
-      if (
-        latestObs &&
-        prevPrice === currentPrice &&
-        prevOriginal === currentOriginal &&
-        ageMs < sevenDaysMs
-      ) {
-        platLogger.info(
-          'ingest.price_delta_unchanged_client',
-          `Delta Price Compression: price unchanged (${currentPrice.toLocaleString('vi-VN')}₫, last anchor ${String(latestObs.recorded_at).slice(0, 10)}), skipping redundant history row.`,
-          { productId, observationId }
-        );
-      } else {
-        const { data: existingPrice, error: priceLookupErr } = await this.supabase
+      if (!handledByObservationRpc) {
+        const { data: latestObsRows, error: latestObsErr } = await this.supabase
           .from('price_history')
-          .select('observation_id')
-          .eq('observation_id', observationId)
+          .select('observation_id, price, price_original, recorded_at')
+          .eq('product_id', productId)
+          .order('recorded_at', { ascending: false })
           .limit(1);
-        if (priceLookupErr) {
-          throw new Error(`Failed to check existing price observation: ${priceLookupErr.message}`);
+        // Without the last observation the unchanged-price check cannot run, and a
+        // blind insert would add a redundant history row (DOS/Rate#1431).
+        if (latestObsErr) {
+          throw new Error(
+            `Failed to read the latest price observation (product ${productId})${errorDetail(latestObsErr)}`
+          );
         }
-        if (Array.isArray(existingPrice) && existingPrice.length > 0) {
+
+        const latestObs = Array.isArray(latestObsRows)
+          ? (latestObsRows.find(row => row && typeof row === 'object' && !Array.isArray(row)) ??
+            null)
+          : null;
+        const currentPrice = Number(product.priceMin);
+        const currentOriginal = Number(product.priceBeforeDiscount || 0);
+        const prevPrice = latestObs ? Number(latestObs.price) : -1;
+        const prevOriginal = latestObs ? Number(latestObs.price_original || 0) : -1;
+        const ageMs =
+          latestObs && latestObs.recorded_at
+            ? Date.now() - new Date(latestObs.recorded_at).getTime()
+            : Number.POSITIVE_INFINITY;
+        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+        if (
+          latestObs &&
+          prevPrice === currentPrice &&
+          prevOriginal === currentOriginal &&
+          ageMs < sevenDaysMs
+        ) {
           platLogger.info(
-            'ingest.price_deduped_client',
-            `Price observation already recorded (${observationId}), skipping.`,
+            'ingest.price_delta_unchanged_client',
+            `Delta Price Compression: price unchanged (${currentPrice.toLocaleString('vi-VN')}₫, last anchor ${String(latestObs.recorded_at).slice(0, 10)}), skipping redundant history row.`,
             { productId, observationId }
           );
         } else {
-          const { error: priceErr } = await this.supabase.from('price_history').insert({
-            product_id: productId,
-            observation_id: observationId,
-            price: product.priceMin,
-            price_original: product.priceBeforeDiscount || null,
-            recorded_at: new Date().toISOString(),
-            source: `${platform}_crawler`,
-          });
-          if (priceErr) {
-            const pCode = (priceErr as { code?: string }).code || '';
-            if (pCode === '23505' || /duplicate key/i.test(priceErr.message)) {
-              platLogger.warn(
-                'ingest.price_race_deduped',
-                'Concurrent price observation insert lost the race; treated as dedupe.',
-                { productId, observationId }
-              );
-            } else {
-              throw new Error(
-                `Failed to record price history (observation ${observationId}): ${priceErr.message}`
-              );
+          const { data: existingPrice, error: priceLookupErr } = await this.supabase
+            .from('price_history')
+            .select('observation_id')
+            .eq('observation_id', observationId)
+            .limit(1);
+          if (priceLookupErr) {
+            throw new Error(
+              `Failed to check existing price observation: ${priceLookupErr.message}`
+            );
+          }
+          if (Array.isArray(existingPrice) && existingPrice.length > 0) {
+            platLogger.info(
+              'ingest.price_deduped_client',
+              `Price observation already recorded (${observationId}), skipping.`,
+              { productId, observationId }
+            );
+          } else {
+            const { error: priceErr } = await this.supabase.from('price_history').insert({
+              product_id: productId,
+              observation_id: observationId,
+              price: product.priceMin,
+              price_original: product.priceBeforeDiscount || null,
+              recorded_at: new Date().toISOString(),
+              source: `${platform}_crawler`,
+            });
+            if (priceErr) {
+              const pCode = (priceErr as { code?: string }).code || '';
+              if (pCode === '23505' || /duplicate key/i.test(priceErr.message)) {
+                platLogger.warn(
+                  'ingest.price_race_deduped',
+                  'Concurrent price observation insert lost the race; treated as dedupe.',
+                  { productId, observationId }
+                );
+              } else {
+                throw new Error(
+                  `Failed to record price history (observation ${observationId}): ${priceErr.message}`
+                );
+              }
             }
           }
         }
@@ -1403,11 +1441,8 @@ export class ShopeeIngestionPipeline {
               merchantId,
               reviews: analysisInput,
               entityName: candidate.name,
-              entityType:
-                candidate.entity_type ??
-                (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(candidate.category_slug)
-                  ? 'service'
-                  : 'product'),
+              entityType: resolvedEntityType,
+              categorySlug: candidate.category_slug,
               platform,
               listingPrice: product.priceMin,
               canonicalMinPrice,
@@ -1472,4 +1507,68 @@ export class ShopeeIngestionPipeline {
     );
     return { productId, merchantId, masterId, itemId, platform };
   }
+
+  /**
+   * Validates and upserts Wave E4 place details for a canonical master entity.
+   */
+  public async upsertPlaceDetails(
+    rawDetails: PlaceDetailInput
+  ): Promise<{ masterId: string; placeKey: string }> {
+    return upsertPlaceDetails(this.supabase, rawDetails);
+  }
+}
+
+export type PlaceDetailInput = (typeof PlaceDetailSchema)['_input'];
+
+type PlaceDetailsInsertRow = Database['rate']['Tables']['place_details']['Insert'];
+
+/**
+ * Validates and upserts Wave E4 place_details metadata against rate.place_details.
+ * Zero private collector logic lives in Open-Core DOS/Rate.
+ */
+export async function upsertPlaceDetails(
+  supabase: RateSupabaseClient,
+  rawDetails: PlaceDetailInput
+): Promise<{ masterId: string; placeKey: string }> {
+  const parsed = PlaceDetailSchema.parse(rawDetails);
+  if (!supabase || typeof supabase.from !== 'function') {
+    throw new Error('upsertPlaceDetails requires a configured RateSupabaseClient');
+  }
+  const rateClient =
+    typeof (supabase as unknown as { schema?: unknown }).schema === 'function'
+      ? scopeSupabaseToRate(supabase)
+      : supabase;
+  const row: PlaceDetailsInsertRow = {
+    master_id: parsed.masterId,
+    place_key: parsed.placeKey,
+    branch_group_key: parsed.branchGroupKey,
+    geo_lat: parsed.geoLat ?? null,
+    geo_lng: parsed.geoLng ?? null,
+    geohash7: parsed.geohash7 ?? null,
+    address: parsed.address ?? null,
+    province_code: parsed.provinceCode,
+    district_code: parsed.districtCode ?? null,
+    price_min: parsed.priceMin ?? null,
+    price_max: parsed.priceMax ?? null,
+    price_tier: parsed.priceTier ?? null,
+    price_unit: parsed.priceUnit ?? null,
+    opening_hours: parsed.openingHours ?? null,
+    phone: parsed.phone ?? null,
+    website: parsed.website ?? null,
+    cuisine: parsed.cuisine ?? null,
+    star_rating: parsed.starRating ?? null,
+    source_ids: parsed.sourceIds as Json,
+    overture_confidence: parsed.overtureConfidence ?? null,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await rateClient.from('place_details').upsert(row, { onConflict: 'master_id' });
+  if (error) {
+    throw new Error(
+      `Failed to upsert place_details (master ${parsed.masterId}, place_key ${parsed.placeKey})${errorDetail(error)}`
+    );
+  }
+  return {
+    masterId: parsed.masterId,
+    placeKey: parsed.placeKey,
+  };
 }

@@ -121,7 +121,23 @@ export type PointCriterionMessageKey =
   | 'pointCrit_capacity'
   | 'pointCrit_wash_quality'
   | 'pointCrit_filtration'
-  | 'pointCrit_filter_cost';
+  | 'pointCrit_filter_cost'
+  | 'pointCrit_effectiveness'
+  | 'pointCrit_ingredients'
+  | 'pointCrit_tolerance'
+  | 'pointCrit_packaging'
+  | 'pointCrit_skin_feel'
+  | 'pointCrit_safety'
+  | 'pointCrit_quality'
+  | 'pointCrit_ease_of_use'
+  | 'pointCrit_food_quality'
+  | 'pointCrit_service_attitude'
+  | 'pointCrit_hygiene'
+  | 'pointCrit_ambiance'
+  | 'pointCrit_room_quality'
+  | 'pointCrit_cleanliness'
+  | 'pointCrit_location'
+  | 'pointCrit_service';
 
 const CRITERION_MESSAGE_KEYS: Readonly<
   Record<RatingCriterionKey, PointCriterionMessageKey>
@@ -155,6 +171,22 @@ const CRITERION_MESSAGE_KEYS: Readonly<
   wash_quality: 'pointCrit_wash_quality',
   filtration: 'pointCrit_filtration',
   filter_cost: 'pointCrit_filter_cost',
+  effectiveness: 'pointCrit_effectiveness',
+  ingredients: 'pointCrit_ingredients',
+  tolerance: 'pointCrit_tolerance',
+  packaging: 'pointCrit_packaging',
+  skin_feel: 'pointCrit_skin_feel',
+  safety: 'pointCrit_safety',
+  quality: 'pointCrit_quality',
+  ease_of_use: 'pointCrit_ease_of_use',
+  food_quality: 'pointCrit_food_quality',
+  service_attitude: 'pointCrit_service_attitude',
+  hygiene: 'pointCrit_hygiene',
+  ambiance: 'pointCrit_ambiance',
+  room_quality: 'pointCrit_room_quality',
+  cleanliness: 'pointCrit_cleanliness',
+  location: 'pointCrit_location',
+  service: 'pointCrit_service',
 };
 
 const LEGACY_CRITERION_MAP: Readonly<
@@ -191,6 +223,13 @@ const LEGACY_CRITERION_MAP: Readonly<
     value: 'value',
   },
   services: {},
+  supplements: {},
+  cosmetics: {},
+  'mother-baby': {},
+  restaurants: {},
+  cafes: {},
+  hotels: {},
+  homestays: {},
 };
 
 const CRITERION_KEY_RE = /^[a-z_]{2,32}$/;
