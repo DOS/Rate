@@ -35,7 +35,15 @@ import {
   type LeaderboardScoreCriterion,
 } from '@/lib/leaderboard-engine';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
-import { productRatingScore5 } from '@/lib/rate-domain';
+import {
+  normalizePriceCurrency,
+  sanitizeCurrencyPriceValue,
+} from '@/lib/locale-format';
+import {
+  isCanonicalCategorySlug,
+  productRatingScore5,
+  resolveListingPriceCurrency,
+} from '@/lib/rate-domain';
 import { roundScore } from '@/lib/rating-display';
 import { listingCountForSaleState, saleStateOfMaster } from '@/lib/sale-state';
 import {
@@ -193,6 +201,13 @@ const SUPPORTED_CATEGORY_ENUM = z.enum([
   'laptops',
   'smartwatches',
   'earbuds',
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
 ]);
 
 const SUPPORTED_PLATFORM_OR_ALL_ENUM = z.enum([
@@ -271,11 +286,7 @@ function isSupportedRetailOrRateInspectionUrl(rawUrl: string): boolean {
         const [section, identifier] = segments;
         const lowerSection = section!.toLowerCase();
         if (
-          (lowerSection === 'smartphones' ||
-            lowerSection === 'tablets' ||
-            lowerSection === 'laptops' ||
-            lowerSection === 'smartwatches' ||
-            lowerSection === 'earbuds' ||
+          (isCanonicalCategorySlug(lowerSection) ||
             lowerSection === 'merchants') &&
           isValidSlugToken(identifier!, 128)
         ) {
@@ -313,18 +324,18 @@ export const SearchVerifiedCatalogInputSchema = z
       .describe('Manufacturer name filter (for example "Apple", "Samsung").'),
     minPriceVnd: z
       .number()
-      .int()
-      .min(1)
+      .finite()
+      .positive()
       .max(MAX_VALID_VND_PRICE)
       .optional()
-      .describe('Minimum verified VND price floor.'),
+      .describe('Minimum verified listing price floor (VND or PCT).'),
     maxPriceVnd: z
       .number()
-      .int()
-      .min(1)
+      .finite()
+      .positive()
       .max(MAX_VALID_VND_PRICE)
       .optional()
-      .describe('Maximum verified VND price ceiling.'),
+      .describe('Maximum verified listing price ceiling (VND or PCT).'),
     sort: z
       .enum([
         'default',
@@ -444,36 +455,40 @@ export const AuditListingUrlInputSchema = z.strictObject({
     ),
   observedPriceVnd: z
     .number()
-    .int()
-    .min(1)
-    .max(MAX_VALID_VND_PRICE)
-    .optional()
-    .describe('Optional live selling price in VND observed on the page.'),
-  observedOriginalPriceVnd: z
-    .number()
-    .int()
-    .min(1)
+    .finite()
+    .positive()
     .max(MAX_VALID_VND_PRICE)
     .optional()
     .describe(
-      'Optional strikethrough original price in VND declared by the seller.'
+      'Optional live selling price or rate observed on the page (VND or PCT).'
+    ),
+  observedOriginalPriceVnd: z
+    .number()
+    .finite()
+    .positive()
+    .max(MAX_VALID_VND_PRICE)
+    .optional()
+    .describe(
+      'Optional strikethrough original price or rate declared by the seller (VND or PCT).'
     ),
 });
 
 export const GetGenuineDealsInputSchema = z.strictObject({
   category: SUPPORTED_CATEGORY_ENUM.default('all').describe(
-    'Canonical device category filter across the 5 tech categories, or "all".'
+    'Canonical category filter, or "all".'
   ),
   platform: SUPPORTED_PLATFORM_OR_ALL_ENUM.default('all').describe(
     'Optional filter for one of the 22 tracked retail platforms, or "all".'
   ),
   maxBudgetVnd: z
     .number()
-    .int()
-    .min(1)
+    .finite()
+    .positive()
     .max(MAX_VALID_VND_PRICE)
     .optional()
-    .describe('Optional maximum VND budget ceiling for returned deals.'),
+    .describe(
+      'Optional maximum budget or rate ceiling (VND or PCT) for returned deals.'
+    ),
   officialOnly: z
     .boolean()
     .default(false)
@@ -1081,14 +1096,25 @@ function resolveProductObservedAt(
   return { observedAt: fallbackIso, freshnessSource: 'cache_snapshot' };
 }
 
-function computeMedianPrice(prices: readonly number[]): number | null {
+function computeMedianPrice(
+  prices: readonly number[],
+  currency?: string | null
+): number | null {
   const valid = prices
     .filter((v) => Number.isFinite(v) && v > 0 && v <= MAX_VALID_VND_PRICE)
     .sort((a, b) => a - b);
   if (valid.length === 0) return null;
   const mid = Math.floor(valid.length / 2);
-  if (valid.length % 2 === 1) return valid[mid]!;
-  return Math.round((valid[mid - 1]! + valid[mid]!) / 2);
+  if (valid.length % 2 === 1) {
+    const val = sanitizeCurrencyPriceValue(valid[mid]!, currency);
+    return val > 0 ? val : null;
+  }
+  const avg = (valid[mid - 1]! + valid[mid]!) / 2;
+  if (normalizePriceCurrency(currency) === 'PCT') {
+    const roundedPct = Math.round(avg * 100) / 100;
+    return roundedPct > 0 ? roundedPct : null;
+  }
+  return Math.round(avg);
 }
 
 function getPlausibleInStockMerchantOffers(offers: readonly MerchantOffer[]): {
@@ -1129,12 +1155,16 @@ function resolveExpertRating10(product: MasterProduct): number | null {
   return roundScore(Math.min(10, normalized10), 1);
 }
 
-function toBoundedPositiveVndOrNull(raw: unknown): number | null {
+function toBoundedPositiveVndOrNull(
+  raw: unknown,
+  currency?: string | null
+): number | null {
   const parsed = parseFiniteDecimalInput(raw);
   if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_VALID_VND_PRICE) {
     return null;
   }
-  return Math.round(parsed);
+  const normalized = sanitizeCurrencyPriceValue(parsed, currency);
+  return normalized > 0 ? normalized : null;
 }
 
 export function sanitizeMcpErrorMessage(
@@ -1224,20 +1254,30 @@ async function executeSearchVerifiedCatalog(
     const category = getMasterProductCategorySlug(stored);
     const scoped = applyCategorySpecTemplate(category, stored);
     const rawOffers = offersList[idx] ?? [];
+    const currency = resolveListingPriceCurrency({
+      categorySlug: category,
+      master: scoped,
+      offers: rawOffers,
+    });
     const {
       inStockOffers,
       plausibleInStockOffers,
       excludedUnavailableCount,
       excludedBaitCount,
     } = getPlausibleInStockMerchantOffers(rawOffers);
-    const plausiblePrices = plausibleInStockOffers.map((o) =>
-      Math.round(parseFiniteDecimalInput(o.price_current))
-    );
+    const plausiblePrices = plausibleInStockOffers
+      .map((o) =>
+        sanitizeCurrencyPriceValue(
+          parseFiniteDecimalInput(o.price_current),
+          o.currency ?? currency
+        )
+      )
+      .filter((p) => p > 0 && p <= MAX_VALID_VND_PRICE);
     const verifiedMinPrice =
       plausiblePrices.length > 0 ? Math.min(...plausiblePrices) : null;
     const verifiedMaxPrice =
       plausiblePrices.length > 0 ? Math.max(...plausiblePrices) : null;
-    const verifiedMedianPrice = computeMedianPrice(plausiblePrices);
+    const verifiedMedianPrice = computeMedianPrice(plausiblePrices, currency);
     const href = getMasterProductHref(scoped);
     const { observedAt, freshnessSource } = resolveProductObservedAt(
       scoped,
@@ -1249,6 +1289,7 @@ async function executeSearchVerifiedCatalog(
       name: sanitizeMcpPublicText(scoped.name, 240),
       brand: sanitizeMcpPublicText(scoped.brand, 80),
       category,
+      currency,
       verified_min_price_vnd: verifiedMinPrice,
       verified_median_price_vnd: verifiedMedianPrice,
       verified_max_price_vnd: verifiedMaxPrice,
@@ -1431,14 +1472,27 @@ async function executeGetStoreOffersAndPriceTruth(
     resolveProductObservedAt(product, snapshotAt);
   const productPriceObservedAt = latestGlobalPriceIso ?? productObservedAt;
 
-  const allPlausiblePrices = plausibleInStockOffers.map((o) =>
-    Math.round(parseFiniteDecimalInput(o.price_current))
-  );
+  const productCurrency = resolveListingPriceCurrency({
+    categorySlug: category,
+    master: product,
+    offers: plausibleInStockOffers,
+  });
+  const allPlausiblePrices = plausibleInStockOffers
+    .map((o) =>
+      sanitizeCurrencyPriceValue(
+        parseFiniteDecimalInput(o.price_current),
+        o.currency ?? productCurrency
+      )
+    )
+    .filter((p) => p > 0 && p <= MAX_VALID_VND_PRICE);
   const verifiedMinPrice =
     allPlausiblePrices.length > 0 ? Math.min(...allPlausiblePrices) : null;
   const verifiedMaxPrice =
     allPlausiblePrices.length > 0 ? Math.max(...allPlausiblePrices) : null;
-  const verifiedMedianPrice = computeMedianPrice(allPlausiblePrices);
+  const verifiedMedianPrice = computeMedianPrice(
+    allPlausiblePrices,
+    productCurrency
+  );
 
   const filteredOffers = plausibleInStockOffers
     .filter((o) => {
@@ -1468,13 +1522,18 @@ async function executeGetStoreOffersAndPriceTruth(
 
   const offers = filteredOffers.map((rawOffer) => {
     const publicOffer = withPublicOfferReviewRisk(rawOffer);
-    const currentPrice = Math.round(
-      parseFiniteDecimalInput(publicOffer.price_current)
+    const offerCurrency = normalizePriceCurrency(
+      publicOffer.currency ?? productCurrency
+    );
+    const currentPrice = sanitizeCurrencyPriceValue(
+      parseFiniteDecimalInput(publicOffer.price_current),
+      offerCurrency
     );
     const rawOrig = parseFiniteDecimalInput(publicOffer.price_original);
     const normalizedOrig = normalizeOfferOriginalPrice(
       currentPrice,
-      Number.isFinite(rawOrig) ? rawOrig : 0
+      Number.isFinite(rawOrig) ? rawOrig : 0,
+      offerCurrency
     );
     const normOfferId = normalizeOfferId(publicOffer.id);
     const offerAnalysis =
@@ -1499,6 +1558,7 @@ async function executeGetStoreOffersAndPriceTruth(
       id: sanitizeMcpPublicText(publicOffer.id, 128),
       platform: platformSlug,
       title: sanitizeMcpPublicText(publicOffer.title, 280),
+      currency: offerCurrency,
       price_current_vnd: currentPrice,
       price_original_vnd: normalizedOrig,
       discount_verdict: offerAnalysis?.verdict ?? null,
@@ -1548,6 +1608,7 @@ async function executeGetStoreOffersAndPriceTruth(
       observed_at: productObservedAt,
     },
     price_truth: {
+      currency: productCurrency,
       verified_min_price_vnd: verifiedMinPrice,
       verified_median_price_vnd: verifiedMedianPrice,
       verified_max_price_vnd: verifiedMaxPrice,
@@ -1767,9 +1828,19 @@ async function executeCompareDevicesByUseCase(
       excludedUnavailableCount,
       excludedBaitCount,
     } = getPlausibleInStockMerchantOffers(rawOffers);
-    const plausiblePrices = plausibleInStockOffers.map((o) =>
-      Math.round(parseFiniteDecimalInput(o.price_current))
-    );
+    const deviceCurrency = resolveListingPriceCurrency({
+      categorySlug: lockedCategory,
+      master: scoped,
+      offers: plausibleInStockOffers,
+    });
+    const plausiblePrices = plausibleInStockOffers
+      .map((o) =>
+        sanitizeCurrencyPriceValue(
+          parseFiniteDecimalInput(o.price_current),
+          o.currency ?? deviceCurrency
+        )
+      )
+      .filter((p) => p > 0 && p <= MAX_VALID_VND_PRICE);
     const verifiedMinPrice =
       plausiblePrices.length > 0 ? Math.min(...plausiblePrices) : null;
     const verifiedMaxPrice =
@@ -1807,6 +1878,7 @@ async function executeCompareDevicesByUseCase(
       name: sanitizeMcpPublicText(scoped.name, 240),
       brand: sanitizeMcpPublicText(scoped.brand, 80),
       category: lockedCategory,
+      currency: deviceCurrency,
       verified_min_price_vnd: verifiedMinPrice,
       verified_max_price_vnd: verifiedMaxPrice,
       in_stock_offer_count: plausibleInStockOffers.length,
@@ -1885,12 +1957,18 @@ async function executeAuditListingUrl(
   const inspection =
     await readers.getCachedInspectProductOrShopUrl(lookupTarget);
 
+  const masterCategory = inspection.masterProduct
+    ? getMasterProductCategorySlug(inspection.masterProduct)
+    : undefined;
   const masterProduct = inspection.masterProduct
-    ? applyCategorySpecTemplate(
-        getMasterProductCategorySlug(inspection.masterProduct),
-        inspection.masterProduct
-      )
+    ? applyCategorySpecTemplate(masterCategory!, inspection.masterProduct)
     : null;
+  const auditCurrency = resolveListingPriceCurrency({
+    categorySlug: masterCategory,
+    currency: inspection.matchedOffer?.currency,
+    master: masterProduct ?? undefined,
+    offers: inspection.allOffers,
+  });
   const queryPrice = rawArgs.observedPriceVnd ?? null;
   const queryOriginalPrice = rawArgs.observedOriginalPriceVnd ?? null;
 
@@ -1901,6 +1979,8 @@ async function executeAuditListingUrl(
       matchedOfferPriceCurrent: inspection.matchedOffer?.price_current,
       matchedOfferPriceOriginal: inspection.matchedOffer?.price_original,
       masterMinPrice: masterProduct?.min_price,
+      currency: auditCurrency,
+      categorySlug: masterCategory,
       maxVnd: MAX_VALID_VND_PRICE,
     }
   );
@@ -1971,8 +2051,14 @@ async function executeAuditListingUrl(
     ? withPublicReviewRisk(inspection.merchantProfile)
     : null;
 
+  const matchedOfferCurrency = normalizePriceCurrency(
+    matchedOfferPublic?.currency ?? auditCurrency
+  );
   const matchedOfferPriceCurrent = matchedOfferPublic
-    ? toBoundedPositiveVndOrNull(matchedOfferPublic.price_current)
+    ? toBoundedPositiveVndOrNull(
+        matchedOfferPublic.price_current,
+        matchedOfferCurrency
+      )
     : null;
   const rawMatchedOfferOrig = matchedOfferPublic
     ? parseFiniteDecimalInput(matchedOfferPublic.price_original)
@@ -1981,7 +2067,8 @@ async function executeAuditListingUrl(
     matchedOfferPriceCurrent !== null
       ? normalizeOfferOriginalPrice(
           matchedOfferPriceCurrent,
-          Number.isFinite(rawMatchedOfferOrig) ? rawMatchedOfferOrig : 0
+          Number.isFinite(rawMatchedOfferOrig) ? rawMatchedOfferOrig : 0,
+          matchedOfferCurrency
         )
       : null;
 
@@ -1994,6 +2081,9 @@ async function executeAuditListingUrl(
     .slice(0, 5)
     .map((offer) => {
       const pub = withPublicOfferReviewRisk(offer);
+      const offerCurrency = normalizePriceCurrency(
+        pub.currency ?? auditCurrency
+      );
       return {
         id: sanitizeMcpPublicText(pub.id, 128),
         platform: sanitizeMcpPublicText(
@@ -2001,8 +2091,10 @@ async function executeAuditListingUrl(
           32
         ).toLowerCase(),
         title: sanitizeMcpPublicText(pub.title, 240),
-        price_current_vnd: Math.round(
-          parseFiniteDecimalInput(pub.price_current)
+        currency: offerCurrency,
+        price_current_vnd: sanitizeCurrencyPriceValue(
+          parseFiniteDecimalInput(pub.price_current),
+          offerCurrency
         ),
         merchant_name: sanitizeMcpPublicText(pub.merchant?.name, 160),
         is_official_mall: Boolean(pub.merchant?.is_official),
@@ -2054,6 +2146,7 @@ async function executeAuditListingUrl(
           name: sanitizeMcpPublicText(masterProduct.name, 240),
           brand: sanitizeMcpPublicText(masterProduct.brand, 80),
           category: getMasterProductCategorySlug(masterProduct),
+          currency: auditCurrency,
           bayesian_rating_5: productRatingScore5(masterProduct),
           expert_rating_10: resolveExpertRating10(masterProduct),
           canonical_citation_url: buildCanonicalRateUrl(
@@ -2070,6 +2163,7 @@ async function executeAuditListingUrl(
             32
           ).toLowerCase(),
           title: sanitizeMcpPublicText(matchedOfferPublic.title, 280),
+          currency: matchedOfferCurrency,
           price_current_vnd: matchedOfferPriceCurrent,
           price_original_vnd: matchedOfferPriceOriginal,
           availability: matchedOfferPublic.availability ?? null,

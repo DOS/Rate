@@ -18,6 +18,11 @@ import {
   getRadarSignal,
   type RadarSignal,
 } from '../../lib/deal-radar';
+import {
+  formatListingPrice,
+  sanitizeCurrencyPriceValue,
+} from '../../lib/locale-format';
+import { resolveListingPriceCurrency } from '../../lib/rate-domain-core';
 import { isOfferUnavailable } from '../../lib/product-market-stats';
 import { roundScore } from '../../lib/rating-display';
 import { normalizeOfferId, plausibleOffers } from '@repo/shared-data/rules';
@@ -47,6 +52,7 @@ export interface CrossPlatformDealRadarItem {
   /** Null for a seller with no score at all (DOS/Rate#1484). */
   merchantRiskScore: number | null;
   offerUrl: string;
+  currency?: 'VND' | 'PCT';
   priceCurrent: number;
   priceOriginal: number | null;
   marketMedianPrice: number;
@@ -70,6 +76,7 @@ export interface CrossPlatformPriceSpreadItem {
   categorySlug: CanonicalCategorySlug;
   productHref: string;
   imageUrl: string | null;
+  currency?: 'VND' | 'PCT';
   platformCount: number;
   offerCount: number;
   minPrice: number;
@@ -102,7 +109,7 @@ export interface CrossPlatformDealRadarResponse {
 /** Offers needed before a deal can be called the multi-platform floor. */
 export const MIN_OFFERS_FOR_ALL_TIME_LOW = 3;
 
-function computeMedian(values: number[]): number {
+function computeMedian(values: number[], currency?: string | null): number {
   const valid = values
     .filter((v) => Number.isFinite(v) && v > 0 && v <= MAX_VALID_VND_PRICE)
     .sort((a, b) => a - b);
@@ -111,7 +118,10 @@ function computeMedian(values: number[]): number {
   if (valid.length % 2 === 1) {
     return valid[mid]!;
   }
-  return Math.round((valid[mid - 1]! + valid[mid]!) / 2);
+  return sanitizeCurrencyPriceValue(
+    (valid[mid - 1]! + valid[mid]!) / 2,
+    currency
+  );
 }
 
 /**
@@ -417,10 +427,16 @@ export function computeCrossPlatformDealRadarFromData(
       );
     }
 
+    const offerCurrency = resolveListingPriceCurrency({
+      master,
+      offers: validOffers,
+    });
+    const fmtOfferPrice = (amount: number) =>
+      formatListingPrice(amount, offerCurrency, 'vi');
     const prices = validOffers.map((o) => o.price_current);
     const marketMinPrice = Math.min(...prices);
     const marketMaxPrice = Math.max(...prices);
-    const marketMedianPrice = computeMedian(prices);
+    const marketMedianPrice = computeMedian(prices, offerCurrency);
     if (marketMedianPrice <= 0) continue;
 
     const pickPositiveRating = (val: unknown): number =>
@@ -444,7 +460,10 @@ export function computeCrossPlatformDealRadarFromData(
     );
     const cheapestOffer = sortedByPrice[0]!;
     const priciestOffer = sortedByPrice[sortedByPrice.length - 1]!;
-    const spreadVnd = Math.max(0, marketMaxPrice - marketMinPrice);
+    const spreadVnd = sanitizeCurrencyPriceValue(
+      Math.max(0, marketMaxPrice - marketMinPrice),
+      offerCurrency
+    );
     const spreadPct =
       marketMinPrice > 0
         ? Math.round((spreadVnd / marketMinPrice) * 1000) / 10
@@ -467,6 +486,7 @@ export function computeCrossPlatformDealRadarFromData(
         categorySlug,
         productHref,
         imageUrl,
+        currency: offerCurrency,
         platformCount,
         offerCount: validOffers.length,
         minPrice: marketMinPrice,
@@ -479,7 +499,7 @@ export function computeCrossPlatformDealRadarFromData(
         cheapestOfferUrl: cheapestOffer.url,
         priciestPlatform: priciestOffer.platform,
         priciestMerchantName: priciestOffer.merchant.name,
-        explanationVi: `Chênh lệch ${spreadVnd.toLocaleString('vi-VN')} ₫ (${spreadPct}%) giữa ${cheapestOffer.platform.toUpperCase()} (${marketMinPrice.toLocaleString('vi-VN')} ₫) và ${priciestOffer.platform.toUpperCase()} (${marketMaxPrice.toLocaleString('vi-VN')} ₫).`,
+        explanationVi: `Chênh lệch ${fmtOfferPrice(spreadVnd)} (${spreadPct}%) giữa ${cheapestOffer.platform.toUpperCase()} (${fmtOfferPrice(marketMinPrice)}) và ${priciestOffer.platform.toUpperCase()} (${fmtOfferPrice(marketMaxPrice)}).`,
       });
     }
 
@@ -491,13 +511,18 @@ export function computeCrossPlatformDealRadarFromData(
     );
 
     if (bestOffer && bestOffer.price_current < marketMedianPrice) {
-      const savingsVsMedianVnd = marketMedianPrice - bestOffer.price_current;
+      const savingsVsMedianVnd =
+        offerCurrency === 'PCT'
+          ? Math.round((marketMedianPrice - bestOffer.price_current) * 100) /
+            100
+          : marketMedianPrice - bestOffer.price_current;
       const savingsVsMedianPct = Number(
         ((savingsVsMedianVnd / marketMedianPrice) * 100).toFixed(1)
       );
       const rawBestOrig = normalizeOfferOriginalPrice(
         bestOffer.price_current,
-        bestOffer.price_original
+        bestOffer.price_original,
+        offerCurrency
       );
       const validBestOrig =
         rawBestOrig !== null &&
@@ -540,6 +565,7 @@ export function computeCrossPlatformDealRadarFromData(
         isOfficialMall: Boolean(bestOffer.merchant.is_official),
         merchantRiskScore: resolveEffectiveMerchantRisk(bestOffer.merchant),
         offerUrl: bestOffer.url,
+        currency: offerCurrency,
         priceCurrent: bestOffer.price_current,
         priceOriginal: validBestOrig,
         marketMedianPrice,
@@ -551,7 +577,7 @@ export function computeCrossPlatformDealRadarFromData(
         claimedDiscountPct,
         fakeMarkupPct: 0,
         jreviewsScore10,
-        explanationVi: `Rẻ hơn giá trung vị của ${validOffers.length} tin bán ${savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${savingsVsMedianPct}%) tại ${bestOffer.merchant.name} (${bestOffer.platform.toUpperCase()}).`,
+        explanationVi: `Rẻ hơn giá trung vị của ${validOffers.length} tin bán ${fmtOfferPrice(savingsVsMedianVnd)} (-${savingsVsMedianPct}%) tại ${bestOffer.merchant.name} (${bestOffer.platform.toUpperCase()}).`,
       });
     }
 
@@ -566,7 +592,8 @@ export function computeCrossPlatformDealRadarFromData(
       }
       const validOrig = normalizeOfferOriginalPrice(
         off.price_current,
-        off.price_original
+        off.price_original,
+        offerCurrency
       );
       if (!validOrig || validOrig <= off.price_current) {
         continue;
@@ -581,6 +608,14 @@ export function computeCrossPlatformDealRadarFromData(
         fakeMarkupPct >= FAKE_MARKUP_THRESHOLD_PCT &&
         off.price_current >= marketMedianPrice
       ) {
+        const trapSavingsDelta =
+          offerCurrency === 'PCT'
+            ? Math.round((marketMedianPrice - off.price_current) * 100) / 100
+            : marketMedianPrice - off.price_current;
+        const trapOverFloor =
+          offerCurrency === 'PCT'
+            ? Math.round((off.price_current - marketMinPrice) * 100) / 100
+            : off.price_current - marketMinPrice;
         const candidateTrap: CrossPlatformDealRadarItem = {
           id: `trap-${safeMasterSlug}-${off.platform}-${off.id}`,
           verdict: 'inflated_fake_sale',
@@ -597,12 +632,13 @@ export function computeCrossPlatformDealRadarFromData(
           isOfficialMall: Boolean(off.merchant.is_official),
           merchantRiskScore: resolveEffectiveMerchantRisk(off.merchant),
           offerUrl: off.url,
+          currency: offerCurrency,
           priceCurrent: off.price_current,
           priceOriginal: validOrig,
           marketMedianPrice,
           marketMinPrice,
           marketMaxPrice,
-          savingsVsMedianVnd: marketMedianPrice - off.price_current,
+          savingsVsMedianVnd: trapSavingsDelta,
           savingsVsMedianPct: Number(
             (
               ((marketMedianPrice - off.price_current) / marketMedianPrice) *
@@ -613,7 +649,7 @@ export function computeCrossPlatformDealRadarFromData(
           claimedDiscountPct,
           fakeMarkupPct,
           jreviewsScore10,
-          explanationVi: `Gian hàng treo giá gốc gạch ngang ${validOrig.toLocaleString('vi-VN')} ₫ (cao hơn trung vị thị trường +${fakeMarkupPct}%) để tạo cảm giác giảm ${claimedDiscountPct}%, nhưng giá thực bán cao hơn đáy thị trường ${(off.price_current - marketMinPrice).toLocaleString('vi-VN')} ₫.`,
+          explanationVi: `Gian hàng treo giá gốc gạch ngang ${fmtOfferPrice(validOrig)} (cao hơn trung vị thị trường +${fakeMarkupPct}%) để tạo cảm giác giảm ${claimedDiscountPct}%, nhưng giá thực bán cao hơn đáy thị trường ${fmtOfferPrice(trapOverFloor)}.`,
         };
 
         if (

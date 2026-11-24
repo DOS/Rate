@@ -2,7 +2,9 @@ import { Suspense } from 'react';
 import {
   MAX_VALID_VND_PRICE,
   isCanonicalCategorySlug,
+  isCategoryVisibleInDirectory,
   resolveCompareEffectiveUserRating,
+  resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
@@ -11,6 +13,7 @@ import { IntentLink } from '@/components/elementary/IntentLink';
 import {
   getCachedCategoryDirectoryFacets,
   getCachedMasterProducts,
+  getCachedRatePlatformStats,
   getItemCatalogPage,
   getCrossPlatformDealRadar,
   getMasterProducts,
@@ -50,6 +53,7 @@ import {
   BsPhone,
   BsSearch,
   BsTrophy,
+  BsTv,
   BsGraphDownArrow,
   BsExclamationTriangle,
 } from 'react-icons/bs';
@@ -61,9 +65,11 @@ import { productImageUrl } from '@/lib/rate-domain-core';
 import {
   localizeDecimalPoints,
   formatDecimal,
+  formatListingPrice,
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
+  sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import {
   canonicalVersusOrder,
@@ -120,7 +126,10 @@ export function catalogCanonicalUrl(
     : base;
 }
 
-export function sanitizeCatalogRadarPriceVnd(value: unknown): number | null {
+export function sanitizeCatalogRadarPriceVnd(
+  value: unknown,
+  currency?: string | null
+): number | null {
   if (typeof value !== 'number' && typeof value !== 'string') return null;
   let raw: number;
   if (typeof value === 'string') {
@@ -136,16 +145,21 @@ export function sanitizeCatalogRadarPriceVnd(value: unknown): number | null {
   if (!Number.isFinite(raw) || raw <= 0 || raw > MAX_VALID_VND_PRICE) {
     return null;
   }
-  const rounded = Math.round(raw);
-  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : null;
+  const sanitized = sanitizeCurrencyPriceValue(raw, currency);
+  return sanitized > 0 && sanitized <= MAX_VALID_VND_PRICE ? sanitized : null;
 }
 
 export function formatCatalogRadarPriceVnd(
   value: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
-  const safe = sanitizeCatalogRadarPriceVnd(value);
-  return safe != null ? formatPriceVnd(safe, locale) : '-';
+  const safe = sanitizeCatalogRadarPriceVnd(value, currency);
+  if (safe == null) return '-';
+  return currency === 'PCT' || categorySlug === 'internet-telecom'
+    ? formatListingPrice(safe, currency ?? 'VND', locale, { categorySlug })
+    : formatPriceVnd(safe, locale);
 }
 
 const SAFE_PAGE_VERSUS_SLUG_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/;
@@ -276,8 +290,25 @@ export function pickCatalogVersusPair<T extends { slug: string }>(
 export type CatalogPriceChipKey =
   | 'page.chipPrice'
   | 'page.chipPriceZero'
+  | 'page.chipPriceThousand'
   | 'page.chipPriceMillion'
   | 'page.chipPriceMillionPlus';
+
+function formatCatalogPriceBound(
+  amountVnd: number,
+  t: (
+    key: CatalogPriceChipKey,
+    values?: Record<string, string | number>
+  ) => string
+): string {
+  if (amountVnd > 0 && amountVnd < 1_000_000) {
+    return t('page.chipPriceThousand', {
+      amount: Math.max(1, Math.round(amountVnd / 1_000)),
+    });
+  }
+  const millions = Math.round((amountVnd / 1_000_000) * 10) / 10;
+  return t('page.chipPriceMillion', { amount: millions });
+}
 
 export function formatCatalogPriceChip(
   minPrice: number,
@@ -291,12 +322,10 @@ export function formatCatalogPriceChip(
   const safeMin = Number.isFinite(minPrice) && minPrice > 0 ? minPrice : 0;
   const safeMax = Number.isFinite(maxPrice) && maxPrice > 0 ? maxPrice : 0;
   const minLabel =
-    safeMin > 0
-      ? t('page.chipPriceMillion', { amount: Math.round(safeMin / 1_000_000) })
-      : t('page.chipPriceZero');
+    safeMin > 0 ? formatCatalogPriceBound(safeMin, t) : t('page.chipPriceZero');
   const maxLabel =
     safeMax > 0
-      ? t('page.chipPriceMillion', { amount: Math.round(safeMax / 1_000_000) })
+      ? formatCatalogPriceBound(safeMax, t)
       : t('page.chipPriceMillionPlus', { amount: maxSliderMillion });
   return t('page.chipPrice', { min: minLabel, max: maxLabel });
 }
@@ -545,21 +574,27 @@ export async function CategoryCatalogContent({
 
   const validGenuineDeals = Array.isArray(categoryDealRadar?.genuineDeals)
     ? categoryDealRadar.genuineDeals.filter(
-        (g) => sanitizeCatalogRadarPriceVnd(g?.priceCurrent) != null
+        (g) =>
+          sanitizeCatalogRadarPriceVnd(g?.priceCurrent, g?.currency) != null
       )
     : [];
   const validFakeSaleTraps = Array.isArray(categoryDealRadar?.fakeSaleTraps)
     ? categoryDealRadar.fakeSaleTraps.filter(
-        (trap) => sanitizeCatalogRadarPriceVnd(trap?.priceCurrent) != null
+        (trap) =>
+          sanitizeCatalogRadarPriceVnd(trap?.priceCurrent, trap?.currency) !=
+          null
       )
     : [];
   const validPriceSpreadLeaders = Array.isArray(
     categoryDealRadar?.priceSpreadLeaders
   )
     ? categoryDealRadar.priceSpreadLeaders.filter((sp) => {
-        const minP = sanitizeCatalogRadarPriceVnd(sp?.minPrice);
-        const maxP = sanitizeCatalogRadarPriceVnd(sp?.maxPrice);
-        const spread = sanitizeCatalogRadarPriceVnd(sp?.spreadVnd);
+        const minP = sanitizeCatalogRadarPriceVnd(sp?.minPrice, sp?.currency);
+        const maxP = sanitizeCatalogRadarPriceVnd(sp?.maxPrice, sp?.currency);
+        const spread = sanitizeCatalogRadarPriceVnd(
+          sp?.spreadVnd,
+          sp?.currency
+        );
         return minP != null && maxP != null && maxP >= minP && spread != null;
       })
     : [];
@@ -662,10 +697,24 @@ export async function CategoryCatalogContent({
 
   // Breadcrumb and a summary ItemList of the listed products, the form Google
   // reads on list pages (DOS/Rate#750).
-  const [tNav, tDetail] = await Promise.all([
+  const [tNav, tDetail, platformStats] = await Promise.all([
     getTranslations({ locale, namespace: 'rate.nav' }),
     getTranslations({ locale, namespace: 'productDetail' }),
+    getCachedRatePlatformStats().catch(() => null),
   ]);
+  const categoryCountBySlug = new Map(
+    (platformStats?.categoriesWithCounts ?? []).map((cat) => [
+      cat.slug,
+      cat.productCount,
+    ])
+  );
+  const visibleSidebarCategories = facets.categories.filter((cat) =>
+    isCategoryVisibleInDirectory(
+      cat.slug,
+      categoryCountBySlug.get(cat.slug) ?? 0,
+      categorySlug
+    )
+  );
   const categoryLabel = tNav.has(categorySlug)
     ? tNav(categorySlug as 'smartphones')
     : categorySlug;
@@ -702,9 +751,16 @@ export async function CategoryCatalogContent({
     ],
   };
 
+  const populatedExtraCategories = (platformStats?.categoriesWithCounts ?? [])
+    .filter((cat) => cat.productCount > 0)
+    .map((cat) => cat.slug);
+
   return (
     <ClientMessages scope="catalog">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedExtraCategories}
+      >
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -901,7 +957,7 @@ export async function CategoryCatalogContent({
                 >
                   <ListSidebarOne
                     categorySlug={categorySlug}
-                    categories={facets.categories}
+                    categories={visibleSidebarCategories}
                     brandFacets={facets.brands}
                   />
                 </Suspense>
@@ -1142,7 +1198,12 @@ export async function CategoryCatalogContent({
                       if (screen) {
                         cardSpecs.push({
                           key: 'screen',
-                          icon: <BsPhone aria-hidden="true" />,
+                          icon:
+                            categorySlug === 'tvs' ? (
+                              <BsTv aria-hidden="true" />
+                            ) : (
+                              <BsPhone aria-hidden="true" />
+                            ),
                           label: String(screen),
                         });
                       }
@@ -1183,6 +1244,10 @@ export async function CategoryCatalogContent({
                             radarSignal={getRadarSignal(radarIndex, item.slug)}
                             minPrice={Number(item.min_price || 0)}
                             maxPrice={Number(item.max_price || 0)}
+                            currency={resolveListingPriceCurrency({
+                              categorySlug,
+                              metadata: item.metadata,
+                            })}
                             merchantCount={item.merchant_count || 0}
                             saleState={saleStateOfMaster(item)}
                             verified
@@ -1288,7 +1353,8 @@ export async function CategoryCatalogContent({
                                   <span className="rate-radar-price">
                                     {formatCatalogRadarPriceVnd(
                                       g.priceCurrent,
-                                      locale
+                                      locale,
+                                      g.currency
                                     )}
                                   </span>
                                   <span className="rate-radar-tag is-good">
@@ -1335,7 +1401,8 @@ export async function CategoryCatalogContent({
                                   <span className="rate-radar-price">
                                     {formatCatalogRadarPriceVnd(
                                       trap.priceCurrent,
-                                      locale
+                                      locale,
+                                      trap.currency
                                     )}
                                   </span>
                                   <span className="rate-radar-tag is-bad">
@@ -1372,8 +1439,20 @@ export async function CategoryCatalogContent({
                           <div className="row g-2">
                             {validPriceSpreadLeaders.slice(0, 2).map((sp) => {
                               const safeSpread = sanitizeCatalogRadarPriceVnd(
-                                sp.spreadVnd
+                                sp.spreadVnd,
+                                sp.currency
                               );
+                              const spreadAmountText =
+                                safeSpread == null
+                                  ? '-'
+                                  : sp.currency === 'PCT'
+                                    ? formatListingPrice(
+                                        safeSpread,
+                                        sp.currency,
+                                        locale,
+                                        { includeUnitSuffix: false }
+                                      )
+                                    : formatNumber(safeSpread, locale);
                               return (
                                 <div key={sp.productSlug} className="col-12">
                                   <div className="rate-radar-spread-item">
@@ -1396,16 +1475,21 @@ export async function CategoryCatalogContent({
                                     </div>
                                     <div className="rate-radar-item-side">
                                       <span className="rate-radar-tag is-warn">
-                                        {t('page.spreadDiffBadge', {
-                                          pct: formatPlainNumber(
-                                            sp.spreadPct,
-                                            locale
-                                          ),
-                                          amount:
-                                            safeSpread != null
-                                              ? formatNumber(safeSpread, locale)
-                                              : '-',
-                                        })}
+                                        {sp.currency === 'PCT'
+                                          ? t('page.spreadDiffBadgeCurrency', {
+                                              pct: formatPlainNumber(
+                                                sp.spreadPct,
+                                                locale
+                                              ),
+                                              amount: spreadAmountText,
+                                            })
+                                          : t('page.spreadDiffBadge', {
+                                              pct: formatPlainNumber(
+                                                sp.spreadPct,
+                                                locale
+                                              ),
+                                              amount: spreadAmountText,
+                                            })}
                                       </span>
                                     </div>
                                   </div>

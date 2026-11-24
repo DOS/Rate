@@ -8,7 +8,10 @@ import {
   type VariantSource,
 } from '@repo/shared-data';
 import {
+  CANONICAL_CATEGORY_SLUGS,
+  SIZELESS_CATEGORY_SLUGS,
   UnkeyableProductTitleError,
+  WAVE_E2_SERVICE_CATEGORY_SLUGS,
   detectCategorySlug,
   type CanonicalCategorySlug,
   type NormalizedProductCandidate,
@@ -22,13 +25,7 @@ import type { RateSupabaseClient } from './types.js';
 
 const logger = createImporterLogger('EntityMatcher');
 
-const VALID_CATEGORY_SLUGS = new Set<CanonicalCategorySlug>([
-  'smartphones',
-  'tablets',
-  'laptops',
-  'smartwatches',
-  'earbuds',
-]);
+const VALID_CATEGORY_SLUGS = CANONICAL_CATEGORY_SLUGS;
 
 /** Minimum pg_trgm similarity returned from RPC so ambiguous near-misses (0.65..0.69) can be flagged as draft */
 export const ENTITY_MATCH_CANDIDATE_FLOOR = 0.65;
@@ -276,7 +273,8 @@ export class EntityMatcher {
     const variantKnown =
       typeof candidate.variant_known === 'boolean'
         ? candidate.variant_known
-        : keys.variantKey !== UNKNOWN_VARIANT_KEY || candidate.category_slug === 'earbuds';
+        : keys.variantKey !== UNKNOWN_VARIANT_KEY ||
+          SIZELESS_CATEGORY_SLUGS.has(candidate.category_slug);
     const variantSource: VariantSource | null = variantKnown
       ? (candidate.variant_source ??
         (keys.variantKey === UNKNOWN_VARIANT_KEY ? 'single_variant' : 'title'))
@@ -644,7 +642,7 @@ export class EntityMatcher {
     // size-less title.
     const validFuzzyMatches =
       candidate.storage_gb == null &&
-      candidate.category_slug !== 'earbuds' &&
+      !SIZELESS_CATEGORY_SLUGS.has(candidate.category_slug) &&
       candidate.category_slug !== 'smartwatches'
         ? scoredFuzzyMatches.filter(m => !isStorageKeyed(m.model_key))
         : scoredFuzzyMatches;
@@ -861,6 +859,16 @@ export class EntityMatcher {
         has_5g: toBooleanOrNull(candidate.has_5g),
         specifications: candidate.specifications,
         key_specs: candidate.key_specs,
+        entity_type:
+          candidate.entity_type === 'service' ||
+          WAVE_E2_SERVICE_CATEGORY_SLUGS.has(candidate.category_slug)
+            ? 'service'
+            : 'product',
+        ...(candidate.metadata &&
+        typeof candidate.metadata === 'object' &&
+        !Array.isArray(candidate.metadata)
+          ? { metadata: candidate.metadata }
+          : {}),
         images: safeImages,
         thumbnail: safeImages[0] || null,
         colors: safeColors,

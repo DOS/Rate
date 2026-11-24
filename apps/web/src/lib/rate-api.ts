@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
+import {
+  normalizePriceCurrency,
+  sanitizeCurrencyPriceValue,
+} from '@/lib/locale-format';
 import { timeStep } from '@/lib/server-timing';
 import { rankModelCandidates } from '@/lib/model-match';
 import { isPendingReview } from '@/lib/review-display';
@@ -36,6 +40,7 @@ import {
   hasReviewRiskEvidence,
   merchantRiskFromSignals,
   filterAndSortMerchants,
+  resolveListingPriceCurrency,
   sanitizePostgrestFilterToken,
   type ParsedEcommerceUrl,
   parseEcommerceUrlOrQuery,
@@ -69,6 +74,7 @@ export {
   extractPersistedBreakdown,
   storedRiskSplit,
   filterAndSortMerchants,
+  resolveListingPriceCurrency,
   sanitizePostgrestFilterToken,
   parseEcommerceUrlOrQuery,
   sanitizeAnPhatItemId,
@@ -200,6 +206,7 @@ export interface MerchantOffer {
   title: string;
   price_current: number;
   price_original: number | null;
+  currency?: 'VND' | 'PCT';
   stock: number;
   rating_star: number;
   rating_count: number;
@@ -969,6 +976,7 @@ interface RawTrustViewRow {
   title: string;
   price_current: number | string;
   price_original: number | string | null;
+  currency?: string | null;
   stock: number;
   rating_star: number | string;
   rating_count: number;
@@ -990,7 +998,8 @@ interface RawTrustViewRow {
  */
 export function normalizeOfferOriginalPrice(
   priceCurrent: number,
-  rawOriginal: unknown
+  rawOriginal: unknown,
+  currency?: string | null
 ): number | null {
   if (typeof rawOriginal !== 'number' && typeof rawOriginal !== 'string') {
     return null;
@@ -998,10 +1007,10 @@ export function normalizeOfferOriginalPrice(
   if (typeof rawOriginal === 'string' && rawOriginal.trim() === '') {
     return null;
   }
-  const orig = Math.round(Number(rawOriginal));
+  const orig = sanitizeCurrencyPriceValue(Number(rawOriginal), currency);
   const safeCurrent =
     typeof priceCurrent === 'number' && Number.isFinite(priceCurrent)
-      ? Math.round(priceCurrent)
+      ? sanitizeCurrencyPriceValue(priceCurrent, currency)
       : 0;
   if (
     !Number.isFinite(orig) ||
@@ -1036,6 +1045,7 @@ export interface RawOfferRow {
   title: string;
   price_current: number | string;
   price_original: number | string | null;
+  currency?: string | null;
   stock: number;
   rating_star: number | string;
   rating_count: number;
@@ -1059,11 +1069,11 @@ function toOptionalRiskScore100(raw: unknown): number | null {
   return Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : null;
 }
 
-function toSafeOfferPrice(raw: unknown): number {
+function toSafeOfferPrice(raw: unknown, currency?: string | null): number {
   if (typeof raw !== 'number' && typeof raw !== 'string') return 0;
   const num = Number(raw);
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) return 0;
-  return Math.round(num);
+  return sanitizeCurrencyPriceValue(num, currency);
 }
 
 function toSafeStarRating5(raw: unknown): number {
@@ -1256,7 +1266,8 @@ export function mapTrustViewRowToMerchantOffer(
             followerCount,
           })
         : null;
-  const priceCurrent = toSafeOfferPrice(safeRow.price_current);
+  const offerCurrency = normalizePriceCurrency(safeRow.currency);
+  const priceCurrent = toSafeOfferPrice(safeRow.price_current, offerCurrency);
   const cleanPlatform = sanitizeOfferString(safeRow.platform).toLowerCase();
   const cleanLocation = sanitizeOfferString(safeRow.merchant_location);
   // A baseline seller carries a breakdown counting no review, so every
@@ -1276,8 +1287,10 @@ export function mapTrustViewRowToMerchantOffer(
     price_current: priceCurrent,
     price_original: normalizeOfferOriginalPrice(
       priceCurrent,
-      safeRow.price_original
+      safeRow.price_original,
+      offerCurrency
     ),
+    currency: offerCurrency,
     stock: toSafeNonNegativeVoteCount(safeRow.stock, 100_000_000),
     rating_star: toSafeStarRating5(safeRow.rating_star),
     rating_count: toSafeNonNegativeVoteCount(safeRow.rating_count, 100_000_000),
@@ -1424,7 +1437,8 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
               ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
             ? meta
             : null));
-  const priceCurrent = toSafeOfferPrice(safeItem.price_current);
+  const offerCurrency = normalizePriceCurrency(safeItem.currency);
+  const priceCurrent = toSafeOfferPrice(safeItem.price_current, offerCurrency);
   const rawMerchantRating =
     typeof merchantObj?.rating_star === 'number' ||
     (typeof merchantObj?.rating_star === 'string' &&
@@ -1445,8 +1459,10 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     price_current: priceCurrent,
     price_original: normalizeOfferOriginalPrice(
       priceCurrent,
-      safeItem.price_original
+      safeItem.price_original,
+      offerCurrency
     ),
+    currency: offerCurrency,
     stock: toSafeNonNegativeVoteCount(safeItem.stock, 100_000_000),
     rating_star: toSafeStarRating5(safeItem.rating_star),
     rating_count: toSafeNonNegativeVoteCount(
@@ -1484,11 +1500,11 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
  * uncapped now that they page.
  */
 const TRUST_VIEW_SELECT =
-  'id, cluster_id, merchant_id, platform, title, price_current, price_original, stock, rating_star, rating_count, url, merchant_name, merchant_is_official, merchant_location, threat_risk_score, threat_source, dosafe_risk_score, review_risk_score, review_risk_breakdown';
+  'id, cluster_id, merchant_id, platform, title, price_current, price_original, currency, stock, rating_star, rating_count, url, merchant_name, merchant_is_official, merchant_location, threat_risk_score, threat_source, dosafe_risk_score, review_risk_score, review_risk_breakdown';
 
 /** Offer columns readable through rate.merchants' column-level grants. */
 const OFFER_FALLBACK_SELECT = `
-  id, cluster_id, platform, title, price_current, price_original, stock,
+  id, cluster_id, platform, title, price_current, price_original, currency, stock,
   rating_star, rating_count, url,
   merchants (
     id, name, platform, is_official, rating_star, follower_count, location,
@@ -2144,6 +2160,7 @@ export interface PriceHistoryPoint {
   is_official: boolean;
   price: number;
   price_original: number | null;
+  currency?: 'VND' | 'PCT';
   recorded_at: string;
   source: string | null;
 }
@@ -2154,6 +2171,7 @@ export interface OfferDiscountAnalysis {
   platform: string;
   price_current: number;
   price_original: number | null;
+  currency?: 'VND' | 'PCT';
   claimed_discount_pct: number;
   real_discount_vs_median_pct: number;
   historical_min_price: number;
@@ -2187,14 +2205,17 @@ interface RawPriceHistoryRow {
   source?: string | null;
 }
 
-function computeMedian(values: number[]): number {
+function computeMedian(values: number[], currency?: string | null): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   if (sorted.length % 2 === 1) {
     return sorted[mid] ?? 0;
   }
-  return Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
+  return sanitizeCurrencyPriceValue(
+    ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2,
+    currency
+  );
 }
 
 /** fetchAllRows over `ids` in chunks, so no in() overflows the request line. */
@@ -2360,7 +2381,8 @@ export async function getMasterProductPriceHistory(
     }
     const priceOriginal = normalizeOfferOriginalPrice(
       price,
-      row.price_original
+      row.price_original,
+      off.currency
     );
 
     points.push({
@@ -2371,6 +2393,7 @@ export async function getMasterProductPriceHistory(
       is_official: off.merchant.is_official,
       price,
       price_original: priceOriginal,
+      currency: off.currency,
       recorded_at: row.recorded_at,
       source: row.source || null,
     });
@@ -2400,7 +2423,8 @@ export async function getMasterProductPriceHistory(
     if (!existingList || existingList.length === 0) {
       const normalizedOrig = normalizeOfferOriginalPrice(
         off.price_current,
-        off.price_original
+        off.price_original,
+        off.currency
       );
       pricesByOffer.set(off.id, [off.price_current]);
       points.push({
@@ -2411,6 +2435,7 @@ export async function getMasterProductPriceHistory(
         is_official: off.merchant.is_official,
         price: off.price_current,
         price_original: normalizedOrig,
+        currency: off.currency,
         recorded_at: nowIso,
         source: 'live_listing',
       });
@@ -2437,7 +2462,8 @@ export async function getMasterProductPriceHistory(
           .filter(
             (p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE
           );
-  const marketMedianPrice = computeMedian(validOfferPrices);
+  const marketCurrency = resolveListingPriceCurrency({ offers });
+  const marketMedianPrice = computeMedian(validOfferPrices, marketCurrency);
 
   const byOffer: Record<string, OfferDiscountAnalysis> = {};
   let fakeDiscountCount = 0;
@@ -2463,16 +2489,19 @@ export async function getMasterProductPriceHistory(
 
     const histMin = Math.min(...allSamples);
     const histMax = Math.max(...allSamples);
-    const histMedian = computeMedian(allSamples);
+    const histMedian = computeMedian(allSamples, off.currency);
     const referenceBasePrice =
       histPrices.length >= 2
         ? histMedian
         : Math.max(histMedian, marketMedianPrice);
 
+    const fmtHistVal = (val: number) =>
+      off.currency === 'PCT' ? `${val}%` : `${val.toLocaleString('vi-VN')} ₫`;
     const priceCurrent = off.price_current;
     const normalizedOrig = normalizeOfferOriginalPrice(
       priceCurrent,
-      off.price_original
+      off.price_original,
+      off.currency
     );
     const priceOriginal =
       normalizedOrig && normalizedOrig > priceCurrent ? normalizedOrig : null;
@@ -2490,7 +2519,7 @@ export async function getMasterProductPriceHistory(
 
     let verdict: DiscountVerdictType = 'normal_price';
     let badgeLabel = 'Giá ổn định';
-    let explanation = `Giá bán hiện tại (${priceCurrent.toLocaleString('vi-VN')} ₫) khớp với mức trung vị lịch sử (${histMedian.toLocaleString('vi-VN')} ₫).`;
+    let explanation = `Giá bán hiện tại (${fmtHistVal(priceCurrent)}) khớp với mức trung vị lịch sử (${fmtHistVal(histMedian)}).`;
 
     const offerAvailability = toOfferAvailability(off.availability);
     const offerUnavailable = isOfferUnavailable(off);
@@ -2504,12 +2533,12 @@ export async function getMasterProductPriceHistory(
       ) {
         verdict = 'fake_discount';
         badgeLabel = 'Cảnh báo giảm giá ảo';
-        explanation = `Gian hàng niêm yết giá gạch ngang ${priceOriginal.toLocaleString('vi-VN')} ₫ (-${claimedDiscountPct}%), nhưng giá bán thực tế lịch sử chưa từng vượt ${histMax.toLocaleString('vi-VN')} ₫ (trung vị: ${histMedian.toLocaleString('vi-VN')} ₫).`;
+        explanation = `Gian hàng niêm yết giá gạch ngang ${fmtHistVal(priceOriginal)} (-${claimedDiscountPct}%), nhưng giá bán thực tế lịch sử chưa từng vượt ${fmtHistVal(histMax)} (trung vị: ${fmtHistVal(histMedian)}).`;
         fakeDiscountCount += 1;
       } else if (claimedDiscountPct - realDiscountVsMedianPct >= 6) {
         verdict = 'suspicious_discount';
         badgeLabel = 'Nghi nâng giá gốc';
-        explanation = `Mức giảm công bố (-${claimedDiscountPct}%) cao hơn đáng kể so với mức giảm thực tế (-${Math.max(0, realDiscountVsMedianPct)}%) khi đối chiếu lịch sử giá (${histMedian.toLocaleString('vi-VN')} ₫).`;
+        explanation = `Mức giảm công bố (-${claimedDiscountPct}%) cao hơn đáng kể so với mức giảm thực tế (-${Math.max(0, realDiscountVsMedianPct)}%) khi đối chiếu lịch sử giá (${fmtHistVal(histMedian)}).`;
         fakeDiscountCount += 1;
       } else if (
         !offerUnavailable &&
@@ -2517,7 +2546,7 @@ export async function getMasterProductPriceHistory(
       ) {
         verdict = 'genuine_deal';
         badgeLabel = 'Giảm giá thật';
-        explanation = `Giá hiện tại thấp hơn ${Math.max(realDiscountVsMedianPct, claimedDiscountPct)}% so với mức trung vị lịch sử (${histMedian.toLocaleString('vi-VN')} ₫).`;
+        explanation = `Giá hiện tại thấp hơn ${Math.max(realDiscountVsMedianPct, claimedDiscountPct)}% so với mức trung vị lịch sử (${fmtHistVal(histMedian)}).`;
         genuineDealCount += 1;
       }
     } else if (
@@ -2529,7 +2558,7 @@ export async function getMasterProductPriceHistory(
     ) {
       verdict = 'genuine_deal';
       badgeLabel = 'Đáy giá lịch sử';
-      explanation = `Đang ở vùng giá thấp nhất ghi nhận được (${priceCurrent.toLocaleString('vi-VN')} ₫ so với đỉnh ${histMax.toLocaleString('vi-VN')} ₫).`;
+      explanation = `Đang ở vùng giá thấp nhất ghi nhận được (${fmtHistVal(priceCurrent)} so với đỉnh ${fmtHistVal(histMax)}).`;
       genuineDealCount += 1;
     }
 
@@ -2539,6 +2568,7 @@ export async function getMasterProductPriceHistory(
       platform: off.platform,
       price_current: priceCurrent,
       price_original: priceOriginal,
+      currency: off.currency,
       claimed_discount_pct: claimedDiscountPct,
       real_discount_vs_median_pct: realDiscountVsMedianPct,
       historical_min_price: histMin,
@@ -2623,6 +2653,7 @@ export interface MerchantProductListing {
   title: string;
   price_current: number;
   price_original: number | null;
+  currency?: 'VND' | 'PCT';
   stock: number;
   historical_sold: number;
   /** Marketplace label (e.g. "20k+") when historical_sold is only its floor. */
@@ -2690,6 +2721,7 @@ interface RawProductRow {
   title: string;
   price_current: number | string;
   price_original?: number | string | null;
+  currency?: string | null;
   stock?: number | null;
   historical_sold?: number | null;
   historical_sold_display?: string | null;
@@ -3727,7 +3759,7 @@ export async function getMerchantProfileBase(
         supabase
           .from('products')
           .select(
-            'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id, availability'
+            'id, merchant_id, platform, platform_item_id, title, price_current, price_original, currency, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id, availability'
           )
           .eq('merchant_id', merchantId)
           .order('price_current', { ascending: true })
@@ -3889,7 +3921,8 @@ export async function getMerchantProfileBase(
     const masterInfo = p.cluster_id
       ? masterById.get(p.cluster_id) || null
       : null;
-    const priceCurrent = toSafeOfferPrice(p.price_current);
+    const listingCurrency = normalizePriceCurrency(p.currency);
+    const priceCurrent = toSafeOfferPrice(p.price_current, listingCurrency);
     return {
       id: p.id,
       platform: p.platform,
@@ -3898,8 +3931,10 @@ export async function getMerchantProfileBase(
       price_current: priceCurrent,
       price_original: normalizeOfferOriginalPrice(
         priceCurrent,
-        p.price_original
+        p.price_original,
+        listingCurrency
       ),
+      currency: listingCurrency,
       stock: toSafeNonNegativeVoteCount(p.stock, 10_000_000),
       historical_sold: toSafeNonNegativeVoteCount(
         p.historical_sold,

@@ -22,9 +22,16 @@ import {
   COMBO_CART_MIN_ITEMS,
 } from './combo-cart-optimizer';
 import { isValidComboSlugToken } from './combo-cart-links';
-import { formatNumber, localizeDecimalPoints } from './locale-format';
+import {
+  formatNumber,
+  formatPercent,
+  localizeDecimalPoints,
+  resolveListingUnitSuffix,
+  sanitizeCurrencyPriceValue,
+} from './locale-format';
 import { displayedScore5, formatScoreFixed } from './rating-display';
 import { MAX_VALID_VND_PRICE } from './rate-domain';
+import { resolveListingPriceCurrency } from './rate-domain-core';
 
 export const TOTAL_TRACKED_PLATFORMS = 22;
 
@@ -52,6 +59,7 @@ export interface ProductTruthCardData {
   readonly type: 'product';
   readonly slug: string;
   readonly categoryPath: string;
+  readonly currency?: 'VND' | 'PCT';
   readonly name: string;
   readonly brand: string;
   readonly minPriceVnd: number;
@@ -69,6 +77,8 @@ export interface ProductTruthCardData {
 
 export interface VersusTruthCardSide {
   readonly slug: string;
+  readonly categoryPath?: string;
+  readonly currency?: 'VND' | 'PCT';
   readonly name: string;
   readonly brand: string;
   readonly score5: number;
@@ -88,6 +98,9 @@ export interface VersusTruthCardData {
 
 export interface DealsTruthCardHighlight {
   readonly name: string;
+  readonly categorySlug?: string;
+  readonly categoryPath?: string;
+  readonly currency?: 'VND' | 'PCT';
   readonly minPriceVnd: number;
   readonly savingsPct: number;
   readonly offerCount: number;
@@ -454,9 +467,19 @@ export function parseOgTruthCardQuery(
   };
 }
 
-function clampSafeVnd(value: unknown, maxVnd = MAX_VALID_VND_PRICE): number {
+function clampSafePriceValue(
+  value: unknown,
+  currency?: string | null,
+  maxValue = MAX_VALID_VND_PRICE
+): number {
   const n = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(n) && n > 0 && n <= maxVnd ? Math.round(n) : 0;
+  if (!Number.isFinite(n) || n <= 0 || n > maxValue) return 0;
+  const normalized = sanitizeCurrencyPriceValue(n, currency);
+  return normalized > 0 && normalized <= maxValue ? normalized : 0;
+}
+
+function clampSafeVnd(value: unknown, maxVnd = MAX_VALID_VND_PRICE): number {
+  return clampSafePriceValue(value, 'VND', maxVnd);
 }
 
 function clampSafeCount(value: unknown, max = 10_000_000): number {
@@ -469,15 +492,47 @@ function clampSafePct(value: unknown, max = 999): number {
   return Number.isFinite(n) && n > 0 ? Math.min(max, Number(n.toFixed(1))) : 0;
 }
 
+export function formatOgListingPrice(
+  amount: number,
+  locale: OgTruthCardLocale,
+  options: {
+    readonly currency?: string | null;
+    readonly categorySlug?: string | null;
+    readonly includeUnitSuffix?: boolean;
+    readonly maxValue?: number;
+  } = {}
+): string {
+  const currency = resolveListingPriceCurrency({
+    categorySlug: options.categorySlug,
+    currency: options.currency,
+  });
+  const safe = clampSafePriceValue(
+    amount,
+    currency,
+    options.maxValue ?? MAX_VALID_VND_PRICE
+  );
+  if (safe <= 0) return '';
+  const suffix =
+    options.includeUnitSuffix !== false
+      ? resolveListingUnitSuffix(currency, options.categorySlug, locale)
+      : '';
+  if (currency === 'PCT') {
+    return sanitizeOgCardText(`${formatPercent(safe, locale)}${suffix}`, 48);
+  }
+  const num = sanitizeOgCardText(formatNumber(safe, locale), 40);
+  const base = locale === 'vi' ? `${num} đ` : `${num} VND`;
+  return sanitizeOgCardText(`${base}${suffix}`, 48);
+}
+
 function formatOgPriceVnd(
   amount: number,
   locale: OgTruthCardLocale,
   maxVnd = MAX_VALID_VND_PRICE
 ): string {
-  const safe = clampSafeVnd(amount, maxVnd);
-  if (safe <= 0) return '';
-  const num = sanitizeOgCardText(formatNumber(safe, locale), 40);
-  return locale === 'vi' ? `${num} đ` : `${num} VND`;
+  return formatOgListingPrice(amount, locale, {
+    currency: 'VND',
+    maxValue: maxVnd,
+  });
 }
 
 function formatOgPriceVndOrZero(
@@ -953,18 +1008,35 @@ function renderProductCardElement(
     TOTAL_TRACKED_PLATFORMS,
     clampSafeCount(data.sellerCount, TOTAL_TRACKED_PLATFORMS)
   );
-  const minPrice = clampSafeVnd(data.minPriceVnd);
-  const maxPrice = clampSafeVnd(data.maxPriceVnd);
-  const spreadVnd =
+  const productCurrency = resolveListingPriceCurrency({
+    categorySlug: data.categoryPath,
+    currency: data.currency,
+  });
+  const minPrice = clampSafePriceValue(data.minPriceVnd, productCurrency);
+  const maxPrice = clampSafePriceValue(data.maxPriceVnd, productCurrency);
+  const rawSpread =
     minPrice > 0 && maxPrice > minPrice ? maxPrice - minPrice : 0;
+  const spreadValue =
+    productCurrency === 'PCT'
+      ? Math.round(rawSpread * 100) / 100
+      : Math.round(rawSpread);
 
   const formattedFloor =
-    minPrice > 0 ? formatOgPriceVnd(minPrice, locale) : copy.outOfStock;
+    minPrice > 0
+      ? formatOgListingPrice(minPrice, locale, {
+          currency: productCurrency,
+          categorySlug: data.categoryPath,
+        })
+      : copy.outOfStock;
   const spreadText =
-    spreadVnd > 0
+    spreadValue > 0
       ? copy.spreadLine(
           Math.max(2, safeStores),
-          formatOgPriceVnd(spreadVnd, locale)
+          formatOgListingPrice(spreadValue, locale, {
+            currency: productCurrency,
+            categorySlug: data.categoryPath,
+            includeUnitSuffix: false,
+          })
         )
       : copy.noSpreadLine(safeStores);
 
@@ -1233,9 +1305,20 @@ function renderVersusSideBox(params: {
 }) {
   const copy = OG_COPY[params.locale];
   const scoreStr = formatOgScore5(params.side.score5, params.locale);
+  const sideCurrency = resolveListingPriceCurrency({
+    categorySlug: params.side.categoryPath,
+    currency: params.side.currency,
+  });
+  const safeSidePrice = clampSafePriceValue(
+    params.side.minPriceVnd,
+    sideCurrency
+  );
   const priceStr =
-    params.side.minPriceVnd > 0
-      ? formatOgPriceVnd(params.side.minPriceVnd, params.locale)
+    safeSidePrice > 0
+      ? formatOgListingPrice(safeSidePrice, params.locale, {
+          currency: sideCurrency,
+          categorySlug: params.side.categoryPath,
+        })
       : copy.outOfStock;
   const stores = Math.min(
     TOTAL_TRACKED_PLATFORMS,
@@ -1348,13 +1431,8 @@ function renderVersusSideBox(params: {
           <div
             style={{
               display: 'flex',
-              color: params.side.minPriceVnd > 0 ? '#34d399' : '#94a3b8',
-              fontSize:
-                params.side.minPriceVnd > 0
-                  ? params.isPortrait
-                    ? 32
-                    : 26
-                  : 20,
+              color: safeSidePrice > 0 ? '#34d399' : '#94a3b8',
+              fontSize: safeSidePrice > 0 ? (params.isPortrait ? 32 : 26) : 20,
               fontWeight: 800,
             }}
           >
@@ -1770,8 +1848,11 @@ function renderDealsCardElement(
                       }}
                     >
                       {sanitizeOgCardText(
-                        formatOgPriceVnd(deal.minPriceVnd, locale),
-                        32
+                        formatOgListingPrice(deal.minPriceVnd, locale, {
+                          currency: deal.currency,
+                          categorySlug: deal.categorySlug ?? deal.categoryPath,
+                        }),
+                        36
                       )}
                     </div>
                     {deal.savingsPct > 0 ? (

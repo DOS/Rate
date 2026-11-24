@@ -13,7 +13,7 @@ import {
   type RateSupabaseClient,
   type ShopeeProduct,
   type ShopeeReview,
-  type SupportedEcommercePlatform,
+  type SupportedPlatform,
   type ValidatedScrapedProduct,
 } from './types.js';
 import {
@@ -21,6 +21,7 @@ import {
   NonNewListingError,
   ProductNormalizer,
   UnkeyableProductTitleError,
+  WAVE_E2_SERVICE_CATEGORY_SLUGS,
 } from './product-normalizer.js';
 import {
   EntityMatcher,
@@ -223,19 +224,48 @@ export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
  *  - strips `priceBeforeDiscount` when `<= 0`, `< priceMin`, non-finite, or `> MAX_VALID_VND_PRICE`;
  *  - filters out variant `models` whose `price` is `<= 0`, non-finite, or `> MAX_VALID_VND_PRICE`.
  */
+function prepareRawScrapedProduct(rawProduct: unknown): unknown {
+  if (!rawProduct || typeof rawProduct !== 'object' || Array.isArray(rawProduct)) {
+    return rawProduct;
+  }
+  const rawObj = rawProduct as Record<string, unknown>;
+  return {
+    ...rawObj,
+    ...(rawObj.category_slug === undefined && rawObj.categorySlug !== undefined
+      ? { category_slug: rawObj.categorySlug }
+      : {}),
+    ...(rawObj.entity_type === undefined && rawObj.entityType !== undefined
+      ? { entity_type: rawObj.entityType }
+      : {}),
+  };
+}
+
 export function normalizeScrapedProductPrices(
-  product: ValidatedScrapedProduct
+  product: Omit<ValidatedScrapedProduct, 'currency'> & {
+    currency?: string;
+    categorySlug?: string;
+    entityType?: 'product' | 'service';
+  }
 ): ValidatedScrapedProduct {
   if (!product || typeof product !== 'object' || Array.isArray(product)) {
     throw new Error('normalizeScrapedProductPrices requires a non-null product object');
   }
+  const normalizedCurrency =
+    String(product.currency || 'VND')
+      .trim()
+      .toUpperCase() === 'PCT'
+      ? 'PCT'
+      : 'VND';
+  const isPercentCurrency = normalizedCurrency === 'PCT';
+  const roundPriceValue = (value: number): number =>
+    isPercentCurrency ? Math.round(value * 100) / 100 : Math.round(value);
   const rawPriceMin = typeof product.priceMin === 'boolean' ? 0 : Number(product.priceMin);
   const priceMin =
     Number.isFinite(rawPriceMin) && rawPriceMin > 0
-      ? Math.min(Math.round(rawPriceMin), MAX_VALID_VND_PRICE)
+      ? Math.min(roundPriceValue(rawPriceMin), MAX_VALID_VND_PRICE)
       : 0;
   const rawPriceMax = typeof product.priceMax === 'boolean' ? Number.NaN : Number(product.priceMax);
-  const roundedPriceMax = Number.isFinite(rawPriceMax) ? Math.round(rawPriceMax) : Number.NaN;
+  const roundedPriceMax = Number.isFinite(rawPriceMax) ? roundPriceValue(rawPriceMax) : Number.NaN;
   const priceMax =
     Number.isFinite(roundedPriceMax) &&
     roundedPriceMax >= priceMin &&
@@ -246,7 +276,7 @@ export function normalizeScrapedProductPrices(
     product.priceBeforeDiscount !== undefined &&
     product.priceBeforeDiscount !== null &&
     typeof product.priceBeforeDiscount !== 'boolean'
-      ? Math.round(Number(product.priceBeforeDiscount))
+      ? roundPriceValue(Number(product.priceBeforeDiscount))
       : undefined;
   const validBeforeDiscount =
     rawBefore !== undefined &&
@@ -261,12 +291,12 @@ export function normalizeScrapedProductPrices(
         .filter(m => {
           if (!m || typeof m !== 'object' || Array.isArray(m) || typeof m.price === 'boolean')
             return false;
-          const p = Math.round(Number(m.price));
+          const p = roundPriceValue(Number(m.price));
           return Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE;
         })
         .map(m => ({
           ...m,
-          price: Math.round(Number(m.price)),
+          price: roundPriceValue(Number(m.price)),
         }))
     : [];
   const rawSold =
@@ -306,8 +336,13 @@ export function normalizeScrapedProductPrices(
               : undefined,
         }))
     : [];
+  const resolvedCategorySlug = product.category_slug ?? product.categorySlug;
+  const resolvedEntityType = product.entity_type ?? product.entityType;
   return {
     ...product,
+    ...(resolvedCategorySlug !== undefined ? { category_slug: resolvedCategorySlug } : {}),
+    ...(resolvedEntityType !== undefined ? { entity_type: resolvedEntityType } : {}),
+    currency: normalizedCurrency,
     priceMin,
     priceMax,
     priceBeforeDiscount: validBeforeDiscount,
@@ -367,7 +402,6 @@ export class ShopeeIngestionPipeline {
   private matcher: EntityMatcher;
   private enricher: AiSpecEnricher;
   private reviewAnalyzer: AiReviewAnalyzer;
-  private smartphoneCategoryId: string | null = null;
   private categoryIdBySlug = new Map<string, string>();
 
   constructor(aiConfig?: ShopeeIngestionPipelineConfig) {
@@ -532,7 +566,7 @@ export class ShopeeIngestionPipeline {
   }
 
   /**
-   * Initializes category lookup across all 5 tech categories
+   * Initializes category lookup across all canonical categories
    */
   public async init(): Promise<void> {
     const { data: cats, error: catsErr } = await this.supabase
@@ -551,9 +585,6 @@ export class ShopeeIngestionPipeline {
           : '';
       if (!safeSlug || !safeId) continue;
       this.categoryIdBySlug.set(safeSlug, safeId);
-      if (safeSlug === 'smartphones') {
-        this.smartphoneCategoryId = safeId;
-      }
     }
 
     const aiInfo = this.enricher.getProviderInfo();
@@ -569,7 +600,7 @@ export class ShopeeIngestionPipeline {
   }
 
   /**
-   * Ingest a full e-commerce product (Shopee, Lazada, Tiki, CellphoneS, TGDD) into rate schema
+   * Ingest a full e-commerce product or service feed row into rate schema
    * with canonical Master Product deduplication.
    */
   public async ingestProduct(
@@ -583,10 +614,12 @@ export class ShopeeIngestionPipeline {
     masterId: string | null;
     /** The listing's Item; null while `RATE_ITEM_MODEL` is `off`. */
     itemId: string | null;
-    platform: SupportedEcommercePlatform;
+    platform: SupportedPlatform;
   }> {
     if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
-    const product = normalizeScrapedProductPrices(ScrapedProductSchema.parse(rawProduct));
+    const product = normalizeScrapedProductPrices(
+      ScrapedProductSchema.parse(prepareRawScrapedProduct(rawProduct))
+    );
     if (
       !Number.isFinite(product.priceMin) ||
       product.priceMin <= 0 ||
@@ -600,7 +633,7 @@ export class ShopeeIngestionPipeline {
       await this.init();
     }
 
-    const platform: SupportedEcommercePlatform = product.platform || 'shopee';
+    const platform: SupportedPlatform = product.platform || 'shopee';
     const platLogger = logger.child({ platform });
 
     platLogger.info('ingest.start', `Processing: "${product.title}"`, {
@@ -664,9 +697,18 @@ export class ShopeeIngestionPipeline {
     await report?.('merchant');
 
     // 2. Match / Seed Master Product
-    const resolvedCategoryId =
-      this.categoryIdBySlug.get(candidate.category_slug || 'smartphones') ||
-      this.smartphoneCategoryId;
+    const targetCategorySlug = candidate.category_slug || 'smartphones';
+    const resolvedCategoryId = this.categoryIdBySlug.get(targetCategorySlug) ?? null;
+    if (
+      !resolvedCategoryId &&
+      this.categoryIdBySlug.size > 0 &&
+      targetCategorySlug !== 'smartphones' &&
+      !options.masterIdHint
+    ) {
+      throw new Error(
+        `Missing category_id for canonical slug "${targetCategorySlug}" in rate.categories`
+      );
+    }
 
     platLogger.info(
       'ingest.specs_normalized',
@@ -922,6 +964,11 @@ export class ShopeeIngestionPipeline {
           images: product.images || [],
           models: product.models || [],
           attributes: product.attributes || [],
+          ...(product.metadata &&
+          typeof product.metadata === 'object' &&
+          !Array.isArray(product.metadata)
+            ? { metadata: product.metadata }
+            : {}),
           url: product.url,
           updated_at: new Date().toISOString(),
         },
@@ -1012,10 +1059,14 @@ export class ShopeeIngestionPipeline {
       if (!obsRpcErr && typeof obsStatus === 'string') {
         handledByObservationRpc = true;
         if (obsStatus === 'unchanged_delta') {
+          const priceLabel =
+            product.currency === 'PCT'
+              ? `${Number(product.priceMin).toFixed(2)}%`
+              : `${Number(product.priceMin).toLocaleString('vi-VN')}₫`;
           platLogger.info(
             'ingest.price_delta_unchanged',
-            `Delta Price Compression (RPC): price unchanged (${Number(product.priceMin).toLocaleString('vi-VN')}₫), skipping redundant history row.`,
-            { productId, observationId, priceMin: product.priceMin }
+            `Delta Price Compression (RPC): price unchanged (${priceLabel}), skipping redundant history row.`,
+            { productId, observationId, priceMin: product.priceMin, currency: product.currency }
           );
         } else if (obsStatus === 'deduped_conflict') {
           platLogger.info(
@@ -1352,7 +1403,11 @@ export class ShopeeIngestionPipeline {
               merchantId,
               reviews: analysisInput,
               entityName: candidate.name,
-              entityType: 'product',
+              entityType:
+                candidate.entity_type ??
+                (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(candidate.category_slug)
+                  ? 'service'
+                  : 'product'),
               platform,
               listingPrice: product.priceMin,
               canonicalMinPrice,

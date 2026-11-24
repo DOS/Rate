@@ -19,6 +19,7 @@ import { buildWatchlistComboHref } from '@/lib/combo-cart-links';
 import {
   MAX_VALID_VND_PRICE,
   comparePositiveMinPrices,
+  resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
 import {
   CRITERION_RANK_WRITERS,
@@ -73,8 +74,10 @@ import StarRating from '@/components/elementary/StarRating';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import {
   formatDecimal,
+  formatListingPrice,
   formatPercent,
   formatPriceVnd,
+  sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import {
   displayedScore5,
@@ -129,7 +132,10 @@ export function sanitizeVersusMarkdownCell(value: unknown): string {
   return cleaned || '-';
 }
 
-export function sanitizeVersusPriceVnd(value: unknown): number {
+export function sanitizeVersusPriceVnd(
+  value: unknown,
+  currency?: string | null
+): number {
   if (typeof value !== 'number' && typeof value !== 'string') return 0;
   let num: number;
   if (typeof value === 'string') {
@@ -145,31 +151,45 @@ export function sanitizeVersusPriceVnd(value: unknown): number {
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  const rounded = Math.round(num);
-  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
+  const sanitized = sanitizeCurrencyPriceValue(num, currency);
+  return sanitized > 0 && sanitized <= MAX_VALID_VND_PRICE ? sanitized : 0;
 }
 
 export function formatVersusPriceVnd(
   value: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): string {
-  const safe = sanitizeVersusPriceVnd(value);
-  return safe > 0 ? formatPriceVnd(safe, locale) : '-';
+  const safe = sanitizeVersusPriceVnd(value, currency);
+  if (safe <= 0) return '-';
+  return currency === 'PCT'
+    ? formatListingPrice(safe, currency, locale)
+    : formatPriceVnd(safe, locale);
 }
 
 export function resolveVersusScoreMinPriceVnd(
   score:
     | (Pick<ScoredVersusItem, 'minPrice'> & {
-        product?: { min_price?: unknown } | null;
+        product?: { min_price?: unknown; metadata?: unknown } | null;
+        categorySlug?: string | null;
       })
     | null
-    | undefined
+    | undefined,
+  currency?: string | null
 ): number {
   if (!score) return 0;
+  const resolvedCurrency =
+    currency ??
+    (score.product || score.categorySlug
+      ? resolveListingPriceCurrency({
+          master: score.product ?? undefined,
+          categorySlug: score.categorySlug ?? undefined,
+        })
+      : undefined);
   if (score.product && Object.hasOwn(score.product, 'min_price')) {
-    return sanitizeVersusPriceVnd(score.product.min_price);
+    return sanitizeVersusPriceVnd(score.product.min_price, resolvedCurrency);
   }
-  return sanitizeVersusPriceVnd(score.minPrice);
+  return sanitizeVersusPriceVnd(score.minPrice, resolvedCurrency);
 }
 
 export function buildVersusMarkdownMinPriceRow(
@@ -177,9 +197,10 @@ export function buildVersusMarkdownMinPriceRow(
   minPriceA: unknown,
   minPriceB: unknown,
   safePriceAdv: string,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): string {
-  return `| **${rowLabel}** | ${formatVersusPriceVnd(minPriceA, locale)} | ${formatVersusPriceVnd(minPriceB, locale)} | ${safePriceAdv} |`;
+  return `| **${rowLabel}** | ${formatVersusPriceVnd(minPriceA, locale, currency)} | ${formatVersusPriceVnd(minPriceB, locale, currency)} | ${safePriceAdv} |`;
 }
 
 export function formatVersusWeightedMarkdown(
@@ -415,8 +436,12 @@ export default function VersusInteractiveScoreboard({
     selectUseCasePreset('default');
   };
 
-  const safeMinPriceA = resolveVersusScoreMinPriceVnd(scoreA);
-  const safeMinPriceB = resolveVersusScoreMinPriceVnd(scoreB);
+  const versusCurrency = resolveListingPriceCurrency({
+    master: scoreA.product ?? scoreB.product ?? undefined,
+    categorySlug: scoreA.categorySlug ?? scoreB.categorySlug,
+  });
+  const safeMinPriceA = resolveVersusScoreMinPriceVnd(scoreA, versusCurrency);
+  const safeMinPriceB = resolveVersusScoreMinPriceVnd(scoreB, versusCurrency);
   const priceSide = comparePositiveMinPrices(safeMinPriceA, safeMinPriceB);
   const priceAdvantageLabel =
     priceSide === 'A'
@@ -761,7 +786,8 @@ export default function VersusInteractiveScoreboard({
           safeMinPriceA,
           safeMinPriceB,
           safePriceAdv,
-          locale
+          locale,
+          versusCurrency
         ),
         `| **${t('mdRowDealRadar')}** | ${radarMarkdownCell(sigA, locale)} | ${radarMarkdownCell(sigB, locale)} | ${sigA.verdict === 'genuine_deal' ? safeNameA : sigB.verdict === 'genuine_deal' ? safeNameB : '-'} |`,
       ];
@@ -955,7 +981,9 @@ export default function VersusInteractiveScoreboard({
         weightedScore5: shownA > 0 ? shownA : null,
         // As the API's `overall_score_source` (DOS/Rate#1663).
         overallScoreSource: overallResult.sourceA,
+        currency: versusCurrency,
         expertScore10: scoreA.expertScore10,
+        minPrice: safeMinPriceA,
         minPriceVnd: safeMinPriceA,
         dealRadar: radarExportFields(sigA),
       },
@@ -965,7 +993,9 @@ export default function VersusInteractiveScoreboard({
         brand: scoreB.brand,
         weightedScore5: shownB > 0 ? shownB : null,
         overallScoreSource: overallResult.sourceB,
+        currency: versusCurrency,
         expertScore10: scoreB.expertScore10,
+        minPrice: safeMinPriceB,
         minPriceVnd: safeMinPriceB,
         dealRadar: radarExportFields(sigB),
       },

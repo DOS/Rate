@@ -12,6 +12,7 @@ import {
   subscribeWatchlist,
   upsertWatchlistItem,
 } from './watchlist-store';
+import { resolveListingPriceCurrency } from '@/lib/rate-domain';
 
 export function normalizeQuickWatchlistSlug(value: unknown): string {
   return sanitizeWatchlistSlug(value);
@@ -82,6 +83,7 @@ export interface WatchlistQuickItem {
   brand: string;
   thumbnail: string | null;
   min_price: number;
+  currency?: 'VND' | 'PCT';
   categoryPath?: string;
 }
 
@@ -126,14 +128,23 @@ export default function WatchlistQuickToggle({
       return;
     }
 
-    const basePrice = sanitizeWatchlistPrice(item?.min_price);
-    const defaultTarget = computeWatchlistTargetPrice(basePrice, 5);
+    const resolvedCurrency = resolveListingPriceCurrency({
+      categorySlug: item?.categoryPath?.replace(/^\/+/, '').split('/')[0],
+      currency: item?.currency,
+    });
+    const basePrice = sanitizeWatchlistPrice(item?.min_price, resolvedCurrency);
+    const defaultTarget = computeWatchlistTargetPrice(
+      basePrice,
+      5,
+      resolvedCurrency
+    );
 
     upsertWatchlistItem({
       slug: safeSlug,
       name: item.name,
       brand: item.brand,
       categoryPath: item.categoryPath || '/smartphones',
+      currency: resolvedCurrency,
       thumbnail: item.thumbnail,
       priceWhenAdded: basePrice,
       targetPrice: defaultTarget,

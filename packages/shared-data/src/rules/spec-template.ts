@@ -140,6 +140,100 @@ const SPEC_TEMPLATES: Readonly<Record<string, CategorySpecTemplate>> = {
     screen: false,
     has5g: false,
   },
+  tvs: {
+    groups: [
+      'display',
+      'multimedia',
+      'connectivity',
+      'hardware',
+      'design',
+      'availability',
+      'regulatory',
+    ],
+    hiddenFields: {
+      display: ['protection'],
+      hardware: ['ram_gb', 'storage_gb', 'storage_expansion', 'gpu'],
+      connectivity: ['nfc'],
+    },
+    displayHiddenFields: {},
+    keySpecs: ['screen', 'chip'],
+    ram: false,
+    storage: false,
+    screen: true,
+    has5g: false,
+  },
+  'air-conditioners': {
+    groups: ['design', 'connectivity', 'availability', 'regulatory'],
+    hiddenFields: {
+      design: ['biometrics'],
+      connectivity: ['nfc', 'location', 'gps'],
+    },
+    displayHiddenFields: {},
+    keySpecs: [],
+    ram: false,
+    storage: false,
+    screen: false,
+    has5g: false,
+  },
+  refrigerators: {
+    groups: ['design', 'connectivity', 'availability', 'regulatory'],
+    hiddenFields: {
+      design: ['biometrics'],
+      connectivity: ['nfc', 'location', 'gps'],
+    },
+    displayHiddenFields: {},
+    keySpecs: [],
+    ram: false,
+    storage: false,
+    screen: false,
+    has5g: false,
+  },
+  'washing-machines': {
+    groups: ['design', 'connectivity', 'availability', 'regulatory'],
+    hiddenFields: {
+      design: ['biometrics'],
+      connectivity: ['nfc', 'location', 'gps'],
+    },
+    displayHiddenFields: {},
+    keySpecs: [],
+    ram: false,
+    storage: false,
+    screen: false,
+    has5g: false,
+  },
+  'air-purifiers': {
+    groups: ['design', 'connectivity', 'availability', 'regulatory'],
+    hiddenFields: {
+      design: ['biometrics'],
+      connectivity: ['nfc', 'location', 'gps'],
+    },
+    displayHiddenFields: {},
+    keySpecs: [],
+    ram: false,
+    storage: false,
+    screen: false,
+    has5g: false,
+  },
+  'bank-savings': {
+    groups: ['availability', 'regulatory'],
+    hiddenFields: {},
+    displayHiddenFields: {},
+    keySpecs: [],
+    ram: false,
+    storage: false,
+    screen: false,
+    has5g: false,
+  },
+  'internet-telecom': {
+    groups: ['availability', 'regulatory'],
+    hiddenFields: {},
+    displayHiddenFields: {},
+    keySpecs: [],
+    ram: false,
+    storage: false,
+    screen: false,
+    has5g: false,
+  },
 };
 
 const normalizeSlug = (categorySlug: unknown): string =>
@@ -309,11 +403,26 @@ export function applyCategorySpecTemplate<T extends CategoryScopedSpecs>(
   }
 
   if (isRecord(product.key_specs)) {
-    out.key_specs = Object.fromEntries(
-      Object.entries(product.key_specs).filter(([key]) =>
-        (template.keySpecs as readonly string[]).includes(key)
-      )
-    );
+    const keySpecs: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(product.key_specs)) {
+      if (
+        (ALL_KEY_SPECS as readonly string[]).includes(key) &&
+        !(template.keySpecs as readonly string[]).includes(key)
+      ) {
+        continue;
+      }
+      if (key === '__proto__') {
+        Object.defineProperty(keySpecs, key, {
+          value,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      } else {
+        keySpecs[key] = value;
+      }
+    }
+    out.key_specs = keySpecs;
   }
 
   if (!template.ram && 'ram_gb' in product) out.ram_gb = null;

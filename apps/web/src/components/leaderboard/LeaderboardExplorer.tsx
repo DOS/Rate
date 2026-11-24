@@ -16,8 +16,10 @@ import { IntentLink } from '@/components/elementary/IntentLink';
 import {
   MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
+  isCategoryVisibleInDirectory,
   normalizeLeaderboardCategory,
   normalizeLeaderboardCriterion,
+  resolveListingPriceCurrency,
   scoreMasterProductForLeaderboard,
   type CanonicalCategorySlug,
   type FilteredReviewCountsByMaster,
@@ -70,10 +72,13 @@ import {
 import {
   BsArrowLeftRight,
   BsAwardFill,
+  BsBank,
   BsBatteryCharging,
+  BsBoxSeam,
   BsCameraFill,
   BsCpu,
   BsDisplay,
+  BsDroplet,
   BsEarbuds,
   BsFolder2Open,
   BsFunnel,
@@ -84,14 +89,23 @@ import {
   BsSearch,
   BsShieldCheck,
   BsSmartwatch,
+  BsSnow,
   BsStarFill,
   BsTablet,
   BsTrophy,
   BsTrophyFill,
+  BsTv,
+  BsWifi,
+  BsWind,
 } from 'react-icons/bs';
 import ContentText from '@/components/elementary/ContentText';
 import StarRating from '@/components/elementary/StarRating';
-import { formatDecimal, formatPriceVnd } from '@/lib/locale-format';
+import {
+  formatDecimal,
+  formatListingPrice,
+  formatPriceVnd,
+  sanitizeCurrencyPriceValue,
+} from '@/lib/locale-format';
 import {
   displayRating,
   formatRatingValue,
@@ -125,7 +139,10 @@ export function sanitizeLeaderboardWeight(
   return Math.max(0, Math.min(100, Math.round(num)));
 }
 
-export function sanitizeLeaderboardPriceVnd(value: unknown): number {
+export function sanitizeLeaderboardPriceVnd(
+  value: unknown,
+  currency?: string | null
+): number {
   if (typeof value !== 'number' && typeof value !== 'string') return 0;
   let num: number;
   if (typeof value === 'string') {
@@ -141,23 +158,35 @@ export function sanitizeLeaderboardPriceVnd(value: unknown): number {
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  const rounded = Math.round(num);
-  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
+  const normalized = sanitizeCurrencyPriceValue(num, currency);
+  return normalized > 0 && normalized <= MAX_VALID_VND_PRICE ? normalized : 0;
 }
 
 export function formatLeaderboardPriceVnd(
   value: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
-  return formatPriceVnd(sanitizeLeaderboardPriceVnd(value), locale);
+  const safePrice = sanitizeLeaderboardPriceVnd(value, currency);
+  if (currency || categorySlug) {
+    return formatListingPrice(safePrice, currency ?? 'VND', locale, {
+      categorySlug,
+    });
+  }
+  return formatPriceVnd(safePrice, locale);
 }
 
 export function formatLeaderboardDisplayPriceVnd(
   value: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
-  const safePrice = sanitizeLeaderboardPriceVnd(value);
-  return safePrice > 0 ? formatLeaderboardPriceVnd(safePrice, locale) : '-';
+  const safePrice = sanitizeLeaderboardPriceVnd(value, currency);
+  return safePrice > 0
+    ? formatLeaderboardPriceVnd(safePrice, locale, currency, categorySlug)
+    : '-';
 }
 
 export function formatLeaderboardShowdownDelta(
@@ -519,7 +548,15 @@ export function buildLeaderboardMarkdownRow(
   radar: RadarSignal | null | undefined,
   locale?: string
 ): string[] {
-  const safePrice = sanitizeLeaderboardPriceVnd(entry.product.min_price);
+  const entryCategorySlug = getMasterProductCategorySlug(entry.product);
+  const entryCurrency = resolveListingPriceCurrency({
+    categorySlug: entryCategorySlug,
+    metadata: entry.product.metadata,
+  });
+  const safePrice = sanitizeLeaderboardPriceVnd(
+    entry.product.min_price,
+    entryCurrency
+  );
   return [
     `#${rank}`,
     sanitizeLeaderboardMarkdownCell(entry.product.name),
@@ -531,7 +568,12 @@ export function buildLeaderboardMarkdownRow(
     entry.expertScore10 != null
       ? formatScoreFixed(entry.expertScore10, 1)
       : unratedShort,
-    formatLeaderboardDisplayPriceVnd(safePrice, locale),
+    formatLeaderboardDisplayPriceVnd(
+      safePrice,
+      locale,
+      entryCurrency,
+      entryCategorySlug
+    ),
     radarMarkdownCell(radar, locale),
   ];
 }
@@ -550,7 +592,14 @@ export function buildLeaderboardCsvRow(
   scoreDigits: 1 | 2,
   radar: RadarSignal | null | undefined
 ): string[] {
-  const safePrice = sanitizeLeaderboardPriceVnd(entry.product.min_price);
+  const currency = resolveListingPriceCurrency({
+    categorySlug: entry.categorySlug,
+    metadata: entry.product.metadata,
+  });
+  const safePrice = sanitizeLeaderboardPriceVnd(
+    entry.product.min_price,
+    currency
+  );
   return [
     String(rank),
     entry.product.slug,
@@ -579,6 +628,11 @@ export function buildLeaderboardJsonItem(
   rank: number,
   signal: RadarSignal | null | undefined
 ) {
+  const currency = resolveListingPriceCurrency({ master: entry.product });
+  const minPrice = sanitizeLeaderboardPriceVnd(
+    entry.product.min_price,
+    currency
+  );
   return {
     rank,
     slug: entry.product.slug,
@@ -590,7 +644,9 @@ export function buildLeaderboardJsonItem(
       entry.userScore5 > 0 ? displayedScore5(entry.userScore5) : null,
     expertScore10: entry.expertScore10,
     criteria: entry.criteria,
-    minPriceVnd: sanitizeLeaderboardPriceVnd(entry.product.min_price),
+    currency,
+    minPrice,
+    minPriceVnd: minPrice,
     dealRadar: radarExportFields(signal),
   };
 }
@@ -670,6 +726,41 @@ function buildCategoryTabs(t: TranslateFn): ReadonlyArray<{
       slug: 'earbuds',
       icon: BsEarbuds,
       label: t('tabEarbuds'),
+    },
+    {
+      slug: 'tvs',
+      icon: BsTv,
+      label: t('tabTvs'),
+    },
+    {
+      slug: 'air-conditioners',
+      icon: BsSnow,
+      label: t('tabAirConditioners'),
+    },
+    {
+      slug: 'refrigerators',
+      icon: BsBoxSeam,
+      label: t('tabRefrigerators'),
+    },
+    {
+      slug: 'washing-machines',
+      icon: BsDroplet,
+      label: t('tabWashingMachines'),
+    },
+    {
+      slug: 'air-purifiers',
+      icon: BsWind,
+      label: t('tabAirPurifiers'),
+    },
+    {
+      slug: 'bank-savings',
+      icon: BsBank,
+      label: t('tabBankSavings'),
+    },
+    {
+      slug: 'internet-telecom',
+      icon: BsWifi,
+      label: t('tabInternetTelecom'),
     },
   ];
 }
@@ -1052,8 +1143,13 @@ export default function LeaderboardExplorer({
       ) {
         return false;
       }
-      const minPrice = sanitizeLeaderboardPriceVnd(item.min_price);
+      const itemCurrency = resolveListingPriceCurrency({ master: item });
+      const minPrice = sanitizeLeaderboardPriceVnd(
+        item.min_price,
+        itemCurrency
+      );
       if (priceSegment !== 'all') {
+        if (itemCurrency === 'PCT') return false;
         if (minPrice <= 0) return false;
         if (priceSegment === 'under15m' && minPrice >= 15_000_000) return false;
         if (
@@ -1153,8 +1249,14 @@ export default function LeaderboardExplorer({
       if (b.authenticCount !== a.authenticCount) {
         return b.authenticCount - a.authenticCount;
       }
-      const priceA = sanitizeLeaderboardPriceVnd(a.product.min_price);
-      const priceB = sanitizeLeaderboardPriceVnd(b.product.min_price);
+      const priceA = sanitizeLeaderboardPriceVnd(
+        a.product.min_price,
+        resolveListingPriceCurrency({ master: a.product })
+      );
+      const priceB = sanitizeLeaderboardPriceVnd(
+        b.product.min_price,
+        resolveListingPriceCurrency({ master: b.product })
+      );
       if (priceA > 0 && priceB > 0 && priceA !== priceB) {
         return priceA - priceB;
       }
@@ -1612,35 +1714,43 @@ export default function LeaderboardExplorer({
           role="group"
           aria-label={t('categoryTabsAria')}
         >
-          {categoryTabs.map((tab) => {
-            const isSelected = tab.slug === activeCategory;
-            const count = categoryCounts.get(tab.slug) ?? 0;
-            return (
-              <button
-                key={tab.slug}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() => handleSelectCategory(tab.slug)}
-                className={`btn rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-2 ${
-                  isSelected
-                    ? 'btn-danger text-white shadow-sm'
-                    : 'btn-outline-dark bg-light'
-                }`}
-              >
-                <tab.icon aria-hidden="true" />
-                <span>{tab.label}</span>
-                <span
-                  className={`badge rounded-pill rate-tabular ${
+          {categoryTabs
+            .filter((tab) =>
+              isCategoryVisibleInDirectory(
+                tab.slug,
+                categoryCounts.get(tab.slug) ?? 0,
+                activeCategory
+              )
+            )
+            .map((tab) => {
+              const isSelected = tab.slug === activeCategory;
+              const count = categoryCounts.get(tab.slug) ?? 0;
+              return (
+                <button
+                  key={tab.slug}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => handleSelectCategory(tab.slug)}
+                  className={`btn rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-2 ${
                     isSelected
-                      ? 'text-danger bg-white'
-                      : 'bg-secondary bg-opacity-25 text-dark'
+                      ? 'btn-danger text-white shadow-sm'
+                      : 'btn-outline-dark bg-light'
                   }`}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+                  <tab.icon aria-hidden="true" />
+                  <span>{tab.label}</span>
+                  <span
+                    className={`badge rounded-pill rate-tabular ${
+                      isSelected
+                        ? 'text-danger bg-white'
+                        : 'bg-secondary bg-opacity-25 text-dark'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
         </div>
 
         {/* 8-Mode JReviews Ranking Criterion Selector */}
@@ -2131,7 +2241,11 @@ export default function LeaderboardExplorer({
                       <span className="small text-white-50 rate-tabular">
                         {formatLeaderboardDisplayPriceVnd(
                           entry.product.min_price,
-                          locale
+                          locale,
+                          resolveListingPriceCurrency({
+                            categorySlug: entry.categorySlug,
+                            metadata: entry.product.metadata,
+                          })
                         )}
                       </span>
                       <Link
@@ -2252,12 +2366,19 @@ export default function LeaderboardExplorer({
         {rankedEntries.map((entry, idx) => {
           const rank = idx + 1;
           const keySpecs = (entry.product.key_specs || {}) as KeySpecs;
+          const entryCurrency = resolveListingPriceCurrency({
+            categorySlug: entry.categorySlug,
+            metadata: entry.product.metadata,
+          });
           const safeRowPrice = sanitizeLeaderboardPriceVnd(
-            entry.product.min_price
+            entry.product.min_price,
+            entryCurrency
           );
           const minPriceText = formatLeaderboardDisplayPriceVnd(
             safeRowPrice,
-            locale
+            locale,
+            entryCurrency,
+            entry.categorySlug
           );
           const rowRadarSignal = getRadarSignal(radarIndex, entry.product.slug);
 
@@ -2470,6 +2591,7 @@ export default function LeaderboardExplorer({
                           categoryPath: entry.categoryPath,
                           thumbnail: entry.thumbnail,
                           min_price: safeRowPrice,
+                          currency: entryCurrency,
                         }}
                       />
                       <Link

@@ -19,7 +19,7 @@ import dotenv from 'dotenv';
 import { FLAGSHIP_DEVICES_TO_SEED, type FlagshipDeviceSeed } from '../flagship-seed-data.js';
 import { createImporterLogger } from '../logger.js';
 import { fetchByKey, resolveBackfillSupabaseTarget } from '../paging.js';
-import { ProductNormalizer } from '../product-normalizer.js';
+import { ProductNormalizer, SIZELESS_CATEGORY_SLUGS } from '../product-normalizer.js';
 import { scopeSupabaseToRate, type RateSupabaseClient, type ShopeeProduct } from '../types.js';
 
 const logger = createImporterLogger('ItemInventoryReport');
@@ -56,8 +56,8 @@ const KEY_SHAPE = /^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9.-]*:[a-z0-9-]+$/;
 const VARIANT_SLUG_SUFFIX = /-(\d+(gb|tb)|standard|unknown)$/;
 /** The trailing size `rate.item_name_from_master` strips (section 7.1). */
 const VARIANT_NAME_SUFFIX = /\s\d+\s?(gb|tb)$/i;
-/** Categories with no storage axis (section 4.2). */
-const SIZELESS_CATEGORIES = new Set(['earbuds']);
+/** Categories with no storage axis (section 4.2 + Wave E1/E2). */
+const SIZELESS_CATEGORIES: ReadonlySet<string> = SIZELESS_CATEGORY_SLUGS;
 
 /** `split_part(k, ':', 1) || ':' || split_part(k, ':', 2)`, as the M2 backfill groups. */
 export const itemKeyOf = (modelKey: string): string => {

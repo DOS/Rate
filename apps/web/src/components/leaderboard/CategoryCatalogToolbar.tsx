@@ -8,14 +8,17 @@ import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   formatDecimal,
+  formatListingPrice,
   formatNumber,
-  formatPriceVnd,
+  sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import { displayedScore5, formatScoreFixed } from '@/lib/rating-display';
 import {
   MAX_VALID_VND_PRICE,
+  getMasterProductCategorySlug,
   resolveCompareEffectiveUserRating,
   resolveCompareExpertRating10,
+  resolveListingPriceCurrency,
   type MasterProduct,
 } from '@/lib/rate-domain';
 import {
@@ -181,7 +184,10 @@ export function sanitizeCatalogToolbarText(
   return cleaned.length > maxLen ? cleaned.slice(0, maxLen) : cleaned;
 }
 
-export function sanitizeCatalogPriceVnd(value: unknown): number {
+export function sanitizeCatalogPriceVnd(
+  value: unknown,
+  currency?: string | null
+): number {
   if (typeof value !== 'number' && typeof value !== 'string') return 0;
   let num: number;
   if (typeof value === 'string') {
@@ -197,8 +203,8 @@ export function sanitizeCatalogPriceVnd(value: unknown): number {
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  const rounded = Math.round(num);
-  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
+  const sanitized = sanitizeCurrencyPriceValue(num, currency);
+  return sanitized > 0 && sanitized <= MAX_VALID_VND_PRICE ? sanitized : 0;
 }
 
 export function sanitizeCatalogCount(value: unknown): number {
@@ -239,6 +245,8 @@ export function buildCatalogJsonProductEntry(
 ) {
   const rawUser = resolveCompareEffectiveUserRating(p);
   const expertScore10 = resolveCompareExpertRating10(p);
+  const currency = resolveListingPriceCurrency({ master: p });
+  const minPrice = sanitizeCatalogPriceVnd(p.min_price, currency);
   return {
     rank,
     slug: resolveCatalogExportSlug(p, itemSlugBySlug),
@@ -247,7 +255,9 @@ export function buildCatalogJsonProductEntry(
     userRating: rawUser > 0 ? rawUser : null,
     ratingScore5: rawUser > 0 ? displayedScore5(rawUser) : null,
     expertRating: expertScore10,
-    minPriceVnd: sanitizeCatalogPriceVnd(p.min_price),
+    currency,
+    minPrice,
+    minPriceVnd: minPrice,
     dealRadar: radarExportFields(signal),
   };
 }
@@ -288,8 +298,9 @@ export function buildCatalogCsvRow(
   const rawUser = resolveCompareEffectiveUserRating(p);
   const userRating = rawUser > 0 ? rawUser : null;
   const expertScore10 = resolveCompareExpertRating10(p);
-  const minPrice = sanitizeCatalogPriceVnd(p.min_price);
-  const maxPrice = sanitizeCatalogPriceVnd(p.max_price);
+  const currency = resolveListingPriceCurrency({ master: p });
+  const minPrice = sanitizeCatalogPriceVnd(p.min_price, currency);
+  const maxPrice = sanitizeCatalogPriceVnd(p.max_price, currency);
   return [
     String(rank),
     resolveCatalogExportSlug(p, itemSlugBySlug),
@@ -359,7 +370,12 @@ export function buildCatalogMarkdown(
     const userRating = rawUser > 0 ? rawUser : null;
     const expertScore10 = resolveCompareExpertRating10(p);
     const radar = radarFor(p.slug);
-    const minPrice = sanitizeCatalogPriceVnd(p.min_price);
+    const productCategorySlug = getMasterProductCategorySlug(p);
+    const currency = resolveListingPriceCurrency({
+      categorySlug: productCategorySlug,
+      master: p,
+    });
+    const minPrice = sanitizeCatalogPriceVnd(p.min_price, currency);
     const authReviews = sanitizeCatalogCount(
       p.authentic_review_count || p.total_reviews || 0
     );
@@ -374,7 +390,11 @@ export function buildCatalogMarkdown(
         ? `${formatDecimal(expertScore10, locale, 1)}/10`
         : t('toolbar.unratedText'),
       formatNumber(authReviews, locale),
-      minPrice > 0 ? formatPriceVnd(minPrice, locale) : '-',
+      minPrice > 0
+        ? formatListingPrice(minPrice, currency, locale, {
+            categorySlug: productCategorySlug,
+          })
+        : '-',
       radarMarkdownCell(radar, locale),
     ];
   });

@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
-import { buildLeaderboardItemListElements } from '@/lib/leaderboard-engine';
+import {
+  VALID_LEADERBOARD_CATEGORIES,
+  buildLeaderboardItemListElements,
+} from '@/lib/leaderboard-engine';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import {
   BsArrowLeftRight,
@@ -14,7 +17,6 @@ import {
   getItemCatalogPage,
   getCrossPlatformDealRadar,
 } from '@/server/rate';
-import type { CanonicalCategorySlug } from '@/lib/rate-api';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph } from '@/lib/seo';
 import { sumCountsByItemRow } from '@/lib/item-directory';
@@ -36,14 +38,6 @@ const SITE_URL = (
 interface PageProps {
   params: Promise<{ locale: string }>;
 }
-
-const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
-  'smartphones',
-  'tablets',
-  'laptops',
-  'smartwatches',
-  'earbuds',
-]);
 
 export async function generateMetadata({
   params,
@@ -88,7 +82,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
   const [productsByCategory, dealRadar, filteredReviewCounts] =
     await Promise.all([
       Promise.all(
-        [...VALID_CATEGORIES].map((categorySlug) =>
+        VALID_LEADERBOARD_CATEGORIES.map((categorySlug) =>
           // RATE_ITEM_MODEL on: the 100 best-rated Items, read past the
           // first 100 variants so sizes do not crowd a tab (#1155, #1275);
           // off: null, and the 100 best-rated variants as before.
@@ -163,9 +157,16 @@ export default async function LeaderboardPage({ params }: PageProps) {
     itemListElement: itemListElements,
   };
 
+  const populatedCategorySlugs = VALID_LEADERBOARD_CATEGORIES.filter(
+    (_, idx) => (productsByCategory[idx]?.length ?? 0) > 0
+  );
+
   return (
     <ClientMessages scope="leaderboard">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedCategorySlugs}
+      >
         <div
           style={{
             background: 'var(--rate-bg-canvas)',
@@ -294,7 +295,9 @@ export default async function LeaderboardPage({ params }: PageProps) {
                             fontFamily: 'var(--font-mono, monospace)',
                           }}
                         >
-                          5
+                          {populatedCategorySlugs.length > 0
+                            ? populatedCategorySlugs.length
+                            : 5}
                         </div>
                         <div
                           style={{

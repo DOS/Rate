@@ -126,22 +126,39 @@ function staticEntries(
   dates: SitemapLastModified | null,
   latestMerchant?: Date
 ): MetadataRoute.Sitemap {
-  return STATIC_PAGES.map(({ path, date, changeFrequency, priority }) => {
-    const lastModified =
-      !dates || date === null
-        ? undefined
-        : date === 'catalog'
-          ? dates.latest
-          : date === 'merchants'
-            ? newestOf(dates.latest, latestMerchant)
-            : dates.byCategory.get(date);
-    return {
-      url: `${baseUrl}${path}`,
-      ...(lastModified ? { lastModified } : {}),
-      changeFrequency,
-      priority,
-    };
-  });
+  const populatedWavePages = VALID_LEADERBOARD_CATEGORIES.filter(
+    (cat) =>
+      cat !== 'smartphones' &&
+      cat !== 'laptops' &&
+      cat !== 'tablets' &&
+      cat !== 'smartwatches' &&
+      cat !== 'earbuds' &&
+      Boolean(dates?.byCategory.get(cat))
+  ).map((cat) => ({
+    path: `/${cat}`,
+    date: cat as StaticDate,
+    changeFrequency: 'daily' as const,
+    priority: 0.85,
+  }));
+
+  return [...STATIC_PAGES, ...populatedWavePages].map(
+    ({ path, date, changeFrequency, priority }) => {
+      const lastModified =
+        !dates || date === null
+          ? undefined
+          : date === 'catalog'
+            ? dates.latest
+            : date === 'merchants'
+              ? newestOf(dates.latest, latestMerchant)
+              : dates.byCategory.get(date);
+      return {
+        url: `${baseUrl}${path}`,
+        ...(lastModified ? { lastModified } : {}),
+        changeFrequency,
+        priority,
+      };
+    }
+  );
 }
 
 function isSafeVersusSlug(slug: string): boolean {

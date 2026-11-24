@@ -33,8 +33,10 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
   isCanonicalCategorySlug,
+  resolveListingPriceCurrency,
   type CanonicalCategorySlug,
 } from '@/lib/rate-domain-core';
+import { sanitizeCurrencyPriceValue } from '@/lib/locale-format';
 
 const log = createLogger('api.watchlist');
 
@@ -300,7 +302,8 @@ export async function GET(request: NextRequest) {
             })
           : null;
       const productHref =
-        candidateItemHref && /^\/[a-z]+\/[^/?#\s]+$/.test(candidateItemHref)
+        candidateItemHref &&
+        /^\/[a-z][a-z0-9-]*\/[^/?#\s]+$/.test(candidateItemHref)
           ? candidateItemHref
           : getMasterProductHref(master);
 
@@ -377,7 +380,7 @@ const PriceAlertBodySchema = z.object({
       .finite()
       .positive('targetPrice must be greater than 0')
       .max(MAX_VALID_VND_PRICE)
-      .transform((v) => Math.round(v))
+      .transform((v) => Math.round(v * 100) / 100)
   ),
   locale: z.enum(['vi', 'en', 'cs']).catch('vi'),
 });
@@ -443,18 +446,39 @@ export async function POST(request: NextRequest) {
     const offers = await getCachedMasterProductOffers(masterProduct.id);
     const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
     const radarSignal = computeProductRadarSignal(masterProduct, offers);
+    const itemCategorySlug = getMasterProductCategorySlug(masterProduct);
+    const itemCurrency = resolveListingPriceCurrency({
+      categorySlug: itemCategorySlug,
+      master: masterProduct,
+      offers,
+    });
+    const normalizedTargetPrice = sanitizeCurrencyPriceValue(
+      targetPrice,
+      itemCurrency
+    );
+    if (normalizedTargetPrice <= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'targetPrice must be greater than 0',
+          code: 'INVALID_BODY',
+        },
+        { status: 400, headers: WATCHLIST_CORS_HEADERS }
+      );
+    }
     const { currentMinPrice } = resolveWatchlistMasterPriceBounds(
       masterProduct,
       bestOffer?.price,
       MAX_VALID_VND_PRICE
     );
-    const isReached = currentMinPrice > 0 && currentMinPrice <= targetPrice;
+    const isReached =
+      currentMinPrice > 0 && currentMinPrice <= normalizedTargetPrice;
 
     const { data: rpcData, error: rpcError } = await auth.rateClient.rpc(
       'upsert_price_alert',
       {
         p_product_slug: slug,
-        p_target_price: targetPrice,
+        p_target_price: normalizedTargetPrice,
         // The RPC keys signed-in callers by auth.uid(); the fingerprint is not used for them.
         p_client_fingerprint: `user:${auth.userId}`,
         p_subscriber_email: auth.email ?? undefined,

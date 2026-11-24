@@ -111,7 +111,17 @@ export type PointCriterionMessageKey =
   | 'pointCrit_service_quality'
   | 'pointCrit_price'
   | 'pointCrit_attitude'
-  | 'pointCrit_speed';
+  | 'pointCrit_speed'
+  | 'pointCrit_connectivity'
+  | 'pointCrit_cooling'
+  | 'pointCrit_energy_efficiency'
+  | 'pointCrit_noise'
+  | 'pointCrit_durability'
+  | 'pointCrit_features'
+  | 'pointCrit_capacity'
+  | 'pointCrit_wash_quality'
+  | 'pointCrit_filtration'
+  | 'pointCrit_filter_cost';
 
 const CRITERION_MESSAGE_KEYS: Readonly<
   Record<RatingCriterionKey, PointCriterionMessageKey>
@@ -135,6 +145,16 @@ const CRITERION_MESSAGE_KEYS: Readonly<
   price: 'pointCrit_price',
   attitude: 'pointCrit_attitude',
   speed: 'pointCrit_speed',
+  connectivity: 'pointCrit_connectivity',
+  cooling: 'pointCrit_cooling',
+  energy_efficiency: 'pointCrit_energy_efficiency',
+  noise: 'pointCrit_noise',
+  durability: 'pointCrit_durability',
+  features: 'pointCrit_features',
+  capacity: 'pointCrit_capacity',
+  wash_quality: 'pointCrit_wash_quality',
+  filtration: 'pointCrit_filtration',
+  filter_cost: 'pointCrit_filter_cost',
 };
 
 const LEGACY_CRITERION_MAP: Readonly<

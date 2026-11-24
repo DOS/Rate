@@ -19,12 +19,14 @@ export default async function PageShell({
   locale,
   footerTop = true,
   mainClassName,
+  populatedCategorySlugs = [],
 }: {
   readonly children: React.ReactNode;
   readonly locale?: string;
   /** The footer call-to-action band above the footer. */
   readonly footerTop?: boolean;
   readonly mainClassName?: string;
+  readonly populatedCategorySlugs?: readonly string[];
 }) {
   const tNav = await getTranslations({
     locale: locale ?? (await getLocale()),
@@ -39,14 +41,22 @@ export default async function PageShell({
       >
         {tNav('skipToContent')}
       </a>
-      <NavbarDarkDynamic links={[]} />
+      <NavbarDarkDynamic
+        links={[]}
+        populatedCategorySlugs={populatedCategorySlugs}
+      />
       {/* tabIndex -1: following the skip link moves focus here, so the next
       Tab continues inside the content instead of in the navbar. */}
       <main id={MAIN_CONTENT_ID} tabIndex={-1} className={mainClassName}>
         {children}
       </main>
       {footerTop ? <FooterTop locale={locale} /> : null}
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
+      <FooterDynamic
+        sections={[]}
+        links={[]}
+        locale={locale}
+        populatedCategorySlugs={populatedCategorySlugs}
+      />
       <BackToTop />
     </>
   );

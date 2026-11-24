@@ -41,7 +41,23 @@ const CATEGORY_LINK_IDS = new Set([
   'tablets',
   'smartwatches',
   'earbuds',
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
 ]);
+const EXTRA_NAV_CATEGORY_SLUGS = [
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
+] as const;
 // Already reachable from the logo and the price-alert button on desktop.
 const DESKTOP_HIDDEN_LINK_IDS = new Set(['home', 'watchlist']);
 
@@ -94,9 +110,11 @@ export function shouldCloseNavbarDrawerOnLinkClick(
 export function NavbarDarkDynamic({
   links,
   logoUrl,
+  populatedCategorySlugs,
 }: {
   readonly links: readonly NavbarLinkItem[];
   readonly logoUrl?: string | null;
+  readonly populatedCategorySlugs?: readonly string[];
 }) {
   const tNav = useTranslations('rate.nav');
   const pathname = usePathname();
@@ -440,6 +458,13 @@ export function NavbarDarkDynamic({
                     label: tNav('earbuds'),
                     href: '/earbuds',
                   },
+                  ...EXTRA_NAV_CATEGORY_SLUGS.filter((slug) =>
+                    populatedCategorySlugs?.includes(slug)
+                  ).map((slug) => ({
+                    id: slug,
+                    label: tNav(slug),
+                    href: `/${slug}`,
+                  })),
                   {
                     id: 'leaderboard',
                     label: tNav('leaderboard'),

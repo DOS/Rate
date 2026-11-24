@@ -159,6 +159,7 @@ export default function CompareQuickToggle({
               brand: item?.brand ?? '',
               thumbnail: item?.thumbnail ?? null,
               min_price: item?.min_price ?? 0,
+              currency: item?.currency,
               categoryPath: item?.categoryPath,
             }}
           />
@@ -203,6 +204,7 @@ export default function CompareQuickToggle({
             brand: item?.brand ?? '',
             thumbnail: item?.thumbnail ?? null,
             min_price: item?.min_price ?? 0,
+            currency: item?.currency,
             categoryPath: item?.categoryPath,
           }}
           size={size}

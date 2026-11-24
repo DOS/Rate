@@ -50,8 +50,12 @@ export default async function AboutUsPage({
     getTranslations({ locale, namespace: 'staticPages' }),
   ]);
 
+  const populatedCategorySlugs = stats.categoriesWithCounts
+    .filter((cat) => cat.productCount > 0)
+    .map((cat) => cat.slug);
+
   return (
-    <PageShell locale={locale}>
+    <PageShell locale={locale} populatedCategorySlugs={populatedCategorySlugs}>
       <section
         className="hero-banner rate-surface-dark rate-ink-on-dark border-bottom border-secondary border-opacity-25 py-5 text-white"
         style={{ background: 'var(--bs-dark)' }}

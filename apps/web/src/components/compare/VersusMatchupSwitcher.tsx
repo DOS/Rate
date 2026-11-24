@@ -1,16 +1,22 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { BsLightningCharge } from 'react-icons/bs';
 import { useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import {
   MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
+  resolveListingPriceCurrency,
   type CanonicalCategorySlug,
   type MasterProduct,
 } from '@/lib/rate-domain';
+import {
+  formatListingPrice,
+  resolveListingUnitSuffix,
+  sanitizeCurrencyPriceValue,
+} from '@/lib/locale-format';
 import {
   canonicalVersusOrder,
   isParseableVersusPair,
@@ -18,7 +24,10 @@ import {
 } from '@/lib/item-compare';
 import type { ItemCatalogRow } from '@/lib/item-directory';
 
-export function sanitizeVersusPeerPriceVnd(value: unknown): number {
+export function sanitizeVersusPeerPriceVnd(
+  value: unknown,
+  currency?: string | null
+): number {
   if (typeof value !== 'number' && typeof value !== 'string') return 0;
   let num: number;
   if (typeof value === 'string') {
@@ -34,19 +43,49 @@ export function sanitizeVersusPeerPriceVnd(value: unknown): number {
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  const rounded = Math.round(num);
-  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
+  const normalized = sanitizeCurrencyPriceValue(num, currency);
+  return normalized > 0 && normalized <= MAX_VALID_VND_PRICE ? normalized : 0;
 }
 
-export function formatVersusPeerPriceBadge(value: unknown): string {
-  const num = sanitizeVersusPeerPriceVnd(value);
+export function formatVersusPeerPriceBadge(
+  value: unknown,
+  options?:
+    | {
+        readonly currency?: string | null;
+        readonly categorySlug?: string | null;
+        readonly locale?: string | null;
+      }
+    | string
+    | null
+): string {
+  const opts =
+    typeof options === 'string' ? { currency: options } : (options ?? {});
+  const currency = resolveListingPriceCurrency({
+    categorySlug: opts.categorySlug,
+    currency: opts.currency,
+  });
+  const num = sanitizeVersusPeerPriceVnd(value, currency);
   if (num <= 0) {
     return 'N/A';
   }
-  if (num >= 1_000_000) {
-    return `${Math.max(1, Math.round(num / 1_000_000))}M`;
+  if (currency === 'PCT') {
+    return formatListingPrice(num, 'PCT', opts.locale, {
+      categorySlug: opts.categorySlug,
+      includeUnitSuffix: false,
+    });
   }
-  return `${Math.max(1, Math.round(num / 1_000))}K`;
+  const suffix = resolveListingUnitSuffix(
+    'VND',
+    opts.categorySlug,
+    opts.locale
+  );
+  if (num >= 1_000_000) {
+    return `${Math.max(1, Math.round(num / 1_000_000))}M${suffix}`;
+  }
+  if (num < 1_000) {
+    return `${num}${suffix}`;
+  }
+  return `${Math.max(1, Math.round(num / 1_000))}K${suffix}`;
 }
 
 function lookupVersusOwnSlug(
@@ -216,6 +255,7 @@ export default function VersusMatchupSwitcher({
   itemSlugBySlug,
 }: VersusMatchupSwitcherProps) {
   const t = useTranslations('compare');
+  const locale = useLocale();
   const router = useRouter();
   const [slugA, setSlugA] = useState<string>(currentSlugA);
   const [slugB, setSlugB] = useState<string>(currentSlugB);
@@ -298,21 +338,33 @@ export default function VersusMatchupSwitcher({
             onChange={(e) => setSlugA(e.target.value)}
             className="form-select form-select-sm"
           >
-            {sameCategoryPeers.map((peer) => (
-              <option
-                key={`a-${peer.slug}`}
-                value={peer.slug}
-                disabled={
-                  !isValidVersusPeerPair(
-                    peer.slug,
-                    effectiveSlugB,
-                    resolvedItemSlugBySlug
+            {sameCategoryPeers.map((peer) => {
+              const peerCurrency = resolveListingPriceCurrency({
+                categorySlug,
+                master: peer,
+              });
+              return (
+                <option
+                  key={`a-${peer.slug}`}
+                  value={peer.slug}
+                  disabled={
+                    !isValidVersusPeerPair(
+                      peer.slug,
+                      effectiveSlugB,
+                      resolvedItemSlugBySlug
+                    )
+                  }
+                >
+                  [A] {peer.name} (
+                  {formatVersusPeerPriceBadge(peer.min_price, {
+                    currency: peerCurrency,
+                    categorySlug,
+                    locale,
+                  })}
                   )
-                }
-              >
-                [A] {peer.name} ({formatVersusPeerPriceBadge(peer.min_price)})
-              </option>
-            ))}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -323,21 +375,33 @@ export default function VersusMatchupSwitcher({
             onChange={(e) => setSlugB(e.target.value)}
             className="form-select form-select-sm"
           >
-            {sameCategoryPeers.map((peer) => (
-              <option
-                key={`b-${peer.slug}`}
-                value={peer.slug}
-                disabled={
-                  !isValidVersusPeerPair(
-                    peer.slug,
-                    effectiveSlugA,
-                    resolvedItemSlugBySlug
+            {sameCategoryPeers.map((peer) => {
+              const peerCurrency = resolveListingPriceCurrency({
+                categorySlug,
+                master: peer,
+              });
+              return (
+                <option
+                  key={`b-${peer.slug}`}
+                  value={peer.slug}
+                  disabled={
+                    !isValidVersusPeerPair(
+                      peer.slug,
+                      effectiveSlugA,
+                      resolvedItemSlugBySlug
+                    )
+                  }
+                >
+                  [B] {peer.name} (
+                  {formatVersusPeerPriceBadge(peer.min_price, {
+                    currency: peerCurrency,
+                    categorySlug,
+                    locale,
+                  })}
                   )
-                }
-              >
-                [B] {peer.name} ({formatVersusPeerPriceBadge(peer.min_price)})
-              </option>
-            ))}
+                </option>
+              );
+            })}
           </select>
         </div>
 

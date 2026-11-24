@@ -5,6 +5,7 @@ import {
   MAX_VALID_VND_PRICE,
   getCategoryRouteHref,
   getMasterProductCategorySlug,
+  resolveListingPriceCurrency,
   resolveProductImageUrl,
 } from '@/lib/rate-domain';
 
@@ -14,6 +15,7 @@ export interface CompareTrayItem {
   brand: string;
   thumbnail: string | null;
   min_price: number;
+  currency?: 'VND' | 'PCT';
   categorySlug?: CanonicalCategorySlug;
   categoryPath?: string;
 }
@@ -27,6 +29,13 @@ const CANONICAL_TRAY_CATEGORIES = new Set<CanonicalCategorySlug>([
   'laptops',
   'smartwatches',
   'earbuds',
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
 ]);
 
 export const MAX_COMPARE_ITEMS = 4;
@@ -50,12 +59,19 @@ export function sanitizeTraySlug(value: unknown, maxLen = 160): string {
   return cleaned.length > maxLen ? cleaned.slice(0, maxLen) : cleaned;
 }
 
-export function sanitizeTrayPriceVnd(value: unknown): number {
+export function sanitizeTrayPriceVnd(
+  value: unknown,
+  currency?: string | null
+): number {
+  const isPct =
+    typeof currency === 'string' && currency.trim().toUpperCase() === 'PCT';
+  const roundVal = (n: number) =>
+    isPct ? Math.round(n * 100) / 100 : Math.round(n);
   if (typeof value === 'number') {
     if (!Number.isFinite(value) || value <= 0 || value > MAX_VALID_VND_PRICE) {
       return 0;
     }
-    return Math.round(value);
+    return roundVal(value);
   }
   if (typeof value === 'string') {
     if (/\p{Cc}/u.test(value)) {
@@ -69,7 +85,7 @@ export function sanitizeTrayPriceVnd(value: unknown): number {
     if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
       return 0;
     }
-    return Math.round(num);
+    return roundVal(num);
   }
   return 0;
 }
@@ -146,7 +162,11 @@ export function normalizeTrayItem(item: CompareTrayItem): CompareTrayItem {
         slug: safeSlug,
         name: safeName,
       }));
-  const safePrice = sanitizeTrayPriceVnd(safeItem.min_price);
+  const resolvedCurrency = resolveListingPriceCurrency({
+    categorySlug,
+    currency: safeItem.currency,
+  });
+  const safePrice = sanitizeTrayPriceVnd(safeItem.min_price, resolvedCurrency);
   const normalized: CompareTrayItem = {
     ...(safeItem as CompareTrayItem),
     slug: safeSlug,
@@ -156,6 +176,11 @@ export function normalizeTrayItem(item: CompareTrayItem): CompareTrayItem {
     min_price: safePrice,
     categorySlug,
   };
+  if (safeItem.currency !== undefined || resolvedCurrency === 'PCT') {
+    normalized.currency = resolvedCurrency;
+  } else {
+    delete normalized.currency;
+  }
   if (safeItem.categoryPath !== undefined) {
     normalized.categoryPath = getCategoryRouteHref(categorySlug);
   } else {

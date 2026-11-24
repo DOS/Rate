@@ -46,10 +46,12 @@ import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
 import {
   collapseWhitespace,
+  formatListingPrice,
   formatNumber,
   formatPercent,
   formatPlainNumber,
   formatPriceVnd,
+  sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 
 interface ProductOffersExplorerProps {
@@ -409,10 +411,22 @@ export function buildOffersMarkdown(params: {
         ? params.t('offersTrustBadgeNoData')
         : formatPercent(trust, locale),
       hasValidCurrentPrice
-        ? formatPriceVnd(Math.round(Number(o.price_current)), locale)
+        ? o.currency === 'PCT'
+          ? formatListingPrice(
+              sanitizeCurrencyPriceValue(Number(o.price_current), o.currency),
+              o.currency,
+              locale
+            )
+          : formatPriceVnd(Math.round(Number(o.price_current)), locale)
         : '-',
       hasValidOrig
-        ? formatPriceVnd(Math.round(Number(o.price_original)), locale)
+        ? o.currency === 'PCT'
+          ? formatListingPrice(
+              sanitizeCurrencyPriceValue(Number(o.price_original), o.currency),
+              o.currency,
+              locale
+            )
+          : formatPriceVnd(Math.round(Number(o.price_original)), locale)
         : '-',
       sanitizeOffersMarkdownCell(verdictCell, locale),
     ];
@@ -776,43 +790,58 @@ export default function ProductOffersExplorer({
           data-testid="price-spread-audit-banner"
           className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 border p-3"
         >
-          <div>
-            <span className="badge bg-success rounded-pill me-2 text-white">
-              {t('offersSpreadBadge', {
-                count: priceSpreadAudit.platformCount,
-              })}
-            </span>
-            <strong className="text-dark small">
-              {t('offersSpreadSavePrefix')}{' '}
-              <span className="text-success rate-tabular">
-                {formatPriceVnd(priceSpreadAudit.spreadVnd, locale)} (
-                {formatPercent(priceSpreadAudit.spreadPct, locale)})
-              </span>{' '}
-              {t('offersSpreadBuyAt')}{' '}
-              <span className="text-uppercase">
-                {priceSpreadAudit.cheapest.platform}
-              </span>{' '}
-              (
-              <ContentText
-                text={priceSpreadAudit.cheapest.merchant.name}
-                locale={locale}
-              />
-              ) {t('offersSpreadInsteadOf')}{' '}
-              <span className="text-uppercase">
-                {priceSpreadAudit.priciest.platform}
-              </span>
-            </strong>
-          </div>
-          <div className="small rate-tabular text-secondary">
-            {t('offersSpreadLowLabel')}{' '}
-            <strong className="text-success">
-              {formatPriceVnd(priceSpreadAudit.cheapest.price_current, locale)}
-            </strong>{' '}
-            • {t('offersSpreadHighLabel')}{' '}
-            <strong className="text-danger">
-              {formatPriceVnd(priceSpreadAudit.priciest.price_current, locale)}
-            </strong>
-          </div>
+          {(() => {
+            const spreadCurrency = priceSpreadAudit.cheapest.currency;
+            const fmtSpreadVal = (val: number) =>
+              spreadCurrency === 'PCT'
+                ? formatListingPrice(
+                    sanitizeCurrencyPriceValue(val, spreadCurrency),
+                    spreadCurrency,
+                    locale
+                  )
+                : formatPriceVnd(val, locale);
+            return (
+              <>
+                <div>
+                  <span className="badge bg-success rounded-pill me-2 text-white">
+                    {t('offersSpreadBadge', {
+                      count: priceSpreadAudit.platformCount,
+                    })}
+                  </span>
+                  <strong className="text-dark small">
+                    {t('offersSpreadSavePrefix')}{' '}
+                    <span className="text-success rate-tabular">
+                      {fmtSpreadVal(priceSpreadAudit.spreadVnd)} (
+                      {formatPercent(priceSpreadAudit.spreadPct, locale)})
+                    </span>{' '}
+                    {t('offersSpreadBuyAt')}{' '}
+                    <span className="text-uppercase">
+                      {priceSpreadAudit.cheapest.platform}
+                    </span>{' '}
+                    (
+                    <ContentText
+                      text={priceSpreadAudit.cheapest.merchant.name}
+                      locale={locale}
+                    />
+                    ) {t('offersSpreadInsteadOf')}{' '}
+                    <span className="text-uppercase">
+                      {priceSpreadAudit.priciest.platform}
+                    </span>
+                  </strong>
+                </div>
+                <div className="small rate-tabular text-secondary">
+                  {t('offersSpreadLowLabel')}{' '}
+                  <strong className="text-success">
+                    {fmtSpreadVal(priceSpreadAudit.cheapest.price_current)}
+                  </strong>{' '}
+                  • {t('offersSpreadHighLabel')}{' '}
+                  <strong className="text-danger">
+                    {fmtSpreadVal(priceSpreadAudit.priciest.price_current)}
+                  </strong>
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -992,10 +1021,19 @@ export default function ProductOffersExplorer({
                   offer.price_current
                 );
                 const price = hasValidCurrentPrice
-                  ? formatPriceVnd(
-                      Math.round(Number(offer.price_current)),
-                      locale
-                    )
+                  ? offer.currency === 'PCT'
+                    ? formatListingPrice(
+                        sanitizeCurrencyPriceValue(
+                          Number(offer.price_current),
+                          offer.currency
+                        ),
+                        offer.currency,
+                        locale
+                      )
+                    : formatPriceVnd(
+                        Math.round(Number(offer.price_current)),
+                        locale
+                      )
                   : '-';
                 const origPrice =
                   hasValidCurrentPrice &&
@@ -1003,10 +1041,19 @@ export default function ProductOffersExplorer({
                   Number.isFinite(Number(offer.price_original)) &&
                   Number(offer.price_original) > Number(offer.price_current) &&
                   Number(offer.price_original) <= MAX_VALID_VND_PRICE
-                    ? formatPriceVnd(
-                        Math.round(Number(offer.price_original)),
-                        locale
-                      )
+                    ? offer.currency === 'PCT'
+                      ? formatListingPrice(
+                          sanitizeCurrencyPriceValue(
+                            Number(offer.price_original),
+                            offer.currency
+                          ),
+                          offer.currency,
+                          locale
+                        )
+                      : formatPriceVnd(
+                          Math.round(Number(offer.price_original)),
+                          locale
+                        )
                     : null;
                 const trustScore = offerTrustScore(offer.merchant.risk_score);
                 const safeOfferUrl = isSafeExternalOfferUrl(offer.url)

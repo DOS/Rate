@@ -464,17 +464,23 @@ export const getCachedMasterProductPriceHistory = cache(
           .update(
             safeOffers
               .map((o) => {
+                const curCurrency =
+                  typeof o.currency === 'string' &&
+                  o.currency.trim().toUpperCase() === 'PCT'
+                    ? 'PCT'
+                    : 'VND';
+                const scale = curCurrency === 'PCT' ? 100 : 1;
                 const safeCur =
                   typeof o.price_current === 'number' &&
                   Number.isFinite(o.price_current) &&
                   o.price_current > 0
-                    ? Math.round(o.price_current)
+                    ? Math.round(o.price_current * scale) / scale
                     : 0;
                 const safeOrig =
                   typeof o.price_original === 'number' &&
                   Number.isFinite(o.price_original) &&
                   o.price_original > 0
-                    ? Math.round(o.price_original)
+                    ? Math.round(o.price_original * scale) / scale
                     : '';
                 const safeAvail =
                   o.availability === 'in_stock' ||
@@ -482,7 +488,7 @@ export const getCachedMasterProductPriceHistory = cache(
                   o.availability === 'discontinued'
                     ? o.availability
                     : '';
-                return `${sanitizeCachedEntityId(o.id)}:${safeCur}:${safeOrig}:${safeAvail}`;
+                return `${sanitizeCachedEntityId(o.id)}:${curCurrency}:${safeCur}:${safeOrig}:${safeAvail}`;
               })
               .join('|')
           )
@@ -656,6 +662,18 @@ export const getCachedRatePlatformStats = cache(async () => {
     ? stats
     : { ...stats, masterProductsCount: itemCount };
 });
+
+/** Slugs of categories that currently have at least one published product. */
+export async function getCachedPopulatedCategorySlugs(): Promise<string[]> {
+  try {
+    const stats = await getCachedRatePlatformStats();
+    return stats.categoriesWithCounts
+      .filter((cat) => cat.productCount > 0)
+      .map((cat) => cat.slug);
+  } catch {
+    return [];
+  }
+}
 
 /** Stored reviews kept out of the rating, per master id (DOS/Rate#1139). */
 export const getCachedFilteredReviewCountsByMaster = cache(() =>

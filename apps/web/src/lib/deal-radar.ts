@@ -17,6 +17,7 @@ export type RadarVerdict = 'genuine_deal' | 'fake_sale_trap' | 'none';
 
 export interface RadarSignal {
   verdict: RadarVerdict;
+  currency?: 'VND' | 'PCT';
   savingsPct: number;
   fakeMarkupPct: number;
   spreadPct: number;
@@ -214,9 +215,14 @@ export function buildRadarIndex(
       : sig.fakeSaleTrap
         ? 'fake_sale_trap'
         : 'none';
+    const signalCurrency =
+      sig.genuineDeal?.currency ??
+      sig.priceSpread?.currency ??
+      sig.fakeSaleTrap?.currency;
     map.set(slug, {
       ...sig,
       verdict,
+      ...(signalCurrency ? { currency: signalCurrency } : {}),
       savingsPct: toSafeRadarPct(sig.genuineDeal?.savingsVsMedianPct),
       fakeMarkupPct: toSafeRadarPct(sig.fakeSaleTrap?.fakeMarkupPct),
       spreadPct: toSafeRadarPct(sig.priceSpread?.spreadPct),

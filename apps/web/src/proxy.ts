@@ -140,6 +140,6 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
 export const config = {
   matcher: [
     '/',
-    '/((?!_[nN][eE][xX][tT]|_[vV][eE][rR][cC][eE][lL]|[aA][pP][iI]|[mM][oO][nN][iI][tT][oO][rR][iI][nN][gG]|[sS][iI][tT][eE][mM][aA][pP]|(?!(?:(?:[cC][sS]|[eE][nN]|[vV][iI])/)?(?:[mM][eE][rR][cC][hH][aA][nN][tT][sS]|[cC][oO][mM][pP][aA][rR][eE]|[sS][mM][aA][rR][tT][pP][hH][oO][nN][eE][sS]|[lL][aA][pP][tT][oO][pP][sS]|[tT][aA][bB][lL][eE][tT][sS]|[sS][mM][aA][rR][tT][wW][aA][tT][cC][hH][eE][sS]|[eE][aA][rR][bB][uU][dD][sS])/[a-zA-Z0-9][a-zA-Z0-9_-]*(?:[.][a-zA-Z0-9_-]+)*/?$)[^.]*\\..*).*)',
+    '/((?!_[nN][eE][xX][tT]|_[vV][eE][rR][cC][eE][lL]|[aA][pP][iI]|[mM][oO][nN][iI][tT][oO][rR][iI][nN][gG]|[sS][iI][tT][eE][mM][aA][pP]|(?!(?:(?:[cC][sS]|[eE][nN]|[vV][iI])/)?(?:[mM][eE][rR][cC][hH][aA][nN][tT][sS]|[cC][oO][mM][pP][aA][rR][eE]|[sS][mM][aA][rR][tT][pP][hH][oO][nN][eE][sS]|[lL][aA][pP][tT][oO][pP][sS]|[tT][aA][bB][lL][eE][tT][sS]|[sS][mM][aA][rR][tT][wW][aA][tT][cC][hH][eE][sS]|[eE][aA][rR][bB][uU][dD][sS]|[tT][vV][sS]|[aA][iI][rR]-[cC][oO][nN][dD][iI][tT][iI][oO][nN][eE][rR][sS]|[rR][eE][fF][rR][iI][gG][eE][rR][aA][tT][oO][rR][sS]|[wW][aA][sS][hH][iI][nN][gG]-[mM][aA][cC][hH][iI][nN][eE][sS]|[aA][iI][rR]-[pP][uU][rR][iI][fF][iI][eE][rR][sS]|[bB][aA][nN][kK]-[sS][aA][vV][iI][nN][gG][sS]|[iI][nN][tT][eE][rR][nN][eE][tT]-[tT][eE][lL][eE][cC][oO][mM])/[a-zA-Z0-9][a-zA-Z0-9_-]*(?:[.][a-zA-Z0-9_-]+)*/?$)[^.]*\\..*).*)',
   ],
 };

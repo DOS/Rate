@@ -1,5 +1,5 @@
 import type { CriteriaRatings } from '@repo/shared-data/rules';
-import { RATING_CRITERIA_VERSION } from '@repo/shared-data/rules';
+import { getRatingCriteriaVersion } from '@repo/shared-data/rules';
 import {
   reviewV2Errors,
   reviewV2Star,
@@ -19,7 +19,7 @@ export interface ReviewV2Submission {
   comment: string | null;
   /** Computed on the server from the criteria, never read from the body. */
   ratingStar: number;
-  criteriaVersion: typeof RATING_CRITERIA_VERSION;
+  criteriaVersion: number;
   criteriaRatings: CriteriaRatings;
   verdict: string;
   pros: readonly string[];
@@ -72,7 +72,7 @@ export function buildReviewV2Submission(
       variation: cleanName(body.variation, 120),
       comment: body.comment || null,
       ratingStar,
-      criteriaVersion: RATING_CRITERIA_VERSION,
+      criteriaVersion: getRatingCriteriaVersion(categorySlug),
       criteriaRatings: body.criteriaRatings,
       verdict: body.verdict,
       pros: body.pros,

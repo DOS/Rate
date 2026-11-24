@@ -65,8 +65,8 @@ import {
   batchCostUsd,
   checkReviewPoints,
   DEFAULT_REVIEW_AI_MODEL,
+  getRatingCriteriaVersion,
   isReviewAiModel,
-  RATING_CRITERIA_VERSION,
   REQUEST_MAX_TOKENS,
   reserveUsd,
   REVIEW_AI_MODELS,
@@ -570,7 +570,7 @@ export function aiCandidates(input: {
       marker !== undefined &&
       marker.text_hash === textHash &&
       marker.prompt_version === promptVersion &&
-      Number(marker.criteria_version) === RATING_CRITERIA_VERSION &&
+      Number(marker.criteria_version) === getRatingCriteriaVersion(category) &&
       marker.category_slug === category;
     if (sameKey && !(marker.outcome === 'failed' && Number(marker.attempts) < MAX_ATTEMPTS)) {
       continue;
@@ -629,7 +629,7 @@ export function buildRequests(
       manifest.push({
         custom_id,
         category,
-        criteria_version: RATING_CRITERIA_VERSION,
+        criteria_version: getRatingCriteriaVersion(category),
         reviews: refs.map(r => ({
           ref: r.ref,
           id: r.candidate.id,

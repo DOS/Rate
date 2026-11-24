@@ -1,8 +1,10 @@
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain-core';
 import type { OfferDiscountAnalysis } from '@/lib/rate-api';
 import {
+  formatListingPrice,
   formatPlainNumber,
-  formatPriceVnd,
+  normalizePriceCurrency,
+  sanitizeCurrencyPriceValue,
   toFormatLocale,
 } from '@/lib/locale-format';
 
@@ -44,13 +46,18 @@ function parseDecimalVerdictNumber(raw: unknown): number {
   return Number.NaN;
 }
 
-const vnd = (price: number | null | undefined, locale?: string | null) => {
+const vnd = (
+  price: number | null | undefined,
+  locale?: string | null,
+  currency?: string | null
+) => {
   const num = parseDecimalVerdictNumber(price);
+  const resolvedCurrency = normalizePriceCurrency(currency);
   const safe =
     Number.isFinite(num) && num > 0 && num <= MAX_VALID_VND_PRICE
-      ? Math.round(num)
+      ? sanitizeCurrencyPriceValue(num, resolvedCurrency)
       : 0;
-  return formatPriceVnd(safe, locale);
+  return formatListingPrice(safe, resolvedCurrency, locale);
 };
 
 const toSafePct = (pct: number | null | undefined) => {
@@ -72,7 +79,8 @@ export function discountVerdictCopy(
 ): DiscountVerdictCopy {
   const safeAnalysis =
     a && typeof a === 'object' ? a : ({} as Partial<OfferDiscountAnalysis>);
-  const median = vnd(safeAnalysis.historical_median_price, locale);
+  const currency = safeAnalysis.currency ?? null;
+  const median = vnd(safeAnalysis.historical_median_price, locale, currency);
   const safeClaimedPct = toSafePct(safeAnalysis.claimed_discount_pct);
   const safeRealPct = toSafePct(safeAnalysis.real_discount_vs_median_pct);
   // rate-api only judges a claimed discount when the store shows a
@@ -85,9 +93,9 @@ export function discountVerdictCopy(
       return {
         label: t('labelFake'),
         explanation: t('explainFake', {
-          original: vnd(safeAnalysis.price_original, locale),
+          original: vnd(safeAnalysis.price_original, locale, currency),
           claimed: pctArg(safeClaimedPct, locale),
-          max: vnd(safeAnalysis.historical_max_price, locale),
+          max: vnd(safeAnalysis.historical_max_price, locale, currency),
           median,
         }),
       };
@@ -112,15 +120,15 @@ export function discountVerdictCopy(
         : {
             label: t('labelHistoricLow'),
             explanation: t('explainHistoricLow', {
-              current: vnd(safeAnalysis.price_current, locale),
-              max: vnd(safeAnalysis.historical_max_price, locale),
+              current: vnd(safeAnalysis.price_current, locale, currency),
+              max: vnd(safeAnalysis.historical_max_price, locale, currency),
             }),
           };
     default:
       return {
         label: t('labelNormal'),
         explanation: t('explainNormal', {
-          current: vnd(safeAnalysis.price_current, locale),
+          current: vnd(safeAnalysis.price_current, locale, currency),
           median,
         }),
       };

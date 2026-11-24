@@ -15,6 +15,13 @@ const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
   'laptops',
   'smartwatches',
   'earbuds',
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
 ]);
 
 const VALID_PLATFORMS = SUPPORTED_PLATFORM_SLUGS;
