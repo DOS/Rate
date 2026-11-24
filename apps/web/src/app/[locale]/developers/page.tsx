@@ -100,6 +100,8 @@ const MCP_TOOL_KEYS = [
   'compare_devices_by_use_case',
   'audit_listing_url',
   'get_genuine_deals',
+  'optimize_combo_cart',
+  'calculate_effective_price',
 ] as const;
 
 const MCP_CLIENT_CONFIG_SNIPPET = [
@@ -136,7 +138,7 @@ const MCP_JSON_RPC_CURL_SNIPPET = [
   "curl -sS -X POST 'https://rate.vn/api/mcp' \\",
   "  -H 'Content-Type: application/json' \\",
   "  -H 'Accept: application/json, text/event-stream' \\",
-  '  --data-raw \'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_genuine_deals","arguments":{"category":"smartphones","limit":3}}}\'',
+  '  --data-raw \'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"optimize_combo_cart","arguments":{"items":["apple-iphone-16-128gb","apple-airpods-pro-2-usb-c"],"maxStores":2,"minTrust":80}}}\'',
 ].join('\n');
 
 export default async function DevelopersPage({
@@ -192,6 +194,14 @@ export default async function DevelopersPage({
       cache: 's-maxage=30, stale-while-revalidate=120',
       queryParams: t('ep4Params'),
       summary: t('ep4Summary'),
+    },
+    {
+      method: 'GET',
+      path: '/api/v1/rate/combo-cart',
+      auth: t('authPublic'),
+      cache: 's-maxage=60, stale-while-revalidate=300',
+      queryParams: t('ep23Params'),
+      summary: t('ep23Summary'),
     },
     {
       method: 'GET',
@@ -272,6 +282,14 @@ export default async function DevelopersPage({
       cache: 's-maxage=120, stale-while-revalidate=300',
       queryParams: t('ep18Params'),
       summary: t('ep18Summary'),
+    },
+    {
+      method: 'GET',
+      path: '/api/v1/rate/og',
+      auth: t('authPublic'),
+      cache: 's-maxage=3600, stale-while-revalidate=86400',
+      queryParams: t('ep24Params'),
+      summary: t('ep24Summary'),
     },
     {
       method: 'GET',

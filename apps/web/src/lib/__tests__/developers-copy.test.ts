@@ -139,6 +139,8 @@ const mcpToolKeys = [
   'compare_devices_by_use_case',
   'audit_listing_url',
   'get_genuine_deals',
+  'optimize_combo_cart',
+  'calculate_effective_price',
 ] as const;
 
 const mcpFlatKeys = [
@@ -151,6 +153,10 @@ const mcpFlatKeys = [
   'ep21Summary',
   'ep22Params',
   'ep22Summary',
+  'ep23Params',
+  'ep23Summary',
+  'ep24Params',
+  'ep24Summary',
   'mcpBadge',
   'mcpTitle',
   'mcpSubtitle',
@@ -171,6 +177,10 @@ for (const locale of ['vi', 'en', 'cs'] as const) {
     Object.keys(dev).sort(),
     enDevTopKeys,
     `${locale}.developers top-level key parity`
+  );
+  assert.ok(
+    String(dev.mcpToolsHeading ?? '').startsWith('7 '),
+    `${locale}.developers.mcpToolsHeading must advertise 7 tools`
   );
   for (const k of mcpFlatKeys) {
     const val = dev[k];
@@ -215,6 +225,8 @@ for (const locale of ['vi', 'cs'] as const) {
     'ep20Summary',
     'ep21Summary',
     'ep22Summary',
+    'ep23Summary',
+    'ep24Summary',
     'mcpTitle',
     'mcpSubtitle',
     'mcpGuardNote',
@@ -244,6 +256,8 @@ for (const expectedPageToken of [
   "'/api/mcp'",
   "'/.well-known/mcp.json'",
   "'/llms.txt'",
+  "'/api/v1/rate/combo-cart'",
+  "'/api/v1/rate/og'",
   't(`mcpTools.${toolKey}`)',
   'https://rate.vn/api/mcp',
   'mcp-remote',
