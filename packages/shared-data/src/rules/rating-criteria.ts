@@ -495,8 +495,13 @@ export function getRatingCriteriaVersion(
     : RATING_CRITERIA_VERSION;
 }
 
-/** Categories with their own criteria list. */
-export const RATING_CRITERIA_CATEGORIES: readonly string[] =
+/** V1 categories matching `RATING_CRITERIA_VERSION` (1). */
+export const RATING_CRITERIA_CATEGORIES: readonly string[] = Object.keys(
+  RATING_CRITERIA
+).filter((slug) => getRatingCriteriaVersion(slug) === RATING_CRITERIA_VERSION);
+
+/** All categories (v1 + Wave E1/E2 v2) with their own criteria list. */
+export const RATING_CRITERIA_ALL_CATEGORIES: readonly string[] =
   Object.keys(RATING_CRITERIA);
 
 /**

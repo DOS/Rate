@@ -1730,7 +1730,7 @@ function testLlmReviewSummaryScope(): void {
 function testRatingCriteriaAndReviewForm(): void {
   // D1: every list is weighted to 100, with unique keys, all three locale
   // labels (vi, en, cs) and exactly one required criterion (#1837).
-  for (const slug of rules.RATING_CRITERIA_CATEGORIES) {
+  for (const slug of rules.RATING_CRITERIA_ALL_CATEGORIES) {
     const criteria = rules.getRatingCriteria(slug);
     assert.equal(
       criteria.reduce((sum, criterion) => sum + criterion.weight, 0),
@@ -3542,6 +3542,8 @@ function testRatingUseCasePresets(): void {
 function testWaveE1E2Readiness(): void {
   assert.equal(rules.RATING_CRITERIA_VERSION, 1);
   assert.equal(rules.RATING_CRITERIA_V2_VERSION, 2);
+  assert.equal(rules.RATING_CRITERIA_CATEGORIES.length, 6);
+  assert.equal(rules.RATING_CRITERIA_ALL_CATEGORIES.length, 13);
 
   const expectedWeights: Record<string, Record<string, number>> = {
     tvs: {

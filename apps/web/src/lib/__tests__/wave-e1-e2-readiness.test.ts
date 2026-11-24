@@ -116,12 +116,19 @@ for (const slug of [
     true,
     `missing detail page for ${slug}`
   );
-  const escaped = slug.replace(/-/g, '\\-');
-  const matchCount = nextConfigSrc.match(
-    new RegExp(`\\|${slug}(?:\\||\\))|\\|${escaped}(?:\\||\\))`, 'g')
-  )?.length;
+  const escapedSlug = slug.split('-').join('\\-');
+  const matchCount = nextConfigSrc
+    .split('\n')
+    .filter(
+      (line) =>
+        line.includes('/:path(') &&
+        (line.includes(`|${slug}|`) ||
+          line.includes(`|${slug})`) ||
+          line.includes(`|${escapedSlug}|`) ||
+          line.includes(`|${escapedSlug})`))
+    ).length;
   assert.ok(
-    (matchCount ?? 0) >= 2,
+    matchCount >= 2,
     `next.config.mjs must exclude ${slug} in both middleware/rewrite lookaheads`
   );
 }
