@@ -500,25 +500,26 @@ function containsKeyword(
   return false;
 }
 
-/** Matched keywords, not counting one inside a longer match ("màn" in "màn hình"). */
-function keywordHits(
+/** Matched normalized keyword phrases for a criterion. */
+function matchedKeywords(
   words: readonly string[],
   keywords: readonly string[],
   plainLine: boolean
-): number {
-  const matched = keywords.filter((kw) =>
-    containsKeyword(words, kw, plainLine)
-  );
-  return matched.filter(
-    (kw) =>
-      !matched.some((other) => other !== kw && ` ${other} `.includes(` ${kw} `))
-  ).length;
+): string[] {
+  const out: string[] = [];
+  for (const kw of keywords) {
+    if (containsKeyword(words, kw, plainLine)) {
+      out.push(plainLine ? plainWord(kw) : kw);
+    }
+  }
+  return out;
 }
 
 /**
  * The criterion a line belongs to in a category: its own key when the
  * category has it, otherwise the criterion whose keywords it mentions most
- * (ties go to the category's order), otherwise null ("Chung").
+ * (dropping shorter phrases nested inside a longer matched phrase across the
+ * category, ties go to the category's order), otherwise null ("Chung").
  */
 export function assignPointCriterion(
   categorySlug: string | null | undefined,
@@ -530,18 +531,30 @@ export function assignPointCriterion(
     return criterionKey;
   const words = comparablePoint(body).split(SPACE);
   const plainLine = words.every((word) => word === plainWord(word));
-  let best: string | null = null;
-  let bestHits = 0;
-  for (const criterion of criteria) {
+  const perCriterion = criteria.map((criterion) => {
     const keywords = Object.prototype.hasOwnProperty.call(
       CRITERION_KEYWORDS,
       criterion.key
     )
       ? CRITERION_KEYWORDS[criterion.key]!
       : [];
-    const hits = keywordHits(words, keywords, plainLine);
+    return {
+      key: criterion.key,
+      matched: matchedKeywords(words, keywords, plainLine),
+    };
+  });
+  const allMatched = perCriterion.flatMap((entry) => entry.matched);
+  let best: string | null = null;
+  let bestHits = 0;
+  for (const entry of perCriterion) {
+    const hits = entry.matched.filter(
+      (kw) =>
+        !allMatched.some(
+          (other) => other !== kw && ` ${other} `.includes(` ${kw} `)
+        )
+    ).length;
     if (hits > bestHits) {
-      best = criterion.key;
+      best = entry.key;
       bestHits = hits;
     }
   }

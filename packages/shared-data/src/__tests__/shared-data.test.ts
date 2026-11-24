@@ -4115,6 +4115,24 @@ function testWaveE3E4Readiness(): void {
       `Expected PlaceDetailSchema rejection for ${JSON.stringify(bad)}`
     );
   }
+
+  // Specific multi-word criterion phrases win across criteria over shorter nested matches.
+  assert.equal(
+    rules.assignPointCriterion('supplements', null, 'Gây tác dụng phụ nhẹ'),
+    'tolerance'
+  );
+  assert.equal(
+    rules.assignPointCriterion('supplements', null, 'Tác dụng tốt rõ rệt'),
+    'effectiveness'
+  );
+  assert.equal(
+    rules.assignPointCriterion('hotels', null, 'Ga giường mới sạch'),
+    'cleanliness'
+  );
+  assert.equal(
+    rules.assignPointCriterion('hotels', null, 'Giường êm ái'),
+    'room_quality'
+  );
 }
 
 function main(): void {

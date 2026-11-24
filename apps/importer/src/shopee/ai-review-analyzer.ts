@@ -904,17 +904,56 @@ const SHIPPING_ASPECT_RE =
 const PRODUCT_MENTION_RE =
   /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|pin|màn(?:\s*hình)?|camera|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số|sản\s*phẩm(?!\s+(?:(?:đã\s+)?được\s+|đã\s+)?(?:đóng\s*gói|giao\s*(?:hàng|nhanh|chậm|trễ|lâu|đến|tới)|vận\s*chuyển|bọc|ship))|chất\s*lượng(?!\s+(?:đóng\s*gói|giao|vận\s*chuyển|phục\s*vụ|dịch\s*vụ))|(?<!(?:giao|gói|đóng|nhận|gửi|ship)\s+)hàng(?:\s+\p{L}+){0,2}?\s+(?:đẹp|tốt|xịn|chuẩn|ok|ổn|kém|tệ|lỗi|tuyệt|ngon|hài\s*lòng|ưng)|(?<!(?:gói|hộp|bọc|bì)(?:\s+\p{L}+)?\s*)đẹp|mô\s*tả|(?:y|giống|đúng)\s*hình|tính\s*năng\s*nổi\s*bật)(?![\p{L}\p{N}])/iu;
 
+const WAVE_E4_PLACE_CATEGORIES = new Set<string>(['restaurants', 'cafes', 'hotels', 'homestays']);
+const WAVE_E3_RETAIL_CATEGORIES = new Set<string>(['supplements', 'cosmetics', 'mother-baby']);
+
+// Domain feedback for Wave E4 places (excludes delivery couriers / shipper-only praise).
+const PLACE_DOMAIN_MENTION_RE =
+  /(?<![\p{L}\p{N}])(?:món(?:\s*ăn)?|đồ\s*(?:ăn|uống)|thức\s*(?:ăn|uống)|thực\s*đơn|menu|nước\s*(?:lèo|dùng|sốt|chấm|uống)|thịt|cá|hải\s*sản|rau|cơm|phở|bún|trà|cà\s*phê|bánh|vị|nêm(?:\s*nếm)?|đậm\s*đà|nhạt|mặn|ngọt|cay|tươi|giòn|ngon|dở|nguội|không\s*gian|quán|nhà\s*hàng|khách\s*sạn|homestay|phòng(?:\s*(?:ốc|ngủ|tắm))?|giường|nệm|ga\s*(?:giường|gối)|gối|chăn|vệ\s*sinh|sạch(?:\s*sẽ)?|bẩn|dơ|mùi(?:\s*hôi)?|ồn(?:\s*ào)?|yên\s*tĩnh|thoáng|view|tầm\s*nhìn|vị\s*trí|trung\s*tâm|đỗ\s*xe|đậu\s*xe|check[\s-]*in|check[\s-]*out|lễ\s*tân|nhân\s*viên(?!\s*(?:giao|ship|vận\s*chuyển))|phục\s*vụ(?!\s*(?:giao|ship|vận\s*chuyển))|thái\s*độ|hồ\s*bơi|ăn\s*sáng|điều\s*hòa|máy\s*lạnh|nước\s*nóng|cách\s*âm|giá(?:\s*(?:cả|tiền))?|đáng\s*tiền)(?![\p{L}\p{N}])/iu;
+
+// Intrinsic product/packaging feedback for Wave E3 consumables (keeps courier-only remarks excluded).
+const E3_CONSUMABLE_MENTION_RE =
+  /(?<![\p{L}\p{N}])(?:bao\s*bì|vòi\s*(?:xịt|nhấn|pump|bơm)|nắp\s*(?:chai|hộp|lọ|vặn|bật)|tem\s*niêm\s*phong|seal|hạn\s*sử\s*dụng|hsd|thành\s*phần|hoạt\s*chất|tác\s*dụng(?:\s*phụ)?|hiệu\s*quả|kích\s*ứng|dị\s*ứng|nổi\s*mụn|thấm|bết|nhờn|dưỡng|ẩm|mịn|mùi|vị|sữa|bỉm|tã|uống|bôi|thoa|tẩy|rửa|hòa\s*tan|chai|lọ|tuýp|hộp\s*thiếc|hũ|bé\s*(?:chịu|thích|hợp|ti|uống|bú))(?!\p{L}|\d)/iu;
+
+export interface ShippingCommentContext {
+  entityType?: 'product' | 'service' | 'place' | null;
+  categorySlug?: string | null;
+}
+
+function hasDomainSubstance(text: string, context?: ShippingCommentContext): boolean {
+  if (PRODUCT_MENTION_RE.test(text)) return true;
+  const category = context?.categorySlug?.trim().toLowerCase() || null;
+  if (
+    (context?.entityType === 'place' ||
+      (category !== null && WAVE_E4_PLACE_CATEGORIES.has(category))) &&
+    PLACE_DOMAIN_MENTION_RE.test(text)
+  ) {
+    return true;
+  }
+  if (
+    category !== null &&
+    WAVE_E3_RETAIL_CATEGORIES.has(category) &&
+    E3_CONSUMABLE_MENTION_RE.test(text)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Detects reviews that only discuss shipping, packaging, or courier behavior without mentioning
- * any product attribute or usage experience (Section 4 #13 & Section 13 P1).
+ * any product/place attribute or usage experience (Section 4 #13 & Section 13 P1).
  */
-export function isShippingOnlyComment(comment: string | null | undefined): boolean {
+export function isShippingOnlyComment(
+  comment: string | null | undefined,
+  context?: ShippingCommentContext
+): boolean {
   const text = (typeof comment === 'string' ? comment : '')
     .normalize('NFC')
     .replace(/\p{Cc}+/gu, '')
     .trim();
   if (text.length < 6 || isRatingOnlyComment(text)) return false;
-  return SHIPPING_ASPECT_RE.test(text) && !PRODUCT_MENTION_RE.test(text);
+  return SHIPPING_ASPECT_RE.test(text) && !hasDomainSubstance(text, context);
 }
 
 /**
@@ -1079,6 +1118,8 @@ export function assessReview6Axes(
     isDuplicateSeeding?: boolean;
     isCopiedSeeding?: boolean;
     isConflictOfInterest?: boolean;
+    entityType?: 'product' | 'service' | 'place' | null;
+    categorySlug?: string | null;
   } = {}
 ): ReviewAssessment {
   const safeReview =
@@ -1135,9 +1176,23 @@ export function assessReview6Axes(
       routesTo: 'product',
     };
   }
+  const shippingContext: ShippingCommentContext = {
+    entityType: options.entityType,
+    categorySlug: options.categorySlug,
+  };
+  if (
+    Object.keys(aspects).filter(k => aspects[k]?.routesTo === 'product').length === 0 &&
+    hasDomainSubstance(comment, shippingContext)
+  ) {
+    aspects.domain = {
+      sentiment: defaultSentiment,
+      evidence: comment.slice(0, 120),
+      routesTo: 'product',
+    };
+  }
 
   const productAspectCount = Object.values(aspects).filter(a => a.routesTo === 'product').length;
-  const shippingOnly = isShippingOnlyComment(comment);
+  const shippingOnly = isShippingOnlyComment(comment, shippingContext);
   const contradiction = hasStarSentimentContradiction(safeReview.rating_star, comment);
 
   // 2. Axis A: Authenticity
@@ -1384,7 +1439,10 @@ export class AiReviewAnalyzer {
    * Catches coin-farming spam, duplicate seeding templates, competitor sabotage, and review bombing
    * at 0 token cost.
    */
-  public analyzeWithHeuristics(reviews: ReviewInputItem[]): AnalyzedReviewResult[] {
+  public analyzeWithHeuristics(
+    reviews: ReviewInputItem[],
+    context?: ShippingCommentContext
+  ): AnalyzedReviewResult[] {
     if (!Array.isArray(reviews)) return [];
     const safeReviews = reviews.filter((r): r is ReviewInputItem =>
       Boolean(r && typeof r === 'object' && !Array.isArray(r))
@@ -1495,7 +1553,7 @@ export class AiReviewAnalyzer {
         ) &&
         distinctAuthorsWithSameText >= 2;
 
-      const isShippingOnly = isShippingOnlyComment(comment);
+      const isShippingOnly = isShippingOnlyComment(comment, context);
       const hasContradiction = hasStarSentimentContradiction(safeRatingStar, comment);
 
       if (isCompetitorSabotage) {
@@ -1563,6 +1621,8 @@ export class AiReviewAnalyzer {
         isReviewBombing,
         isDuplicateSeeding: isDuplicateSeeding || isScriptedPraise,
         isCopiedSeeding,
+        entityType: context?.entityType,
+        categorySlug: context?.categorySlug,
       });
 
       const helpfulnessWeight = isShippingOnly
@@ -1608,6 +1668,7 @@ export class AiReviewAnalyzer {
     context?: {
       entityName?: string;
       entityType?: 'product' | 'service' | 'place';
+      categorySlug?: string | null;
       platform?: string;
       expertRating?: number | null;
     }
@@ -1638,6 +1699,7 @@ export class AiReviewAnalyzer {
     context?: {
       entityName?: string;
       entityType?: 'product' | 'service' | 'place';
+      categorySlug?: string | null;
       platform?: string;
     }
   ): Promise<{
@@ -1646,7 +1708,7 @@ export class AiReviewAnalyzer {
     aiCons: string[];
     aiSummaryText: string;
   }> {
-    const heuristicResults = this.analyzeWithHeuristics(reviews);
+    const heuristicResults = this.analyzeWithHeuristics(reviews, context);
     let finalResults = heuristicResults;
     let aiPros: string[] = [];
     let aiCons: string[] = [];
@@ -1671,6 +1733,7 @@ export class AiReviewAnalyzer {
     context?: {
       entityName?: string;
       entityType?: 'product' | 'service' | 'place';
+      categorySlug?: string | null;
       platform?: string;
     }
   ): Promise<{
@@ -1933,7 +1996,7 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
         if (
           !aiItem ||
           isRatingOnlyComment(srcReview?.comment) ||
-          isShippingOnlyComment(srcReview?.comment)
+          isShippingOnlyComment(srcReview?.comment, context)
         ) {
           return { ...base, detector: 'heuristic:v2-jreviews' };
         }
@@ -2519,6 +2582,7 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
       reviews: ReviewInputItem[];
       entityName?: string;
       entityType?: 'product' | 'service' | 'place';
+      categorySlug?: string | null;
       platform?: string;
       listingPrice?: number;
       canonicalMinPrice?: number;
@@ -2549,6 +2613,7 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
     const analysis = await this.analyzeReviewsRaw(safeReviews, {
       entityName: params?.entityName,
       entityType: params?.entityType,
+      categorySlug: params?.categorySlug,
       platform: safePlatform,
     });
 

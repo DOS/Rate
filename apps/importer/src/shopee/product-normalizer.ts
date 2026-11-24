@@ -806,7 +806,7 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
     return 'mother-baby';
   }
   if (
-    /(?<![\p{L}\d])(?:thực\s*phẩm\s*chức\s*năng|thực\s*phẩm\s*bảo\s*vệ\s*sức\s*khỏe|viên\s*uống|bổ\s*sung\s*(?:vitamin|canxi|sắt|kẽm|omega|collagen|d3|k2)|omega[\s-]*3|dầu\s*cá|fish\s*oil|probiotic|men\s*vi\s*sinh|collagen\s*(?:uống|viên|nước|bột|peptide)|glucosamine|multivitamin|vitamin\s*(?:c|d\d*|e|b\d*|tổng\s*hợp)|d3\s*k2|whey\s*protein|creatine)(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:thực\s*phẩm\s*chức\s*năng|thực\s*phẩm\s*bảo\s*vệ\s*sức\s*khỏe|viên\s*uống|bột\s*uống|nước\s*uống\s*collagen|bổ\s*sung\s*(?:vitamin|canxi|sắt|kẽm|omega|collagen|d3|k2)|omega[\s-]*3|dầu\s*cá|fish\s*oil|probiotic|men\s*vi\s*sinh|collagen\s*(?:uống|viên|nước|bột|peptide)|glucosamine|multivitamin|d3\s*k2|whey\s*protein|creatine)(?![\p{L}\d])/iu.test(
       t
     )
   ) {
@@ -818,6 +818,9 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
     )
   ) {
     return 'cosmetics';
+  }
+  if (/(?<![\p{L}\d])vitamin\s*(?:c|d\d*|e|b\d*|tổng\s*hợp)(?![\p{L}\d])/iu.test(t)) {
+    return 'supplements';
   }
   return null;
 }
@@ -3262,19 +3265,42 @@ export class ProductNormalizer {
               'giu'
             )
           : null;
+      const packSizeRe =
+        /\d+(?:[.,]\d+)?\s*(?:ml|l|g|kg|mg|mcg|iu|viên|gói|miếng|chai|tuýp|hộp|lon|túi|ống|lốc|thùng|vỉ)(?![\p{L}\d])|\bcombo\s*\d+\b/giu;
       const cleanedE3 = (brandRe ? baseE3Title.replace(brandRe, ' ') : baseE3Title)
+        .replace(/\[[^[\]]*\]/g, ' ')
+        .replace(/\(\s*(?:tặng|kèm|quà|km|khuyến\s*mãi|free)[^()]*\)/giu, ' ')
+        .replace(/\(([^()]*)\)/g, (_, inner: string) =>
+          /\d+(?:[.,]\d+)?\s*(?:ml|l|g|kg|mg|mcg|iu|viên|gói|miếng|chai|tuýp|hộp|lon|túi|ống|lốc|thùng|vỉ)(?![\p{L}\d])|\bcombo\s*\d+\b/iu.test(
+            inner
+          )
+            ? ` ${inner} `
+            : ' '
+        )
         .replace(/^[-:|/,\s]+/, '')
         .replace(/ {2,}/g, ' ')
         .trim();
-      const tokens: string[] = [];
+      const bodyTokens: string[] = [];
       for (const tok of cleanedE3.split(/\s+/).filter(Boolean)) {
-        if (tokens.length >= 10) break;
         const normTok = tok.normalize('NFC');
         if (normTok.startsWith('(') || normTok.startsWith('[')) break;
         if (/^(?:-|tặng|kèm)$/iu.test(normTok)) break;
-        tokens.push(tok.replace(/[,;]+$/g, ''));
+        const cleanTok = tok.replace(/[,;)]+$/g, '');
+        if (cleanTok) bodyTokens.push(cleanTok);
       }
-      model = tokens.join(' ');
+      const headTokens = bodyTokens.slice(0, 10);
+      if (bodyTokens.length > 10) {
+        const tailText = bodyTokens.slice(10).join(' ');
+        const tailPacks = tailText.match(packSizeRe) ?? [];
+        const headJoined = headTokens.join(' ').toLowerCase();
+        for (const pack of tailPacks) {
+          const normalizedPack = pack.replace(/\s+/g, ' ').trim();
+          if (normalizedPack && !headJoined.includes(normalizedPack.toLowerCase())) {
+            headTokens.push(normalizedPack);
+          }
+        }
+      }
+      model = headTokens.join(' ');
       if (!slugify(model)) {
         model = baseE3Title || title;
       }

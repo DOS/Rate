@@ -1442,6 +1442,7 @@ export class ShopeeIngestionPipeline {
               reviews: analysisInput,
               entityName: candidate.name,
               entityType: resolvedEntityType,
+              categorySlug: candidate.category_slug,
               platform,
               listingPrice: product.priceMin,
               canonicalMinPrice,

@@ -25,6 +25,11 @@ import {
   minimumListingPriceVnd,
 } from '@repo/shared-data/rules';
 import { EntityMatcher } from '../entity-matcher.js';
+import {
+  AiReviewAnalyzer,
+  assessReview6Axes,
+  isShippingOnlyComment,
+} from '../ai-review-analyzer.js';
 import { buildRequests } from '../jobs/review-ai-points.js';
 import {
   ProductNormalizer,
@@ -532,6 +537,80 @@ describe('ProductNormalizer Wave E3 retail SKU and Wave E4 places', () => {
     assert.equal(giftSuffix.brand, 'Simple');
     assert.equal(giftSuffix.model, 'Sữa rửa mặt Refreshing');
     assert.doesNotMatch(giftSuffix.model, /[()]/);
+
+    // Gift suffix containing a unit is still stripped, while pack sizes in parens stay.
+    const giftWithSize = normalizer.normalize(
+      createSampleProduct({
+        title: 'Sữa rửa mặt Simple Refreshing 150ml (Tặng tuýp mini 10ml)',
+        categorySlug: 'cosmetics',
+        priceMin: 150_000,
+        priceMax: 150_000,
+      })
+    );
+    assert.equal(giftWithSize.model, 'Sữa rửa mặt Refreshing 150ml');
+
+    // Un-hinted Vitamin C serum stays cosmetics; genuine Vitamin C stays supplements.
+    const serumVitC = normalizer.normalize(
+      createSampleProduct({
+        title: 'Serum Garnier Vitamin C 30ml',
+        priceMin: 220_000,
+        priceMax: 220_000,
+      })
+    );
+    assert.equal(serumVitC.category_slug, 'cosmetics');
+
+    const tabletVitC = normalizer.normalize(
+      createSampleProduct({
+        title: 'Vitamin C Blackmores Bio C 1000mg 60 viên',
+        priceMin: 310_000,
+        priceMax: 310_000,
+      })
+    );
+    assert.equal(tabletVitC.category_slug, 'supplements');
+
+    // Parenthetical and trailing pack sizes (>10 tokens) keep distinct E3 model_key identities.
+    const cerave50 = normalizer.normalize(
+      createSampleProduct({
+        title: 'Kem dưỡng ẩm CeraVe Moisturising Cream (50ml)',
+        categorySlug: 'cosmetics',
+        priceMin: 190_000,
+        priceMax: 190_000,
+      })
+    );
+    const cerave340 = normalizer.normalize(
+      createSampleProduct({
+        title: 'Kem dưỡng ẩm CeraVe Moisturising Cream (340g)',
+        categorySlug: 'cosmetics',
+        priceMin: 420_000,
+        priceMax: 420_000,
+      })
+    );
+    assert.notEqual(cerave50.model_key, cerave340.model_key);
+    assert.ok(cerave50.model_key.endsWith(':unknown'));
+    assert.match(cerave50.model_key, /50ml/);
+    assert.match(cerave340.model_key, /340g/);
+
+    const long50 = normalizer.normalize(
+      createSampleProduct({
+        title:
+          'Kem dưỡng ẩm phục hồi hàng rào bảo vệ da dành cho da rất khô CeraVe Moisturising Cream 50ml',
+        categorySlug: 'cosmetics',
+        priceMin: 190_000,
+        priceMax: 190_000,
+      })
+    );
+    const long340 = normalizer.normalize(
+      createSampleProduct({
+        title:
+          'Kem dưỡng ẩm phục hồi hàng rào bảo vệ da dành cho da rất khô CeraVe Moisturising Cream 340g',
+        categorySlug: 'cosmetics',
+        priceMin: 420_000,
+        priceMax: 420_000,
+      })
+    );
+    assert.notEqual(long50.model_key, long340.model_key);
+    assert.match(long50.model_key, /50ml/);
+    assert.match(long340.model_key, /340g/);
   });
 
   it('normalizes E4 places with entity_type place and preserves compound cafe/branch names', () => {
@@ -825,5 +904,48 @@ describe('Ingestion pipeline, EntityMatcher, and upsertPlaceDetails Open-Core gu
       upsertPlaceDetails(errClient, validInput),
       /Failed to upsert place_details/
     );
+  });
+
+  it('keeps substantive E4 place and E3 packaging reviews in ratings while excluding delivery-only comments', () => {
+    const foodComment = 'Món ăn rất ngon, thịt tươi và rau giòn, giao hàng nhanh.';
+    assert.equal(
+      isShippingOnlyComment(foodComment, { entityType: 'place', categorySlug: 'restaurants' }),
+      false
+    );
+    const cosmeticPackaging = 'Bao bì đẹp, vòi xịt chắc chắn, giao hàng hơi chậm.';
+    assert.equal(
+      isShippingOnlyComment(cosmeticPackaging, {
+        entityType: 'product',
+        categorySlug: 'cosmetics',
+      }),
+      false
+    );
+    const deliveryOnly = 'Giao hàng nhanh, shipper thân thiện, đóng gói cẩn thận.';
+    assert.equal(
+      isShippingOnlyComment(deliveryOnly, { entityType: 'place', categorySlug: 'restaurants' }),
+      true
+    );
+    assert.equal(
+      isShippingOnlyComment(deliveryOnly, { entityType: 'product', categorySlug: 'cosmetics' }),
+      true
+    );
+
+    const foodAssessment = assessReview6Axes(
+      { id: 'rev-food', rating_star: 5, comment: foodComment, author_name: 'Lan' },
+      { entityType: 'place', categorySlug: 'restaurants' }
+    );
+    assert.equal(foodAssessment.breakdown.context, 1);
+    assert.ok(foodAssessment.breakdown.weight > 0);
+
+    const analyzer = new AiReviewAnalyzer();
+    const restaurantResults = analyzer.analyzeWithHeuristics(
+      [
+        { id: 'rev-food', rating_star: 5, comment: foodComment, author_name: 'Lan' },
+        { id: 'rev-ship', rating_star: 5, comment: deliveryOnly, author_name: 'Minh' },
+      ],
+      { entityType: 'place', categorySlug: 'restaurants' }
+    );
+    assert.ok(restaurantResults[0].helpfulness_weight > 0);
+    assert.equal(restaurantResults[1].helpfulness_weight, 0);
   });
 });
