@@ -7,6 +7,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SupportedPriceCurrency } from '@repo/shared-data';
 export {
   MAX_VALID_VND_PRICE,
+  EntityTypeSchema,
+  PlacePriceTierSchema,
+  PlacePriceUnitSchema,
+  PlaceDetailSchema,
   SupportedEcommercePlatformSchema,
   SupportedServicePlatformSchema,
   SupportedIngestionPlatformSchema,
@@ -14,6 +18,10 @@ export {
   ScrapedReviewerSchema,
   ScrapedReviewSchema,
   ScrapedProductSchema,
+  type EntityType,
+  type PlacePriceTier,
+  type PlacePriceUnit,
+  type PlaceDetail,
   type SupportedServicePlatform,
   type SupportedIngestionPlatform,
   type SupportedPriceCurrency,
@@ -61,7 +69,7 @@ export type SupportedEcommercePlatform =
   | 'anphatpc';
 
 export type SupportedPlatform =
-  SupportedEcommercePlatform | 'vietcombank' | 'acb' | 'vnpt' | 'fpttelecom';
+  SupportedEcommercePlatform | 'vietcombank' | 'acb' | 'vnpt' | 'fpttelecom' | 'avakids';
 
 /**
  * Reviewer metadata scraped alongside a review. What each platform exposes differs
@@ -112,10 +120,10 @@ export interface ShopeeReview {
 export interface ShopeeProduct {
   /** Platform identifier (defaults to 'shopee' for backward compatibility) */
   platform?: SupportedPlatform;
-  /** Entity type supplied by trusted sources (e.g. 'service' for Wave E2). */
-  entityType?: 'product' | 'service';
+  /** Entity type supplied by trusted sources (e.g. 'service' for Wave E2, 'place' for Wave E4). */
+  entityType?: 'product' | 'service' | 'place';
   /** Snake-case alias accepted by ScrapedProductSchema for entityType. */
-  entity_type?: 'product' | 'service';
+  entity_type?: 'product' | 'service' | 'place';
   /** Optional explicit category slug hint from upstream crawler/feed. */
   categorySlug?: string;
   /** Snake-case alias accepted by ScrapedProductSchema for categorySlug. */

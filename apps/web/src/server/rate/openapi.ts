@@ -306,6 +306,13 @@ function buildBaseRateOpenApiSpec(
     'air-purifiers',
     'bank-savings',
     'internet-telecom',
+    'supplements',
+    'cosmetics',
+    'mother-baby',
+    'restaurants',
+    'cafes',
+    'hotels',
+    'homestays',
   ];
   const supportedPlatforms = Object.keys(EXTENSION_CAPABILITY_MATRIX);
 
@@ -2469,7 +2476,7 @@ function buildBaseRateOpenApiSpec(
           type: 'string',
           enum: categorySlugs,
           description:
-            '12 canonical product and service categories on Rate.vn.',
+            '19 canonical product, service, and place categories on Rate.vn.',
         },
         PriceVerdictLevel: {
           type: 'string',

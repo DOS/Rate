@@ -258,11 +258,11 @@ const RPC_REJECTIONS: Record<string, RpcRejection> = {
     code: 'REJECTED',
     error: 'Dữ liệu đánh giá không hợp lệ.',
   },
-  // no listing for this master product
+  // no linked retail listing for this master product / place
   P0002: {
-    status: 400,
-    code: 'REJECTED',
-    error: 'Sản phẩm này chưa có nơi bán để gắn đánh giá.',
+    status: 422,
+    code: 'NO_LINKED_LISTING',
+    error: 'Mục này chưa có nơi bán hoặc listing liên kết để gắn đánh giá.',
   },
   // not signed in, or a Supabase anonymous sign-in
   '42501': {

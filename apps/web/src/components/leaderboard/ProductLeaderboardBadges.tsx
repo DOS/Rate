@@ -22,6 +22,13 @@ const VALID_BADGE_CATEGORIES = new Set<CanonicalCategorySlug>([
   'air-purifiers',
   'bank-savings',
   'internet-telecom',
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
 ]);
 
 const VALID_BADGE_CRITERIA = new Set<LeaderboardCriterionKey>([
@@ -113,6 +120,13 @@ export default async function ProductLeaderboardBadges({
     'air-purifiers': t('catAirPurifiers'),
     'bank-savings': t('catBankSavings'),
     'internet-telecom': t('catInternetTelecom'),
+    supplements: t('catSupplements'),
+    cosmetics: t('catCosmetics'),
+    'mother-baby': t('catMotherBaby'),
+    restaurants: t('catRestaurants'),
+    cafes: t('catCafes'),
+    hotels: t('catHotels'),
+    homestays: t('catHomestays'),
   };
 
   const critLabels: Record<LeaderboardCriterionKey, string> = {

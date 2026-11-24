@@ -512,6 +512,88 @@ export type Database = {
         };
         Relationships: [];
       };
+      place_details: {
+        Row: {
+          address: string | null;
+          branch_group_key: string;
+          created_at: string;
+          cuisine: string | null;
+          district_code: string | null;
+          geo_lat: number | null;
+          geo_lng: number | null;
+          geohash7: string | null;
+          master_id: string;
+          opening_hours: string | null;
+          overture_confidence: number | null;
+          phone: string | null;
+          place_key: string;
+          price_max: number | null;
+          price_min: number | null;
+          price_tier: string | null;
+          price_unit: string | null;
+          province_code: string;
+          source_ids: Json;
+          star_rating: number | null;
+          updated_at: string;
+          website: string | null;
+        };
+        Insert: {
+          address?: string | null;
+          branch_group_key: string;
+          created_at?: string;
+          cuisine?: string | null;
+          district_code?: string | null;
+          geo_lat?: number | null;
+          geo_lng?: number | null;
+          geohash7?: string | null;
+          master_id: string;
+          opening_hours?: string | null;
+          overture_confidence?: number | null;
+          phone?: string | null;
+          place_key: string;
+          price_max?: number | null;
+          price_min?: number | null;
+          price_tier?: string | null;
+          price_unit?: string | null;
+          province_code: string;
+          source_ids?: Json;
+          star_rating?: number | null;
+          updated_at?: string;
+          website?: string | null;
+        };
+        Update: {
+          address?: string | null;
+          branch_group_key?: string;
+          created_at?: string;
+          cuisine?: string | null;
+          district_code?: string | null;
+          geo_lat?: number | null;
+          geo_lng?: number | null;
+          geohash7?: string | null;
+          master_id?: string;
+          opening_hours?: string | null;
+          overture_confidence?: number | null;
+          phone?: string | null;
+          place_key?: string;
+          price_max?: number | null;
+          price_min?: number | null;
+          price_tier?: string | null;
+          price_unit?: string | null;
+          province_code?: string;
+          source_ids?: Json;
+          star_rating?: number | null;
+          updated_at?: string;
+          website?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'place_details_master_id_fkey';
+            columns: ['master_id'];
+            referencedRelation: 'master_products';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       price_alerts: {
         Row: {
           client_fingerprint: string;

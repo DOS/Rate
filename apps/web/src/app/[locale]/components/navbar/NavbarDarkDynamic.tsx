@@ -48,6 +48,13 @@ const CATEGORY_LINK_IDS = new Set([
   'air-purifiers',
   'bank-savings',
   'internet-telecom',
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
 ]);
 const EXTRA_NAV_CATEGORY_SLUGS = [
   'tvs',
@@ -57,6 +64,13 @@ const EXTRA_NAV_CATEGORY_SLUGS = [
   'air-purifiers',
   'bank-savings',
   'internet-telecom',
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
 ] as const;
 // Already reachable from the logo and the price-alert button on desktop.
 const DESKTOP_HIDDEN_LINK_IDS = new Set(['home', 'watchlist']);

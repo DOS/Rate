@@ -208,6 +208,13 @@ const SUPPORTED_CATEGORY_ENUM = z.enum([
   'air-purifiers',
   'bank-savings',
   'internet-telecom',
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
 ]);
 
 const SUPPORTED_PLATFORM_OR_ALL_ENUM = z.enum([

@@ -18,6 +18,13 @@
       "air-purifiers": "Air purifiers",
       "bank-savings": "Bank savings",
       "internet-telecom": "Internet & telecom",
+      "supplements": "Supplements",
+      "cosmetics": "Cosmetics",
+      "mother-baby": "Mother & baby",
+      "restaurants": "Restaurants",
+      "cafes": "Cafes",
+      "hotels": "Hotels",
+      "homestays": "Homestays",
       "leaderboard": "Leaderboard",
       "merchants": "Merchants",
       "inspect": "Check a link",
@@ -60,6 +67,13 @@
         "air-purifiers": "Air purifiers",
         "bank-savings": "Bank savings",
         "internet-telecom": "Internet & telecom",
+        "supplements": "Supplements",
+        "cosmetics": "Cosmetics",
+        "mother-baby": "Mother & baby",
+        "restaurants": "Restaurants",
+        "cafes": "Cafes",
+        "hotels": "Hotels",
+        "homestays": "Homestays",
         "leaderboard": "Product rankings",
         "inspect": "Check a product link",
         "compare": "Compare specs",
@@ -238,6 +252,20 @@
     "catBankSavingsUnit": "savings plans",
     "catInternetTelecom": "Internet & telecom",
     "catInternetTelecomUnit": "internet plans",
+    "catSupplements": "Supplements",
+    "catSupplementsUnit": "supplements",
+    "catCosmetics": "Cosmetics",
+    "catCosmeticsUnit": "cosmetics",
+    "catMotherBaby": "Mother & baby",
+    "catMotherBabyUnit": "mother & baby items",
+    "catRestaurants": "Restaurants",
+    "catRestaurantsUnit": "restaurants",
+    "catCafes": "Cafes",
+    "catCafesUnit": "cafes",
+    "catHotels": "Hotels",
+    "catHotelsUnit": "hotels",
+    "catHomestays": "Homestays",
+    "catHomestaysUnit": "homestays",
     "boolYes": "Yes",
     "boolNo": "No",
     "group0Title": "Review scores and trust",
@@ -450,6 +478,13 @@
     "catAirPurifiers": "Air purifiers",
     "catBankSavings": "Bank savings",
     "catInternetTelecom": "Internet & telecom",
+    "catSupplements": "Supplements",
+    "catCosmetics": "Cosmetics",
+    "catMotherBaby": "Mother & baby",
+    "catRestaurants": "Restaurants",
+    "catCafes": "Cafes",
+    "catHotels": "Hotels",
+    "catHomestays": "Homestays",
     "badgeCombined": "Overall score",
     "badgeUser": "Verified users",
     "badgeExpert": "Lab experts",
@@ -470,6 +505,13 @@
     "tabAirPurifiers": "Air purifiers",
     "tabBankSavings": "Bank savings",
     "tabInternetTelecom": "Internet & telecom",
+    "tabSupplements": "Supplements",
+    "tabCosmetics": "Cosmetics",
+    "tabMotherBaby": "Mother & baby",
+    "tabRestaurants": "Restaurants",
+    "tabCafes": "Cafes",
+    "tabHotels": "Hotels",
+    "tabHomestays": "Homestays",
     "dirLabel": "Tech & electronics",
     "chooseCategory": "1. Select category (same-category ranking lock):",
     "chooseCriterion": "2. Rank by criterion:",
@@ -604,6 +646,7 @@
     "errDuplicateReview": "You have already reviewed this product.",
     "errRateLimited": "You have submitted 5 reviews in the last 24 hours. Please try again later.",
     "errInvalidReview": "This review is not valid. Check the star rating and the text (15 to 3,000 characters).",
+    "errNoLinkedListing": "This item has no linked store or place listing for reviews yet.",
     "errNetworkFailed": "Network error while submitting review. Please try again.",
     "defaultAuthorName": "Rate.vn User",
     "successPendingModeration": "Your review has been saved and will be included in the rating after moderation.",
@@ -781,7 +824,23 @@
     "pointCrit_capacity": "Capacity & layout",
     "pointCrit_wash_quality": "Wash quality",
     "pointCrit_filtration": "Filtration performance",
-    "pointCrit_filter_cost": "Filter replacement cost"
+    "pointCrit_filter_cost": "Filter replacement cost",
+    "pointCrit_effectiveness": "Effectiveness",
+    "pointCrit_ingredients": "Ingredients",
+    "pointCrit_tolerance": "Tolerance",
+    "pointCrit_packaging": "Packaging",
+    "pointCrit_skin_feel": "Skin feel",
+    "pointCrit_safety": "Safety",
+    "pointCrit_quality": "Quality",
+    "pointCrit_ease_of_use": "Ease of use",
+    "pointCrit_food_quality": "Food & drinks quality",
+    "pointCrit_service_attitude": "Service attitude",
+    "pointCrit_hygiene": "Hygiene",
+    "pointCrit_ambiance": "Ambiance",
+    "pointCrit_room_quality": "Room quality",
+    "pointCrit_cleanliness": "Cleanliness",
+    "pointCrit_location": "Location",
+    "pointCrit_service": "Service & amenities"
   },
   "watchlist": {
     "metaTitle": "True price watchlist and drop alerts | Rate.vn",
@@ -974,6 +1033,9 @@
     "catAirPurifiers": "Air purifiers",
     "catBankSavings": "Bank savings",
     "catInternetTelecom": "Internet & telecom",
+    "catSupplements": "Supplements",
+    "catCosmetics": "Cosmetics",
+    "catMotherBaby": "Mother & baby",
     "personaValueHunter": "Best value (P/P)",
     "personaDefault": "All-round balanced",
     "personaPhotography": "Camera and audio",
@@ -1606,6 +1668,13 @@
     "catDescAirPurifiers": "Compare HEPA/CADR filtration, filter replacement cost, noise & real prices",
     "catDescBankSavings": "Compare official bank savings interest rates by term & customer service reviews",
     "catDescInternetTelecom": "Compare fiber internet plans, monthly fees & verified customer support ratings",
+    "catDescSupplements": "Compare real retail prices & community feedback on efficacy, ingredients & safety",
+    "catDescCosmetics": "Verify authentic skincare & cosmetics pricing alongside ingredient & skin-feel reviews",
+    "catDescMotherBaby": "Compare baby formula, diapers & gear prices with parent safety reviews",
+    "catDescRestaurants": "Browse verified diner ratings on food quality, hygiene, service & typical spend",
+    "catDescCafes": "Explore cafe ratings for drinks, workspace ambiance, service & average spend",
+    "catDescHotels": "Check hotel and resort ratings on room quality, cleanliness, location & nightly rates",
+    "catDescHomestays": "Compare homestays and villas by cleanliness, host service, location & nightly rate",
     "popularBattlesBadge": "1v1 showdowns",
     "popularBattlesTitle": "Most compared flagships right now",
     "leaderboard5CatsBtn": "Leaderboard",
@@ -2049,6 +2118,41 @@
         "titleCount": "Internet & telecom plan comparison ({count, plural, one {# plan} other {# plans}}) | Rate.vn",
         "titleDefault": "Internet & telecom plan comparison and reviews | Rate.vn",
         "description": "Compare fiber internet plans (VNPT, FPT Telecom), monthly fees and verified network stability and support reviews on Rate.vn."
+      },
+      "supplements": {
+        "titleCount": "Supplement price comparison ({count, plural, one {# product} other {# products}}) | Rate.vn",
+        "titleDefault": "Supplement prices and verified community reviews | Rate.vn",
+        "description": "Compare dietary supplement prices across 22 retailers alongside verified reviews on efficacy, ingredients and safety on Rate.vn."
+      },
+      "cosmetics": {
+        "titleCount": "Cosmetics & skincare comparison ({count, plural, one {# product} other {# products}}) | Rate.vn",
+        "titleDefault": "Cosmetics & skincare prices and authentic reviews | Rate.vn",
+        "description": "Verify authentic cosmetics and skincare retail prices alongside real buyer reviews on ingredients and skin feel on Rate.vn."
+      },
+      "mother-baby": {
+        "titleCount": "Mother & baby comparison ({count, plural, one {# product} other {# products}}) | Rate.vn",
+        "titleDefault": "Mother & baby prices and parent safety reviews | Rate.vn",
+        "description": "Compare formula, diapers and baby gear prices across stores alongside parent safety reviews on Rate.vn."
+      },
+      "restaurants": {
+        "titleCount": "Restaurant ratings & spend guide ({count, plural, one {# place} other {# places}}) | Rate.vn",
+        "titleDefault": "Restaurant ratings, hygiene & spend guide | Rate.vn",
+        "description": "Explore verified diner reviews on food quality, hygiene, service and typical spend per person on Rate.vn."
+      },
+      "cafes": {
+        "titleCount": "Cafe & tea ratings ({count, plural, one {# cafe} other {# cafes}}) | Rate.vn",
+        "titleDefault": "Cafe & tea ratings, ambiance & price guide | Rate.vn",
+        "description": "Browse verified reviews on drink quality, ambiance, service and spend per person at cafes on Rate.vn."
+      },
+      "hotels": {
+        "titleCount": "Hotel & resort ratings ({count, plural, one {# hotel} other {# hotels}}) | Rate.vn",
+        "titleDefault": "Hotel & resort ratings, cleanliness & nightly rates | Rate.vn",
+        "description": "Compare hotel and resort ratings on room quality, cleanliness, location and reference nightly prices on Rate.vn."
+      },
+      "homestays": {
+        "titleCount": "Homestay & villa ratings ({count, plural, one {# stay} other {# stays}}) | Rate.vn",
+        "titleDefault": "Homestay & villa ratings and nightly rates | Rate.vn",
+        "description": "Discover homestay and villa reviews on cleanliness, service, location and reference nightly spend on Rate.vn."
       }
     },
     "sortOptions": {
@@ -2062,6 +2166,8 @@
     "schemas": {
       "directoryTech": "Tech & digital devices",
       "directoryServices": "Public & financial services",
+      "directoryRetail": "Health, beauty & family",
+      "directoryPlaces": "Dining & stays",
       "smartphones": {
         "title": "Smartphones",
         "subtitle": "Explore 10-group technical specs aligned with GSMArena & PhoneArena, compare cross-platform prices, and filter authentic buyer reviews with AI",
@@ -2255,6 +2361,83 @@
           "under-200k": "Under 200K VND",
           "200k-350k": "200K - 350K VND",
           "over-350k": "Over 350K VND"
+        },
+        "features": {}
+      },
+      "supplements": {
+        "title": "Supplements",
+        "subtitle": "Verify retail prices and community reviews on efficacy, ingredients and safety",
+        "searchPlaceholder": "Search vitamin D3, omega-3, collagen, multivitamins...",
+        "presets": {
+          "under-300k": "Under 300K VND",
+          "300k-800k": "300K - 800K VND",
+          "over-800k": "Over 800K VND"
+        },
+        "features": {}
+      },
+      "cosmetics": {
+        "title": "Cosmetics & skincare",
+        "subtitle": "Compare official retail prices and verified reviews on ingredients and skin feel",
+        "searchPlaceholder": "Search sunscreen, cleanser, moisturizer, serum...",
+        "presets": {
+          "under-300k": "Under 300K VND",
+          "300k-800k": "300K - 800K VND",
+          "over-800k": "Over 800K VND"
+        },
+        "features": {}
+      },
+      "mother-baby": {
+        "title": "Mother & baby",
+        "subtitle": "Compare formula, diaper and baby gear prices alongside parent safety reviews",
+        "searchPlaceholder": "Search baby formula, diapers, stroller, bottle...",
+        "presets": {
+          "under-300k": "Under 300K VND",
+          "300k-1m": "300K - 1M VND",
+          "over-1m": "Over 1M VND"
+        },
+        "features": {}
+      },
+      "restaurants": {
+        "title": "Restaurants",
+        "subtitle": "Browse verified diner ratings on food quality, hygiene, service and spend",
+        "searchPlaceholder": "Search restaurant, cuisine, district or city...",
+        "presets": {
+          "under-200k": "Under 200K/person",
+          "200k-500k": "200K - 500K/person",
+          "over-500k": "Over 500K/person"
+        },
+        "features": {}
+      },
+      "cafes": {
+        "title": "Cafes & tea",
+        "subtitle": "Browse ratings for drinks, workspace ambiance, service and average spend",
+        "searchPlaceholder": "Search cafe, tea shop, roastery, area...",
+        "presets": {
+          "under-60k": "Under 60K/person",
+          "60k-120k": "60K - 120K/person",
+          "over-120k": "Over 120K/person"
+        },
+        "features": {}
+      },
+      "hotels": {
+        "title": "Hotels & resorts",
+        "subtitle": "Compare room quality, cleanliness, location ratings and nightly reference rates",
+        "searchPlaceholder": "Search hotel, resort, street or area...",
+        "presets": {
+          "under-1m": "Under 1M/night",
+          "1m-3m": "1M - 3M/night",
+          "over-3m": "Over 3M/night"
+        },
+        "features": {}
+      },
+      "homestays": {
+        "title": "Homestays & villas",
+        "subtitle": "Explore guest ratings on cleanliness, service, location and nightly rates",
+        "searchPlaceholder": "Search homestay, villa, cabin or mountain lodge...",
+        "presets": {
+          "under-800k": "Under 800K/night",
+          "800k-2m": "800K - 2M/night",
+          "over-2m": "Over 2M/night"
         },
         "features": {}
       }
@@ -2553,5 +2736,15 @@
     "notListedHint": "Rate has not found a store in Vietnam selling this model.",
     "noStock": "Not in stock anywhere",
     "noStockHint": "No store has it in stock."
+  },
+  "placeDetail": {
+    "heading": "Place details",
+    "referencePriceLabel": "Reference price",
+    "openingHoursLabel": "Opening hours",
+    "addressLabel": "Address",
+    "viewOnMap": "View on map",
+    "websiteLabel": "Website",
+    "starRatingBadge": "{stars}★",
+    "otherBranchesHeading": "Other branches in chain"
   }
 }

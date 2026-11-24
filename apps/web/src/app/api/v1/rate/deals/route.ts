@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCrossPlatformDealRadar } from '../../../../../server/rate/deals';
 import type { CanonicalCategorySlug } from '../../../../../lib/rate-api';
+import { isPlaceCategorySlug } from '../../../../../lib/rate-domain-core';
 import {
   PUBLIC_API_CORS_HEADERS,
   SUPPORTED_PLATFORM_SLUGS,
@@ -22,6 +23,9 @@ const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
   'air-purifiers',
   'bank-savings',
   'internet-telecom',
+  'supplements',
+  'cosmetics',
+  'mother-baby',
 ]);
 
 const VALID_PLATFORMS = SUPPORTED_PLATFORM_SLUGS;
@@ -44,11 +48,11 @@ export async function GET(request: Request) {
     )
       .trim()
       .toLowerCase();
-    const categorySlug: CanonicalCategorySlug | 'all' = VALID_CATEGORIES.has(
-      rawCat as CanonicalCategorySlug
-    )
-      ? (rawCat as CanonicalCategorySlug)
-      : 'all';
+    const categorySlug: CanonicalCategorySlug | 'all' =
+      VALID_CATEGORIES.has(rawCat as CanonicalCategorySlug) ||
+      isPlaceCategorySlug(rawCat)
+        ? (rawCat as CanonicalCategorySlug)
+        : 'all';
 
     const rawPlatform = (
       parseBoundedStringParam(searchParams.get('platform'), 32) || 'all'

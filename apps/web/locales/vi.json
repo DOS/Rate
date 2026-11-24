@@ -18,6 +18,13 @@
       "air-purifiers": "Lọc không khí",
       "bank-savings": "Tiết kiệm",
       "internet-telecom": "Internet",
+      "supplements": "TPCN",
+      "cosmetics": "Mỹ phẩm",
+      "mother-baby": "Mẹ & bé",
+      "restaurants": "Nhà hàng",
+      "cafes": "Cà phê",
+      "hotels": "Khách sạn",
+      "homestays": "Homestay",
       "leaderboard": "Xếp hạng",
       "merchants": "Gian hàng",
       "inspect": "Kiểm tra link",
@@ -60,6 +67,13 @@
         "air-purifiers": "Máy lọc không khí",
         "bank-savings": "Tiết kiệm ngân hàng",
         "internet-telecom": "Internet & viễn thông",
+        "supplements": "Thực phẩm chức năng",
+        "cosmetics": "Mỹ phẩm & chăm sóc da",
+        "mother-baby": "Mẹ & bé",
+        "restaurants": "Nhà hàng & quán ăn",
+        "cafes": "Quán cà phê & trà",
+        "hotels": "Khách sạn & resort",
+        "homestays": "Homestay & villa",
         "leaderboard": "Bảng xếp hạng sản phẩm",
         "inspect": "Kiểm tra link sản phẩm",
         "compare": "So sánh thông số",
@@ -238,6 +252,20 @@
     "catBankSavingsUnit": "gói tiết kiệm",
     "catInternetTelecom": "Internet & viễn thông",
     "catInternetTelecomUnit": "gói cước",
+    "catSupplements": "Thực phẩm chức năng",
+    "catSupplementsUnit": "sản phẩm TPCN",
+    "catCosmetics": "Mỹ phẩm",
+    "catCosmeticsUnit": "sản phẩm mỹ phẩm",
+    "catMotherBaby": "Mẹ & bé",
+    "catMotherBabyUnit": "sản phẩm mẹ & bé",
+    "catRestaurants": "Nhà hàng",
+    "catRestaurantsUnit": "nhà hàng",
+    "catCafes": "Quán cà phê",
+    "catCafesUnit": "quán cà phê",
+    "catHotels": "Khách sạn",
+    "catHotelsUnit": "khách sạn",
+    "catHomestays": "Homestay",
+    "catHomestaysUnit": "homestay",
     "boolYes": "Có",
     "boolNo": "Không",
     "group0Title": "Điểm đánh giá và độ tin cậy",
@@ -450,6 +478,13 @@
     "catAirPurifiers": "Máy lọc không khí",
     "catBankSavings": "Tiết kiệm ngân hàng",
     "catInternetTelecom": "Internet & viễn thông",
+    "catSupplements": "Thực phẩm chức năng",
+    "catCosmetics": "Mỹ phẩm",
+    "catMotherBaby": "Mẹ & bé",
+    "catRestaurants": "Nhà hàng",
+    "catCafes": "Quán cà phê",
+    "catHotels": "Khách sạn",
+    "catHomestays": "Homestay",
     "badgeCombined": "Điểm tổng hợp",
     "badgeUser": "Người dùng thật",
     "badgeExpert": "Chuyên gia Rate Lab",
@@ -470,6 +505,13 @@
     "tabAirPurifiers": "Lọc không khí",
     "tabBankSavings": "Tiết kiệm",
     "tabInternetTelecom": "Internet & viễn thông",
+    "tabSupplements": "Thực phẩm chức năng",
+    "tabCosmetics": "Mỹ phẩm",
+    "tabMotherBaby": "Mẹ & bé",
+    "tabRestaurants": "Nhà hàng",
+    "tabCafes": "Quán cà phê",
+    "tabHotels": "Khách sạn",
+    "tabHomestays": "Homestay",
     "dirLabel": "Công nghệ & điện tử",
     "chooseCategory": "1. Chọn danh mục ngành hàng (khóa xếp hạng cùng ngành):",
     "chooseCriterion": "2. Xếp hạng theo tiêu chí:",
@@ -604,6 +646,7 @@
     "errDuplicateReview": "Bạn đã gửi đánh giá cho sản phẩm này rồi.",
     "errRateLimited": "Bạn đã gửi quá 5 đánh giá trong 24 giờ, vui lòng thử lại sau.",
     "errInvalidReview": "Đánh giá chưa hợp lệ. Vui lòng kiểm tra số sao và nội dung (15 đến 3.000 ký tự).",
+    "errNoLinkedListing": "Mục này chưa có nơi bán hoặc dữ liệu địa điểm liên kết để gắn đánh giá.",
     "errNetworkFailed": "Lỗi kết nối khi gửi đánh giá. Vui lòng thử lại.",
     "defaultAuthorName": "Người dùng Rate.vn",
     "successPendingModeration": "Đã lưu đánh giá của bạn. Đánh giá chỉ được tính vào điểm trung bình sau khi hệ thống kiểm duyệt xong.",
@@ -781,7 +824,23 @@
     "pointCrit_capacity": "Dung tích sử dụng",
     "pointCrit_wash_quality": "Hiệu quả giặt sạch",
     "pointCrit_filtration": "Hiệu suất lọc bụi",
-    "pointCrit_filter_cost": "Chi phí thay lõi lọc"
+    "pointCrit_filter_cost": "Chi phí thay lõi lọc",
+    "pointCrit_effectiveness": "Hiệu quả sử dụng",
+    "pointCrit_ingredients": "Thành phần",
+    "pointCrit_tolerance": "Độ dung nạp & phản ứng",
+    "pointCrit_packaging": "Bao bì & đóng gói",
+    "pointCrit_skin_feel": "Cảm giác trên da",
+    "pointCrit_safety": "Độ an toàn",
+    "pointCrit_quality": "Chất lượng hoàn thiện",
+    "pointCrit_ease_of_use": "Dễ sử dụng",
+    "pointCrit_food_quality": "Chất lượng món ăn & đồ uống",
+    "pointCrit_service_attitude": "Thái độ phục vụ",
+    "pointCrit_hygiene": "Vệ sinh",
+    "pointCrit_ambiance": "Không gian",
+    "pointCrit_room_quality": "Chất lượng phòng",
+    "pointCrit_cleanliness": "Vệ sinh & sạch sẽ",
+    "pointCrit_location": "Vị trí",
+    "pointCrit_service": "Dịch vụ & tiện ích"
   },
   "watchlist": {
     "metaTitle": "Theo dõi giá thật và cảnh báo giảm giá | Rate.vn",
@@ -974,6 +1033,9 @@
     "catAirPurifiers": "Lọc không khí",
     "catBankSavings": "Tiết kiệm ngân hàng",
     "catInternetTelecom": "Internet & viễn thông",
+    "catSupplements": "Thực phẩm chức năng",
+    "catCosmetics": "Mỹ phẩm",
+    "catMotherBaby": "Mẹ & bé",
     "personaValueHunter": "Đáng tiền nhất (P/P)",
     "personaDefault": "Cân bằng toàn diện",
     "personaPhotography": "Camera và âm thanh",
@@ -1606,6 +1668,13 @@
     "catDescAirPurifiers": "Đối chiếu chỉ số lọc CADR/HEPA, chi phí thay màng lọc, độ ồn & giá thật",
     "catDescBankSavings": "So sánh lãi suất tiền gửi theo kỳ hạn & đánh giá chất lượng phục vụ thực tế",
     "catDescInternetTelecom": "So sánh gói cước internet cáp quang, cước hàng tháng & đánh giá hỗ trợ kỹ thuật",
+    "catDescSupplements": "Đối chiếu giá bán thực tế & đánh giá cộng đồng về hiệu quả, thành phần và độ an toàn",
+    "catDescCosmetics": "Kiểm chứng giá mỹ phẩm chính hãng cùng nhận xét thực tế về thành phần và độ lành tính",
+    "catDescMotherBaby": "So sánh giá sữa bột, tã bỉm, đồ dùng mẹ & bé kèm đánh giá an toàn từ phụ huynh",
+    "catDescRestaurants": "Xem đánh giá thực khách về món ăn, vệ sinh, phục vụ & chi phí trung bình mỗi người",
+    "catDescCafes": "Khám phá đánh giá đồ uống, không gian làm việc, phục vụ & mức chi mỗi người",
+    "catDescHotels": "Tra cứu đánh giá chất lượng phòng, độ sạch sẽ, vị trí & giá phòng tham khảo theo đêm",
+    "catDescHomestays": "So sánh homestay và villa theo độ sạch sẽ, phục vụ, vị trí & giá tham khảo mỗi đêm",
     "popularBattlesBadge": "So sánh đối đầu 1v1",
     "popularBattlesTitle": "Các flagship đang được so kè nhiều nhất",
     "leaderboard5CatsBtn": "Bảng xếp hạng",
@@ -2049,6 +2118,41 @@
         "titleCount": "So sánh gói cước internet & viễn thông ({count} gói) | Rate.vn",
         "titleDefault": "So sánh gói cước internet cáp quang và đánh giá dịch vụ | Rate.vn",
         "description": "So sánh gói cước internet cáp quang (VNPT, FPT Telecom), cước hàng tháng minh bạch và đánh giá độ ổn định từ người dùng thật trên Rate.vn."
+      },
+      "supplements": {
+        "titleCount": "So sánh giá thực phẩm chức năng ({count} sản phẩm) | Rate.vn",
+        "titleDefault": "So sánh giá thực phẩm chức năng và đánh giá thật | Rate.vn",
+        "description": "Đối chiếu giá thực phẩm chức năng trên 22 nơi bán cùng đánh giá cộng đồng về hiệu quả, thành phần và độ an toàn trên Rate.vn."
+      },
+      "cosmetics": {
+        "titleCount": "So sánh giá mỹ phẩm & chăm sóc da ({count} sản phẩm) | Rate.vn",
+        "titleDefault": "So sánh giá mỹ phẩm chính hãng và đánh giá thực tế | Rate.vn",
+        "description": "Kiểm chứng giá mỹ phẩm và chăm sóc da chính hãng cùng đánh giá thật về thành phần, kết cấu và độ lành tính trên Rate.vn."
+      },
+      "mother-baby": {
+        "titleCount": "So sánh giá đồ mẹ & bé ({count} sản phẩm) | Rate.vn",
+        "titleDefault": "So sánh giá sữa bột, tã bỉm và đồ dùng mẹ & bé | Rate.vn",
+        "description": "Đối chiếu giá sữa công thức, tã bỉm và đồ dùng mẹ & bé cùng đánh giá an toàn từ phụ huynh trên Rate.vn."
+      },
+      "restaurants": {
+        "titleCount": "Đánh giá nhà hàng & quán ăn ({count} địa điểm) | Rate.vn",
+        "titleDefault": "Đánh giá nhà hàng, vệ sinh và mức giá tham khảo | Rate.vn",
+        "description": "Khám phá đánh giá thực khách về chất lượng món ăn, vệ sinh an toàn thực phẩm, phục vụ và chi phí mỗi người trên Rate.vn."
+      },
+      "cafes": {
+        "titleCount": "Đánh giá quán cà phê & trà ({count} quán) | Rate.vn",
+        "titleDefault": "Đánh giá quán cà phê, không gian và mức chi | Rate.vn",
+        "description": "Xem đánh giá đồ uống, không gian làm việc, thái độ phục vụ và mức giá tham khảo mỗi người tại các quán cà phê trên Rate.vn."
+      },
+      "hotels": {
+        "titleCount": "Đánh giá khách sạn & resort ({count} khách sạn) | Rate.vn",
+        "titleDefault": "Đánh giá khách sạn, độ sạch và giá tham khảo theo đêm | Rate.vn",
+        "description": "So sánh đánh giá chất lượng phòng, vệ sinh, vị trí và giá phòng tham khảo theo đêm của khách sạn và resort trên Rate.vn."
+      },
+      "homestays": {
+        "titleCount": "Đánh giá homestay & villa ({count} chỗ ở) | Rate.vn",
+        "titleDefault": "Đánh giá homestay, villa và giá tham khảo mỗi đêm | Rate.vn",
+        "description": "Khám phá đánh giá homestay và villa về độ sạch sẽ, phục vụ, vị trí và giá tham khảo mỗi đêm trên Rate.vn."
       }
     },
     "sortOptions": {
@@ -2062,6 +2166,8 @@
     "schemas": {
       "directoryTech": "Công nghệ & thiết bị số",
       "directoryServices": "Dịch vụ công & tài chính",
+      "directoryRetail": "Tiêu dùng & sức khỏe",
+      "directoryPlaces": "Địa điểm & lưu trú",
       "smartphones": {
         "title": "Điện thoại thông minh",
         "subtitle": "Tra cứu dữ liệu kỹ thuật 10 nhóm thông số chuẩn GSMArena & PhoneArena, đối chiếu giá đa sàn và lọc đánh giá thật bằng AI",
@@ -2255,6 +2361,83 @@
           "under-200k": "Dưới 200K",
           "200k-350k": "200K - 350K",
           "over-350k": "Trên 350K"
+        },
+        "features": {}
+      },
+      "supplements": {
+        "title": "Thực phẩm chức năng",
+        "subtitle": "Đối chiếu giá thật và đánh giá cộng đồng về hiệu quả, thành phần và độ an toàn",
+        "searchPlaceholder": "Tìm viên uống bổ sung, omega-3, collagen, vitamin D3...",
+        "presets": {
+          "under-300k": "Dưới 300K",
+          "300k-800k": "300K - 800K",
+          "over-800k": "Trên 800K"
+        },
+        "features": {}
+      },
+      "cosmetics": {
+        "title": "Mỹ phẩm & chăm sóc da",
+        "subtitle": "So sánh giá bán chính hãng và đánh giá thực tế về thành phần, kết cấu và độ lành tính",
+        "searchPlaceholder": "Tìm kem chống nắng, sữa rửa mặt, tẩy trang, tinh chất...",
+        "presets": {
+          "under-300k": "Dưới 300K",
+          "300k-800k": "300K - 800K",
+          "over-800k": "Trên 800K"
+        },
+        "features": {}
+      },
+      "mother-baby": {
+        "title": "Mẹ & bé",
+        "subtitle": "Đối chiếu giá sữa bột, tã bỉm, đồ dùng cho bé cùng đánh giá an toàn từ phụ huynh",
+        "searchPlaceholder": "Tìm sữa bột, tã bỉm, xe đẩy, máy hút sữa...",
+        "presets": {
+          "under-300k": "Dưới 300K",
+          "300k-1m": "300K - 1 triệu",
+          "over-1m": "Trên 1 triệu"
+        },
+        "features": {}
+      },
+      "restaurants": {
+        "title": "Nhà hàng & quán ăn",
+        "subtitle": "Khám phá đánh giá thực khách về món ăn, vệ sinh, thái độ phục vụ và mức giá tham khảo",
+        "searchPlaceholder": "Tìm nhà hàng, quán ăn, quận/thành phố, món đặc trưng...",
+        "presets": {
+          "under-200k": "Dưới 200K/người",
+          "200k-500k": "200K - 500K/người",
+          "over-500k": "Trên 500K/người"
+        },
+        "features": {}
+      },
+      "cafes": {
+        "title": "Quán cà phê & trà",
+        "subtitle": "Đánh giá đồ uống, không gian làm việc, phục vụ và mức chi trung bình mỗi người",
+        "searchPlaceholder": "Tìm quán cà phê, trà sữa, tiệm rang xay, khu vực...",
+        "presets": {
+          "under-60k": "Dưới 60K/người",
+          "60k-120k": "60K - 120K/người",
+          "over-120k": "Trên 120K/người"
+        },
+        "features": {}
+      },
+      "hotels": {
+        "title": "Khách sạn & resort",
+        "subtitle": "Xem đánh giá chất lượng phòng, vệ sinh, vị trí và giá phòng tham khảo theo đêm",
+        "searchPlaceholder": "Tìm khách sạn, khu nghỉ dưỡng, tên đường hoặc khu vực...",
+        "presets": {
+          "under-1m": "Dưới 1 triệu/đêm",
+          "1m-3m": "1 - 3 triệu/đêm",
+          "over-3m": "Trên 3 triệu/đêm"
+        },
+        "features": {}
+      },
+      "homestays": {
+        "title": "Homestay & villa",
+        "subtitle": "Đánh giá trải nghiệm lưu trú, độ sạch sẽ, vị trí và giá tham khảo mỗi đêm",
+        "searchPlaceholder": "Tìm homestay, căn hộ nghỉ dưỡng, nhà vườn...",
+        "presets": {
+          "under-800k": "Dưới 800K/đêm",
+          "800k-2m": "800K - 2 triệu/đêm",
+          "over-2m": "Trên 2 triệu/đêm"
         },
         "features": {}
       }
@@ -2553,5 +2736,15 @@
     "notListedHint": "Rate chưa ghi nhận nơi bán nào tại Việt Nam cho mẫu này.",
     "noStock": "Chưa có nơi bán còn hàng",
     "noStockHint": "Không có nơi bán nào đang còn hàng."
+  },
+  "placeDetail": {
+    "heading": "Thông tin địa điểm",
+    "referencePriceLabel": "Giá tham khảo",
+    "openingHoursLabel": "Giờ mở cửa",
+    "addressLabel": "Địa chỉ",
+    "viewOnMap": "Xem bản đồ",
+    "websiteLabel": "Trang web",
+    "starRatingBadge": "{stars} sao",
+    "otherBranchesHeading": "Chi nhánh khác trong chuỗi"
   }
 }

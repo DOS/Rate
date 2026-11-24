@@ -204,6 +204,7 @@ export type SubmitErrorKey =
   | 'errDuplicateReview'
   | 'errRateLimited'
   | 'errInvalidReview'
+  | 'errNoLinkedListing'
   | 'v2ErrInvalid'
   | 'errSubmitFailed';
 
@@ -217,6 +218,7 @@ const SUBMIT_ERROR_KEYS = new Map<string, SubmitErrorKey>([
   ['RATE_LIMIT_EXCEEDED', 'errRateLimited'],
   ['REJECTED', 'errInvalidReview'],
   ['INVALID_BODY', 'errInvalidReview'],
+  ['NO_LINKED_LISTING', 'errNoLinkedListing'],
   // The v2 form marks each wrong field (DOS/Rate#1544).
   ['INVALID_REVIEW', 'v2ErrInvalid'],
 ]);

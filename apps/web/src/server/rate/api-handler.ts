@@ -1240,9 +1240,17 @@ const VALID_PRODUCT_CATEGORY_SLUGS = new Set([
   'air-purifiers',
   'bank-savings',
   'internet-telecom',
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
 ]);
 
-const VALID_BRAND_TOKEN_REGEX = /^[\p{L}\p{N}\s.+-]+$/u;
+const VALID_BRAND_TOKEN_REGEX =
+  /^[\p{L}\p{N}\s.+-]+(?:['’][\p{L}\p{N}][\p{L}\p{N}\s.+-]*)*$/u;
 
 /**
  * Validates and normalizes `category`, `brands`/`brand`, and `minPrice`/`maxPrice` bounds
@@ -1292,7 +1300,8 @@ export function parseProductsFilterBounds(
         !/[\p{L}\p{N}]/u.test(b) ||
         /^0+$/.test(b) ||
         DISALLOWED_SLUG_AND_BRAND_TOKENS.has(lower) ||
-        b.includes('..')
+        b.includes('..') ||
+        b.includes('--')
       ) {
         continue;
       }

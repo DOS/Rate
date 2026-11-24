@@ -872,12 +872,13 @@ async function testReviewsV2() {
       assert.deepEqual(refused.fieldErrors, [{ field, key: 'v2ErrRejected' }]);
     }
 
-    // The other rejections keep v1's meaning.
+    // The other rejections keep their semantic status; P0002 without
+    // master_product_id means no linked listing/place record -> 422 NO_LINKED_LISTING.
     for (const [sqlstate, status, code] of [
       ['42501', 403, 'FORBIDDEN'],
       ['23505', 409, 'DUPLICATE_REVIEW'],
       ['54000', 429, 'RATE_LIMIT_EXCEEDED'],
-      ['P0002', 400, 'REJECTED'],
+      ['P0002', 422, 'NO_LINKED_LISTING'],
       ['22023', 400, 'REJECTED'],
     ] as const) {
       calls = [];
@@ -891,6 +892,26 @@ async function testReviewsV2() {
       assert.equal(res.status, status, sqlstate);
       assert.equal((await res.json()).code, code, sqlstate);
     }
+
+    // Place or product with no linked retail listing raises P0002 -> 422 NO_LINKED_LISTING.
+    calls = [];
+    rpcResponder = () => ({
+      status: 400,
+      json: {
+        code: 'P0002',
+        message: 'Linked listing not found for canonical product entry',
+      },
+    });
+    res = await POST(post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req);
+    assert.equal(res.status, 422);
+    const noListingBody = await res.json();
+    assert.equal(noListingBody.ok, false);
+    assert.equal(noListingBody.code, 'NO_LINKED_LISTING');
+    assert.equal(
+      noListingBody.error.includes('canonical product entry'),
+      false,
+      'raw postgres message must not be echoed to clients'
+    );
 
     // No product behind the id: a 404, not "no listing".
     calls = [];

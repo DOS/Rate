@@ -1,5 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
+import {
+  sanitizePlaceAdminCode,
+  sanitizePlaceBranchGroupKey,
+  sanitizePlaceCoordinates,
+  sanitizePlacePriceTier,
+  sanitizePlacePriceUnit,
+  sanitizePlaceText,
+  sanitizePlaceWebsiteUrl,
+  type PlaceBranchSibling,
+  type PlaceDetail,
+} from './place-details';
 import { createLogger } from '@/lib/logger';
 import {
   normalizePriceCurrency,
@@ -34,6 +45,7 @@ import {
   type CanonicalCategorySlug,
   isCanonicalCategorySlug,
   getMasterProductCategorySlug,
+  getMasterProductHref,
   type MerchantListFilterParams,
   extractPersistedBreakdown,
   storedRiskSplit,
@@ -109,7 +121,7 @@ const createRateSchemaClient = (url: string, anonKey: string) =>
   createClient<Database>(url, anonKey, {
     auth: { persistSession: false },
   }).schema('rate');
-type RateSchemaClient = ReturnType<typeof createRateSchemaClient>;
+export type RateSchemaClient = ReturnType<typeof createRateSchemaClient>;
 let _client: RateSchemaClient | null = null;
 
 export function getRateClient(): RateSchemaClient {
@@ -5880,4 +5892,303 @@ export async function getItemVariantsBatch(
     byItem.set(id, sortItemVariants(variants));
   }
   return byItem;
+}
+
+const PLACE_DETAIL_SELECT =
+  'master_id, place_key, branch_group_key, geo_lat, geo_lng, geohash7, address, province_code, district_code, price_min, price_max, price_tier, price_unit, opening_hours, phone, website, cuisine, star_rating, overture_confidence, created_at, updated_at';
+
+const PLACE_BRANCH_SELECT =
+  'master_id, address, province_code, district_code, price_min, price_max, price_tier, price_unit, master_products!inner(id, slug, name, model, category_id, metadata, specifications, status, entity_type, rating_score, total_reviews)';
+
+const PLACE_BATCH_SUMMARY_SELECT =
+  'master_id, province_code, district_code, price_min, price_max, price_tier, price_unit, cuisine, star_rating';
+
+export type { PlaceDetail, PlaceBranchSibling };
+
+export type PlaceListingSummary = Pick<
+  PlaceDetail,
+  | 'master_id'
+  | 'province_code'
+  | 'district_code'
+  | 'price_min'
+  | 'price_max'
+  | 'price_tier'
+  | 'price_unit'
+  | 'cuisine'
+  | 'star_rating'
+>;
+
+function parsePlacePriceInt(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const num =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value.trim())
+        : Number.NaN;
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return null;
+  }
+  return Math.round(num);
+}
+
+function parsePlaceFiniteRange(
+  value: unknown,
+  min: number,
+  max: number
+): number | null {
+  if (value === null || value === undefined) return null;
+  const num =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value.trim())
+        : Number.NaN;
+  if (!Number.isFinite(num) || num < min || num > max) return null;
+  return num;
+}
+
+function normalizePlaceDetailRow(row: unknown): PlaceDetail | null {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
+  const r = row as Record<string, unknown>;
+  const masterId = sanitizeRateEntityId(r.master_id);
+  const placeKey = sanitizePlaceText(r.place_key, 350);
+  const branchGroupKey = sanitizePlaceBranchGroupKey(r.branch_group_key);
+  const provinceCode = sanitizePlaceAdminCode(r.province_code);
+  if (!masterId || !placeKey || !branchGroupKey || !provinceCode) return null;
+
+  const coords = sanitizePlaceCoordinates(r.geo_lat, r.geo_lng);
+  const priceMin = parsePlacePriceInt(r.price_min);
+  const priceMaxRaw = parsePlacePriceInt(r.price_max);
+  const priceMax =
+    priceMin !== null && priceMaxRaw !== null && priceMaxRaw < priceMin
+      ? priceMin
+      : priceMaxRaw;
+
+  const geohashRaw = sanitizePlaceText(r.geohash7, 16);
+  const geohash7 =
+    geohashRaw && /^[0-9bcdefghjkmnpqrstuvwxyz]{7}$/.test(geohashRaw)
+      ? geohashRaw
+      : null;
+
+  return {
+    master_id: masterId,
+    place_key: placeKey,
+    branch_group_key: branchGroupKey,
+    geo_lat: coords?.lat ?? null,
+    geo_lng: coords?.lng ?? null,
+    geohash7,
+    address: sanitizePlaceText(r.address, 500),
+    province_code: provinceCode,
+    district_code: sanitizePlaceAdminCode(r.district_code),
+    price_min: priceMin,
+    price_max: priceMax,
+    price_tier: sanitizePlacePriceTier(r.price_tier),
+    price_unit: sanitizePlacePriceUnit(r.price_unit),
+    opening_hours: sanitizePlaceText(r.opening_hours, 500),
+    phone: sanitizePlaceText(r.phone, 64),
+    website: sanitizePlaceWebsiteUrl(r.website),
+    cuisine: sanitizePlaceText(r.cuisine, 200),
+    star_rating: parsePlaceFiniteRange(r.star_rating, 1, 5),
+    overture_confidence: parsePlaceFiniteRange(r.overture_confidence, 0, 1),
+    created_at:
+      typeof r.created_at === 'string' && r.created_at.trim()
+        ? r.created_at
+        : '',
+    updated_at:
+      typeof r.updated_at === 'string' && r.updated_at.trim()
+        ? r.updated_at
+        : '',
+  };
+}
+
+/**
+ * Fetches `rate.place_details` metadata for a single published `place` master record.
+ */
+export async function getMasterPlaceDetail(
+  masterId: string,
+  options?: { client?: RateSchemaClient }
+): Promise<PlaceDetail | null> {
+  const cleanMasterId = sanitizeRateEntityId(masterId);
+  if (!cleanMasterId) return null;
+
+  const client = options?.client ?? getRateClient();
+  const { data, error } = await client
+    .from('place_details')
+    .select(PLACE_DETAIL_SELECT)
+    .eq('master_id', cleanMasterId)
+    .maybeSingle();
+
+  if (error) {
+    log.error('place detail query failed', {
+      masterId: cleanMasterId,
+      message: error.message,
+    });
+    return null;
+  }
+  return normalizePlaceDetailRow(data);
+}
+
+/**
+ * Fetches published sibling branches in the same `branch_group_key` chain,
+ * rejecting malformed keys and enforcing `status = 'published'` and `entity_type = 'place'`.
+ */
+export async function getPlaceBranchSiblings(
+  branchGroupKey: string,
+  excludeMasterId: string,
+  options?: {
+    client?: RateSchemaClient;
+    categorySlugById?: Map<string, string>;
+  }
+): Promise<PlaceBranchSibling[]> {
+  const cleanGroupKey = sanitizePlaceBranchGroupKey(branchGroupKey);
+  const cleanExcludeId = sanitizeRateEntityId(excludeMasterId);
+  if (!cleanGroupKey || !cleanExcludeId) return [];
+
+  const client = options?.client ?? getRateClient();
+  const [{ data, error }, catSlugById] = await Promise.all([
+    client
+      .from('place_details')
+      .select(PLACE_BRANCH_SELECT)
+      .eq('branch_group_key', cleanGroupKey)
+      .eq('master_products.status', 'published')
+      .eq('master_products.entity_type', 'place')
+      .neq('master_id', cleanExcludeId)
+      .limit(24),
+    options?.categorySlugById
+      ? Promise.resolve(options.categorySlugById)
+      : getCategorySlugMap().catch(() => new Map<string, string>()),
+  ]);
+
+  if (error) {
+    log.error('place branch siblings query failed', {
+      branchGroupKey: cleanGroupKey,
+      message: error.message,
+    });
+    return [];
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  const siblings: PlaceBranchSibling[] = [];
+  for (const raw of rows) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const row = raw as Record<string, unknown>;
+    const rowMasterId = sanitizeRateEntityId(row.master_id);
+    if (!rowMasterId || rowMasterId === cleanExcludeId) continue;
+
+    const mpRaw = Array.isArray(row.master_products)
+      ? row.master_products[0]
+      : row.master_products;
+    if (!mpRaw || typeof mpRaw !== 'object' || Array.isArray(mpRaw)) continue;
+    const mp = mpRaw as Record<string, unknown>;
+    if (mp.status !== 'published' || mp.entity_type !== 'place') continue;
+
+    const slug = sanitizePlaceText(mp.slug, 200);
+    const name = sanitizePlaceText(mp.name, 300);
+    const provinceCode = sanitizePlaceAdminCode(row.province_code);
+    if (!slug || !name || !provinceCode) continue;
+
+    const href = getMasterProductHref(
+      {
+        slug,
+        name,
+        model: typeof mp.model === 'string' ? mp.model : null,
+        category_id: typeof mp.category_id === 'string' ? mp.category_id : null,
+        metadata:
+          mp.metadata && typeof mp.metadata === 'object'
+            ? (mp.metadata as Record<string, unknown>)
+            : null,
+        specifications:
+          mp.specifications && typeof mp.specifications === 'object'
+            ? (mp.specifications as Record<string, unknown>)
+            : null,
+      },
+      catSlugById ?? undefined
+    );
+
+    const priceMin = parsePlacePriceInt(row.price_min);
+    const priceMaxRaw = parsePlacePriceInt(row.price_max);
+    const priceMax =
+      priceMin !== null && priceMaxRaw !== null && priceMaxRaw < priceMin
+        ? priceMin
+        : priceMaxRaw;
+    const ratingScore = parsePlaceFiniteRange(mp.rating_score, 0, 5);
+    const rawReviews =
+      typeof mp.total_reviews === 'number' && Number.isFinite(mp.total_reviews)
+        ? Math.max(0, Math.round(mp.total_reviews))
+        : 0;
+
+    siblings.push({
+      master_id: rowMasterId,
+      slug,
+      name,
+      href,
+      address: sanitizePlaceText(row.address, 500),
+      province_code: provinceCode,
+      district_code: sanitizePlaceAdminCode(row.district_code),
+      price_min: priceMin,
+      price_max: priceMax,
+      price_tier: sanitizePlacePriceTier(row.price_tier),
+      price_unit: sanitizePlacePriceUnit(row.price_unit),
+      rating_score: ratingScore,
+      total_reviews: rawReviews,
+    });
+  }
+
+  return siblings;
+}
+
+/**
+ * Fetches summary `rate.place_details` metadata for catalog card rendering in batches.
+ */
+export async function getMasterPlaceDetailsBatch(
+  masterIds: readonly string[],
+  options?: { client?: RateSchemaClient }
+): Promise<Map<string, PlaceListingSummary>> {
+  const cleanIds = Array.from(
+    new Set(
+      masterIds
+        .map((id) => sanitizeRateEntityId(id))
+        .filter((id) => id.length > 0)
+    )
+  ).slice(0, 200);
+  const map = new Map<string, PlaceListingSummary>();
+  if (cleanIds.length === 0) return map;
+
+  const client = options?.client ?? getRateClient();
+  const { data, error } = await client
+    .from('place_details')
+    .select(PLACE_BATCH_SUMMARY_SELECT)
+    .in('master_id', cleanIds);
+
+  if (error) {
+    log.error('place details batch query failed', { message: error.message });
+    return map;
+  }
+  const rows = Array.isArray(data) ? data : [];
+  for (const raw of rows) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const r = raw as Record<string, unknown>;
+    const masterId = sanitizeRateEntityId(r.master_id);
+    const provinceCode = sanitizePlaceAdminCode(r.province_code);
+    if (!masterId || !provinceCode) continue;
+    const priceMin = parsePlacePriceInt(r.price_min);
+    const priceMaxRaw = parsePlacePriceInt(r.price_max);
+    const priceMax =
+      priceMin !== null && priceMaxRaw !== null && priceMaxRaw < priceMin
+        ? priceMin
+        : priceMaxRaw;
+    map.set(masterId, {
+      master_id: masterId,
+      province_code: provinceCode,
+      district_code: sanitizePlaceAdminCode(r.district_code),
+      price_min: priceMin,
+      price_max: priceMax,
+      price_tier: sanitizePlacePriceTier(r.price_tier),
+      price_unit: sanitizePlacePriceUnit(r.price_unit),
+      cuisine: sanitizePlaceText(r.cuisine, 200),
+      star_rating: parsePlaceFiniteRange(r.star_rating, 1, 5),
+    });
+  }
+  return map;
 }

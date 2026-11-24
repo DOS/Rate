@@ -2,9 +2,14 @@ import type { Metadata } from 'next';
 import {
   MAX_VALID_VND_PRICE,
   isCategoryVisibleInDirectory,
+  isPlaceCategorySlug,
   resolveCompareEffectiveUserRating,
   resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
+import {
+  formatPlaceLocationBadge,
+  resolveCardPricePair,
+} from '@/lib/place-details';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import PageShell from './components/page-shell';
@@ -23,6 +28,7 @@ import {
   versusHref,
 } from '@/lib/item-compare';
 import {
+  getCachedMasterPlaceDetailsBatch,
   getCachedMasterProducts,
   getCachedMerchantsList,
   getCachedRatePlatformStats,
@@ -42,11 +48,17 @@ import {
   BsBank,
   BsBatteryHalf,
   BsBoxSeam,
+  BsBuilding,
+  BsCapsule,
   BsCheckCircleFill,
   BsCpu,
+  BsCupHot,
   BsDroplet,
+  BsForkKnife,
   BsGraphUpArrow,
   BsHeadphones,
+  BsHeartPulse,
+  BsHouseHeart,
   BsLaptop,
   BsPhone,
   BsShieldCheck,
@@ -55,6 +67,7 @@ import {
   BsSmartwatch,
   BsSnow,
   BsStarFill,
+  BsStars,
   BsTabletLandscape,
   BsTrophy,
   BsTv,
@@ -97,6 +110,7 @@ import {
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
+  hasListingUnitSuffix,
   sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import StarRating from '@/components/elementary/StarRating';
@@ -134,6 +148,13 @@ const CATEGORY_DESC_KEYS = {
   'air-purifiers': 'catDescAirPurifiers',
   'bank-savings': 'catDescBankSavings',
   'internet-telecom': 'catDescInternetTelecom',
+  supplements: 'catDescSupplements',
+  cosmetics: 'catDescCosmetics',
+  'mother-baby': 'catDescMotherBaby',
+  restaurants: 'catDescRestaurants',
+  cafes: 'catDescCafes',
+  hotels: 'catDescHotels',
+  homestays: 'catDescHomestays',
 } as const;
 
 type KnownCategorySlug = keyof typeof CATEGORY_DESC_KEYS;
@@ -172,6 +193,20 @@ function getCategoryIcon(slug: string) {
       return <BsBank />;
     case 'internet-telecom':
       return <BsWifi />;
+    case 'supplements':
+      return <BsCapsule />;
+    case 'cosmetics':
+      return <BsStars />;
+    case 'mother-baby':
+      return <BsHeartPulse />;
+    case 'restaurants':
+      return <BsForkKnife />;
+    case 'cafes':
+      return <BsCupHot />;
+    case 'hotels':
+      return <BsBuilding />;
+    case 'homestays':
+      return <BsHouseHeart />;
     default:
       return <BsCpu />;
   }
@@ -530,8 +565,10 @@ export function HomeDealRadarBlock({
                 {genuineDeals.slice(0, 3).map((g) => {
                   const gCurrency = g.currency;
                   const gCategorySlug = g.productHref?.split('/')[1] || '';
-                  const gHasUnit =
-                    gCurrency === 'PCT' || gCategorySlug === 'internet-telecom';
+                  const gHasUnit = hasListingUnitSuffix(
+                    gCurrency,
+                    gCategorySlug
+                  );
                   const currentPrice = sanitizeHomePriceVnd(
                     g.priceCurrent,
                     gCurrency
@@ -612,8 +649,10 @@ export function HomeDealRadarBlock({
                 {fakeSaleTraps.slice(0, 3).map((t) => {
                   const tCurrency = t.currency;
                   const tCategorySlug = t.productHref?.split('/')[1] || '';
-                  const tHasUnit =
-                    tCurrency === 'PCT' || tCategorySlug === 'internet-telecom';
+                  const tHasUnit = hasListingUnitSuffix(
+                    tCurrency,
+                    tCategorySlug
+                  );
                   const currentPrice = sanitizeHomePriceVnd(
                     t.priceCurrent,
                     tCurrency
@@ -1093,6 +1132,20 @@ export default async function Home({
   // RATE_ITEM_MODEL on: one grid card and one 1v1 battle slot per Item (DOS/Rate#1155, #1808).
   const { gridProducts, popularHomeBattles } =
     await resolveHomeGroupedCatalog(masterProducts);
+  const homePlaceIds = gridProducts
+    .slice(0, 6)
+    .filter(
+      (item) =>
+        item.entity_type === 'place' ||
+        isPlaceCategorySlug(getMasterProductCategorySlug(item, catSlugById))
+    )
+    .map((item) => item.id);
+  const homePlaceDetailsByMaster =
+    homePlaceIds.length > 0
+      ? await getCachedMasterPlaceDetailsBatch(homePlaceIds).catch(
+          () => new Map()
+        )
+      : new Map();
   const quickCompareSlugs = buildHomeQuickCompareSlugs(
     gridProducts,
     catSlugById
@@ -1479,6 +1532,30 @@ export default async function Home({
                     });
                   }
 
+                  const homePlaceSummary =
+                    homePlaceDetailsByMaster.get(item.id) ?? null;
+                  const homePlaceLoc = homePlaceSummary
+                    ? formatPlaceLocationBadge(
+                        homePlaceSummary.district_code,
+                        homePlaceSummary.province_code
+                      )
+                    : null;
+                  const cardPricing = resolveCardPricePair({
+                    masterMinPrice: item.min_price,
+                    masterMaxPrice: item.max_price,
+                    placeSummary: homePlaceSummary,
+                  });
+                  const cardSaleState = cardPricing.fromPlace
+                    ? saleStateOfMaster({
+                        min_price:
+                          cardPricing.minPrice > 0
+                            ? cardPricing.minPrice
+                            : cardPricing.maxPrice,
+                        metadata: item.metadata,
+                        specifications: item.specifications,
+                      })
+                    : saleStateOfMaster(item);
+
                   return (
                     <div key={item.id} className="col-lg-4 col-md-6 col-12">
                       <ProductCard
@@ -1497,6 +1574,13 @@ export default async function Home({
                         brand={item.brand}
                         thumbnail={thumb ?? null}
                         tags={[
+                          ...(homePlaceSummary?.price_tier
+                            ? [homePlaceSummary.price_tier]
+                            : []),
+                          ...(homePlaceSummary?.cuisine
+                            ? [homePlaceSummary.cuisine]
+                            : []),
+                          ...(homePlaceLoc ? [homePlaceLoc] : []),
                           item.ram_gb ? `${item.ram_gb}GB RAM` : '',
                           item.storage_gb ? `${item.storage_gb}GB` : '',
                         ].filter(Boolean)}
@@ -1507,8 +1591,8 @@ export default async function Home({
                         )}
                         expertScore={expertScore}
                         radarSignal={getRadarSignal(radarIndex, item.slug)}
-                        minPrice={Number(item.min_price || 0)}
-                        maxPrice={Number(item.max_price || 0)}
+                        minPrice={cardPricing.minPrice}
+                        maxPrice={cardPricing.maxPrice}
                         currency={resolveListingPriceCurrency({
                           categorySlug: getMasterProductCategorySlug(
                             item,
@@ -1516,8 +1600,9 @@ export default async function Home({
                           ),
                           metadata: item.metadata,
                         })}
+                        priceUnit={homePlaceSummary?.price_unit ?? null}
                         merchantCount={item.merchant_count || 0}
-                        saleState={saleStateOfMaster(item)}
+                        saleState={cardSaleState}
                       />
                     </div>
                   );

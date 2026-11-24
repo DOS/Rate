@@ -1259,6 +1259,13 @@ async function testSpecMatchesBodies() {
     'air-purifiers',
     'bank-savings',
     'internet-telecom',
+    'supplements',
+    'cosmetics',
+    'mother-baby',
+    'restaurants',
+    'cafes',
+    'hotels',
+    'homestays',
     'all',
   ]);
   assert.equal(productCategoryParam.schema.default, 'smartphones');

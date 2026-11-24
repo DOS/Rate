@@ -23,13 +23,19 @@ import {
   storedPoint,
   RATING_CRITERIA_VERSION,
   RATING_CRITERIA_V2_VERSION,
+  RATING_CRITERIA_V3_VERSION,
   REVIEW_POINT_MAX,
   REVIEW_POINT_MIN,
 } from '@repo/shared-data/rules';
 
 /** Bump on any change to the instructions, examples or schema (design 4). */
 export const REVIEW_AI_PROMPT_VERSION = 'v1';
-export { RATING_CRITERIA_VERSION, RATING_CRITERIA_V2_VERSION, getRatingCriteriaVersion };
+export {
+  RATING_CRITERIA_VERSION,
+  RATING_CRITERIA_V2_VERSION,
+  RATING_CRITERIA_V3_VERSION,
+  getRatingCriteriaVersion,
+};
 
 /** Reviews per request: one category, one instruction block (a shared prefix). */
 export const REVIEWS_PER_REQUEST = 20;
@@ -159,7 +165,40 @@ const CRITERION_HINTS: Readonly<Record<string, string>> = {
   wash_quality: 'hiệu quả giặt sạch, vắt khô, bảo vệ sợi vải',
   filtration: 'hiệu quả lọc bụi mịn PM2.5, khử mùi, màng HEPA',
   filter_cost: 'chi phí và chu kỳ thay lõi lọc, màng lọc',
+  effectiveness: 'hiệu quả sử dụng, tác dụng thực tế, mức độ cải thiện',
+  ingredients: 'bảng thành phần, hoạt chất, độ lành tính',
+  tolerance: 'độ dung nạp, kích ứng, dị ứng, tác dụng phụ',
+  packaging: 'bao bì sản phẩm, hộp, chai lọ, vòi xịt, tem niêm phong',
+  skin_feel: 'kết cấu, độ thấm, bết dính, cảm giác trên da',
+  safety: 'độ an toàn cho bé và mẹ, chất liệu không độc hại',
+  quality: 'chất lượng hoàn thiện, chất liệu, độ bền sản phẩm',
+  ease_of_use: 'tính tiện lợi, dễ sử dụng, dễ vệ sinh',
+  food_quality: 'chất lượng món ăn, đồ uống, hương vị, độ tươi ngon',
+  service_attitude: 'thái độ nhân viên, tốc độ và sự chu đáo khi phục vụ',
+  hygiene: 'mức độ sạch sẽ, vệ sinh khu vực ăn uống và chế biến',
+  ambiance: 'không gian, chỗ ngồi, ánh sáng, âm thanh, trang trí',
+  room_quality: 'chất lượng phòng, giường nệm, nội thất, tiện nghi, cách âm',
+  cleanliness: 'độ sạch sẽ phòng nghỉ, ga giường, nhà vệ sinh',
+  location: 'vị trí, sự thuận tiện đi lại, gần trung tâm hay điểm tham quan',
+  service: 'dịch vụ lễ tân, nhận trả phòng, tiện ích đi kèm',
 };
+
+const PLACE_CATEGORY_SLUGS = new Set(['restaurants', 'cafes', 'hotels', 'homestays']);
+const E3_RETAIL_CATEGORY_SLUGS = new Set(['supplements', 'cosmetics', 'mother-baby']);
+
+const PLACE_EXAMPLES = `Ví dụ (minh hoạ, không phải review thật):
+Review ref 1: "món phở đậm đà, nước dùng ngọt thanh, nhưng quán hơi chật và nhân viên lên món chậm"
+Kết quả: {"ref": 1, "points": [
+  {"kind": "pro", "criterion_key": "food_quality", "body": "Món ăn đậm đà, nước dùng ngon", "evidence": "món phở đậm đà, nước dùng ngọt thanh"},
+  {"kind": "con", "criterion_key": "ambiance", "body": "Không gian quán hơi chật", "evidence": "quán hơi chật"},
+  {"kind": "con", "criterion_key": "service_attitude", "body": "Nhân viên lên món chậm", "evidence": "nhân viên lên món chậm"}]}
+Review ref 2: "sẽ quay lại ủng hộ quán dài dài nha mọi người ơi"
+Kết quả: {"ref": 2, "points": []}
+Review ref 3: "phòng sạch sẽ, gần trung tâm tiện đi lại, nhưng cách âm hơi kém nên tối nghe tiếng xe"
+Kết quả: {"ref": 3, "points": [
+  {"kind": "pro", "criterion_key": "cleanliness", "body": "Phòng nghỉ sạch sẽ", "evidence": "phòng sạch sẽ"},
+  {"kind": "pro", "criterion_key": "location", "body": "Vị trí gần trung tâm, tiện đi lại", "evidence": "gần trung tâm tiện đi lại"},
+  {"kind": "con", "criterion_key": "room_quality", "body": "Phòng cách âm chưa tốt", "evidence": "cách âm hơi kém"}]}`;
 
 const EXAMPLES = `Ví dụ (minh hoạ, không phải review thật):
 Review ref 1: "pin xài cả ngày vẫn còn 30%, mà ra nắng hơi khó nhìn. shop giao nhanh"
@@ -187,6 +226,27 @@ export function reviewAiInstructions(categorySlug: string): string {
         `- ${c.key}: ${c.label.vi}${CRITERION_HINTS[c.key] ? ` (${CRITERION_HINTS[c.key]})` : ''}`
     )
     .join('\n');
+  if (PLACE_CATEGORY_SLUGS.has(categorySlug)) {
+    return `Bạn đọc review địa điểm do khách trải nghiệm thực tế viết và rút ra ưu điểm, nhược điểm của chính địa điểm này.
+
+Tiêu chí của danh mục này (criterion_key: tên):
+${criteria}
+
+Luật:
+1. Chỉ lấy điều review nói ra. Không suy ra từ số sao, không đoán, không thêm ý.
+2. Mỗi review tối đa ${AI_POINTS_PER_KIND} ưu và ${AI_POINTS_PER_KIND} nhược. Không có ý rõ ràng về địa điểm hoặc trải nghiệm thì trả "points": [] (đây là kết quả bình thường).
+3. body: viết lại gọn bằng tiếng Việt, ${REVIEW_POINT_MIN} đến ${REVIEW_POINT_MAX} ký tự, giữ đúng ý và đúng mức độ ("quán hơi ồn" không thành "quán cực kỳ ồn").
+4. criterion_key: một khoá trong danh sách trên, hoặc null nếu là ý chung không thuộc tiêu chí nào.
+5. evidence: đoạn trích nguyên văn, ngắn, chép đúng từng chữ từ chính review đó (giữ nguyên chữ không dấu, viết tắt, lỗi chính tả). Ít nhất 2 từ.
+6. Bỏ qua chuyện đặt đơn giao hàng online, mã giảm giá, khuyến mãi, quà tặng, xu.
+7. Không có dòng nào vừa là ưu vừa là nhược. Không lặp ý.
+8. Trả đúng một mục cho mỗi ref nhận được.
+
+${PLACE_EXAMPLES}`;
+  }
+  const rule6 = E3_RETAIL_CATEGORY_SLUGS.has(categorySlug)
+    ? '6. Bỏ qua chuyện giao hàng của đơn vị vận chuyển, người bán, khuyến mãi, quà tặng, xu (chỉ xét bao bì của chính sản phẩm nếu thuộc tiêu chí packaging).'
+    : '6. Bỏ qua chuyện giao hàng, đóng gói, người bán, khuyến mãi, quà tặng, xu.';
   return `Bạn đọc review sản phẩm do người mua viết trên sàn thương mại điện tử và rút ra ưu điểm, nhược điểm của chính sản phẩm.
 
 Tiêu chí của ngành hàng này (criterion_key: tên):
@@ -198,7 +258,7 @@ Luật:
 3. body: viết lại gọn bằng tiếng Việt, ${REVIEW_POINT_MIN} đến ${REVIEW_POINT_MAX} ký tự, giữ đúng ý và đúng mức độ ("pin hơi yếu" không thành "pin rất tệ").
 4. criterion_key: một khoá trong danh sách trên, hoặc null nếu là ý chung không thuộc tiêu chí nào.
 5. evidence: đoạn trích nguyên văn, ngắn, chép đúng từng chữ từ chính review đó (giữ nguyên chữ không dấu, viết tắt, lỗi chính tả). Ít nhất 2 từ.
-6. Bỏ qua chuyện giao hàng, đóng gói, người bán, khuyến mãi, quà tặng, xu.
+${rule6}
 7. Không có dòng nào vừa là ưu vừa là nhược. Không lặp ý.
 8. Trả đúng một mục cho mỗi ref nhận được.
 

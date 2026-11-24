@@ -130,6 +130,116 @@ export const KeySpecsSchema = z
 // Defined with the price rules so `@repo/shared-data/rules` stays free of zod.
 export { MAX_VALID_VND_PRICE };
 
+export const EntityTypeSchema = z.enum(['product', 'service', 'place']);
+export type EntityType = z.infer<typeof EntityTypeSchema>;
+
+export const PlacePriceTierSchema = z.enum(['$', '$$', '$$$', '$$$$']);
+export type PlacePriceTier = z.infer<typeof PlacePriceTierSchema>;
+
+export const PlacePriceUnitSchema = z.enum([
+  'vnd_per_person',
+  'vnd_per_night_ref',
+]);
+export type PlacePriceUnit = z.infer<typeof PlacePriceUnitSchema>;
+
+const PLACE_KEY_RE = /^[a-z0-9_-]{1,128}:[a-z0-9_-]{1,80}:[a-z0-9_-]{1,128}$/;
+const BRANCH_GROUP_KEY_RE = /^[a-z0-9_-]{1,128}$/;
+const GEOHASH7_RE = /^[0-9bcdefghjkmnpqrstuvwxyz]{7}$/;
+const ADMIN_CODE_RE = /^[a-z0-9_-]{1,64}$/;
+
+/**
+ * Runtime Zod contract matching `rate.place_details` 1:1 (Wave E4 PA2).
+ */
+export const PlaceDetailSchema = z
+  .object({
+    masterId: z.string().uuid(),
+    placeKey: z.string().regex(PLACE_KEY_RE, {
+      message:
+        'placeKey must match ^[a-z0-9_-]{1,128}:[a-z0-9_-]{1,80}:[a-z0-9_-]{1,128}$',
+    }),
+    branchGroupKey: z.string().regex(BRANCH_GROUP_KEY_RE, {
+      message: 'branchGroupKey must match ^[a-z0-9_-]{1,128}$',
+    }),
+    geoLat: z.number().finite().min(-90).max(90).nullable().optional(),
+    geoLng: z.number().finite().min(-180).max(180).nullable().optional(),
+    geohash7: z
+      .string()
+      .regex(GEOHASH7_RE, {
+        message: 'geohash7 must be 7 lowercase base32 characters',
+      })
+      .nullable()
+      .optional(),
+    address: z.string().max(500).nullable().optional(),
+    provinceCode: z.string().regex(ADMIN_CODE_RE, {
+      message: 'provinceCode must match ^[a-z0-9_-]{1,64}$',
+    }),
+    districtCode: z
+      .string()
+      .regex(ADMIN_CODE_RE, {
+        message: 'districtCode must match ^[a-z0-9_-]{1,64}$',
+      })
+      .nullable()
+      .optional(),
+    priceMin: z
+      .number()
+      .int()
+      .positive()
+      .max(MAX_VALID_VND_PRICE)
+      .nullable()
+      .optional(),
+    priceMax: z
+      .number()
+      .int()
+      .positive()
+      .max(MAX_VALID_VND_PRICE)
+      .nullable()
+      .optional(),
+    priceTier: PlacePriceTierSchema.nullable().optional(),
+    priceUnit: PlacePriceUnitSchema.nullable().optional(),
+    openingHours: z.string().max(500).nullable().optional(),
+    phone: z.string().max(64).nullable().optional(),
+    website: HttpUrlSchema.nullable().optional(),
+    cuisine: z.string().max(200).nullable().optional(),
+    starRating: z
+      .number()
+      .finite()
+      .min(1)
+      .max(5)
+      .refine((v) => Math.abs(v * 10 - Math.round(v * 10)) < 1e-9, {
+        message: 'starRating must be in 0.1 steps between 1.0 and 5.0',
+      })
+      .nullable()
+      .optional(),
+    sourceIds: z.record(z.string(), z.unknown()).default({}),
+    overtureConfidence: z.number().finite().min(0).max(1).nullable().optional(),
+  })
+  .superRefine((detail, ctx) => {
+    const hasLat = detail.geoLat !== null && detail.geoLat !== undefined;
+    const hasLng = detail.geoLng !== null && detail.geoLng !== undefined;
+    if (hasLat !== hasLng) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [hasLat ? 'geoLng' : 'geoLat'],
+        message: 'geoLat and geoLng must both be provided or both omitted/null',
+      });
+    }
+    if (
+      detail.priceMin !== null &&
+      detail.priceMin !== undefined &&
+      detail.priceMax !== null &&
+      detail.priceMax !== undefined &&
+      detail.priceMax < detail.priceMin
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['priceMax'],
+        message: 'priceMax must be greater than or equal to priceMin',
+      });
+    }
+  });
+
+export type PlaceDetail = z.infer<typeof PlaceDetailSchema>;
+
 export const MasterProductSchema = z.object({
   id: z.string().uuid(),
   category_id: z.string().uuid().nullable().optional(),
@@ -156,7 +266,7 @@ export const MasterProductSchema = z.object({
   merchant_count: z.number().int().nonnegative().default(0),
   total_reviews: z.number().int().nonnegative().default(0),
   average_rating: z.number().min(0).max(5).nullable().default(null),
-  entity_type: z.enum(['product', 'service']).default('product').optional(),
+  entity_type: EntityTypeSchema.default('product').optional(),
   expert_rating: z.number().min(0).max(5).nullable().optional(),
   expert_review_summary: z.string().max(10_000).nullable().optional(),
   expert_criteria_scores: z
@@ -228,6 +338,7 @@ export type SupportedServicePlatform = z.infer<
 export const SupportedIngestionPlatformSchema = z.enum([
   ...SupportedEcommercePlatformSchema.options,
   ...SUPPORTED_SERVICE_PLATFORMS,
+  'avakids',
 ]);
 
 export type SupportedIngestionPlatform = z.infer<
@@ -281,7 +392,7 @@ export const ScrapedProductSchema = z.object({
   url: HttpUrlSchema,
   title: z.string().min(1).max(1000),
   description: z.string().max(50_000).optional(),
-  entity_type: z.enum(['product', 'service']).optional(),
+  entity_type: EntityTypeSchema.optional(),
   category_slug: z.string().max(64).optional(),
   priceMin: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
   priceMax: z.number().nonnegative().max(MAX_VALID_VND_PRICE),

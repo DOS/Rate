@@ -328,6 +328,157 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
   price: ['giá', 'tiền', 'rẻ', 'đắt'],
   attitude: ['thái độ', 'nhân viên', 'phục vụ', 'nhiệt tình', 'lịch sự'],
   speed: ['nhanh', 'chậm', 'đợi', 'lâu'],
+  effectiveness: [
+    'hiệu quả',
+    'tác dụng',
+    'công dụng',
+    'cải thiện',
+    'hấp thu',
+    'chuyển biến',
+    'rõ rệt',
+  ],
+  ingredients: [
+    'thành phần',
+    'hoạt chất',
+    'dưỡng chất',
+    'vitamin',
+    'collagen',
+    'công thức',
+    'lành tính',
+    'không cồn',
+  ],
+  tolerance: [
+    'kích ứng',
+    'dị ứng',
+    'tác dụng phụ',
+    'khó tiêu',
+    'đau bụng',
+    'nổi mụn',
+    'hợp da',
+    'dung nạp',
+  ],
+  packaging: [
+    'bao bì',
+    'đóng gói',
+    'vòi xịt',
+    'chai lọ',
+    'tem niêm phong',
+    'bảo quản',
+    'packaging',
+  ],
+  skin_feel: [
+    'thấm nhanh',
+    'bết dính',
+    'nhờn rít',
+    'mềm mịn',
+    'ẩm mượt',
+    'nhẹ mặt',
+    'khô thoáng',
+    'cảm giác trên da',
+  ],
+  safety: [
+    'an toàn',
+    'không độc hại',
+    'không bpa',
+    'chứng nhận',
+    'kiểm định',
+    'dịu nhẹ',
+    'cho bé',
+    'sơ sinh',
+  ],
+  quality: [
+    'chất lượng',
+    'chất liệu',
+    'chắc chắn',
+    'đường may',
+    'hoàn thiện',
+    'bền đẹp',
+  ],
+  ease_of_use: [
+    'dễ dùng',
+    'dễ sử dụng',
+    'tiện lợi',
+    'thao tác',
+    'lắp đặt',
+    'pha sữa',
+    'dễ rửa',
+  ],
+  food_quality: [
+    'món ăn',
+    'đồ ăn',
+    'đồ uống',
+    'thức uống',
+    'ngon',
+    'đậm đà',
+    'tươi ngon',
+    'nêm nếm',
+    'cà phê',
+    'trà sữa',
+  ],
+  service_attitude: [
+    'thái độ',
+    'nhân viên',
+    'phục vụ',
+    'nhiệt tình',
+    'thân thiện',
+    'lễ phép',
+    'chu đáo',
+  ],
+  hygiene: [
+    'vệ sinh',
+    'sạch sẽ',
+    'an toàn thực phẩm',
+    'bàn ghế sạch',
+    'nhà vệ sinh',
+    'bẩn',
+  ],
+  ambiance: [
+    'không gian',
+    'thoáng mát',
+    'decor',
+    'trang trí',
+    'ấm cúng',
+    'yên tĩnh',
+    'ồn ào',
+    'chỗ ngồi',
+  ],
+  room_quality: [
+    'chất lượng phòng',
+    'giường',
+    'nệm',
+    'điều hòa',
+    'nước nóng',
+    'cách âm',
+    'nội thất',
+    'tiện nghi',
+  ],
+  cleanliness: [
+    'sạch sẽ',
+    'dọn phòng',
+    'ga giường',
+    'khăn tắm',
+    'mùi hôi',
+    'bụi bẩn',
+    'thơm tho',
+  ],
+  location: [
+    'vị trí',
+    'trung tâm',
+    'gần biển',
+    'đi lại',
+    'thuận tiện',
+    'chỗ đậu xe',
+    'tìm đường',
+  ],
+  service: [
+    'dịch vụ',
+    'lễ tân',
+    'check in',
+    'check out',
+    'hồ bơi',
+    'ăn sáng',
+    'tiện ích',
+  ],
 };
 
 /**
@@ -349,25 +500,26 @@ function containsKeyword(
   return false;
 }
 
-/** Matched keywords, not counting one inside a longer match ("màn" in "màn hình"). */
-function keywordHits(
+/** Matched normalized keyword phrases for a criterion. */
+function matchedKeywords(
   words: readonly string[],
   keywords: readonly string[],
   plainLine: boolean
-): number {
-  const matched = keywords.filter((kw) =>
-    containsKeyword(words, kw, plainLine)
-  );
-  return matched.filter(
-    (kw) =>
-      !matched.some((other) => other !== kw && ` ${other} `.includes(` ${kw} `))
-  ).length;
+): string[] {
+  const out: string[] = [];
+  for (const kw of keywords) {
+    if (containsKeyword(words, kw, plainLine)) {
+      out.push(plainLine ? plainWord(kw) : kw);
+    }
+  }
+  return out;
 }
 
 /**
  * The criterion a line belongs to in a category: its own key when the
  * category has it, otherwise the criterion whose keywords it mentions most
- * (ties go to the category's order), otherwise null ("Chung").
+ * (dropping shorter phrases nested inside a longer matched phrase across the
+ * category, ties go to the category's order), otherwise null ("Chung").
  */
 export function assignPointCriterion(
   categorySlug: string | null | undefined,
@@ -379,18 +531,30 @@ export function assignPointCriterion(
     return criterionKey;
   const words = comparablePoint(body).split(SPACE);
   const plainLine = words.every((word) => word === plainWord(word));
-  let best: string | null = null;
-  let bestHits = 0;
-  for (const criterion of criteria) {
+  const perCriterion = criteria.map((criterion) => {
     const keywords = Object.prototype.hasOwnProperty.call(
       CRITERION_KEYWORDS,
       criterion.key
     )
       ? CRITERION_KEYWORDS[criterion.key]!
       : [];
-    const hits = keywordHits(words, keywords, plainLine);
+    return {
+      key: criterion.key,
+      matched: matchedKeywords(words, keywords, plainLine),
+    };
+  });
+  const allMatched = perCriterion.flatMap((entry) => entry.matched);
+  let best: string | null = null;
+  let bestHits = 0;
+  for (const entry of perCriterion) {
+    const hits = entry.matched.filter(
+      (kw) =>
+        !allMatched.some(
+          (other) => other !== kw && ` ${other} `.includes(` ${kw} `)
+        )
+    ).length;
     if (hits > bestHits) {
-      best = criterion.key;
+      best = entry.key;
       bestHits = hits;
     }
   }

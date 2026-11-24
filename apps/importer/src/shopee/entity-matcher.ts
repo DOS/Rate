@@ -12,6 +12,7 @@ import {
   SIZELESS_CATEGORY_SLUGS,
   UnkeyableProductTitleError,
   WAVE_E2_SERVICE_CATEGORY_SLUGS,
+  WAVE_E4_PLACE_CATEGORY_SLUGS,
   detectCategorySlug,
   type CanonicalCategorySlug,
   type NormalizedProductCandidate,
@@ -861,9 +862,14 @@ export class EntityMatcher {
         key_specs: candidate.key_specs,
         entity_type:
           candidate.entity_type === 'service' ||
-          WAVE_E2_SERVICE_CATEGORY_SLUGS.has(candidate.category_slug)
-            ? 'service'
-            : 'product',
+          candidate.entity_type === 'place' ||
+          candidate.entity_type === 'product'
+            ? candidate.entity_type
+            : WAVE_E2_SERVICE_CATEGORY_SLUGS.has(candidate.category_slug)
+              ? 'service'
+              : WAVE_E4_PLACE_CATEGORY_SLUGS.has(candidate.category_slug)
+                ? 'place'
+                : 'product',
         ...(candidate.metadata &&
         typeof candidate.metadata === 'object' &&
         !Array.isArray(candidate.metadata)
