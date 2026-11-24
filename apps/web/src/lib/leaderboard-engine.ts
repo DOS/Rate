@@ -117,6 +117,13 @@ export const VALID_LEADERBOARD_CATEGORIES: readonly CanonicalCategorySlug[] = [
   'air-purifiers',
   'bank-savings',
   'internet-telecom',
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
 ] as const;
 
 export function normalizeLeaderboardCategory(
@@ -281,7 +288,17 @@ export function leaderboardCriteriaForCategory(
   ) {
     return ['value'];
   }
-  if (categorySlug === 'bank-savings' || categorySlug === 'internet-telecom') {
+  if (
+    categorySlug === 'bank-savings' ||
+    categorySlug === 'internet-telecom' ||
+    categorySlug === 'supplements' ||
+    categorySlug === 'cosmetics' ||
+    categorySlug === 'mother-baby' ||
+    categorySlug === 'restaurants' ||
+    categorySlug === 'cafes' ||
+    categorySlug === 'hotels' ||
+    categorySlug === 'homestays'
+  ) {
     return ['value'];
   }
   return LEADERBOARD_SCORE_CRITERIA;

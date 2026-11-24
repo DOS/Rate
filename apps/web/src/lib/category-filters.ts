@@ -46,7 +46,7 @@ export interface SpecFeatureOption {
 
 export interface CategoryFilterSchema {
   categorySlug: string;
-  directorySlug: 'tech_electronics' | 'services';
+  directorySlug: 'tech_electronics' | 'services' | 'retail' | 'places';
   directoryName: string;
   categoryTitle: string;
   categorySubtitle: string;
@@ -678,6 +678,286 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     ],
     featureCheckboxes: [],
   },
+  supplements: {
+    categorySlug: 'supplements',
+    directorySlug: 'retail',
+    directoryName: 'Tiêu dùng & sức khỏe',
+    categoryTitle: 'Thực phẩm chức năng',
+    categorySubtitle:
+      'Đối chiếu giá thật và đánh giá cộng đồng về hiệu quả, thành phần và độ an toàn',
+    searchPlaceholder: 'Tìm Omega-3, Collagen, Vitamin D3, Blackmores...',
+    defaultBrands: [
+      'Blackmores',
+      'DHC',
+      'Doppelherz',
+      'Nature Made',
+      'Kirkland',
+    ],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 5,
+      step: 0.1,
+    },
+    pricePresets: [
+      {
+        id: 'under-300k',
+        label: 'Dưới 300K',
+        minVnd: 0,
+        maxVnd: 300_000,
+      },
+      {
+        id: '300k-800k',
+        label: '300K - 800K',
+        minVnd: 300_000,
+        maxVnd: 800_000,
+      },
+      {
+        id: 'over-800k',
+        label: 'Trên 800K',
+        minVnd: 800_000,
+        maxVnd: 5_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  cosmetics: {
+    categorySlug: 'cosmetics',
+    directorySlug: 'retail',
+    directoryName: 'Tiêu dùng & sức khỏe',
+    categoryTitle: 'Mỹ phẩm & Chăm sóc da',
+    categorySubtitle:
+      'So sánh giá bán chính hãng và đánh giá thực tế về thành phần, kết cấu và độ lành tính',
+    searchPlaceholder:
+      'Tìm La Roche-Posay, Bioderma, CeraVe, kem chống nắng...',
+    defaultBrands: [
+      'La Roche-Posay',
+      'Bioderma',
+      'CeraVe',
+      "L'Oreal",
+      'Cocoon',
+    ],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 5,
+      step: 0.1,
+    },
+    pricePresets: [
+      {
+        id: 'under-300k',
+        label: 'Dưới 300K',
+        minVnd: 0,
+        maxVnd: 300_000,
+      },
+      {
+        id: '300k-800k',
+        label: '300K - 800K',
+        minVnd: 300_000,
+        maxVnd: 800_000,
+      },
+      {
+        id: 'over-800k',
+        label: 'Trên 800K',
+        minVnd: 800_000,
+        maxVnd: 5_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  'mother-baby': {
+    categorySlug: 'mother-baby',
+    directorySlug: 'retail',
+    directoryName: 'Tiêu dùng & sức khỏe',
+    categoryTitle: 'Mẹ & Bé',
+    categorySubtitle:
+      'Đối chiếu giá sữa bột, tã bỉm, đồ dùng cho bé cùng đánh giá an toàn từ phụ huynh',
+    searchPlaceholder: 'Tìm Huggies, Merries, Aptamil, Enfamil, máy hút sữa...',
+    defaultBrands: ['Huggies', 'Merries', 'Aptamil', 'Similac', 'Pigeon'],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 10,
+      step: 0.1,
+    },
+    pricePresets: [
+      {
+        id: 'under-300k',
+        label: 'Dưới 300K',
+        minVnd: 0,
+        maxVnd: 300_000,
+      },
+      {
+        id: '300k-1m',
+        label: '300K - 1 triệu',
+        minVnd: 300_000,
+        maxVnd: 1_000_000,
+      },
+      {
+        id: 'over-1m',
+        label: 'Trên 1 triệu',
+        minVnd: 1_000_000,
+        maxVnd: 10_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  restaurants: {
+    categorySlug: 'restaurants',
+    directorySlug: 'places',
+    directoryName: 'Địa điểm & lưu trú',
+    categoryTitle: 'Nhà hàng & Quán ăn',
+    categorySubtitle:
+      'Khám phá đánh giá thực khách về món ăn, vệ sinh, thái độ phục vụ và mức giá tham khảo',
+    searchPlaceholder:
+      'Tìm nhà hàng, quán ăn, quận/thành phố, món đặc trưng...',
+    defaultBrands: [],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 5,
+      step: 0.05,
+    },
+    pricePresets: [
+      {
+        id: 'under-200k',
+        label: 'Dưới 200K/người',
+        minVnd: 0,
+        maxVnd: 200_000,
+      },
+      {
+        id: '200k-500k',
+        label: '200K - 500K/người',
+        minVnd: 200_000,
+        maxVnd: 500_000,
+      },
+      {
+        id: 'over-500k',
+        label: 'Trên 500K/người',
+        minVnd: 500_000,
+        maxVnd: 5_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  cafes: {
+    categorySlug: 'cafes',
+    directorySlug: 'places',
+    directoryName: 'Địa điểm & lưu trú',
+    categoryTitle: 'Quán cà phê & Trà',
+    categorySubtitle:
+      'Đánh giá đồ uống, không gian làm việc, phục vụ và mức chi trung bình mỗi người',
+    searchPlaceholder: 'Tìm quán cà phê, trà sữa, roastery, khu vực...',
+    defaultBrands: [],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 0.5,
+      step: 0.02,
+    },
+    pricePresets: [
+      {
+        id: 'under-60k',
+        label: 'Dưới 60K/người',
+        minVnd: 0,
+        maxVnd: 60_000,
+      },
+      {
+        id: '60k-120k',
+        label: '60K - 120K/người',
+        minVnd: 60_000,
+        maxVnd: 120_000,
+      },
+      {
+        id: 'over-120k',
+        label: 'Trên 120K/người',
+        minVnd: 120_000,
+        maxVnd: 500_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  hotels: {
+    categorySlug: 'hotels',
+    directorySlug: 'places',
+    directoryName: 'Địa điểm & lưu trú',
+    categoryTitle: 'Khách sạn & Resort',
+    categorySubtitle:
+      'Xem đánh giá chất lượng phòng, vệ sinh, vị trí và giá phòng tham khảo theo đêm',
+    searchPlaceholder: 'Tìm khách sạn, resort, tên đường hoặc khu vực...',
+    defaultBrands: [],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 20,
+      step: 0.2,
+    },
+    pricePresets: [
+      {
+        id: 'under-1m',
+        label: 'Dưới 1 triệu/đêm',
+        minVnd: 0,
+        maxVnd: 1_000_000,
+      },
+      {
+        id: '1m-3m',
+        label: '1 - 3 triệu/đêm',
+        minVnd: 1_000_000,
+        maxVnd: 3_000_000,
+      },
+      {
+        id: 'over-3m',
+        label: 'Trên 3 triệu/đêm',
+        minVnd: 3_000_000,
+        maxVnd: 20_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  homestays: {
+    categorySlug: 'homestays',
+    directorySlug: 'places',
+    directoryName: 'Địa điểm & lưu trú',
+    categoryTitle: 'Homestay & Villa',
+    categorySubtitle:
+      'Đánh giá trải nghiệm lưu trú, độ sạch sẽ, vị trí và giá tham khảo mỗi đêm',
+    searchPlaceholder: 'Tìm homestay, villa nghỉ dưỡng, Đà Lạt, Sa Pa...',
+    defaultBrands: [],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 10,
+      step: 0.1,
+    },
+    pricePresets: [
+      {
+        id: 'under-800k',
+        label: 'Dưới 800K/đêm',
+        minVnd: 0,
+        maxVnd: 800_000,
+      },
+      {
+        id: '800k-2m',
+        label: '800K - 2 triệu/đêm',
+        minVnd: 800_000,
+        maxVnd: 2_000_000,
+      },
+      {
+        id: 'over-2m',
+        label: 'Trên 2 triệu/đêm',
+        minVnd: 2_000_000,
+        maxVnd: 10_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
 };
 
 const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {
@@ -850,7 +1130,11 @@ export function localizeCategoryFilterSchema(
     directoryName:
       safeSchema.directorySlug === 'services'
         ? t('schemas.directoryServices')
-        : t('schemas.directoryTech'),
+        : safeSchema.directorySlug === 'retail'
+          ? t('schemas.directoryRetail')
+          : safeSchema.directorySlug === 'places'
+            ? t('schemas.directoryPlaces')
+            : t('schemas.directoryTech'),
     categoryTitle: t(`schemas.${slug}.title`),
     categorySubtitle: t(`schemas.${slug}.subtitle`),
     searchPlaceholder: t(`schemas.${slug}.searchPlaceholder`),

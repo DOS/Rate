@@ -1170,7 +1170,14 @@ export type CanonicalCategorySlug =
   | 'washing-machines'
   | 'air-purifiers'
   | 'bank-savings'
-  | 'internet-telecom';
+  | 'internet-telecom'
+  | 'supplements'
+  | 'cosmetics'
+  | 'mother-baby'
+  | 'restaurants'
+  | 'cafes'
+  | 'hotels'
+  | 'homestays';
 
 export const CORE_TECH_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   'smartphones',
@@ -1191,10 +1198,25 @@ export const WAVE_E1_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
 export const WAVE_E2_SERVICE_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] =
   ['bank-savings', 'internet-telecom'] as const;
 
+export const WAVE_E3_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+] as const;
+
+export const WAVE_E4_PLACE_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
+] as const;
+
 export const ALL_CANONICAL_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   ...CORE_TECH_CATEGORY_SLUGS,
   ...WAVE_E1_CATEGORY_SLUGS,
   ...WAVE_E2_SERVICE_CATEGORY_SLUGS,
+  ...WAVE_E3_CATEGORY_SLUGS,
+  ...WAVE_E4_PLACE_CATEGORY_SLUGS,
 ] as const;
 
 const CANONICAL_CATEGORY_SLUG_SET = new Set<string>(
@@ -1204,6 +1226,10 @@ const CORE_TECH_CATEGORY_SLUG_SET = new Set<string>(CORE_TECH_CATEGORY_SLUGS);
 const WAVE_E1_CATEGORY_SLUG_SET = new Set<string>(WAVE_E1_CATEGORY_SLUGS);
 const WAVE_E2_SERVICE_CATEGORY_SLUG_SET = new Set<string>(
   WAVE_E2_SERVICE_CATEGORY_SLUGS
+);
+const WAVE_E3_CATEGORY_SLUG_SET = new Set<string>(WAVE_E3_CATEGORY_SLUGS);
+const WAVE_E4_PLACE_CATEGORY_SLUG_SET = new Set<string>(
+  WAVE_E4_PLACE_CATEGORY_SLUGS
 );
 
 export function isCanonicalCategorySlug(
@@ -1224,6 +1250,20 @@ export function isWaveE2ServiceCategorySlug(value: unknown): boolean {
   return (
     typeof value === 'string' && WAVE_E2_SERVICE_CATEGORY_SLUG_SET.has(value)
   );
+}
+
+export function isWaveE3CategorySlug(value: unknown): boolean {
+  return typeof value === 'string' && WAVE_E3_CATEGORY_SLUG_SET.has(value);
+}
+
+export function isWaveE4PlaceCategorySlug(value: unknown): boolean {
+  return (
+    typeof value === 'string' && WAVE_E4_PLACE_CATEGORY_SLUG_SET.has(value)
+  );
+}
+
+export function isPlaceCategorySlug(value: unknown): boolean {
+  return isWaveE4PlaceCategorySlug(value);
 }
 
 /**
@@ -1437,6 +1477,55 @@ export function getMasterProductCategorySlug(
     )
   ) {
     return 'earbuds';
+  }
+  if (
+    /(?<![\p{L}\d])(?:mỹ phẩm|kem chống nắng|sữa rửa mặt|nước tẩy trang|kem dưỡng|son môi|tinh chất|serum|toner|retinol|niacinamide|cosmetics?|skincare|la roche-posay|bioderma|cerave)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'cosmetics';
+  }
+  if (
+    /(?<![\p{L}\d])(?:thực phẩm chức năng|tpcn|viên uống|collagen|omega[\s-]?3|vitamin[\s-]?[a-z0-9]+|glucosamine|men vi sinh|bổ sung dinh dưỡng|supplements?|blackmores|doppelherz)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'supplements';
+  }
+  if (
+    /(?<![\p{L}\d])(?:mẹ và bé|mẹ & bé|mother[- ]?baby|tã dán|tã quần|bỉm|sữa bột|sữa công thức|bình sữa|xe đẩy em bé|xe đẩy trẻ em|huggies|pampers|merries|moony|enfamil|similac|aptamil)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'mother-baby';
+  }
+  if (
+    /(?<![\p{L}\d])(?:homestays?|home stay|farmstay|villa nghỉ dưỡng|bungalow|căn hộ nghỉ dưỡng)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'homestays';
+  }
+  if (
+    /(?<![\p{L}\d])(?:khách sạn|khu nghỉ dưỡng|hotels?|resorts?|intercontinental|marriott|hilton|sheraton|melia|vinpearl|novotel|pullman)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'hotels';
+  }
+  if (
+    /(?<![\p{L}\d])(?:quán cà phê|tiệm cà phê|tiệm trà|trà sữa|coffee shop|coffee house|highlands coffee|phúc long|starbucks|katinat|cộng cà phê|cong caphe|cafes?|café|espresso bar|roastery)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'cafes';
+  }
+  if (
+    /(?<![\p{L}\d])(?:nhà hàng|quán ăn|quán nhậu|restaurants?|bistro|buffet|lẩu|nướng bbq|quán phở|bún chả|cơm tấm|haidilao|manwah|gogi house|kichi kichi|pizza 4p)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'restaurants';
   }
   return 'smartphones';
 }

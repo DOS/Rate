@@ -19,6 +19,7 @@ import {
   collapseWhitespace,
   formatListingPrice,
   formatNumber,
+  hasListingUnitSuffix,
   localizeDecimalPoints,
   sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
@@ -176,8 +177,10 @@ export function buildShareAuditMarkdown(params: {
   const safeKeySpecLine = params.keySpecLine
     ? sanitizeShareAuditText(params.keySpecLine, 240, locale)
     : '';
-  const hasCustomUnit =
-    params.currency === 'PCT' || params.categorySlug === 'internet-telecom';
+  const hasCustomUnit = hasListingUnitSuffix(
+    params.currency,
+    params.categorySlug
+  );
   const priceStr =
     safeMinPriceVnd > 0
       ? hasCustomUnit

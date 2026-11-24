@@ -67,7 +67,9 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
   isCategoryVisibleInDirectory,
+  isPlaceCategorySlug,
   isWaveE2ServiceCategorySlug,
+  isWaveE3CategorySlug,
   rankMasterProductsForLeaderboard,
   resolveCompareBatteryMah,
   resolveCompareDisplaySizeInch,
@@ -100,7 +102,10 @@ import {
   MAX_COMPARE_ITEMS,
   setCompareTray,
 } from './compare-tray';
-import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
+import {
+  computeWatchlistTargetPrice,
+  upsertWatchlistItem,
+} from '@/components/watchlist/watchlist-store';
 import {
   getSpecUiDictionary,
   localizeSpecValue,
@@ -437,7 +442,7 @@ export function buildCompareMarkdownMinPriceRow(
         categorySlug: catSlug,
         metadata: p.metadata as Record<string, unknown> | null | undefined,
       });
-      return formatComparePriceVnd(p.min_price, locale, cur);
+      return formatComparePriceVnd(p.min_price, locale, cur, catSlug);
     })
     .join(' | ')} |`;
 }
@@ -1257,6 +1262,41 @@ function buildCategoryTabs(t: CompareTranslator): Array<{
       label: t('catInternetTelecom'),
       unitLabel: t('catInternetTelecomUnit'),
     },
+    {
+      slug: 'supplements',
+      label: t('catSupplements'),
+      unitLabel: t('catSupplementsUnit'),
+    },
+    {
+      slug: 'cosmetics',
+      label: t('catCosmetics'),
+      unitLabel: t('catCosmeticsUnit'),
+    },
+    {
+      slug: 'mother-baby',
+      label: t('catMotherBaby'),
+      unitLabel: t('catMotherBabyUnit'),
+    },
+    {
+      slug: 'restaurants',
+      label: t('catRestaurants'),
+      unitLabel: t('catRestaurantsUnit'),
+    },
+    {
+      slug: 'cafes',
+      label: t('catCafes'),
+      unitLabel: t('catCafesUnit'),
+    },
+    {
+      slug: 'hotels',
+      label: t('catHotels'),
+      unitLabel: t('catHotelsUnit'),
+    },
+    {
+      slug: 'homestays',
+      label: t('catHomestays'),
+      unitLabel: t('catHomestaysUnit'),
+    },
   ];
 }
 
@@ -1363,7 +1403,7 @@ export function buildSpecGroups(
             const max = sanitizeComparePriceVnd(p.max_price, pCurrency);
             if (min <= 0) return '-';
             if (max > min) {
-              return `${formatListingPrice(min, pCurrency, locale, { categorySlug: pCategorySlug })} - ${formatListingPrice(max, pCurrency, locale, { categorySlug: pCategorySlug })}`;
+              return `${formatListingPrice(min, pCurrency, locale, { categorySlug: pCategorySlug, includeUnitSuffix: false })} - ${formatListingPrice(max, pCurrency, locale, { categorySlug: pCategorySlug })}`;
             }
             return formatListingPrice(min, pCurrency, locale, {
               categorySlug: pCategorySlug,
@@ -1389,7 +1429,11 @@ export function buildSpecGroups(
               categorySlug: catSlug,
               metadata: p.metadata,
             });
-            if (pCurrency === 'PCT' || isWaveE2ServiceCategorySlug(catSlug)) {
+            if (
+              pCurrency === 'PCT' ||
+              isWaveE2ServiceCategorySlug(catSlug) ||
+              isPlaceCategorySlug(catSlug)
+            ) {
               return '-';
             }
             const min = sanitizeComparePriceVnd(p.min_price, pCurrency);
@@ -1415,7 +1459,11 @@ export function buildSpecGroups(
               categorySlug: catSlug,
               metadata: p.metadata,
             });
-            if (pCurrency === 'PCT' || isWaveE2ServiceCategorySlug(catSlug)) {
+            if (
+              pCurrency === 'PCT' ||
+              isWaveE2ServiceCategorySlug(catSlug) ||
+              isPlaceCategorySlug(catSlug)
+            ) {
               return null;
             }
             const min = sanitizeComparePriceVnd(p.min_price, pCurrency);
@@ -1442,7 +1490,12 @@ export function buildSpecGroups(
               categorySlug: catSlug,
               metadata: p.metadata,
             });
-            if (pCurrency === 'PCT' || isWaveE2ServiceCategorySlug(catSlug)) {
+            if (
+              pCurrency === 'PCT' ||
+              isWaveE2ServiceCategorySlug(catSlug) ||
+              isWaveE3CategorySlug(catSlug) ||
+              isPlaceCategorySlug(catSlug)
+            ) {
               return '-';
             }
             const min = sanitizeComparePriceVnd(p.min_price, pCurrency);
@@ -1456,7 +1509,12 @@ export function buildSpecGroups(
               categorySlug: catSlug,
               metadata: p.metadata,
             });
-            if (pCurrency === 'PCT' || isWaveE2ServiceCategorySlug(catSlug)) {
+            if (
+              pCurrency === 'PCT' ||
+              isWaveE2ServiceCategorySlug(catSlug) ||
+              isWaveE3CategorySlug(catSlug) ||
+              isPlaceCategorySlug(catSlug)
+            ) {
               return null;
             }
             const min = sanitizeComparePriceVnd(p.min_price, pCurrency);
@@ -3092,9 +3150,7 @@ export default function CompareWorkspace({
           ? minP > 0
             ? Number((minP * 1.05).toFixed(2))
             : 0
-          : minP > 0
-            ? Math.max(100_000, Math.round((minP * 0.95) / 100_000) * 100_000)
-            : 10_000_000;
+          : computeWatchlistTargetPrice(minP, 5, pCur);
       const thumb = resolveProductImageUrl(p.slug, productImageUrl(p));
       const resolvedHref = getMasterProductHref(p);
       const resolvedCategoryPath =
@@ -3439,9 +3495,16 @@ export default function CompareWorkspace({
                           item.slug,
                           productImageUrl(item)
                         );
+                        const itemCatSlug = getMasterProductCategorySlug(item);
+                        const itemCur = resolveListingPriceCurrency({
+                          categorySlug: itemCatSlug,
+                          metadata: item.metadata,
+                        });
                         const priceFormatted = formatComparePriceVnd(
                           item.min_price,
-                          locale
+                          locale,
+                          itemCur,
+                          itemCatSlug
                         );
                         const rating = getEffectiveRating(item);
 
@@ -4054,10 +4117,20 @@ export default function CompareWorkspace({
                     {headToHeadSummary.lowestPrice.name}
                   </div>
                   <div className="small text-white-50 rate-tabular">
-                    {formatComparePriceVnd(
-                      headToHeadSummary.lowestPrice.min_price,
-                      locale
-                    )}
+                    {(() => {
+                      const lp = headToHeadSummary.lowestPrice;
+                      const lpCat = getMasterProductCategorySlug(lp);
+                      const lpCur = resolveListingPriceCurrency({
+                        categorySlug: lpCat,
+                        metadata: lp.metadata,
+                      });
+                      return formatComparePriceVnd(
+                        lp.min_price,
+                        locale,
+                        lpCur,
+                        lpCat
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -4133,9 +4206,16 @@ export default function CompareWorkspace({
                       p.slug,
                       productImageUrl(p)
                     );
+                    const colCatSlug = getMasterProductCategorySlug(p);
+                    const colCur = resolveListingPriceCurrency({
+                      categorySlug: colCatSlug,
+                      metadata: p.metadata,
+                    });
                     const minPriceFormatted = formatComparePriceVnd(
                       p.min_price,
-                      locale
+                      locale,
+                      colCur,
+                      colCatSlug
                     );
                     const replaceA11y = resolveCompareReplaceButtonA11y(t, {
                       productName: p.name,

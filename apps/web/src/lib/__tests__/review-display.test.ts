@@ -138,6 +138,7 @@ function main() {
   assert.equal(submitErrorKey('RATE_LIMIT_EXCEEDED'), 'errRateLimited');
   assert.equal(submitErrorKey('REJECTED'), 'errInvalidReview');
   assert.equal(submitErrorKey('INVALID_BODY'), 'errInvalidReview');
+  assert.equal(submitErrorKey('NO_LINKED_LISTING'), 'errNoLinkedListing');
   assert.equal(submitErrorKey('INVALID_REVIEW'), 'v2ErrInvalid');
   assert.equal(submitErrorKey('PERSIST_FAILED'), 'errSubmitFailed');
   assert.equal(submitErrorKey('constructor'), 'errSubmitFailed');

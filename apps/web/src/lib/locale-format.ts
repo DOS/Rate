@@ -113,11 +113,15 @@ export function sanitizeCurrencyPriceValue(
     : Math.round(raw);
 }
 
+export type PlacePriceUnit = 'vnd_per_person' | 'vnd_per_night_ref';
+
 export interface ListingPriceFormatOptions {
-  /** Optional canonical category slug or path (`'bank-savings'`, `'internet-telecom'`). */
+  /** Optional canonical category slug or path (`'bank-savings'`, `'internet-telecom'`, `'restaurants'`, etc.). */
   categorySlug?: string | null;
-  /** Append localized unit suffixes (`%/năm`/`/yr`/`/rok`, `/tháng`/`/mo`/`/měs.`). Default `true`. */
+  /** Append localized unit suffixes (`%/năm`/`/yr`/`/rok`, `/tháng`/`/mo`/`/měs.`, `/người`/`/person`/`/os.`, `/đêm`/`/night`/`/noc`). Default `true`. */
   includeUnitSuffix?: boolean;
+  /** Optional explicit place price unit (`'vnd_per_person'` | `'vnd_per_night_ref'`) overriding category default. */
+  priceUnit?: PlacePriceUnit | string | null;
 }
 
 const YEARLY_PCT_UNIT_SUFFIX: Record<FormatLocale, string> = {
@@ -132,19 +136,41 @@ const MONTHLY_VND_UNIT_SUFFIX: Record<FormatLocale, string> = {
   cs: '/měs.',
 };
 
+const PER_PERSON_VND_UNIT_SUFFIX: Record<FormatLocale, string> = {
+  vi: '/người',
+  en: '/person',
+  cs: '/os.',
+};
+
+const PER_NIGHT_VND_UNIT_SUFFIX: Record<FormatLocale, string> = {
+  vi: '/đêm',
+  en: '/night',
+  cs: '/noc',
+};
+
 /**
- * Returns the localized periodic unit suffix for a currency + category pair,
- * such as `'/năm'`/`'/yr'`/`'/rok'` for `'PCT'` rates and `'/tháng'`/`'/mo'`/`'/měs.'`
- * for `'internet-telecom'` monthly plans.
+ * Returns the localized periodic or unit suffix for a currency + category + price_unit pair,
+ * such as `'/năm'`/`'/yr'`/`'/rok'` for `'PCT'` rates, `'/tháng'`/`'/mo'`/`'/měs.'`
+ * for `'internet-telecom'`, `'/người'`/`'/person'`/`'/os.'` for `'restaurants'`/`'cafes'`
+ * or `'vnd_per_person'`, and `'/đêm'`/`'/night'`/`'/noc'` for `'hotels'`/`'homestays'` or `'vnd_per_night_ref'`.
  */
 export function resolveListingUnitSuffix(
   currency: string | null | undefined,
   categorySlug?: string | null,
-  locale?: string | null
+  locale?: string | null,
+  priceUnit?: PlacePriceUnit | string | null
 ): string {
   const loc = toFormatLocale(locale);
   if (normalizePriceCurrency(currency) === 'PCT') {
     return YEARLY_PCT_UNIT_SUFFIX[loc];
+  }
+  const normalizedUnit =
+    typeof priceUnit === 'string' ? priceUnit.trim().toLowerCase() : '';
+  if (normalizedUnit === 'vnd_per_person') {
+    return PER_PERSON_VND_UNIT_SUFFIX[loc];
+  }
+  if (normalizedUnit === 'vnd_per_night_ref') {
+    return PER_NIGHT_VND_UNIT_SUFFIX[loc];
   }
   const normalizedCategory =
     typeof categorySlug === 'string'
@@ -153,13 +179,29 @@ export function resolveListingUnitSuffix(
   if (normalizedCategory === 'internet-telecom') {
     return MONTHLY_VND_UNIT_SUFFIX[loc];
   }
+  if (normalizedCategory === 'restaurants' || normalizedCategory === 'cafes') {
+    return PER_PERSON_VND_UNIT_SUFFIX[loc];
+  }
+  if (normalizedCategory === 'hotels' || normalizedCategory === 'homestays') {
+    return PER_NIGHT_VND_UNIT_SUFFIX[loc];
+  }
   return '';
+}
+
+export function hasListingUnitSuffix(
+  currency: string | null | undefined,
+  categorySlug?: string | null,
+  priceUnit?: PlacePriceUnit | string | null
+): boolean {
+  return (
+    resolveListingUnitSuffix(currency, categorySlug, 'vi', priceUnit) !== ''
+  );
 }
 
 /**
  * Formats a product price in VND or a service rate in percent (`PCT`),
  * preserving up to 2 decimal places for `PCT` (e.g. `5.4%/năm`, `5.4%/yr`, `5,4 %/rok`)
- * and monthly suffixes for `'internet-telecom'` (`195.000 ₫/tháng`, `195.000 ₫/mo`, `195 000 ₫/měs.`).
+ * and localized category/place unit suffixes (`/tháng`, `/người`, `/đêm`).
  */
 export function formatListingPrice(
   value: number,
@@ -170,7 +212,12 @@ export function formatListingPrice(
   const normalizedCurrency = normalizePriceCurrency(currency);
   const includeUnit = options.includeUnitSuffix !== false;
   const suffix = includeUnit
-    ? resolveListingUnitSuffix(normalizedCurrency, options.categorySlug, locale)
+    ? resolveListingUnitSuffix(
+        normalizedCurrency,
+        options.categorySlug,
+        locale,
+        options.priceUnit
+      )
     : '';
   if (normalizedCurrency === 'PCT') {
     const safePct = Math.round(value * 100) / 100;
