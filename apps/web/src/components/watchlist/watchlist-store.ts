@@ -120,11 +120,12 @@ export function sanitizeWatchlistTargetPrice(
 export function formatWatchlistPrice(
   value: unknown,
   currency: string | null | undefined,
-  locale?: string | null
+  locale?: string | null,
+  categorySlug?: string | null
 ): string {
   const resolvedCurrency = normalizePriceCurrency(currency);
   const safe = sanitizeWatchlistPrice(value, resolvedCurrency);
-  return formatListingPrice(safe, resolvedCurrency, locale);
+  return formatListingPrice(safe, resolvedCurrency, locale, { categorySlug });
 }
 
 const WATCHLIST_CONTROL_CHAR_RE = /\p{Cc}+/gu;

@@ -2976,6 +2976,261 @@ async function runMcpTestSuite() {
     true
   );
 
+  // 13. Wave E2 PCT decimal precision across MCP catalog, offers, compare, and audit_url
+  const pctProductA = makeProduct({
+    id: '11111111-1111-4111-8111-000000000101',
+    slug: 'vcb-online-12m',
+    name: 'Vietcombank Online Savings 12M',
+    brand: 'Vietcombank',
+    min_price: 4.85,
+    max_price: 5.45,
+    metadata: { category_slug: 'bank-savings', currency: 'PCT' },
+  });
+  const pctProductB = makeProduct({
+    id: '11111111-1111-4111-8111-000000000102',
+    slug: 'acb-online-12m',
+    name: 'ACB Online Savings 12M',
+    brand: 'ACB',
+    min_price: 5.15,
+    max_price: 5.65,
+    metadata: { category_slug: 'bank-savings', currency: 'PCT' },
+  });
+  const pctOfferA = {
+    ...makeOffer({
+      id: 'offer-vcb-12m',
+      platform: 'vietcombank',
+      title: 'Vietcombank Online Savings 12M',
+      price_current: 4.85,
+      price_original: 5.45,
+      url: 'https://www.vietcombank.com.vn/lai-suat',
+    }),
+    currency: 'PCT' as const,
+  };
+  const pctOfferB = {
+    ...makeOffer({
+      id: 'offer-acb-12m',
+      platform: 'acb',
+      title: 'ACB Online Savings 12M',
+      price_current: 5.15,
+      price_original: 5.65,
+      url: 'https://acb.com.vn/lai-suat',
+    }),
+    currency: 'PCT' as const,
+  };
+  const pctReaders: McpDataReaders = {
+    ...readers,
+    getCachedMasterProducts: async () => [pctProductA, pctProductB],
+    getCachedMasterProductBySlug: async (slug) =>
+      slug === pctProductA.slug
+        ? pctProductA
+        : slug === pctProductB.slug
+          ? pctProductB
+          : null,
+    getCachedCompareMasterProducts: async () => [pctProductA, pctProductB],
+    getCachedMasterProductOffers: async (id) =>
+      id === pctProductA.id ? [pctOfferA, pctOfferB] : [pctOfferB],
+    getCachedInspectProductOrShopUrl: async (rawQuery) => ({
+      query: rawQuery,
+      matchedType: 'product_listing',
+      parsedUrl: parseEcommerceUrlOrQuery(rawQuery),
+      masterProduct: pctProductA,
+      matchedOffer: pctOfferA,
+      allOffers: [pctOfferA, pctOfferB],
+      discountAnalysis: null,
+      priceHistory: null,
+      reviewSummary: null,
+      merchantProfile: null,
+      suggestions: [pctProductB],
+    }),
+  };
+
+  const pctSearchRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'pct-search',
+        method: 'tools/call',
+        params: {
+          name: 'search_verified_catalog',
+          arguments: { category: 'bank-savings' },
+        },
+      })
+    ),
+    {
+      readers: pctReaders,
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const pctSearchBody = JSON.parse(await pctSearchRes.text()) as {
+    result: {
+      structuredContent: {
+        items: Array<{
+          currency: string;
+          verified_min_price_vnd: number;
+          verified_median_price_vnd: number;
+          verified_max_price_vnd: number;
+        }>;
+      };
+    };
+  };
+  assert.equal(
+    pctSearchBody.result.structuredContent.items[0]?.currency,
+    'PCT'
+  );
+  assert.equal(
+    pctSearchBody.result.structuredContent.items[0]?.verified_min_price_vnd,
+    4.85
+  );
+  assert.equal(
+    pctSearchBody.result.structuredContent.items[0]?.verified_median_price_vnd,
+    5
+  );
+  assert.equal(
+    pctSearchBody.result.structuredContent.items[0]?.verified_max_price_vnd,
+    5.15
+  );
+
+  const pctOffersRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'pct-offers',
+        method: 'tools/call',
+        params: {
+          name: 'get_22_store_offers_and_price_truth',
+          arguments: { slug: pctProductA.slug },
+        },
+      })
+    ),
+    {
+      readers: pctReaders,
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const pctOffersBody = JSON.parse(await pctOffersRes.text()) as {
+    result: {
+      structuredContent: {
+        price_truth: { currency: string; verified_min_price_vnd: number };
+        offers: Array<{
+          currency: string;
+          price_current_vnd: number;
+          price_original_vnd: number | null;
+        }>;
+      };
+    };
+  };
+  assert.equal(
+    pctOffersBody.result.structuredContent.price_truth.currency,
+    'PCT'
+  );
+  assert.equal(
+    pctOffersBody.result.structuredContent.price_truth.verified_min_price_vnd,
+    4.85
+  );
+  assert.equal(
+    pctOffersBody.result.structuredContent.offers[0]?.currency,
+    'PCT'
+  );
+  assert.equal(
+    pctOffersBody.result.structuredContent.offers[0]?.price_current_vnd,
+    4.85
+  );
+  assert.equal(
+    pctOffersBody.result.structuredContent.offers[0]?.price_original_vnd,
+    5.45
+  );
+
+  const pctCompareRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'pct-compare',
+        method: 'tools/call',
+        params: {
+          name: 'compare_devices_by_use_case',
+          arguments: { slugs: [pctProductA.slug, pctProductB.slug] },
+        },
+      })
+    ),
+    {
+      readers: pctReaders,
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const pctCompareBody = JSON.parse(await pctCompareRes.text()) as {
+    result: {
+      structuredContent: {
+        devices: Array<{ currency: string; verified_min_price_vnd: number }>;
+      };
+    };
+  };
+  assert.equal(
+    pctCompareBody.result.structuredContent.devices[0]?.currency,
+    'PCT'
+  );
+  assert.equal(
+    pctCompareBody.result.structuredContent.devices[0]?.verified_min_price_vnd,
+    4.85
+  );
+
+  const pctAuditRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'pct-audit',
+        method: 'tools/call',
+        params: {
+          name: 'audit_listing_url',
+          arguments: {
+            url: 'https://rate.vn/bank-savings/vcb-online-12m',
+            observedPriceVnd: 4.85,
+            observedOriginalPriceVnd: 5.45,
+          },
+        },
+      })
+    ),
+    {
+      readers: pctReaders,
+      rateLimiter: limiter,
+      auditUrlRateLimiter: auditLimiter,
+    }
+  );
+  const pctAuditBody = JSON.parse(await pctAuditRes.text()) as {
+    result: {
+      structuredContent: {
+        matched_offer: {
+          currency: string;
+          price_current_vnd: number;
+          price_original_vnd: number | null;
+        };
+        top_competing_offers: Array<{
+          currency: string;
+          price_current_vnd: number;
+        }>;
+      };
+    };
+  };
+  assert.equal(
+    pctAuditBody.result.structuredContent.matched_offer.currency,
+    'PCT'
+  );
+  assert.equal(
+    pctAuditBody.result.structuredContent.matched_offer.price_current_vnd,
+    4.85
+  );
+  assert.equal(
+    pctAuditBody.result.structuredContent.matched_offer.price_original_vnd,
+    5.45
+  );
+  assert.equal(
+    pctAuditBody.result.structuredContent.top_competing_offers[0]
+      ?.price_current_vnd,
+    4.85
+  );
+
   console.warn(
     '  ✅ Rate Shopping MCP Server v1.1.0 (/api/mcp), /llms.txt & /.well-known/mcp.json suite passed (#1896)'
   );

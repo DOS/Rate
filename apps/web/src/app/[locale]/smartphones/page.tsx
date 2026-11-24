@@ -152,12 +152,13 @@ export function sanitizeCatalogRadarPriceVnd(
 export function formatCatalogRadarPriceVnd(
   value: unknown,
   locale?: string | null,
-  currency?: string | null
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
   const safe = sanitizeCatalogRadarPriceVnd(value, currency);
   if (safe == null) return '-';
-  return currency === 'PCT'
-    ? formatListingPrice(safe, currency, locale)
+  return currency === 'PCT' || categorySlug === 'internet-telecom'
+    ? formatListingPrice(safe, currency ?? 'VND', locale, { categorySlug })
     : formatPriceVnd(safe, locale);
 }
 
@@ -1448,7 +1449,8 @@ export async function CategoryCatalogContent({
                                     ? formatListingPrice(
                                         safeSpread,
                                         sp.currency,
-                                        locale
+                                        locale,
+                                        { includeUnitSuffix: false }
                                       )
                                     : formatNumber(safeSpread, locale);
                               return (

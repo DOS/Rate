@@ -282,7 +282,9 @@ export default function PriceWatchButton({
         title={t('btnTitle')}
       >
         {watchedItem
-          ? isPercentCurrency
+          ? isPercentCurrency ||
+            categoryPath.replace(/^\/+/, '').split('/')[0] ===
+              'internet-telecom'
             ? t('btnWatchingCurrency', {
                 price: formatListingPrice(
                   sanitizeWatchlistPrice(
@@ -290,7 +292,8 @@ export default function PriceWatchButton({
                     resolvedCurrency
                   ),
                   resolvedCurrency,
-                  locale
+                  locale,
+                  { categorySlug: categoryPath }
                 ),
               })
             : t('btnWatching', {
@@ -329,11 +332,14 @@ export default function PriceWatchButton({
           <p className="text-muted mb-2" style={{ fontSize: '0.8125rem' }}>
             {t('currentBestPrice')}{' '}
             <strong className="text-danger">
-              {isPercentCurrency
+              {isPercentCurrency ||
+              categoryPath.replace(/^\/+/, '').split('/')[0] ===
+                'internet-telecom'
                 ? formatListingPrice(
                     safeCurrentMinPrice,
                     resolvedCurrency,
-                    locale
+                    locale,
+                    { categorySlug: categoryPath }
                   )
                 : formatPriceVnd(safeCurrentMinPrice, locale)}
             </strong>

@@ -392,7 +392,7 @@ function resolveRetiredItemHref(
   const cat = itemCategorySlugs.get(target.itemCategoryId);
   if (typeof cat !== 'string' || !isCanonicalCategorySlug(cat)) return null;
   const href = `/${cat}/${target.itemSlug}`;
-  return /^\/[a-z]+\/[^/?#\s]+$/.test(href) ? href : null;
+  return /^\/[a-z][a-z0-9-]*\/[^/?#\s]+$/.test(href) ? href : null;
 }
 
 function computeMedianPrice(values: readonly number[]): number {

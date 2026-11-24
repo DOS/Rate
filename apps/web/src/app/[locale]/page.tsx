@@ -529,6 +529,9 @@ export function HomeDealRadarBlock({
               <ul className="rate-radar-list">
                 {genuineDeals.slice(0, 3).map((g) => {
                   const gCurrency = g.currency;
+                  const gCategorySlug = g.productHref?.split('/')[1] || '';
+                  const gHasUnit =
+                    gCurrency === 'PCT' || gCategorySlug === 'internet-telecom';
                   const currentPrice = sanitizeHomePriceVnd(
                     g.priceCurrent,
                     gCurrency
@@ -555,12 +558,13 @@ export function HomeDealRadarBlock({
                             <>
                               {' '}
                               ·{' '}
-                              {gCurrency === 'PCT'
+                              {gHasUnit
                                 ? tHome('medianPriceInlineCurrency', {
                                     price: formatListingPrice(
                                       medianPrice,
                                       gCurrency,
-                                      locale
+                                      locale,
+                                      { categorySlug: gCategorySlug }
                                     ),
                                   })
                                 : tHome('medianPriceInline', {
@@ -572,11 +576,12 @@ export function HomeDealRadarBlock({
                       </div>
                       <div className="rate-radar-item-side">
                         <span className="rate-radar-price">
-                          {gCurrency === 'PCT'
+                          {gHasUnit
                             ? formatListingPrice(
                                 currentPrice,
                                 gCurrency,
-                                locale
+                                locale,
+                                { categorySlug: gCategorySlug }
                               )
                             : formatPriceVnd(currentPrice, locale)}
                         </span>
@@ -606,6 +611,9 @@ export function HomeDealRadarBlock({
               <ul className="rate-radar-list">
                 {fakeSaleTraps.slice(0, 3).map((t) => {
                   const tCurrency = t.currency;
+                  const tCategorySlug = t.productHref?.split('/')[1] || '';
+                  const tHasUnit =
+                    tCurrency === 'PCT' || tCategorySlug === 'internet-telecom';
                   const currentPrice = sanitizeHomePriceVnd(
                     t.priceCurrent,
                     tCurrency
@@ -632,11 +640,12 @@ export function HomeDealRadarBlock({
                               {' '}
                               · {tHome('inflatedOrigInline')}{' '}
                               <s>
-                                {tCurrency === 'PCT'
+                                {tHasUnit
                                   ? formatListingPrice(
                                       origPrice,
                                       tCurrency,
-                                      locale
+                                      locale,
+                                      { categorySlug: tCategorySlug }
                                     )
                                   : formatPriceVnd(origPrice, locale)}
                               </s>
@@ -646,11 +655,12 @@ export function HomeDealRadarBlock({
                       </div>
                       <div className="rate-radar-item-side">
                         <span className="rate-radar-price">
-                          {tCurrency === 'PCT'
+                          {tHasUnit
                             ? formatListingPrice(
                                 currentPrice,
                                 tCurrency,
-                                locale
+                                locale,
+                                { categorySlug: tCategorySlug }
                               )
                             : formatPriceVnd(currentPrice, locale)}
                         </span>
@@ -714,7 +724,9 @@ export function HomeDealRadarBlock({
                       <span className="rate-radar-price">
                         -
                         {sCurrency === 'PCT'
-                          ? formatListingPrice(spreadVnd, sCurrency, locale)
+                          ? formatListingPrice(spreadVnd, sCurrency, locale, {
+                              includeUnitSuffix: false,
+                            })
                           : formatPriceVnd(spreadVnd, locale)}
                       </span>
                       {spreadPct != null && (
@@ -1498,7 +1510,10 @@ export default async function Home({
                         minPrice={Number(item.min_price || 0)}
                         maxPrice={Number(item.max_price || 0)}
                         currency={resolveListingPriceCurrency({
-                          categorySlug: getMasterProductCategorySlug(item),
+                          categorySlug: getMasterProductCategorySlug(
+                            item,
+                            catSlugById
+                          ),
                           metadata: item.metadata,
                         })}
                         merchantCount={item.merchant_count || 0}

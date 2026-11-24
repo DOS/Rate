@@ -295,7 +295,9 @@ export default async function LeaderboardPage({ params }: PageProps) {
                             fontFamily: 'var(--font-mono, monospace)',
                           }}
                         >
-                          5
+                          {populatedCategorySlugs.length > 0
+                            ? populatedCategorySlugs.length
+                            : 5}
                         </div>
                         <div
                           style={{

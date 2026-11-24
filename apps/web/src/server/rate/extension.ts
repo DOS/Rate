@@ -321,6 +321,8 @@ export interface ExtensionLookupParams {
   url?: string | null;
   title?: string | null;
   selectedVariant?: string | null;
+  categorySlug?: string | null;
+  currency?: string | null;
   price?: number | null;
   originalPrice?: number | null;
   mode?: 'pill' | 'full';
@@ -1454,20 +1456,29 @@ export async function lookupExtensionProduct(
   );
   const capability = platform ? EXTENSION_CAPABILITY_MATRIX[platform] : null;
 
-  const observedPrice =
-    typeof params.price === 'number' &&
-    Number.isFinite(params.price) &&
-    params.price > 0 &&
-    params.price <= MAX_VALID_VND_PRICE
-      ? Math.round(params.price)
-      : null;
-  const observedOriginalPrice =
-    typeof params.originalPrice === 'number' &&
-    Number.isFinite(params.originalPrice) &&
-    params.originalPrice > 0 &&
-    params.originalPrice <= MAX_VALID_VND_PRICE
-      ? Math.round(params.originalPrice)
-      : null;
+  const preLookupCurrency = resolveListingPriceCurrency({
+    categorySlug: params.categorySlug,
+    currency: params.currency,
+  });
+  const sanitizePreLookupPrice = (val: unknown): number | null => {
+    if (
+      typeof val !== 'number' ||
+      !Number.isFinite(val) ||
+      val <= 0 ||
+      val > MAX_VALID_VND_PRICE
+    ) {
+      return null;
+    }
+    const targetCurrency =
+      preLookupCurrency === 'PCT' ||
+      (!params.currency && !params.categorySlug && val >= 1)
+        ? 'PCT'
+        : preLookupCurrency;
+    const sanitized = sanitizeCurrencyPriceValue(val, targetCurrency);
+    return sanitized > 0 ? sanitized : null;
+  };
+  const observedPrice = sanitizePreLookupPrice(params.price);
+  const observedOriginalPrice = sanitizePreLookupPrice(params.originalPrice);
 
   const urlKeyword = extractKeywordFromProductUrl(canonicalUrl || params.url);
   const effectiveTitle =
@@ -1478,6 +1489,8 @@ export async function lookupExtensionProduct(
     title: effectiveTitle,
     url: canonicalUrl || params.url,
     price: observedPrice,
+    categorySlug: params.categorySlug,
+    currency: preLookupCurrency,
   });
 
   const { storageGb, hasMultipleStorageInTitle, cleanModelSearchQuery } =
@@ -1994,18 +2007,40 @@ export async function lookupExtensionProduct(
           ai_summary: null,
         };
 
+  const resolvedLookupCurrency = resolveListingPriceCurrency({
+    categorySlug: categoryPath,
+    currency: params.currency,
+    master: matchedMaster,
+    offers,
+  });
   const matchedOfferCurrentPrice =
     matchedOffer &&
     typeof matchedOffer.price_current === 'number' &&
     Number.isFinite(matchedOffer.price_current) &&
     matchedOffer.price_current > 0 &&
     matchedOffer.price_current <= MAX_VALID_VND_PRICE
-      ? matchedOffer.price_current
+      ? sanitizeCurrencyPriceValue(
+          matchedOffer.price_current,
+          matchedOffer.currency ?? resolvedLookupCurrency
+        )
       : null;
-  const effectiveObservedPrice = observedPrice ?? matchedOfferCurrentPrice;
+  const normalizedObservedPrice =
+    observedPrice !== null
+      ? sanitizeCurrencyPriceValue(observedPrice, resolvedLookupCurrency) ||
+        null
+      : null;
+  const normalizedObservedOriginalPrice =
+    observedOriginalPrice !== null
+      ? sanitizeCurrencyPriceValue(
+          observedOriginalPrice,
+          resolvedLookupCurrency
+        ) || null
+      : null;
+  const effectiveObservedPrice =
+    normalizedObservedPrice ?? matchedOfferCurrentPrice;
   const rawEffectiveOriginal =
-    observedOriginalPrice ??
-    (observedPrice === null && matchedOfferCurrentPrice !== null
+    normalizedObservedOriginalPrice ??
+    (normalizedObservedPrice === null && matchedOfferCurrentPrice !== null
       ? matchedOffer?.price_original
       : null) ??
     null;
@@ -2013,7 +2048,7 @@ export async function lookupExtensionProduct(
     rawEffectiveOriginal !== null &&
     effectiveObservedPrice !== null &&
     rawEffectiveOriginal >= effectiveObservedPrice
-      ? rawEffectiveOriginal
+      ? sanitizeCurrencyPriceValue(rawEffectiveOriginal, resolvedLookupCurrency)
       : null;
 
   const isAmbiguous = matchStatus === 'ambiguous_variant';
@@ -2033,13 +2068,14 @@ export async function lookupExtensionProduct(
     // price the fallback offer's own price is the one judged.
     observedOfferId:
       urlMatchedOffer?.id ??
-      (observedPrice === null && matchedOfferCurrentPrice !== null
+      (normalizedObservedPrice === null && matchedOfferCurrentPrice !== null
         ? (matchedOffer?.id ?? null)
         : null),
-    hasLiveObservedPrice: observedPrice !== null,
+    hasLiveObservedPrice: normalizedObservedPrice !== null,
     priceHistory,
   });
 
+  const cheaperDiffFloor = resolvedLookupCurrency === 'PCT' ? 0.05 : 50_000;
   const topCheaperOffers = effectiveObservedPrice
     ? marketOffers
         .filter(
@@ -2047,7 +2083,7 @@ export async function lookupExtensionProduct(
             Number.isFinite(o.price_current) &&
             o.price_current > 0 &&
             o.price_current <= MAX_VALID_VND_PRICE &&
-            o.price_current < effectiveObservedPrice - 50_000
+            o.price_current < effectiveObservedPrice - cheaperDiffFloor
         )
         .sort((a, b) => a.price_current - b.price_current)
         .slice(0, 4)
@@ -2142,6 +2178,9 @@ export interface ExtensionCrowdIngestInput {
   url: string;
   title: string;
   selectedVariant?: string | null;
+  categorySlug?: string | null;
+  entityType?: 'product' | 'service' | null;
+  currency?: string | null;
   price: number;
   originalPrice?: number | null;
   ratingStar?: number | null;
@@ -2236,12 +2275,31 @@ export async function ingestExtensionCrowdSignal(
       reason: 'Mức giá sản phẩm không hợp lệ.',
     };
   }
-  const safeObservedPrice = Math.round(input.price);
+  const ingestCurrency = resolveListingPriceCurrency({
+    categorySlug: input.categorySlug,
+    currency: input.currency,
+  });
+  const safeObservedPrice = sanitizeCurrencyPriceValue(
+    input.price,
+    ingestCurrency
+  );
+  if (safeObservedPrice <= 0) {
+    return {
+      accepted: false,
+      quarantinedForWorker: false,
+      jobState: 'rejected_invalid_price',
+      jobId: null,
+      reason: 'Mức giá sản phẩm không hợp lệ.',
+    };
+  }
 
   const gatekeeper = detectAccessoryOrJunk({
     title: input.title,
     url: canonicalUrl,
     price: safeObservedPrice,
+    categorySlug: input.categorySlug,
+    entityType: input.entityType,
+    currency: ingestCurrency,
   });
   if (gatekeeper.isAccessory) {
     return {
@@ -2301,7 +2359,7 @@ export async function ingestExtensionCrowdSignal(
     Number.isFinite(input.originalPrice) &&
     input.originalPrice >= safeObservedPrice &&
     input.originalPrice <= MAX_VALID_VND_PRICE
-      ? Math.round(input.originalPrice)
+      ? sanitizeCurrencyPriceValue(input.originalPrice, ingestCurrency) || null
       : null;
   const validRatingStar =
     typeof input.ratingStar === 'number' &&

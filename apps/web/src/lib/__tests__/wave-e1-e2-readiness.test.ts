@@ -28,7 +28,9 @@ import {
 } from '../rate-domain-core';
 import {
   formatListingPrice,
+  NBSP,
   normalizePriceCurrency,
+  resolveListingUnitSuffix,
   sanitizeCurrencyPriceValue,
 } from '../locale-format';
 import {
@@ -64,6 +66,12 @@ import {
   sanitizeVersusPriceVnd,
 } from '../../components/compare/VersusInteractiveScoreboard';
 import {
+  buildPriceHistoryMarkdown,
+  computePriceHistoryChartYBounds,
+  formatCompactPriceHistoryVnd,
+} from '../../components/price-history/PriceHistorySection';
+import { formatOgListingPrice, renderOgTruthCardPng } from '../og-truth-card';
+import {
   buildInspectAuditMarkdown,
   isInspectOfferBait,
   orderInspectOffers,
@@ -84,7 +92,15 @@ import {
   resolveWatchlistDetailHref,
   type WatchlistPortfolioMarkdownTranslator,
 } from '../../components/watchlist/WatchlistWorkspace';
-import { detectAccessoryOrJunk } from '../../server/rate/extension';
+import {
+  ingestExtensionCrowdSignal,
+  lookupExtensionProduct,
+  detectAccessoryOrJunk,
+} from '../../server/rate/extension';
+import {
+  parseOptionalVndPriceParam,
+  resolveInspectObservedPrices,
+} from '../../server/rate/api-handler';
 import { buildRateOpenApiSpec } from '../../server/rate/openapi';
 import type { MasterProduct } from '@repo/shared-data';
 import { createTranslator } from 'next-intl';
@@ -180,8 +196,36 @@ assert.equal(platformEnum.includes('vietcombank'), false);
 assert.equal(normalizePriceCurrency('pct'), 'PCT');
 assert.equal(sanitizeCurrencyPriceValue(5.45, 'PCT'), 5.45);
 assert.equal(sanitizeCurrencyPriceValue(5.45, 'VND'), 5);
-assert.equal(formatListingPrice(5.4, 'PCT', 'en'), '5.4%');
-assert.equal(formatListingPrice(5.4, 'PCT', 'vi'), '5.4%');
+assert.equal(formatListingPrice(5.4, 'PCT', 'en'), '5.4%/yr');
+assert.equal(formatListingPrice(5.4, 'PCT', 'vi'), '5.4%/năm');
+assert.equal(formatListingPrice(5.4, 'PCT', 'cs'), `5,4${NBSP}%/rok`);
+assert.equal(
+  formatListingPrice(5.4, 'PCT', 'en', { includeUnitSuffix: false }),
+  '5.4%'
+);
+assert.equal(
+  formatListingPrice(195_000, 'VND', 'vi', {
+    categorySlug: 'internet-telecom',
+  }),
+  '195.000 ₫/tháng'
+);
+assert.equal(
+  formatListingPrice(195_000, 'VND', 'en', {
+    categorySlug: 'internet-telecom',
+  }),
+  '195.000 ₫/mo'
+);
+assert.equal(
+  formatListingPrice(195_000, 'VND', 'cs', {
+    categorySlug: 'internet-telecom',
+  }),
+  `195${NBSP}000${NBSP}₫/měs.`
+);
+assert.equal(
+  resolveListingUnitSuffix('VND', 'internet-telecom', 'vi'),
+  '/tháng'
+);
+assert.equal(resolveListingUnitSuffix('VND', 'smartphones', 'vi'), '');
 assert.equal(
   resolveListingPriceCurrency({ categorySlug: 'bank-savings' }),
   'PCT'
@@ -547,6 +591,138 @@ async function runAsyncReadinessChecks() {
     subMillionChip.includes('150K') && subMillionChip.includes('350K'),
     `expected sub-million K chip, got: ${subMillionChip}`
   );
+
+  // 15b. Real Satori OG PNG rendering for Wave E2 PCT & monthly telecom cards
+  for (const locale of ['vi', 'en', 'cs'] as const) {
+    const pctProductPng = Buffer.from(
+      await renderOgTruthCardPng(
+        {
+          type: 'product',
+          slug: 'vcb-12m',
+          categoryPath: '/bank-savings',
+          currency: 'PCT',
+          name: 'Vietcombank Online 12M',
+          brand: 'Vietcombank',
+          minPriceVnd: 4.85,
+          maxPriceVnd: 5.45,
+          sellerCount: 3,
+          userScore5: 4.6,
+          expertScore10: 8.8,
+          authenticReviews: 24,
+          filteredReviews: 2,
+          radarKind: 'verified',
+          savingsPct: 0,
+          fakeMarkupPct: 0,
+          hasFakeSaleTrap: false,
+        },
+        'og',
+        locale
+      )
+    );
+    assert.ok(
+      pctProductPng.length > 5_000,
+      `PCT product OG PNG must render for ${locale}`
+    );
+
+    const telecomDealsPng = Buffer.from(
+      await renderOgTruthCardPng(
+        {
+          type: 'deals',
+          genuineDealCount: 2,
+          fakeSaleTrapCount: 0,
+          totalOffersAnalyzed: 12,
+          totalClustersAnalyzed: 4,
+          topDeals: [
+            {
+              name: 'VNPT Home Net 1',
+              categorySlug: 'internet-telecom',
+              categoryPath: '/internet-telecom',
+              currency: 'VND',
+              minPriceVnd: 195_000,
+              savingsPct: 12.5,
+              offerCount: 3,
+            },
+            {
+              name: 'Vietcombank Online 12M',
+              categorySlug: 'bank-savings',
+              categoryPath: '/bank-savings',
+              currency: 'PCT',
+              minPriceVnd: 5.45,
+              savingsPct: 6.2,
+              offerCount: 4,
+            },
+          ],
+        },
+        'og',
+        locale
+      )
+    );
+    assert.ok(
+      telecomDealsPng.length > 5_000,
+      `Wave E2 deals OG PNG must render for ${locale}`
+    );
+  }
+
+  // 16b. Extension crowd ingest preserves 2-decimal PCT rates when service currency='PCT'
+  const ingestedPayloads: Array<Record<string, unknown>> = [];
+  const ingestPctRes = await ingestExtensionCrowdSignal({
+    platform: 'shopee',
+    externalItemId: 'vcb-12m',
+    url: 'https://shopee.vn/tiet-kiem-online-i.101.202',
+    title: 'Vietcombank Online Savings 12M',
+    categorySlug: 'bank-savings',
+    entityType: 'service',
+    currency: 'PCT',
+    price: 5.45,
+    originalPrice: 5.85,
+    userConsentOptIn: true,
+    rateClient: {
+      rpc: async (_fn, args) => {
+        if (
+          args.p_payload &&
+          typeof args.p_payload === 'object' &&
+          !Array.isArray(args.p_payload)
+        ) {
+          ingestedPayloads.push(args.p_payload as Record<string, unknown>);
+        }
+        return {
+          data: [{ job_id: 'job-pct-1', state: 'enqueued' }],
+          error: null,
+        };
+      },
+    },
+  });
+  assert.equal(ingestPctRes.accepted, true);
+  assert.equal(ingestedPayloads[0]?.observed_price, 5.45);
+  assert.equal(ingestedPayloads[0]?.observed_original_price, 5.85);
+
+  const { formatVersusPeerPriceBadge, sanitizeVersusPeerPriceVnd } =
+    await import('../../components/compare/VersusMatchupSwitcher');
+  assert.equal(sanitizeVersusPeerPriceVnd(5.45, 'PCT'), 5.45);
+  assert.equal(
+    formatVersusPeerPriceBadge(5.4, {
+      currency: 'PCT',
+      categorySlug: 'bank-savings',
+      locale: 'en',
+    }),
+    '5.4%'
+  );
+  assert.equal(
+    formatVersusPeerPriceBadge(195_000, {
+      currency: 'VND',
+      categorySlug: 'internet-telecom',
+      locale: 'vi',
+    }),
+    '195K/tháng'
+  );
+  assert.equal(
+    formatVersusPeerPriceBadge(195_000, {
+      currency: 'VND',
+      categorySlug: 'internet-telecom',
+      locale: 'en',
+    }),
+    '195K/mo'
+  );
 }
 
 // 9. P1 #5: Hyphenated Wave E1/E2 paths across parser, share OG URL, and watchlist
@@ -627,10 +803,10 @@ const pctVerdictCopy = discountVerdictCopy(
   },
   'en'
 );
-assert.ok(pctVerdictCopy.explanation.includes('5.6%'));
+assert.ok(pctVerdictCopy.explanation.includes('5.6%/yr'));
 
 assert.equal(sanitizeVersusPriceVnd(5.45, 'PCT'), 5.45);
-assert.equal(formatVersusPriceVnd(5.45, 'en', 'PCT'), '5.45%');
+assert.equal(formatVersusPriceVnd(5.45, 'en', 'PCT'), '5.45%/yr');
 assert.equal(sanitizeCatalogPriceVnd(5.45, 'PCT'), 5.45);
 assert.equal(sanitizeComparePriceVnd(5.45, 'PCT'), 5.45);
 
@@ -652,7 +828,11 @@ assert.equal(comparePctEntry.minPrice, 5.45);
 assert.equal(comparePctEntry.minPriceVnd, 5.45);
 
 assert.equal(computeWatchlistTargetPrice(5.4, 5, 'PCT'), 5.13);
-assert.equal(formatWatchlistPrice(5.4, 'PCT', 'en'), '5.4%');
+assert.equal(formatWatchlistPrice(5.4, 'PCT', 'en'), '5.4%/yr');
+assert.equal(
+  formatWatchlistPrice(195_000, 'VND', 'vi', '/internet-telecom'),
+  '195.000 ₫/tháng'
+);
 assert.equal(resolveBoundedWatchlistTargetInput(5.15, 5.4, 'PCT'), 5.15);
 const normalizedPctWatch = normalizeWatchlistItem({
   slug: 'vietcombank-online-savings-12m',
@@ -689,8 +869,8 @@ const watchlistMd = buildWatchlistPortfolioMarkdown({
     )) as WatchlistPortfolioMarkdownTranslator,
   locale: 'en',
 });
-assert.ok(watchlistMd.includes('5.45%'));
-assert.ok(watchlistMd.includes('5.13%'));
+assert.ok(watchlistMd.includes('5.45%/yr'));
+assert.ok(watchlistMd.includes('5.13%/yr'));
 
 // 12. P2 #7: DB-backed SSR routes wire populatedCategorySlugs to PageShell, static pages do not hit Supabase
 for (const relPath of [
@@ -764,6 +944,216 @@ for (const [ns, key] of [
 }
 
 type VerdictTranslatorLike = Parameters<typeof discountVerdictCopy>[0];
+
+// 14. P1 #1: PriceHistorySection SVG PCT scaling, compact ticks, Markdown export, and ItemLazySizePanel wiring
+const pctBounds = computePriceHistoryChartYBounds([4.85, 5.4], 'PCT');
+assert.ok(
+  pctBounds.minY >= 4 && pctBounds.minY < 4.85,
+  `PCT minY must tightly bound low value, got: ${pctBounds.minY}`
+);
+assert.ok(
+  pctBounds.maxY > 5.4 && pctBounds.maxY <= 6,
+  `PCT maxY must tightly bound high value instead of VND 100k step, got: ${pctBounds.maxY}`
+);
+const subOnePctBounds = computePriceHistoryChartYBounds([0.1, 0.2], 'PCT');
+assert.equal(subOnePctBounds.minY, 0.05);
+assert.equal(subOnePctBounds.maxY, 0.25);
+assert.equal(formatCompactPriceHistoryVnd(4.7, 'en', 'PCT'), '4.7%');
+assert.equal(formatCompactPriceHistoryVnd(0, 'en', 'PCT'), '0%');
+assert.equal(formatCompactPriceHistoryVnd(0, 'cs', 'PCT'), `0${NBSP}%`);
+
+const pctHistoryMd = buildPriceHistoryMarkdown({
+  productName: 'Vietcombank Online 12M',
+  currency: 'PCT',
+  categorySlug: 'bank-savings',
+  history: {
+    points: [
+      {
+        id: 1,
+        product_id: 'vcb-12m',
+        merchant_name: 'Vietcombank',
+        platform: 'vietcombank',
+        is_official: true,
+        price: 5.4,
+        price_original: 5.8,
+        currency: 'PCT',
+        recorded_at: '2026-11-24T00:00:00.000Z',
+        source: 'crawler',
+      },
+    ],
+    lowestEverPrice: 4.85,
+    lowestEverDate: '2026-11-15T00:00:00.000Z',
+    lowestEverMerchant: 'Vietcombank',
+    highestEverPrice: 5.8,
+    currentMinPrice: 5.4,
+    byOffer: {},
+    fakeDiscountCount: 0,
+    genuineDealCount: 1,
+  },
+  offerAnalyses: [
+    {
+      product_id: 'vcb-12m',
+      merchant_name: 'Vietcombank',
+      platform: 'vietcombank',
+      price_current: 5.4,
+      price_original: 5.8,
+      currency: 'PCT',
+      claimed_discount_pct: 6.9,
+      real_discount_vs_median_pct: 3.6,
+      historical_min_price: 4.85,
+      historical_max_price: 5.8,
+      historical_median_price: 5.6,
+      observation_count: 10,
+      verdict: 'genuine_deal',
+      badge_label: 'Genuine',
+      explanation: '',
+    },
+  ],
+  tVerdict: ((key, values) =>
+    tVerdictEn(key as never, values as never)) as VerdictTranslatorLike,
+  locale: 'en',
+});
+assert.ok(pctHistoryMd.includes('5.4%/yr'));
+assert.ok(pctHistoryMd.includes('4.85%/yr'));
+assert.ok(pctHistoryMd.includes('Current price (%)'));
+assert.equal(pctHistoryMd.includes('₫'), false);
+
+const lazySizePanelSrc = readFileSync(
+  join(webRoot, 'src/components/product/item/ItemLazySizePanel.tsx'),
+  'utf8'
+);
+assert.match(
+  lazySizePanelSrc,
+  /<PriceHistorySection[\s\S]*?categorySlug=\{categorySlug\}[\s\S]*?currency=\{effectiveCurrency\}/
+);
+
+// 15. P1 #2: OG truth card PCT & internet-telecom formatting
+assert.equal(
+  formatOgListingPrice(5.45, 'vi', {
+    currency: 'PCT',
+    categorySlug: 'bank-savings',
+  }),
+  '5.45%/năm'
+);
+assert.equal(
+  formatOgListingPrice(5.45, 'en', {
+    currency: 'PCT',
+    categorySlug: 'bank-savings',
+  }),
+  '5.45%/yr'
+);
+assert.equal(
+  formatOgListingPrice(5.45, 'cs', {
+    currency: 'PCT',
+    categorySlug: 'bank-savings',
+  }),
+  '5,45 %/rok'
+);
+assert.equal(
+  formatOgListingPrice(195_000, 'vi', {
+    currency: 'VND',
+    categorySlug: 'internet-telecom',
+  }),
+  '195.000 đ/tháng'
+);
+assert.equal(
+  formatOgListingPrice(195_000, 'en', {
+    currency: 'VND',
+    categorySlug: 'internet-telecom',
+  }),
+  '195.000 VND/mo'
+);
+assert.equal(
+  formatOgListingPrice(195_000, 'cs', {
+    currency: 'VND',
+    categorySlug: 'internet-telecom',
+  }),
+  '195 000 VND/měs.'
+);
+const ogRouteSrc = readFileSync(
+  join(webRoot, 'src/app/api/v1/rate/og/route.ts'),
+  'utf8'
+);
+assert.match(
+  ogRouteSrc,
+  /type:\s*'product'[\s\S]*?currency,[\s\S]*?type:\s*'versus'[\s\S]*?currency:\s*resolveListingPriceCurrency/
+);
+
+// 16. P1 #3 & P2 #3: API query/inspect PCT decimals & hyphenated category hrefs
+assert.equal(parseOptionalVndPriceParam('0.1'), null);
+assert.equal(parseOptionalVndPriceParam('5.45', undefined, 'PCT'), 5.45);
+assert.equal(parseOptionalVndPriceParam('0.85', undefined, 'PCT'), 0.85);
+assert.deepEqual(
+  resolveInspectObservedPrices({
+    queryPrice: 5.15,
+    queryOriginalPrice: 5.65,
+    currency: 'PCT',
+    categorySlug: 'bank-savings',
+  }),
+  { observedPrice: 5.15, observedOriginalPrice: 5.65 }
+);
+assert.equal(
+  detectAccessoryOrJunk({
+    title: 'Vietcombank Online Savings 12M',
+    url: 'https://www.vietcombank.com.vn/savings',
+    price: 5.45,
+    categorySlug: 'bank-savings',
+    currency: 'PCT',
+  }).isAccessory,
+  false
+);
+void lookupExtensionProduct;
+
+const watchlistRouteSrc = readFileSync(
+  join(webRoot, 'src/app/api/v1/rate/watchlist/route.ts'),
+  'utf8'
+);
+assert.match(
+  watchlistRouteSrc,
+  /\/\^\\\/\[a-z\]\[a-z0-9-\]\*\\\/\[\^\/\?#\\s\]\+\$\//
+);
+assert.equal(
+  /^\/[a-z][a-z0-9-]*\/[^/?#\s]+$/.test('/air-conditioners/daikin-ftkb25yvmv'),
+  true
+);
+assert.equal(
+  /^\/[a-z][a-z0-9-]*\/[^/?#\s]+$/.test('/bank-savings/vcb-12m'),
+  true
+);
+const comboCartSrc = readFileSync(
+  join(webRoot, 'src/server/rate/combo-cart.ts'),
+  'utf8'
+);
+assert.match(
+  comboCartSrc,
+  /\/\^\\\/\[a-z\]\[a-z0-9-\]\*\\\/\[\^\/\?#\\s\]\+\$\//
+);
+
+// 17. P3: Cross-surface category & currency wiring checks
+const homePageSrc = readFileSync(
+  join(webRoot, 'src/app/[locale]/page.tsx'),
+  'utf8'
+);
+assert.match(
+  homePageSrc,
+  /getMasterProductCategorySlug\(\s*item,\s*catSlugById\s*\)/
+);
+const leaderboardSrc = readFileSync(
+  join(webRoot, 'src/components/leaderboard/LeaderboardExplorer.tsx'),
+  'utf8'
+);
+assert.match(
+  leaderboardSrc,
+  /<CompareQuickToggle[\s\S]*?currency:\s*entryCurrency/
+);
+const compareSrcCheck = readFileSync(
+  join(webRoot, 'src/components/compare/CompareWorkspace.tsx'),
+  'utf8'
+);
+assert.match(
+  compareSrcCheck,
+  /upsertWatchlistItem\(\{[\s\S]*?currency:\s*pCur/
+);
 
 runAsyncReadinessChecks()
   .then(() => {

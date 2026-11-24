@@ -265,14 +265,18 @@ export async function generateCategoryProductMetadata(
       : productMarketStats(product);
   const hasPrice = marketStats.minPrice > 0;
   const name = (isItemGroup ? itemMeta?.name : null) || product.name;
+  const metaCategorySlug = categoryBasePath.replace(/^\/+/, '');
   const metaCurrency = resolveListingPriceCurrency({
     master: product,
-    categorySlug: categoryBasePath.replace(/^\/+/, ''),
+    categorySlug: metaCategorySlug,
   });
-  const minPrice =
-    metaCurrency === 'PCT'
-      ? formatListingPrice(marketStats.minPrice, metaCurrency, locale)
-      : formatNumber(marketStats.minPrice, locale);
+  const metaHasUnitSuffix =
+    metaCurrency === 'PCT' || metaCategorySlug === 'internet-telecom';
+  const minPrice = metaHasUnitSuffix
+    ? formatListingPrice(marketStats.minPrice, metaCurrency, locale, {
+        categorySlug: metaCategorySlug,
+      })
+    : formatNumber(marketStats.minPrice, locale);
   const canonicalSlug =
     itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug;
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${canonicalSlug}`;
@@ -290,14 +294,12 @@ export async function generateCategoryProductMetadata(
       [
         ...(hasPrice
           ? [
-              t(metaCurrency === 'PCT' ? 'metaTitleCurrency' : 'metaTitle', {
+              t(metaHasUnitSuffix ? 'metaTitleCurrency' : 'metaTitle', {
                 name,
                 minPrice,
               }),
               t(
-                metaCurrency === 'PCT'
-                  ? 'metaTitleShortCurrency'
-                  : 'metaTitleShort',
+                metaHasUnitSuffix ? 'metaTitleShortCurrency' : 'metaTitleShort',
                 { name, minPrice }
               ),
             ]
@@ -325,7 +327,7 @@ export async function generateCategoryProductMetadata(
       ...defaultOpenGraph(lang),
       title: t('ogTitle', { name }),
       description: hasPrice
-        ? t(metaCurrency === 'PCT' ? 'ogDescCurrency' : 'ogDesc', {
+        ? t(metaHasUnitSuffix ? 'ogDescCurrency' : 'ogDesc', {
             minPrice,
           })
         : t('ogDescNoStock'),
@@ -625,10 +627,13 @@ export async function ProductDetailView({
     currency: offers[0]?.currency,
     metadata: product.metadata,
   });
-  const heroMinPriceFormatted =
-    effectiveCurrency === 'PCT'
-      ? formatListingPrice(heroStats.minPrice, effectiveCurrency, locale)
-      : formatNumber(heroStats.minPrice, locale);
+  const effectiveHasUnitSuffix =
+    effectiveCurrency === 'PCT' || categorySlug === 'internet-telecom';
+  const heroMinPriceFormatted = effectiveHasUnitSuffix
+    ? formatListingPrice(heroStats.minPrice, effectiveCurrency, locale, {
+        categorySlug,
+      })
+    : formatNumber(heroStats.minPrice, locale);
   // Why there is no price, when there is none (DOS/Rate#1188).
   const saleState = masterSaleState({
     minPrice: currentMinPrice,
@@ -892,7 +897,9 @@ export async function ProductDetailView({
           </div>
           <div className="fw-bold text-dark rate-tabular fs-5">
             {v.stats.minPrice > 0 ? (
-              formatListingPrice(v.stats.minPrice, effectiveCurrency, locale)
+              formatListingPrice(v.stats.minPrice, effectiveCurrency, locale, {
+                categorySlug,
+              })
             ) : v.saleStateKey ? (
               <span data-sale-state={v.saleState}>{tSale(v.saleStateKey)}</span>
             ) : (
@@ -904,19 +911,21 @@ export async function ProductDetailView({
                 {formatListingPrice(
                   v.stats.maxPrice,
                   effectiveCurrency,
-                  locale
+                  locale,
+                  { categorySlug }
                 )}
               </span>
             )}
             {v.priceHistory.lowestEverPrice != null &&
               v.priceHistory.lowestEverPrice > 0 && (
                 <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                  {effectiveCurrency === 'PCT'
+                  {effectiveHasUnitSuffix
                     ? t('allTimeLowBadgeCurrency', {
                         price: formatListingPrice(
                           v.priceHistory.lowestEverPrice,
                           effectiveCurrency,
-                          locale
+                          locale,
+                          { categorySlug }
                         ),
                       })
                     : t('allTimeLowBadge', {
@@ -958,6 +967,7 @@ export async function ProductDetailView({
             authenticReviews={authenticCount}
             minPriceVnd={v.stats.minPrice}
             currency={effectiveCurrency}
+            categorySlug={categorySlug}
             offerCount={v.stats.sellerCount}
             keySpecLine={keySpecLine}
             radarSignal={v.radarSignal}
@@ -1206,7 +1216,7 @@ export async function ProductDetailView({
               {heroStats.minPrice > 0 && heroStats.sellerCount > 0 && (
                 <p className="rate-pdv-price-line mb-3">
                   {t.rich(
-                    effectiveCurrency === 'PCT'
+                    effectiveHasUnitSuffix
                       ? 'heroPriceLineCurrency'
                       : 'heroPriceLine',
                     {
@@ -1229,12 +1239,13 @@ export async function ProductDetailView({
                   unknownSizeLabel={t('variantLinksUnknownSize')}
                   priceLabel={(minPrice) =>
                     minPrice > 0
-                      ? effectiveCurrency === 'PCT'
+                      ? effectiveHasUnitSuffix
                         ? t('itemVariantPriceCurrency', {
                             price: formatListingPrice(
                               minPrice,
                               effectiveCurrency,
-                              locale
+                              locale,
+                              { categorySlug }
                             ),
                           })
                         : t('itemVariantPrice', {
@@ -1255,12 +1266,13 @@ export async function ProductDetailView({
                       label: itemVariantLabel(v.variant),
                       priceLabel:
                         stats.minPrice > 0
-                          ? effectiveCurrency === 'PCT'
+                          ? effectiveHasUnitSuffix
                             ? t('itemVariantPriceCurrency', {
                                 price: formatListingPrice(
                                   stats.minPrice,
                                   effectiveCurrency,
-                                  locale
+                                  locale,
+                                  { categorySlug }
                                 ),
                               })
                             : t('itemVariantPrice', {
@@ -2012,7 +2024,8 @@ export async function ProductDetailView({
                                   {formatListingPrice(
                                     peerPrice,
                                     effectiveCurrency,
-                                    locale
+                                    locale,
+                                    { categorySlug }
                                   )}
                                 </span>
                               ) : (
@@ -2030,7 +2043,12 @@ export async function ProductDetailView({
                                   style={{ fontSize: '0.8125rem' }}
                                 >
                                   {effectiveCurrency === 'PCT'
-                                    ? `${priceDelta < 0 ? '-' : '+'}${formatListingPrice(Math.abs(priceDelta), 'PCT', locale)}`
+                                    ? `${priceDelta < 0 ? '-' : '+'}${formatListingPrice(
+                                        Math.abs(priceDelta),
+                                        'PCT',
+                                        locale,
+                                        { includeUnitSuffix: false }
+                                      )}`
                                     : priceDelta < 0
                                       ? t('cheaperByBadge', {
                                           amount: formatNumber(

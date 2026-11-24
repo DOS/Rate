@@ -39,6 +39,7 @@ interface ProductShareAuditButtonProps {
   readonly authenticReviews: number;
   readonly minPriceVnd: number;
   readonly currency?: 'VND' | 'PCT';
+  readonly categorySlug?: string | null;
   readonly offerCount: number;
   readonly keySpecLine?: string;
   readonly radarSignal?: RadarSignal;
@@ -140,6 +141,7 @@ export function buildShareAuditMarkdown(params: {
   readonly authenticReviews: number;
   readonly minPriceVnd: number;
   readonly currency?: string | null;
+  readonly categorySlug?: string | null;
   readonly offerCount: number;
   readonly keySpecLine?: string;
   readonly radarSignal?: RadarSignal | null;
@@ -174,11 +176,18 @@ export function buildShareAuditMarkdown(params: {
   const safeKeySpecLine = params.keySpecLine
     ? sanitizeShareAuditText(params.keySpecLine, 240, locale)
     : '';
+  const hasCustomUnit =
+    params.currency === 'PCT' || params.categorySlug === 'internet-telecom';
   const priceStr =
     safeMinPriceVnd > 0
-      ? params.currency === 'PCT'
+      ? hasCustomUnit
         ? params.t('shareAuditPriceSourcesCurrency', {
-            price: formatListingPrice(safeMinPriceVnd, params.currency, locale),
+            price: formatListingPrice(
+              safeMinPriceVnd,
+              params.currency,
+              locale,
+              { categorySlug: params.categorySlug }
+            ),
             count: safeOfferCount,
           })
         : params.t('shareAuditPriceSources', {
@@ -286,6 +295,7 @@ export default function ProductShareAuditButton({
   authenticReviews,
   minPriceVnd,
   currency,
+  categorySlug,
   offerCount,
   keySpecLine,
   radarSignal,
@@ -331,6 +341,7 @@ export default function ProductShareAuditButton({
         authenticReviews,
         minPriceVnd,
         currency,
+        categorySlug,
         offerCount,
         keySpecLine,
         radarSignal,

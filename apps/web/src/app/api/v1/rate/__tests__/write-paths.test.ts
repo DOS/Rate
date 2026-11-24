@@ -407,6 +407,27 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (pathname === '/rest/v1/reviews' && url.includes(HIDE_FAKE_LISTING_ID)) {
     return jsonResponse(200, HIDE_FAKE_REVIEW_ROWS);
   }
+  if (
+    pathname === '/rest/v1/master_products' &&
+    new URL(url).searchParams.get('slug') === 'eq.vcb-online-12m'
+  ) {
+    return jsonResponse(200, [
+      {
+        id: '99999999-1111-4111-8111-000000000101',
+        category_id: null,
+        slug: 'vcb-online-12m',
+        name: 'Vietcombank Online Savings 12M',
+        brand: 'Vietcombank',
+        status: 'published',
+        min_price: 5.4,
+        max_price: 5.8,
+        merchant_count: 2,
+        metadata: { category_slug: 'bank-savings', currency: 'PCT' },
+        specifications: {},
+        key_specs: {},
+      },
+    ]);
+  }
   if (pathname === '/rest/v1/master_products') {
     return jsonResponse(200, [
       {
@@ -1994,6 +2015,46 @@ async function testCookieSessions() {
     dotSlugRes.status,
     200,
     'PriceAlertBodySchema must accept slugs with dots and underscores (#402)'
+  );
+
+  // Decimal PCT targetPrice (e.g. 5.15%) must preserve 2 decimals on bank-savings alerts
+  calls = [];
+  rpcResponder = (_fn, rpcBody) => ({
+    status: 200,
+    json: {
+      id: 'alert-pct-1',
+      target_price: (rpcBody as { p_target_price: number }).p_target_price,
+    },
+  });
+  const pctAlertRes = await POST(
+    postWithCookies(
+      '/api/v1/rate/watchlist',
+      { slug: 'vcb-online-12m', targetPrice: 5.15 },
+      cookie,
+      'http://localhost'
+    ) as Req
+  );
+  assert.equal(pctAlertRes.status, 200);
+  const [pctAlertRpc] = rpcCalls('upsert_price_alert');
+  assert.equal(
+    (pctAlertRpc?.body as { p_target_price?: number })?.p_target_price,
+    5.15,
+    'PCT watchlist alert must preserve 2-decimal precision instead of Math.round'
+  );
+
+  // Sub-0.5 VND targetPrice still rejects cleanly on VND products
+  const subVndAlertRes = await POST(
+    postWithCookies(
+      '/api/v1/rate/watchlist',
+      { slug: 'apple-iphone-16-128gb', targetPrice: 0.4 },
+      cookie,
+      'http://localhost'
+    ) as Req
+  );
+  assert.equal(
+    subVndAlertRes.status,
+    400,
+    'Sub-0.5 VND targetPrice rounds to 0 and must return 400'
   );
 
   // POST /api/reviews/[id]/vote also accepts same-origin @supabase/ssr cookies and rejects cross-site cookies (#402)

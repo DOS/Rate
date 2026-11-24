@@ -78,8 +78,9 @@ export function ItemSizePriceStrip({
   const tSale = useTranslations('saleState');
   const locale = useLocale();
   const { stats, priceHistory, product } = data;
+  const categorySlug = context.categoryPath.replace(/^\/+/, '');
   const effectiveCurrency = resolveListingPriceCurrency({
-    categorySlug: context.categoryPath.replace(/^\/+/, ''),
+    categorySlug,
     offers: data.offers,
   });
   return (
@@ -91,7 +92,9 @@ export function ItemSizePriceStrip({
           </div>
           <div className="fw-bold text-dark rate-tabular fs-5">
             {stats.minPrice > 0 ? (
-              formatListingPrice(stats.minPrice, effectiveCurrency, locale)
+              formatListingPrice(stats.minPrice, effectiveCurrency, locale, {
+                categorySlug,
+              })
             ) : data.saleStateKey ? (
               <span data-sale-state={data.saleState}>
                 {tSale(data.saleStateKey)}
@@ -102,18 +105,22 @@ export function ItemSizePriceStrip({
             {stats.minPrice > 0 && stats.minPrice !== stats.maxPrice && (
               <span className="small fw-normal text-muted ms-2">
                 ~{' '}
-                {formatListingPrice(stats.maxPrice, effectiveCurrency, locale)}
+                {formatListingPrice(stats.maxPrice, effectiveCurrency, locale, {
+                  categorySlug,
+                })}
               </span>
             )}
             {priceHistory.lowestEverPrice != null &&
               priceHistory.lowestEverPrice > 0 && (
                 <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                  {effectiveCurrency === 'PCT'
+                  {effectiveCurrency === 'PCT' ||
+                  categorySlug === 'internet-telecom'
                     ? t('allTimeLowBadgeCurrency', {
                         price: formatListingPrice(
                           priceHistory.lowestEverPrice,
                           effectiveCurrency,
-                          locale
+                          locale,
+                          { categorySlug }
                         ),
                       })
                     : t('allTimeLowBadge', {
@@ -154,6 +161,7 @@ export function ItemSizePriceStrip({
             authenticReviews={context.authenticReviews}
             minPriceVnd={stats.minPrice}
             currency={effectiveCurrency}
+            categorySlug={categorySlug}
             offerCount={stats.sellerCount}
             keySpecLine={context.keySpecLine}
             radarSignal={data.radarSignal}
@@ -206,9 +214,16 @@ function renderSize(
   if (kind === 'strip')
     return <ItemSizePriceStrip data={data} context={context} />;
   if (kind === 'offers') return <ItemSizeOffers data={data} />;
+  const categorySlug = context.categoryPath.replace(/^\/+/, '');
+  const effectiveCurrency = resolveListingPriceCurrency({
+    categorySlug,
+    offers: data.offers,
+  });
   return (
     <PriceHistorySection
       productName={data.product.name}
+      categorySlug={categorySlug}
+      currency={effectiveCurrency}
       // Its "current lowest" is the size's "from" price (DOS/Rate#1141).
       history={{
         ...data.priceHistory,

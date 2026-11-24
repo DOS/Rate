@@ -113,21 +113,70 @@ export function sanitizeCurrencyPriceValue(
     : Math.round(raw);
 }
 
+export interface ListingPriceFormatOptions {
+  /** Optional canonical category slug or path (`'bank-savings'`, `'internet-telecom'`). */
+  categorySlug?: string | null;
+  /** Append localized unit suffixes (`%/năm`/`/yr`/`/rok`, `/tháng`/`/mo`/`/měs.`). Default `true`. */
+  includeUnitSuffix?: boolean;
+}
+
+const YEARLY_PCT_UNIT_SUFFIX: Record<FormatLocale, string> = {
+  vi: '/năm',
+  en: '/yr',
+  cs: '/rok',
+};
+
+const MONTHLY_VND_UNIT_SUFFIX: Record<FormatLocale, string> = {
+  vi: '/tháng',
+  en: '/mo',
+  cs: '/měs.',
+};
+
+/**
+ * Returns the localized periodic unit suffix for a currency + category pair,
+ * such as `'/năm'`/`'/yr'`/`'/rok'` for `'PCT'` rates and `'/tháng'`/`'/mo'`/`'/měs.'`
+ * for `'internet-telecom'` monthly plans.
+ */
+export function resolveListingUnitSuffix(
+  currency: string | null | undefined,
+  categorySlug?: string | null,
+  locale?: string | null
+): string {
+  const loc = toFormatLocale(locale);
+  if (normalizePriceCurrency(currency) === 'PCT') {
+    return YEARLY_PCT_UNIT_SUFFIX[loc];
+  }
+  const normalizedCategory =
+    typeof categorySlug === 'string'
+      ? categorySlug.trim().replace(/^\/+/, '').toLowerCase()
+      : '';
+  if (normalizedCategory === 'internet-telecom') {
+    return MONTHLY_VND_UNIT_SUFFIX[loc];
+  }
+  return '';
+}
+
 /**
  * Formats a product price in VND or a service rate in percent (`PCT`),
- * preserving up to 2 decimal places for `PCT` (e.g. `5.4%`, `0.15%`).
+ * preserving up to 2 decimal places for `PCT` (e.g. `5.4%/năm`, `5.4%/yr`, `5,4 %/rok`)
+ * and monthly suffixes for `'internet-telecom'` (`195.000 ₫/tháng`, `195.000 ₫/mo`, `195 000 ₫/měs.`).
  */
 export function formatListingPrice(
   value: number,
   currency: string | null | undefined,
-  locale?: string | null
+  locale?: string | null,
+  options: ListingPriceFormatOptions = {}
 ): string {
   const normalizedCurrency = normalizePriceCurrency(currency);
+  const includeUnit = options.includeUnitSuffix !== false;
+  const suffix = includeUnit
+    ? resolveListingUnitSuffix(normalizedCurrency, options.categorySlug, locale)
+    : '';
   if (normalizedCurrency === 'PCT') {
     const safePct = Math.round(value * 100) / 100;
-    return formatPercent(safePct, locale);
+    return `${formatPercent(safePct, locale)}${suffix}`;
   }
-  return formatPriceVnd(Math.round(value), locale);
+  return `${formatPriceVnd(Math.round(value), locale)}${suffix}`;
 }
 
 export interface DecimalFormatOptions {

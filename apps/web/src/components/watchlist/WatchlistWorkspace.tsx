@@ -1549,10 +1549,14 @@ export default function WatchlistWorkspace({
             <div className="row g-3 justify-content-center mt-2 text-start">
               {catalogProducts.slice(0, 3).map((p) => {
                 const minP = Number(p.min_price || 0);
+                const quickCategorySlug = getMasterProductCategorySlug(p);
                 const quickCurrency = resolveListingPriceCurrency({
-                  categorySlug: getMasterProductCategorySlug(p),
+                  categorySlug: quickCategorySlug,
                   metadata: p.metadata,
                 });
+                const quickHasUnit =
+                  quickCurrency === 'PCT' ||
+                  quickCategorySlug === 'internet-telecom';
                 const quickTarget = computeWatchlistTargetPrice(
                   minP,
                   5,
@@ -1581,7 +1585,12 @@ export default function WatchlistWorkspace({
                           </span>
                           <h3 className="h6 fw-bold mb-1">{p.name}</h3>
                           <div className="text-danger fw-bold small">
-                            {formatWatchlistPrice(minP, quickCurrency, locale)}
+                            {formatWatchlistPrice(
+                              minP,
+                              quickCurrency,
+                              locale,
+                              quickCategorySlug
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1591,18 +1600,18 @@ export default function WatchlistWorkspace({
                         className="btn btn-sm btn-primary rounded-pill fw-medium w-100"
                       >
                         {t(
-                          quickCurrency === 'PCT'
+                          quickHasUnit
                             ? 'quickWatch5PctBtnCurrency'
                             : 'quickWatch5PctBtn',
                           {
-                            price:
-                              quickCurrency === 'PCT'
-                                ? formatListingPrice(
-                                    quickTarget,
-                                    quickCurrency,
-                                    locale
-                                  )
-                                : formatNumber(quickTarget, locale),
+                            price: quickHasUnit
+                              ? formatListingPrice(
+                                  quickTarget,
+                                  quickCurrency,
+                                  locale,
+                                  { categorySlug: quickCategorySlug }
+                                )
+                              : formatNumber(quickTarget, locale),
                           }
                         )}
                       </button>
@@ -1618,14 +1627,16 @@ export default function WatchlistWorkspace({
           {items.map((item, itemIndex) => {
             const live = productBySlug.get(item.slug);
             const dealInfo = liveDeals[item.slug];
+            const itemCategorySlug =
+              item.categoryPath?.replace(/^\/+/, '').split('/')[0] ?? '';
             const itemCurrency =
               item.currency ??
               resolveListingPriceCurrency({
-                categorySlug: item.categoryPath
-                  ?.replace(/^\/+/, '')
-                  .split('/')[0],
+                categorySlug: itemCategorySlug,
                 master: live,
               });
+            const itemHasUnit =
+              itemCurrency === 'PCT' || itemCategorySlug === 'internet-telecom';
             const { currentMin, currentMax } =
               resolveWatchlistItemCurrentPrices(item, dealInfo, live);
             const rawDiffFromAdded =
@@ -1714,7 +1725,8 @@ export default function WatchlistWorkspace({
                                       ? formatListingPrice(
                                           Math.max(0, diffFromTarget),
                                           itemCurrency,
-                                          locale
+                                          locale,
+                                          { includeUnitSuffix: false }
                                         )
                                       : formatNumber(
                                           Math.max(0, diffFromTarget),
@@ -1788,7 +1800,8 @@ export default function WatchlistWorkspace({
                                                 radarSignal.priceSpread
                                                   .spreadVnd,
                                                 spreadCurrency,
-                                                locale
+                                                locale,
+                                                { includeUnitSuffix: false }
                                               )
                                             : formatNumber(
                                                 radarSignal.priceSpread
@@ -1855,18 +1868,18 @@ export default function WatchlistWorkspace({
                         >
                           {currentMin !== currentMax
                             ? t(
-                                itemCurrency === 'PCT'
+                                itemHasUnit
                                   ? 'highestPriceSubCurrency'
                                   : 'highestPriceSub',
                                 {
-                                  price:
-                                    itemCurrency === 'PCT'
-                                      ? formatListingPrice(
-                                          currentMax,
-                                          itemCurrency,
-                                          locale
-                                        )
-                                      : formatNumber(currentMax, locale),
+                                  price: itemHasUnit
+                                    ? formatListingPrice(
+                                        currentMax,
+                                        itemCurrency,
+                                        locale,
+                                        { categorySlug: itemCategorySlug }
+                                      )
+                                    : formatNumber(currentMax, locale),
                                 }
                               )
                             : t('sellersCountSub', {
@@ -1888,7 +1901,8 @@ export default function WatchlistWorkspace({
                           {formatWatchlistPrice(
                             item.priceWhenAdded,
                             itemCurrency,
-                            locale
+                            locale,
+                            itemCategorySlug
                           )}
                         </div>
                         <div
@@ -1914,7 +1928,8 @@ export default function WatchlistWorkspace({
                                         ? formatListingPrice(
                                             Math.abs(diffFromAdded),
                                             itemCurrency,
-                                            locale
+                                            locale,
+                                            { includeUnitSuffix: false }
                                           )
                                         : formatNumber(
                                             Math.abs(diffFromAdded),
@@ -1932,7 +1947,8 @@ export default function WatchlistWorkspace({
                                         ? formatListingPrice(
                                             diffFromAdded,
                                             itemCurrency,
-                                            locale
+                                            locale,
+                                            { includeUnitSuffix: false }
                                           )
                                         : formatNumber(diffFromAdded, locale),
                                   }
@@ -2093,7 +2109,7 @@ export default function WatchlistWorkspace({
                           className="small fw-semibold text-primary text-decoration-none"
                         >
                           {t(
-                            itemCurrency === 'PCT'
+                            itemHasUnit
                               ? 'openDealLinkCurrency'
                               : 'openDealLink',
                             {
@@ -2103,11 +2119,12 @@ export default function WatchlistWorkspace({
                                     bestOffer.price,
                                     itemCurrency
                                   ) || currentMin;
-                                return itemCurrency === 'PCT'
+                                return itemHasUnit
                                   ? formatListingPrice(
                                       offerAmount,
                                       itemCurrency,
-                                      locale
+                                      locale,
+                                      { categorySlug: itemCategorySlug }
                                     )
                                   : formatNumber(offerAmount, locale);
                               })(),

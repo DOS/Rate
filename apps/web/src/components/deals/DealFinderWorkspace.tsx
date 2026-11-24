@@ -108,12 +108,13 @@ export function resolveClaimedOriginalPriceVnd(
 export function formatDealRadarPriceVnd(
   value: unknown,
   locale?: string | null,
-  currency?: string | null
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
   const safe = sanitizeDealRadarPriceVnd(value, currency);
   if (safe == null) return '-';
-  return currency === 'PCT'
-    ? formatListingPrice(safe, currency, locale)
+  return currency === 'PCT' || categorySlug === 'internet-telecom'
+    ? formatListingPrice(safe, currency ?? 'VND', locale, { categorySlug })
     : formatPriceVnd(safe, locale);
 }
 
@@ -466,17 +467,20 @@ export function buildDealRadarMarkdown(params: {
       const gCur =
         g.currency ??
         resolveListingPriceCurrency({ categorySlug: g.categorySlug });
-      const fmtG = (val: number | null) =>
+      const fmtG = (val: number | null, includeUnit = true) =>
         val == null
           ? '-'
-          : gCur === 'PCT'
-            ? formatListingPrice(val, gCur, locale)
+          : gCur === 'PCT' || g.categorySlug === 'internet-telecom'
+            ? formatListingPrice(val, gCur, locale, {
+                categorySlug: g.categorySlug,
+                includeUnitSuffix: includeUnit,
+              })
             : `${formatNumber(val, locale)} ₫`;
       const safeCurrent = sanitizeDealRadarPriceVnd(g.priceCurrent, gCur);
       const safeMedian = sanitizeDealRadarPriceVnd(g.marketMedianPrice, gCur);
       const safeSavings = sanitizeDealRadarPriceVnd(g.savingsVsMedianVnd, gCur);
       const safeSavingsPct = formatPlainNumber(g.savingsVsMedianPct, locale);
-      return `| ${sanitizeDealFinderMarkdownCell(g.productName)} | ${sanitizeDealFinderMarkdownCell(g.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(g.merchantName)}) | ${safeCurrent != null ? `**${fmtG(safeCurrent)}**` : '-'} | ${fmtG(safeMedian)} | ${safeSavings != null ? `-${fmtG(safeSavings)} (-${safeSavingsPct}%)` : '-'} | ${g.jreviewsScore10 != null && g.jreviewsScore10 > 0 ? `${formatScoreFixed(g.jreviewsScore10, 1)}/10` : t('noScore')} |`;
+      return `| ${sanitizeDealFinderMarkdownCell(g.productName)} | ${sanitizeDealFinderMarkdownCell(g.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(g.merchantName)}) | ${safeCurrent != null ? `**${fmtG(safeCurrent)}**` : '-'} | ${fmtG(safeMedian)} | ${safeSavings != null ? `-${fmtG(safeSavings, false)} (-${safeSavingsPct}%)` : '-'} | ${g.jreviewsScore10 != null && g.jreviewsScore10 > 0 ? `${formatScoreFixed(g.jreviewsScore10, 1)}/10` : t('noScore')} |`;
     }),
     '',
     t('radarMdFakeTitle'),
@@ -489,8 +493,10 @@ export function buildDealRadarMarkdown(params: {
       const fmtT = (val: number | null) =>
         val == null
           ? '-'
-          : tCur === 'PCT'
-            ? formatListingPrice(val, tCur, locale)
+          : tCur === 'PCT' || trap.categorySlug === 'internet-telecom'
+            ? formatListingPrice(val, tCur, locale, {
+                categorySlug: trap.categorySlug,
+              })
             : `${formatNumber(val, locale)} ₫`;
       const safeCurrent = sanitizeDealRadarPriceVnd(trap.priceCurrent, tCur);
       const claimedOrig = resolveClaimedOriginalPriceVnd(
@@ -513,17 +519,20 @@ export function buildDealRadarMarkdown(params: {
       const sCur =
         s.currency ??
         resolveListingPriceCurrency({ categorySlug: s.categorySlug });
-      const fmtS = (val: number | null) =>
+      const fmtS = (val: number | null, includeUnit = true) =>
         val == null
           ? '-'
-          : sCur === 'PCT'
-            ? formatListingPrice(val, sCur, locale)
+          : sCur === 'PCT' || s.categorySlug === 'internet-telecom'
+            ? formatListingPrice(val, sCur, locale, {
+                categorySlug: s.categorySlug,
+                includeUnitSuffix: includeUnit,
+              })
             : `${formatNumber(val, locale)} ₫`;
       const safeMin = sanitizeDealRadarPriceVnd(s.minPrice, sCur);
       const safeMax = sanitizeDealRadarPriceVnd(s.maxPrice, sCur);
       const safeSpread = sanitizeDealRadarPriceVnd(s.spreadVnd, sCur);
       const safeSpreadPct = formatPlainNumber(s.spreadPct, locale);
-      return `| ${sanitizeDealFinderMarkdownCell(s.productName)} | ${sanitizeDealFinderMarkdownCell(s.cheapestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.cheapestMerchantName)}) | ${sanitizeDealFinderMarkdownCell(s.priciestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.priciestMerchantName)}) | ${safeMin != null ? `**${fmtS(safeMin)}**` : '-'} | ${fmtS(safeMax)} | ${safeSpread != null ? `**-${fmtS(safeSpread)} (${safeSpreadPct}%)**` : '-'} |`;
+      return `| ${sanitizeDealFinderMarkdownCell(s.productName)} | ${sanitizeDealFinderMarkdownCell(s.cheapestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.cheapestMerchantName)}) | ${sanitizeDealFinderMarkdownCell(s.priciestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.priciestMerchantName)}) | ${safeMin != null ? `**${fmtS(safeMin)}**` : '-'} | ${fmtS(safeMax)} | ${safeSpread != null ? `**-${fmtS(safeSpread, false)} (${safeSpreadPct}%)**` : '-'} |`;
     }),
   ];
   return lines.join('\n');
@@ -640,13 +649,17 @@ export function buildDealsMarkdown(params: {
     ...rankedDeals.slice(0, 20).map((d) => {
       const personaStr = formatDealPersonaScore(d.personaScore5, persona);
       const dPriceStr =
-        d.currency === 'PCT'
-          ? formatListingPrice(d.minPrice, d.currency, locale)
+        d.currency === 'PCT' || d.categorySlug === 'internet-telecom'
+          ? formatListingPrice(d.minPrice, d.currency, locale, {
+              categorySlug: d.categorySlug,
+            })
           : `${formatNumber(d.minPrice, locale)} ₫`;
       const dSpreadStr =
         d.spreadSavingsVnd > 0
           ? d.currency === 'PCT'
-            ? `-${formatListingPrice(d.spreadSavingsVnd, d.currency, locale)}`
+            ? `-${formatListingPrice(d.spreadSavingsVnd, d.currency, locale, {
+                includeUnitSuffix: false,
+              })}`
             : `-${formatNumber(d.spreadSavingsVnd, locale)} ₫`
           : t('samePrice');
       return `| #${d.rank} | ${sanitizeDealFinderMarkdownCell(d.name)} | ${sanitizeDealFinderMarkdownCell(d.brand)} | **${personaStr ? `${personaStr}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? formatScoreFixed(displayedScore5(d.userScore5), 1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${formatScoreFixed(d.expertScore10, 1)}/10` : t('labNoScore')}) | **${dPriceStr}** | ${dSpreadStr} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug), locale)} |`;
@@ -1291,12 +1304,14 @@ export default function DealFinderWorkspace({
                                   <>
                                     {' '}
                                     ·{' '}
-                                    {gCurrency === 'PCT'
+                                    {gCurrency === 'PCT' ||
+                                    g.categorySlug === 'internet-telecom'
                                       ? t('medianPriceLabelCurrency', {
                                           price: formatListingPrice(
                                             safeMedian,
                                             gCurrency,
-                                            locale
+                                            locale,
+                                            { categorySlug: g.categorySlug }
                                           ),
                                         })
                                       : t('medianPriceLabel', {
@@ -1314,7 +1329,8 @@ export default function DealFinderWorkspace({
                                 {formatDealRadarPriceVnd(
                                   g.priceCurrent,
                                   locale,
-                                  gCurrency
+                                  gCurrency,
+                                  g.categorySlug
                                 )}
                               </span>
                               <span className="rate-radar-tag is-good">
@@ -1385,11 +1401,13 @@ export default function DealFinderWorkspace({
                                     {' '}
                                     · {t('claimedOrigLabel')}{' '}
                                     <s>
-                                      {tCurrency === 'PCT'
+                                      {tCurrency === 'PCT' ||
+                                      trap.categorySlug === 'internet-telecom'
                                         ? formatListingPrice(
                                             claimedOrig,
                                             tCurrency,
-                                            locale
+                                            locale,
+                                            { categorySlug: trap.categorySlug }
                                           )
                                         : formatPriceVnd(claimedOrig, locale)}
                                     </s>
@@ -1402,7 +1420,8 @@ export default function DealFinderWorkspace({
                                 {formatDealRadarPriceVnd(
                                   trap.priceCurrent,
                                   locale,
-                                  tCurrency
+                                  tCurrency,
+                                  trap.categorySlug
                                 )}
                               </span>
                               <span className="rate-radar-tag is-bad">
@@ -1580,7 +1599,8 @@ export default function DealFinderWorkspace({
                                   amount: formatListingPrice(
                                     deal.spreadSavingsVnd,
                                     dealCurrency,
-                                    locale
+                                    locale,
+                                    { includeUnitSuffix: false }
                                   ),
                                 })
                               : t('spreadSavingsBadge', {
@@ -1617,7 +1637,8 @@ export default function DealFinderWorkspace({
                             {formatListingPrice(
                               deal.minPrice,
                               dealCurrency,
-                              locale
+                              locale,
+                              { categorySlug: deal.categorySlug }
                             )}{' '}
                             {dealCurrency !== 'PCT' &&
                               !isWaveE2ServiceCategorySlug(deal.categorySlug) &&
@@ -1647,12 +1668,14 @@ export default function DealFinderWorkspace({
                                 dealSignal.fakeSaleTrap.platform.toUpperCase(),
                               claimed:
                                 (dealSignal.fakeSaleTrap.currency ??
-                                  dealCurrency) === 'PCT'
+                                  dealCurrency) === 'PCT' ||
+                                deal.categorySlug === 'internet-telecom'
                                   ? formatListingPrice(
                                       trapOrig,
                                       dealSignal.fakeSaleTrap.currency ??
                                         dealCurrency,
-                                      locale
+                                      locale,
+                                      { categorySlug: deal.categorySlug }
                                     )
                                   : formatPriceVnd(trapOrig, locale),
                               pct: formatPlainNumber(
@@ -1680,7 +1703,8 @@ export default function DealFinderWorkspace({
                                       genuineSavingsVnd,
                                       dealSignal.genuineDeal.currency ??
                                         dealCurrency,
-                                      locale
+                                      locale,
+                                      { includeUnitSuffix: false }
                                     )
                                   : formatPriceVnd(genuineSavingsVnd, locale),
                               pct: formatPlainNumber(

@@ -71,11 +71,12 @@ export function sanitizeProductCardPriceVnd(
 export function formatProductCardVnd(
   value: unknown,
   locale?: string | null,
-  currency?: string | null
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
   const safe = sanitizeProductCardPriceVnd(value, currency);
-  return currency
-    ? formatListingPrice(safe, currency, locale)
+  return currency || categorySlug
+    ? formatListingPrice(safe, currency ?? 'VND', locale, { categorySlug })
     : formatPriceVnd(safe, locale);
 }
 
@@ -263,7 +264,12 @@ export default function ProductCard({
                     {sizeChips.length > 0 ? t('fromPrice') : t('refPrice')}
                   </div>
                   <div className="rate-product-card-price">
-                    {formatProductCardVnd(safeMinPrice, locale, currency)}
+                    {formatProductCardVnd(
+                      safeMinPrice,
+                      locale,
+                      currency,
+                      categoryPath
+                    )}
                   </div>
                 </>
               ) : (
@@ -283,7 +289,12 @@ export default function ProductCard({
               {hasRange && (
                 <div>
                   {t('priceUpTo', {
-                    price: formatProductCardVnd(safeMaxPrice, locale, currency),
+                    price: formatProductCardVnd(
+                      safeMaxPrice,
+                      locale,
+                      currency,
+                      categoryPath
+                    ),
                   })}
                 </div>
               )}

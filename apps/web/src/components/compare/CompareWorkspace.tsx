@@ -407,12 +407,13 @@ export function sanitizeComparePriceVnd(
 export function formatComparePriceVnd(
   value: unknown,
   locale?: string | null,
-  currency?: string | null
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
   const safe = sanitizeComparePriceVnd(value, currency);
   if (safe <= 0) return '-';
-  return currency
-    ? formatListingPrice(safe, currency, locale)
+  return currency || categorySlug
+    ? formatListingPrice(safe, currency ?? 'VND', locale, { categorySlug })
     : formatPriceVnd(safe, locale);
 }
 
@@ -1327,11 +1328,17 @@ export function buildSpecGroups(
           id: 'min_price',
           label: t('rowMinPrice'),
           renderValue: (p) => {
+            const pCategorySlug = getMasterProductCategorySlug(p);
             const pCurrency = resolveListingPriceCurrency({
-              categorySlug: getMasterProductCategorySlug(p),
+              categorySlug: pCategorySlug,
               metadata: p.metadata,
             });
-            return formatComparePriceVnd(p.min_price, locale, pCurrency);
+            return formatComparePriceVnd(
+              p.min_price,
+              locale,
+              pCurrency,
+              pCategorySlug
+            );
           },
           numericValue: (p) => {
             const pCurrency = resolveListingPriceCurrency({
@@ -1347,17 +1354,20 @@ export function buildSpecGroups(
           id: 'price_range',
           label: t('rowPriceRange'),
           renderValue: (p) => {
+            const pCategorySlug = getMasterProductCategorySlug(p);
             const pCurrency = resolveListingPriceCurrency({
-              categorySlug: getMasterProductCategorySlug(p),
+              categorySlug: pCategorySlug,
               metadata: p.metadata,
             });
             const min = sanitizeComparePriceVnd(p.min_price, pCurrency);
             const max = sanitizeComparePriceVnd(p.max_price, pCurrency);
             if (min <= 0) return '-';
             if (max > min) {
-              return `${formatListingPrice(min, pCurrency, locale)} - ${formatListingPrice(max, pCurrency, locale)}`;
+              return `${formatListingPrice(min, pCurrency, locale, { categorySlug: pCategorySlug })} - ${formatListingPrice(max, pCurrency, locale, { categorySlug: pCategorySlug })}`;
             }
-            return formatListingPrice(min, pCurrency, locale);
+            return formatListingPrice(min, pCurrency, locale, {
+              categorySlug: pCategorySlug,
+            });
           },
         },
         {
@@ -2613,10 +2623,7 @@ export default function CompareWorkspace({
           name: p.name,
           brand: p.brand,
           thumbnail: resolveProductImageUrl(p.slug, productImageUrl(p)),
-          min_price: sanitizeComparePriceVnd(p.min_price),
-          ...(pCurrency === 'PCT'
-            ? { min_price: sanitizeComparePriceVnd(p.min_price, pCurrency) }
-            : {}),
+          min_price: sanitizeComparePriceVnd(p.min_price, pCurrency),
           currency: pCurrency,
           categorySlug: targetCat,
         };
@@ -3079,19 +3086,14 @@ export default function CompareWorkspace({
         categorySlug: catSlug,
         metadata: p.metadata,
       });
-      const minP = sanitizeComparePriceVnd(p.min_price);
-      const effectiveMinPrice =
-        pCur === 'PCT' ? sanitizeComparePriceVnd(p.min_price, pCur) : minP;
+      const minP = sanitizeComparePriceVnd(p.min_price, pCur);
       const targetP =
         pCur === 'PCT'
-          ? effectiveMinPrice > 0
-            ? Number((effectiveMinPrice * 1.05).toFixed(2))
+          ? minP > 0
+            ? Number((minP * 1.05).toFixed(2))
             : 0
-          : effectiveMinPrice > 0
-            ? Math.max(
-                100_000,
-                Math.round((effectiveMinPrice * 0.95) / 100_000) * 100_000
-              )
+          : minP > 0
+            ? Math.max(100_000, Math.round((minP * 0.95) / 100_000) * 100_000)
             : 10_000_000;
       const thumb = resolveProductImageUrl(p.slug, productImageUrl(p));
       const resolvedHref = getMasterProductHref(p);
@@ -3103,8 +3105,9 @@ export default function CompareWorkspace({
         brand: p.brand,
         categoryPath: resolvedCategoryPath,
         thumbnail: thumb,
-        priceWhenAdded: effectiveMinPrice,
+        priceWhenAdded: minP,
         targetPrice: targetP,
+        currency: pCur,
         addedAt: new Date().toISOString(),
       });
     }

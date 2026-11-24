@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   productRatingScore5,
+  resolveListingPriceCurrency,
   resolveStoredRatingScore,
 } from '@/lib/rate-domain';
 import {
@@ -86,8 +87,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const price = parseOptionalVndPriceParam(sp.get('price'));
-    const originalPrice = parseOptionalVndPriceParam(sp.get('originalPrice'));
+    const categoryParam = parseBoundedStringParam(
+      sp.get('category') ?? sp.get('categorySlug'),
+      64
+    );
+    const currencyParam = parseBoundedStringParam(sp.get('currency'), 16);
+    const resolvedParamCurrency = resolveListingPriceCurrency({
+      categorySlug: categoryParam,
+      currency: currencyParam,
+    });
+    const price = parseOptionalVndPriceParam(
+      sp.get('price'),
+      undefined,
+      resolvedParamCurrency
+    );
+    const originalPrice = parseOptionalVndPriceParam(
+      sp.get('originalPrice'),
+      undefined,
+      resolvedParamCurrency
+    );
 
     const result = await lookupExtensionProduct({
       platform,
@@ -96,6 +114,8 @@ export async function GET(request: NextRequest) {
       url,
       title,
       selectedVariant,
+      categorySlug: categoryParam,
+      currency: currencyParam,
       price,
       originalPrice,
       mode,

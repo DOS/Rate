@@ -165,11 +165,14 @@ export function sanitizeLeaderboardPriceVnd(
 export function formatLeaderboardPriceVnd(
   value: unknown,
   locale?: string | null,
-  currency?: string | null
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
   const safePrice = sanitizeLeaderboardPriceVnd(value, currency);
-  if (currency) {
-    return formatListingPrice(safePrice, currency, locale);
+  if (currency || categorySlug) {
+    return formatListingPrice(safePrice, currency ?? 'VND', locale, {
+      categorySlug,
+    });
   }
   return formatPriceVnd(safePrice, locale);
 }
@@ -177,11 +180,12 @@ export function formatLeaderboardPriceVnd(
 export function formatLeaderboardDisplayPriceVnd(
   value: unknown,
   locale?: string | null,
-  currency?: string | null
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
   const safePrice = sanitizeLeaderboardPriceVnd(value, currency);
   return safePrice > 0
-    ? formatLeaderboardPriceVnd(safePrice, locale, currency)
+    ? formatLeaderboardPriceVnd(safePrice, locale, currency, categorySlug)
     : '-';
 }
 
@@ -544,8 +548,9 @@ export function buildLeaderboardMarkdownRow(
   radar: RadarSignal | null | undefined,
   locale?: string
 ): string[] {
+  const entryCategorySlug = getMasterProductCategorySlug(entry.product);
   const entryCurrency = resolveListingPriceCurrency({
-    categorySlug: getMasterProductCategorySlug(entry.product),
+    categorySlug: entryCategorySlug,
     metadata: entry.product.metadata,
   });
   const safePrice = sanitizeLeaderboardPriceVnd(
@@ -563,7 +568,12 @@ export function buildLeaderboardMarkdownRow(
     entry.expertScore10 != null
       ? formatScoreFixed(entry.expertScore10, 1)
       : unratedShort,
-    formatLeaderboardDisplayPriceVnd(safePrice, locale, entryCurrency),
+    formatLeaderboardDisplayPriceVnd(
+      safePrice,
+      locale,
+      entryCurrency,
+      entryCategorySlug
+    ),
     radarMarkdownCell(radar, locale),
   ];
 }
@@ -2367,7 +2377,8 @@ export default function LeaderboardExplorer({
           const minPriceText = formatLeaderboardDisplayPriceVnd(
             safeRowPrice,
             locale,
-            entryCurrency
+            entryCurrency,
+            entry.categorySlug
           );
           const rowRadarSignal = getRadarSignal(radarIndex, entry.product.slug);
 
@@ -2580,6 +2591,7 @@ export default function LeaderboardExplorer({
                           categoryPath: entry.categoryPath,
                           thumbnail: entry.thumbnail,
                           min_price: safeRowPrice,
+                          currency: entryCurrency,
                         }}
                       />
                       <Link

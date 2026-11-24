@@ -35,6 +35,7 @@ import {
 } from '@/lib/product-market-stats';
 import {
   MAX_VALID_VND_PRICE,
+  resolveListingPriceCurrency,
   type DiscountVerdictType,
   type MasterProductPriceHistorySummary,
   type OfferAvailability,
@@ -120,7 +121,8 @@ const PRICE_HISTORY_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 export function formatPriceHistoryVnd(
   price: unknown,
   locale?: string | null,
-  currency?: string | null
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
   const num = Number(price);
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
@@ -128,8 +130,10 @@ export function formatPriceHistoryVnd(
   }
   const normalized = sanitizeCurrencyPriceValue(num, currency);
   if (normalized <= 0) return '-';
-  return currency
-    ? formatListingPrice(normalized, currency, locale)
+  return currency || categorySlug
+    ? formatListingPrice(normalized, currency ?? 'VND', locale, {
+        categorySlug,
+      })
     : formatPriceVnd(normalized, locale);
 }
 
@@ -138,11 +142,15 @@ export function formatCompactPriceHistoryVnd(
   locale?: string | null,
   currency?: string | null
 ): string {
+  const isPct = normalizePriceCurrency(currency) === 'PCT';
   const num = Number(price);
-  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
-    return '0';
+  if (!Number.isFinite(num) || num < 0 || num > MAX_VALID_VND_PRICE) {
+    return isPct ? formatPercent(0, locale) : '0';
   }
-  if (normalizePriceCurrency(currency) === 'PCT') {
+  if (num === 0) {
+    return isPct ? formatPercent(0, locale) : '0';
+  }
+  if (isPct) {
     const pct = sanitizeCurrencyPriceValue(num, 'PCT');
     return formatPercent(pct, locale);
   }
@@ -155,6 +163,43 @@ export function formatCompactPriceHistoryVnd(
     return `${Math.round(rounded / 1_000)}k`;
   }
   return `${rounded}`;
+}
+
+export function computePriceHistoryChartYBounds(
+  values: readonly number[],
+  currency?: string | null
+): { minY: number; maxY: number; yRange: number } {
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  if (normalizePriceCurrency(currency) === 'PCT') {
+    const span = Math.max(rawMax - rawMin, rawMin * 0.08, 0.2);
+    const step =
+      span <= 0.4
+        ? 0.05
+        : span <= 1
+          ? 0.1
+          : span <= 2.5
+            ? 0.25
+            : span <= 5
+              ? 0.5
+              : 1;
+    const roundPct = (v: number) => Math.round(v * 100) / 100;
+    const minY = roundPct(
+      Math.max(0, Math.floor((rawMin - span * 0.15) / step) * step)
+    );
+    let maxY = roundPct(Math.ceil((rawMax + span * 0.15) / step) * step);
+    if (maxY <= minY) {
+      maxY = roundPct(minY + step);
+    }
+    return { minY, maxY, yRange: roundPct(Math.max(maxY - minY, 0.01)) };
+  }
+  const span = Math.max(rawMax - rawMin, rawMin * 0.08, 500_000);
+  const minY = Math.max(
+    0,
+    Math.floor((rawMin - span * 0.15) / 100_000) * 100_000
+  );
+  const maxY = Math.ceil((rawMax + span * 0.15) / 100_000) * 100_000;
+  return { minY, maxY, yRange: Math.max(maxY - minY, 1) };
 }
 
 export function sanitizePriceHistoryCount(value: unknown): number {
@@ -268,6 +313,7 @@ function defaultPriceHistoryMarkdownTranslator(
 export function buildPriceHistoryMarkdown(params: {
   productName: string;
   currency?: string | null;
+  categorySlug?: string | null;
   history: MasterProductPriceHistorySummary;
   offerAnalyses: readonly OfferDiscountAnalysis[];
   radarSignal?: RadarSignal | null;
@@ -278,18 +324,26 @@ export function buildPriceHistoryMarkdown(params: {
   const {
     productName,
     currency,
+    categorySlug,
     history,
     offerAnalyses,
     radarSignal,
     tVerdict,
     locale,
   } = params;
-  const resolvedCur = normalizePriceCurrency(
-    currency ?? history.points?.[0]?.currency
-  );
+  const resolvedCur = resolveListingPriceCurrency({
+    categorySlug,
+    currency: currency ?? history.points?.[0]?.currency,
+  });
   const fmtPrice = (val: unknown, loc?: string | null) =>
-    formatPriceHistoryVnd(val, loc, resolvedCur);
+    formatPriceHistoryVnd(val, loc, resolvedCur, categorySlug);
   const tr = params.t ?? defaultPriceHistoryMarkdownTranslator(locale);
+  const fmtPriceCol = (key: PriceHistoryMarkdownKey) => {
+    const label = sanitizePriceHistoryMarkdownCell(tr(key), '-', locale);
+    return resolvedCur === 'PCT'
+      ? label.replace(/\s*\(VND\)$/i, ' (%)')
+      : label;
+  };
   const headers = [
     sanitizePriceHistoryMarkdownCell(
       tr('priceHistoryMdColMerchant'),
@@ -301,26 +355,10 @@ export function buildPriceHistoryMarkdown(params: {
       '-',
       locale
     ),
-    sanitizePriceHistoryMarkdownCell(
-      tr('priceHistoryMdColCurrentPrice'),
-      '-',
-      locale
-    ),
-    sanitizePriceHistoryMarkdownCell(
-      tr('priceHistoryMdColOriginalPrice'),
-      '-',
-      locale
-    ),
-    sanitizePriceHistoryMarkdownCell(
-      tr('priceHistoryMdColMedian90d'),
-      '-',
-      locale
-    ),
-    sanitizePriceHistoryMarkdownCell(
-      tr('priceHistoryMdColLow90d'),
-      '-',
-      locale
-    ),
+    fmtPriceCol('priceHistoryMdColCurrentPrice'),
+    fmtPriceCol('priceHistoryMdColOriginalPrice'),
+    fmtPriceCol('priceHistoryMdColMedian90d'),
+    fmtPriceCol('priceHistoryMdColLow90d'),
     sanitizePriceHistoryMarkdownCell(
       tr('priceHistoryMdColVerdict'),
       '-',
@@ -400,11 +438,12 @@ export default function PriceHistorySection({
           typeof pt.currency === 'string'
       )?.currency
     : undefined;
-  const sectionCurrency = normalizePriceCurrency(
-    currency ?? firstOfferCurrency ?? firstPointCurrency
-  );
+  const sectionCurrency = resolveListingPriceCurrency({
+    categorySlug,
+    currency: currency ?? firstOfferCurrency ?? firstPointCurrency,
+  });
   const formatVnd = (p: unknown, loc?: string | null) =>
-    formatPriceHistoryVnd(p, loc, sectionCurrency);
+    formatPriceHistoryVnd(p, loc, sectionCurrency, categorySlug);
   const formatCompactVnd = (p: unknown, loc?: string | null) =>
     formatCompactPriceHistoryVnd(p, loc, sectionCurrency);
   const storeFilterLabelId = useId();
@@ -517,15 +556,10 @@ export default function PriceHistorySection({
       return null;
     }
 
-    const rawMin = Math.min(...allValues);
-    const rawMax = Math.max(...allValues);
-    const span = Math.max(rawMax - rawMin, rawMin * 0.08, 500_000);
-    const minY = Math.max(
-      0,
-      Math.floor((rawMin - span * 0.15) / 100_000) * 100_000
+    const { minY, maxY, yRange } = computePriceHistoryChartYBounds(
+      allValues,
+      sectionCurrency
     );
-    const maxY = Math.ceil((rawMax + span * 0.15) / 100_000) * 100_000;
-    const yRange = Math.max(maxY - minY, 1);
 
     const times = filteredPoints.map((p) => new Date(p.recorded_at).getTime());
     const minT = Math.min(...times);
@@ -601,10 +635,12 @@ export default function PriceHistorySection({
     }
 
     const yTicks = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-      const value = minY + ratio * yRange;
+      const rawValue = minY + ratio * yRange;
+      const value =
+        sectionCurrency === 'PCT' ? Math.round(rawValue * 100) / 100 : rawValue;
       return {
         value,
-        y: getY(value),
+        y: getY(rawValue),
       };
     });
 
@@ -630,7 +666,13 @@ export default function PriceHistorySection({
       yTicks,
       lowestEverY,
     };
-  }, [filteredPoints, offerAnalyses, history.lowestEverPrice, labelUnits]);
+  }, [
+    filteredPoints,
+    offerAnalyses,
+    history.lowestEverPrice,
+    labelUnits,
+    sectionCurrency,
+  ]);
 
   const [copiedHistoryMd, setCopiedHistoryMd] = useState(false);
 
@@ -638,6 +680,8 @@ export default function PriceHistorySection({
     if (typeof navigator === 'undefined') return;
     const md = buildPriceHistoryMarkdown({
       productName,
+      currency: sectionCurrency,
+      categorySlug,
       history,
       offerAnalyses,
       radarSignal,

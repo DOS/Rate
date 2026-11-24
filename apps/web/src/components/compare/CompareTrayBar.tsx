@@ -28,23 +28,27 @@ const PHONE_QUERY = '(max-width: 767.98px)';
 export function formatCompareTrayPriceVnd(
   value: unknown,
   locale?: string | null,
-  currency?: string | null
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
   const safe = sanitizeTrayPriceVnd(value, currency);
-  return currency
-    ? formatListingPrice(safe, currency, locale)
+  return currency || categorySlug
+    ? formatListingPrice(safe, currency ?? 'VND', locale, { categorySlug })
     : formatPriceVnd(safe, locale);
 }
 
 export function formatCompareTrayPriceDisplay(
   value: unknown,
   locale?: string | null,
-  currency?: string | null
+  currency?: string | null,
+  categorySlug?: string | null
 ): string {
   const safePrice = sanitizeTrayPriceVnd(value, currency);
   if (safePrice <= 0) return '-';
-  return currency
-    ? formatListingPrice(safePrice, currency, locale)
+  return currency || categorySlug
+    ? formatListingPrice(safePrice, currency ?? 'VND', locale, {
+        categorySlug,
+      })
     : formatPriceVnd(safePrice, locale);
 }
 
@@ -294,7 +298,11 @@ export default function CompareTrayBar({ initialItems }: CompareTrayBarProps) {
                               (typeof item.categoryPath === 'string'
                                 ? item.categoryPath.replace(/^\//, '')
                                 : undefined),
-                          })
+                          }),
+                          item.categorySlug ??
+                            (typeof item.categoryPath === 'string'
+                              ? item.categoryPath.replace(/^\//, '')
+                              : undefined)
                         )}
                       </div>
                     </div>

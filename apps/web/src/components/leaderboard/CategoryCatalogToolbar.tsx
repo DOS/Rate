@@ -15,6 +15,7 @@ import {
 import { displayedScore5, formatScoreFixed } from '@/lib/rating-display';
 import {
   MAX_VALID_VND_PRICE,
+  getMasterProductCategorySlug,
   resolveCompareEffectiveUserRating,
   resolveCompareExpertRating10,
   resolveListingPriceCurrency,
@@ -369,7 +370,11 @@ export function buildCatalogMarkdown(
     const userRating = rawUser > 0 ? rawUser : null;
     const expertScore10 = resolveCompareExpertRating10(p);
     const radar = radarFor(p.slug);
-    const currency = resolveListingPriceCurrency({ master: p });
+    const productCategorySlug = getMasterProductCategorySlug(p);
+    const currency = resolveListingPriceCurrency({
+      categorySlug: productCategorySlug,
+      master: p,
+    });
     const minPrice = sanitizeCatalogPriceVnd(p.min_price, currency);
     const authReviews = sanitizeCatalogCount(
       p.authentic_review_count || p.total_reviews || 0
@@ -385,7 +390,11 @@ export function buildCatalogMarkdown(
         ? `${formatDecimal(expertScore10, locale, 1)}/10`
         : t('toolbar.unratedText'),
       formatNumber(authReviews, locale),
-      minPrice > 0 ? formatListingPrice(minPrice, currency, locale) : '-',
+      minPrice > 0
+        ? formatListingPrice(minPrice, currency, locale, {
+            categorySlug: productCategorySlug,
+          })
+        : '-',
       radarMarkdownCell(radar, locale),
     ];
   });
