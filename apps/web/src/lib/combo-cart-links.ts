@@ -87,3 +87,24 @@ export function buildWatchlistComboHref(
   const encoded = unique.map((slug) => encodeURIComponent(slug)).join(',');
   return `/watchlist?items=${encoded}`;
 }
+
+/**
+ * Matches the server `Content-Disposition` filename format for combo truth card PNGs.
+ */
+export function buildComboTruthCardFilename(
+  slugs: readonly string[],
+  format: 'og' | 'social' = 'social'
+): string {
+  const token =
+    `combo-${slugs.join('-')}`
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80)
+      .replace(/-+$/g, '') || 'combo';
+  const suffix = format === 'social' ? '-4x5' : '';
+  return `rate-truth-card-${token}${suffix}.png`;
+}

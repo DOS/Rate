@@ -18,8 +18,10 @@ import {
   COMBO_CART_DEFAULT_MIN_TRUST,
   COMBO_CART_DEFAULT_SHIPPING_VND,
   COMBO_CART_MAX_ITEMS,
+  COMBO_CART_MAX_SHIPPING_VND,
   COMBO_CART_MIN_ITEMS,
 } from './combo-cart-optimizer';
+import { isValidComboSlugToken } from './combo-cart-links';
 import { formatNumber, localizeDecimalPoints } from './locale-format';
 import { displayedScore5, formatScoreFixed } from './rating-display';
 import { MAX_VALID_VND_PRICE } from './rate-domain';
@@ -31,6 +33,9 @@ export const OG_TRUTH_CARD_CACHE_CONTROL =
 
 const MAX_OG_QUERY_LENGTH = 512;
 const MAX_OG_COMBO_QUERY_LENGTH = 800;
+const MAX_OG_COMBO_VND_PRICE =
+  COMBO_CART_MAX_ITEMS * MAX_VALID_VND_PRICE +
+  COMBO_CART_MAX_ITEMS * COMBO_CART_MAX_SHIPPING_VND;
 
 // Exact codepoint ranges present in Next's bundled Geist-Regular.ttf cmap
 // (ASCII, Latin-1 excluding U+00AD SHY, Czech Latin-Extended glyphs, and
@@ -360,7 +365,7 @@ export function parseOgTruthCardQuery(
     const uniqueItems: string[] = [];
     const seenLower = new Set<string>();
     for (const token of tokens) {
-      if (!isValidOgSlug(token, 120)) {
+      if (!isValidOgSlug(token, 120) || !isValidComboSlugToken(token)) {
         return null;
       }
       const lower = token.toLowerCase();
@@ -449,11 +454,9 @@ export function parseOgTruthCardQuery(
   };
 }
 
-function clampSafeVnd(value: unknown): number {
+function clampSafeVnd(value: unknown, maxVnd = MAX_VALID_VND_PRICE): number {
   const n = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(n) && n > 0 && n <= MAX_VALID_VND_PRICE
-    ? Math.round(n)
-    : 0;
+  return Number.isFinite(n) && n > 0 && n <= maxVnd ? Math.round(n) : 0;
 }
 
 function clampSafeCount(value: unknown, max = 10_000_000): number {
@@ -466,8 +469,12 @@ function clampSafePct(value: unknown, max = 999): number {
   return Number.isFinite(n) && n > 0 ? Math.min(max, Number(n.toFixed(1))) : 0;
 }
 
-function formatOgPriceVnd(amount: number, locale: OgTruthCardLocale): string {
-  const safe = clampSafeVnd(amount);
+function formatOgPriceVnd(
+  amount: number,
+  locale: OgTruthCardLocale,
+  maxVnd = MAX_VALID_VND_PRICE
+): string {
+  const safe = clampSafeVnd(amount, maxVnd);
   if (safe <= 0) return '';
   const num = sanitizeOgCardText(formatNumber(safe, locale), 40);
   return locale === 'vi' ? `${num} đ` : `${num} VND`;
@@ -475,13 +482,14 @@ function formatOgPriceVnd(amount: number, locale: OgTruthCardLocale): string {
 
 function formatOgPriceVndOrZero(
   amount: number,
-  locale: OgTruthCardLocale
+  locale: OgTruthCardLocale,
+  maxVnd = MAX_VALID_VND_PRICE
 ): string {
-  const safe = clampSafeVnd(amount);
+  const safe = clampSafeVnd(amount, maxVnd);
   if (safe <= 0) {
     return locale === 'vi' ? '0 đ' : '0 VND';
   }
-  return formatOgPriceVnd(safe, locale);
+  return formatOgPriceVnd(safe, locale, maxVnd);
 }
 
 function csPlural(
@@ -714,8 +722,8 @@ const OG_COPY: Record<OgTruthCardLocale, OgCopyDict> = {
       `Items ${subtotal} + Ship ${shipping}`,
     comboFooterNote: (stamp) =>
       stamp
-        ? `${stamp} - Bait & OOS filtered`
-        : 'Independent data - Bait & OOS filtered',
+        ? `${stamp} - Bait & sold-out filtered`
+        : 'Independent data - Bait & sold-out filtered',
   },
   cs: {
     headerAudit22: `OVĚŘENO NAPŘÍČ ${TOTAL_TRACKED_PLATFORMS} OBCHODY`,
@@ -1826,13 +1834,13 @@ function renderComboPlanBox(params: {
           params.locale
         )
       : '';
-  const storePreview = plan
-    ? plan.storeNames
-        .slice(0, 3)
-        .map((n) => sanitizeOgCardText(n, 28))
-        .filter(Boolean)
-        .join(' + ')
-    : '';
+  const storeList = plan
+    ? plan.storeNames.map((n) => sanitizeOgCardText(n, 28)).filter(Boolean)
+    : [];
+  const storePreview =
+    storeList.length > 3
+      ? `${storeList.slice(0, 3).join(' + ')} +${storeList.length - 3}`
+      : storeList.join(' + ');
 
   return (
     <div
@@ -1917,7 +1925,11 @@ function renderComboPlanBox(params: {
             }}
           >
             {sanitizeOgCardText(
-              formatOgPriceVndOrZero(plan.totalVnd, params.locale),
+              formatOgPriceVndOrZero(
+                plan.totalVnd,
+                params.locale,
+                MAX_OG_COMBO_VND_PRICE
+              ),
               36
             )}
           </div>
@@ -1931,8 +1943,16 @@ function renderComboPlanBox(params: {
           >
             {sanitizeOgCardText(
               copy.comboPlanBreakdown(
-                formatOgPriceVndOrZero(plan.itemsSubtotalVnd, params.locale),
-                formatOgPriceVndOrZero(plan.shippingVnd, params.locale)
+                formatOgPriceVndOrZero(
+                  plan.itemsSubtotalVnd,
+                  params.locale,
+                  MAX_OG_COMBO_VND_PRICE
+                ),
+                formatOgPriceVndOrZero(
+                  plan.shippingVnd,
+                  params.locale,
+                  MAX_OG_COMBO_VND_PRICE
+                )
               ),
               72
             )}
@@ -1977,7 +1997,10 @@ function renderComboCardElement(
 ) {
   const copy = OG_COPY[locale];
   const itemCount = data.items.length;
-  const savingsVnd = clampSafeVnd(data.savingsVsSingleStoreVnd);
+  const savingsVnd = clampSafeVnd(
+    data.savingsVsSingleStoreVnd,
+    MAX_OG_COMBO_VND_PRICE
+  );
   const savingsPctStr =
     data.savingsVsSingleStorePct > 0
       ? localizeDecimalPoints(
@@ -1990,7 +2013,7 @@ function renderComboCardElement(
     savingsVnd > 0 && data.multiStoreOptimal
       ? {
           text: copy.comboBadgeSavings(
-            formatOgPriceVnd(savingsVnd, locale),
+            formatOgPriceVnd(savingsVnd, locale, MAX_OG_COMBO_VND_PRICE),
             savingsPctStr
           ),
           tone: 'green' as const,

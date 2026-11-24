@@ -3619,6 +3619,11 @@ test('RTINGS-style UseCaseWeightBar SSR, Official vs Custom Score parity & WCAG 
       compareHtml.includes(compareCopy.criterionNoData!),
       `CompareWorkspace(${locale}) shows criterionNoData for unrated product instead of inventing a score`
     );
+    assert.match(
+      compareHtml,
+      /data-testid="compare-combo-cart-link"[^>]*href="\/watchlist\?items=[^"]+"|href="\/watchlist\?items=[^"]+"[^>]*data-testid="compare-combo-cart-link"/,
+      `CompareWorkspace(${locale}) renders combo cart CTA link`
+    );
 
     // CompareWorkspace with layout="versus" does NOT duplicate UseCaseWeightBar
     const compareInVersusLayoutHtml = renderToStaticMarkup(
@@ -3699,6 +3704,11 @@ test('RTINGS-style UseCaseWeightBar SSR, Official vs Custom Score parity & WCAG 
       versusHtml,
       /data-testid="versus-persona-lead"/,
       'VersusScoreboard suppresses duplicate legacy persona-lead line when custom-score banner is active'
+    );
+    assert.match(
+      versusHtml,
+      /data-testid="versus-combo-cart-link"[^>]*href="\/watchlist\?items=[^"]+"|href="\/watchlist\?items=[^"]+"[^>]*data-testid="versus-combo-cart-link"/,
+      `VersusInteractiveScoreboard(${locale}) renders combo cart CTA link`
     );
     assert.doesNotMatch(
       versusHtml,

@@ -1,4 +1,5 @@
 import { collapseRun } from './locale-format';
+import { isValidComboSlugToken } from './combo-cart-links';
 /** The default share card for rate.vn links (1200x630, see scripts/og-image/rate-og.html). */
 export const SHARE_IMAGE = {
   url: '/img/rate-og.png',
@@ -376,7 +377,9 @@ export function buildOgTruthCardPath(target: OgTruthCardTarget): string {
     for (const raw of target.items) {
       if (typeof raw !== 'string') return SHARE_IMAGE.url;
       const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
-      if (!isValidOgSlug(cleaned, 120)) return SHARE_IMAGE.url;
+      if (!isValidOgSlug(cleaned, 120) || !isValidComboSlugToken(cleaned)) {
+        return SHARE_IMAGE.url;
+      }
       const lower = cleaned.toLowerCase();
       if (seenLower.has(lower)) return SHARE_IMAGE.url;
       seenLower.add(lower);

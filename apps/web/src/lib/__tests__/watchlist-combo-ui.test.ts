@@ -15,7 +15,7 @@ import csMessages from '../../../locales/cs.json';
 import enMessages from '../../../locales/en.json';
 import viMessages from '../../../locales/vi.json';
 import { pickClientMessages } from '../client-messages';
-import { NBSP } from '../locale-format';
+import { NBSP, formatPriceVnd } from '../locale-format';
 import { evaluateMerchantTrustBadge } from '../merchant-trust-badge';
 import type { CrossPlatformDealRadarResponse } from '../../server/rate/deals';
 import WatchlistWorkspace from '../../components/watchlist/WatchlistWorkspace';
@@ -1648,6 +1648,32 @@ async function main() {
     }).canExport,
     false
   );
+  assert.equal(
+    evaluateComboOgExportEligibility({
+      state: syncedUiState,
+      loading: false,
+      fetchError: null,
+      result: { ...syncedComboResult, missingSlugs: ['missing-item'] },
+      locale: 'vi',
+    }).canExport,
+    false
+  );
+  assert.equal(
+    evaluateComboOgExportEligibility({
+      state: syncedUiState,
+      loading: false,
+      fetchError: null,
+      result: {
+        ...syncedComboResult,
+        items: [
+          syncedComboResult.items[0]!,
+          { ...syncedComboResult.items[1]!, found: false },
+        ],
+      },
+      locale: 'vi',
+    }).canExport,
+    false
+  );
 
   // Guard 2: minTrust must be multiple of 5 in 0..100; shippingVnd must be in 8 CDN presets
   for (const preset of OG_COMBO_SHIPPING_PRESETS) {
@@ -1818,7 +1844,14 @@ async function main() {
     assert.ok(offPresetBtnMatch && /\bdisabled\b/.test(offPresetBtnMatch[0]));
     assert.ok(offPresetHtml.includes('data-testid="combo-og-gating-hint"'));
     assert.ok(
+      offPresetHtml.includes('data-testid="combo-og-shipping-preset-0"')
+    );
+    assert.ok(
       offPresetHtml.includes('data-testid="combo-og-shipping-preset-30000"')
+    );
+    assert.ok(
+      offPresetHtml.includes(`aria-label="${formatPriceVnd(0, loc)}"`),
+      `${loc}: zero shipping preset chip must carry localized aria-label`
     );
   }
 

@@ -31,6 +31,7 @@ import {
   isOgComboMinTrust,
   isOgComboShippingPreset,
 } from '@/lib/seo';
+import { buildComboTruthCardFilename } from '@/lib/combo-cart-links';
 import type { MasterProduct } from '@repo/shared-data';
 import type { WatchlistItem } from './watchlist-store';
 import {
@@ -1081,7 +1082,7 @@ export default function WatchlistComboOptimizer({
     }
     const a = document.createElement('a');
     a.href = ogExport.downloadUrl;
-    a.download = 'rate-truth-card-combo-4x5.png';
+    a.download = buildComboTruthCardFilename(selectedSlugs, 'social');
     a.rel = 'noopener';
     document.body.appendChild(a);
     a.click();
@@ -1801,13 +1802,16 @@ export default function WatchlistComboOptimizer({
                     key={preset}
                     type="button"
                     data-testid={`combo-og-shipping-preset-${preset}`}
+                    aria-label={formatPriceVnd(preset, locale)}
                     onClick={() => {
                       setShippingDraft(String(preset));
                       applyComboUpdate({ shippingVnd: preset });
                     }}
                     className="btn btn-sm btn-outline-light rounded-pill rate-tabular px-2 py-1"
                   >
-                    {preset === 0 ? '0' : `${preset / 1000}k`}
+                    {preset === 0
+                      ? formatPriceVnd(0, locale)
+                      : `${preset / 1000}k`}
                   </button>
                 ))}
               </div>

@@ -454,6 +454,8 @@ function main() {
     'type=combo&items=s1,s2,s3,s4,s5,s6',
     'type=combo&items=iphone-17,IPHONE-17',
     'type=combo&items=iphone-17,,airpods-pro-2',
+    'type=combo&items=-bad,airpods-pro-2',
+    'type=combo&items=_bad,airpods-pro-2',
     'type=combo&items=iphone-17,__proto__',
     'type=combo&items=iphone-17,airpods-pro-2&officialOnly=true',
     'type=combo&items=iphone-17,airpods-pro-2&officialOnly=2',
@@ -626,6 +628,68 @@ async function runOgTruthCardAsyncSuite() {
       snapshotTimestampIso: '2026-11-24T02:15:00.000Z',
     };
 
+    const sampleComboSingleOnly = {
+      type: 'combo' as const,
+      items: [
+        { slug: 'item-1', name: 'Workstation A' },
+        { slug: 'item-2', name: 'Workstation B' },
+        { slug: 'item-3', name: 'Display C' },
+        { slug: 'item-4', name: 'Dock D' },
+        { slug: 'item-5', name: 'Keyboard E' },
+      ],
+      query: {
+        officialOnly: true,
+        minTrust: 90,
+        maxStores: 5,
+        shippingVnd: 0,
+      },
+      singleStoreBest: {
+        distinctStoreCount: 1,
+        itemsSubtotalVnd: 1_450_000_000,
+        shippingVnd: 0,
+        totalVnd: 1_450_000_000,
+        allOfficial: true,
+        avgTrustScore: 95,
+        verifiedSafeStoreCount: 1,
+        storeNames: ['Phong Vu'],
+      },
+      multiStoreOptimal: null,
+      savingsVsSingleStoreVnd: 0,
+      savingsVsSingleStorePct: 0,
+      snapshotTimestampIso: '2026-11-24T02:15:00.000Z',
+    };
+
+    const sampleComboMultiAndOverflow = {
+      ...sampleCombo,
+      singleStoreBest: null,
+      multiStoreOptimal: {
+        distinctStoreCount: 5,
+        itemsSubtotalVnd: 1_350_000_000,
+        shippingVnd: 150_000,
+        totalVnd: 1_350_150_000,
+        allOfficial: false,
+        avgTrustScore: 88,
+        verifiedSafeStoreCount: 3,
+        storeNames: [
+          'CellphoneS',
+          'Tiki Trading',
+          'FPT Shop',
+          'Phong Vu',
+          'GearVN',
+        ],
+      },
+      savingsVsSingleStoreVnd: 0,
+      savingsVsSingleStorePct: 0,
+    };
+
+    const sampleComboBothNull = {
+      ...sampleCombo,
+      singleStoreBest: null,
+      multiStoreOptimal: null,
+      savingsVsSingleStoreVnd: 0,
+      savingsVsSingleStorePct: 0,
+    };
+
     for (const locale of ['vi', 'en', 'cs'] as const) {
       for (const format of ['og', 'social'] as const) {
         const expectedWidth =
@@ -638,6 +702,9 @@ async function runOgTruthCardAsyncSuite() {
           sampleVersus,
           sampleDeals,
           sampleCombo,
+          sampleComboSingleOnly,
+          sampleComboMultiAndOverflow,
+          sampleComboBothNull,
         ]) {
           const bytes = Buffer.from(
             await renderOgTruthCardPng(card, format, locale)
