@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import {
   MAX_VALID_VND_PRICE,
+  isCategoryVisibleInDirectory,
   resolveCompareEffectiveUserRating,
+  resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
@@ -37,9 +39,12 @@ import type { MasterProduct } from '@repo/shared-data';
 import {
   BsArrowLeftRight,
   BsArrowRight,
+  BsBank,
   BsBatteryHalf,
+  BsBoxSeam,
   BsCheckCircleFill,
   BsCpu,
+  BsDroplet,
   BsGraphUpArrow,
   BsHeadphones,
   BsLaptop,
@@ -48,9 +53,13 @@ import {
   BsShieldExclamation,
   BsShop,
   BsSmartwatch,
+  BsSnow,
   BsStarFill,
   BsTabletLandscape,
   BsTrophy,
+  BsTv,
+  BsWifi,
+  BsWind,
   BsGraphDownArrow,
   BsExclamationTriangle,
 } from 'react-icons/bs';
@@ -84,9 +93,11 @@ import {
 import {
   formatDate,
   formatDecimal,
+  formatListingPrice,
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
+  sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import StarRating from '@/components/elementary/StarRating';
 
@@ -116,6 +127,13 @@ const CATEGORY_DESC_KEYS = {
   tablets: 'catDescTablets',
   smartwatches: 'catDescSmartwatches',
   earbuds: 'catDescEarbuds',
+  tvs: 'catDescTvs',
+  'air-conditioners': 'catDescAirConditioners',
+  refrigerators: 'catDescRefrigerators',
+  'washing-machines': 'catDescWashingMachines',
+  'air-purifiers': 'catDescAirPurifiers',
+  'bank-savings': 'catDescBankSavings',
+  'internet-telecom': 'catDescInternetTelecom',
 } as const;
 
 type KnownCategorySlug = keyof typeof CATEGORY_DESC_KEYS;
@@ -140,6 +158,20 @@ function getCategoryIcon(slug: string) {
       return <BsSmartwatch />;
     case 'earbuds':
       return <BsHeadphones />;
+    case 'tvs':
+      return <BsTv />;
+    case 'air-conditioners':
+      return <BsSnow />;
+    case 'refrigerators':
+      return <BsBoxSeam />;
+    case 'washing-machines':
+      return <BsDroplet />;
+    case 'air-purifiers':
+      return <BsWind />;
+    case 'bank-savings':
+      return <BsBank />;
+    case 'internet-telecom':
+      return <BsWifi />;
     default:
       return <BsCpu />;
   }
@@ -228,22 +260,26 @@ export function homeMerchantTrustDisplay(
   return { score, tone, toneClass: `is-${tone}` };
 }
 
-export function sanitizeHomePriceVnd(value: unknown): number | null {
+export function sanitizeHomePriceVnd(
+  value: unknown,
+  currency?: string | null
+): number | null {
   const parsed = parseStrictFiniteNumber(value);
   if (parsed == null || parsed <= 0 || parsed > MAX_VALID_VND_PRICE) {
     return null;
   }
-  const rounded = Math.round(parsed);
-  if (rounded <= 0 || rounded > MAX_VALID_VND_PRICE) return null;
-  return rounded;
+  const sanitized = sanitizeCurrencyPriceValue(parsed, currency);
+  if (sanitized <= 0 || sanitized > MAX_VALID_VND_PRICE) return null;
+  return sanitized;
 }
 
 export function resolveHomeRadarOriginalPriceVnd(
   priceCurrent: unknown,
-  priceOriginal: unknown
+  priceOriginal: unknown,
+  currency?: string | null
 ): number | null {
-  const current = sanitizeHomePriceVnd(priceCurrent);
-  const original = sanitizeHomePriceVnd(priceOriginal);
+  const current = sanitizeHomePriceVnd(priceCurrent, currency);
+  const original = sanitizeHomePriceVnd(priceOriginal, currency);
   if (current == null || original == null || original <= current) {
     return null;
   }
@@ -405,6 +441,7 @@ export type HomeDealRadarTranslateKey =
   | 'radarHomeDealHubBtn'
   | 'radarGenuineTitle'
   | 'medianPriceInline'
+  | 'medianPriceInlineCurrency'
   | 'vsMedianPctBadge'
   | 'radarFakeTitle'
   | 'inflatedOrigInline'
@@ -427,17 +464,17 @@ export function HomeDealRadarBlock({
 }) {
   const genuineDeals = Array.isArray(dealRadar.genuineDeals)
     ? dealRadar.genuineDeals.filter(
-        (g) => sanitizeHomePriceVnd(g.priceCurrent) != null
+        (g) => sanitizeHomePriceVnd(g.priceCurrent, g.currency) != null
       )
     : [];
   const fakeSaleTraps = Array.isArray(dealRadar.fakeSaleTraps)
     ? dealRadar.fakeSaleTraps.filter(
-        (t) => sanitizeHomePriceVnd(t.priceCurrent) != null
+        (t) => sanitizeHomePriceVnd(t.priceCurrent, t.currency) != null
       )
     : [];
   const priceSpreadLeaders = Array.isArray(dealRadar.priceSpreadLeaders)
     ? dealRadar.priceSpreadLeaders.filter(
-        (s) => sanitizeHomePriceVnd(s.spreadVnd) != null
+        (s) => sanitizeHomePriceVnd(s.spreadVnd, s.currency) != null
       )
     : [];
 
@@ -491,8 +528,15 @@ export function HomeDealRadarBlock({
               </h4>
               <ul className="rate-radar-list">
                 {genuineDeals.slice(0, 3).map((g) => {
-                  const currentPrice = sanitizeHomePriceVnd(g.priceCurrent)!;
-                  const medianPrice = sanitizeHomePriceVnd(g.marketMedianPrice);
+                  const gCurrency = g.currency;
+                  const currentPrice = sanitizeHomePriceVnd(
+                    g.priceCurrent,
+                    gCurrency
+                  )!;
+                  const medianPrice = sanitizeHomePriceVnd(
+                    g.marketMedianPrice,
+                    gCurrency
+                  );
                   const savingsPct = sanitizePositiveRadarPct(
                     g.savingsVsMedianPct
                   );
@@ -511,16 +555,30 @@ export function HomeDealRadarBlock({
                             <>
                               {' '}
                               ·{' '}
-                              {tHome('medianPriceInline', {
-                                price: formatNumber(medianPrice, locale),
-                              })}
+                              {gCurrency === 'PCT'
+                                ? tHome('medianPriceInlineCurrency', {
+                                    price: formatListingPrice(
+                                      medianPrice,
+                                      gCurrency,
+                                      locale
+                                    ),
+                                  })
+                                : tHome('medianPriceInline', {
+                                    price: formatNumber(medianPrice, locale),
+                                  })}
                             </>
                           )}
                         </span>
                       </div>
                       <div className="rate-radar-item-side">
                         <span className="rate-radar-price">
-                          {formatPriceVnd(currentPrice, locale)}
+                          {gCurrency === 'PCT'
+                            ? formatListingPrice(
+                                currentPrice,
+                                gCurrency,
+                                locale
+                              )
+                            : formatPriceVnd(currentPrice, locale)}
                         </span>
                         {savingsPct != null && (
                           <span className="rate-radar-tag is-good">
@@ -547,10 +605,15 @@ export function HomeDealRadarBlock({
               </h4>
               <ul className="rate-radar-list">
                 {fakeSaleTraps.slice(0, 3).map((t) => {
-                  const currentPrice = sanitizeHomePriceVnd(t.priceCurrent)!;
+                  const tCurrency = t.currency;
+                  const currentPrice = sanitizeHomePriceVnd(
+                    t.priceCurrent,
+                    tCurrency
+                  )!;
                   const origPrice = resolveHomeRadarOriginalPriceVnd(
                     currentPrice,
-                    t.priceOriginal
+                    t.priceOriginal,
+                    tCurrency
                   );
                   const markupPct = sanitizePositiveRadarPct(t.fakeMarkupPct);
                   return (
@@ -568,14 +631,28 @@ export function HomeDealRadarBlock({
                             <>
                               {' '}
                               · {tHome('inflatedOrigInline')}{' '}
-                              <s>{formatPriceVnd(origPrice, locale)}</s>
+                              <s>
+                                {tCurrency === 'PCT'
+                                  ? formatListingPrice(
+                                      origPrice,
+                                      tCurrency,
+                                      locale
+                                    )
+                                  : formatPriceVnd(origPrice, locale)}
+                              </s>
                             </>
                           )}
                         </span>
                       </div>
                       <div className="rate-radar-item-side">
                         <span className="rate-radar-price">
-                          {formatPriceVnd(currentPrice, locale)}
+                          {tCurrency === 'PCT'
+                            ? formatListingPrice(
+                                currentPrice,
+                                tCurrency,
+                                locale
+                              )
+                            : formatPriceVnd(currentPrice, locale)}
                         </span>
                         {markupPct != null && (
                           <span className="rate-radar-tag is-bad">
@@ -613,7 +690,8 @@ export function HomeDealRadarBlock({
           </div>
           <div className="row g-2">
             {priceSpreadLeaders.slice(0, 3).map((s) => {
-              const spreadVnd = sanitizeHomePriceVnd(s.spreadVnd)!;
+              const sCurrency = s.currency;
+              const spreadVnd = sanitizeHomePriceVnd(s.spreadVnd, sCurrency)!;
               const spreadPct = sanitizePositiveRadarPct(s.spreadPct);
               return (
                 <div key={s.id} className="col-lg-4 col-md-6">
@@ -634,7 +712,10 @@ export function HomeDealRadarBlock({
                     </div>
                     <div className="rate-radar-item-side">
                       <span className="rate-radar-price">
-                        -{formatPriceVnd(spreadVnd, locale)}
+                        -
+                        {sCurrency === 'PCT'
+                          ? formatListingPrice(spreadVnd, sCurrency, locale)
+                          : formatPriceVnd(spreadVnd, locale)}
                       </span>
                       {spreadPct != null && (
                         <span className="rate-radar-tag is-warn">
@@ -1005,9 +1086,16 @@ export default async function Home({
     catSlugById
   );
 
+  const populatedExtraCategories = platformStats.categoriesWithCounts
+    .filter((cat) => cat.productCount > 0)
+    .map((cat) => cat.slug);
+
   return (
     <ClientMessages scope="home">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedExtraCategories}
+      >
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -1245,49 +1333,56 @@ export default async function Home({
             </div>
 
             <div className="row g-3">
-              {platformStats.categoriesWithCounts.map((cat) => {
-                const known = isKnownCategory(cat.slug);
-                return (
-                  <div key={cat.id} className="col-xl col-lg-4 col-sm-6 col-12">
-                    <Link
-                      href={cat.routeHref}
-                      className="rate-card rate-card-interactive rate-category-card"
+              {platformStats.categoriesWithCounts
+                .filter((cat) =>
+                  isCategoryVisibleInDirectory(cat.slug, cat.productCount)
+                )
+                .map((cat) => {
+                  const known = isKnownCategory(cat.slug);
+                  return (
+                    <div
+                      key={cat.id}
+                      className="col-xl col-lg-4 col-sm-6 col-12"
                     >
-                      <div className="rate-category-card-top">
-                        <span
-                          className="rate-category-card-icon"
-                          aria-hidden="true"
-                        >
-                          {getCategoryIcon(cat.slug)}
+                      <Link
+                        href={cat.routeHref}
+                        className="rate-card rate-card-interactive rate-category-card"
+                      >
+                        <div className="rate-category-card-top">
+                          <span
+                            className="rate-category-card-icon"
+                            aria-hidden="true"
+                          >
+                            {getCategoryIcon(cat.slug)}
+                          </span>
+                          <span
+                            className={`rate-category-card-count${
+                              cat.productCount > 0 ? '' : ' is-empty'
+                            }`}
+                          >
+                            {cat.productCount > 0
+                              ? tRate('home.catModelCount', {
+                                  count: cat.productCount,
+                                })
+                              : tRate('home.catExpanding')}
+                          </span>
+                        </div>
+                        <h3 className="rate-category-card-title">
+                          {known ? tRate(`nav.${cat.slug}`) : cat.name}
+                        </h3>
+                        {isKnownCategory(cat.slug) && (
+                          <p className="rate-category-card-desc">
+                            {tHome(CATEGORY_DESC_KEYS[cat.slug])}
+                          </p>
+                        )}
+                        <span className="rate-category-card-cta">
+                          {tRate('home.catViewLink')}
+                          <BsArrowRight aria-hidden="true" />
                         </span>
-                        <span
-                          className={`rate-category-card-count${
-                            cat.productCount > 0 ? '' : ' is-empty'
-                          }`}
-                        >
-                          {cat.productCount > 0
-                            ? tRate('home.catModelCount', {
-                                count: cat.productCount,
-                              })
-                            : tRate('home.catExpanding')}
-                        </span>
-                      </div>
-                      <h3 className="rate-category-card-title">
-                        {known ? tRate(`nav.${cat.slug}`) : cat.name}
-                      </h3>
-                      {isKnownCategory(cat.slug) && (
-                        <p className="rate-category-card-desc">
-                          {tHome(CATEGORY_DESC_KEYS[cat.slug])}
-                        </p>
-                      )}
-                      <span className="rate-category-card-cta">
-                        {tRate('home.catViewLink')}
-                        <BsArrowRight aria-hidden="true" />
-                      </span>
-                    </Link>
-                  </div>
-                );
-              })}
+                      </Link>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </section>
@@ -1402,6 +1497,10 @@ export default async function Home({
                         radarSignal={getRadarSignal(radarIndex, item.slug)}
                         minPrice={Number(item.min_price || 0)}
                         maxPrice={Number(item.max_price || 0)}
+                        currency={resolveListingPriceCurrency({
+                          categorySlug: getMasterProductCategorySlug(item),
+                          metadata: item.metadata,
+                        })}
                         merchantCount={item.merchant_count || 0}
                         saleState={saleStateOfMaster(item)}
                       />

@@ -1218,6 +1218,13 @@ const VALID_PRODUCT_CATEGORY_SLUGS = new Set([
   'laptops',
   'smartwatches',
   'earbuds',
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
 ]);
 
 const VALID_BRAND_TOKEN_REGEX = /^[\p{L}\p{N}\s.+-]+$/u;

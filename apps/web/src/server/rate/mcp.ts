@@ -193,6 +193,13 @@ const SUPPORTED_CATEGORY_ENUM = z.enum([
   'laptops',
   'smartwatches',
   'earbuds',
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
 ]);
 
 const SUPPORTED_PLATFORM_OR_ALL_ENUM = z.enum([

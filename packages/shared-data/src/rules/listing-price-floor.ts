@@ -8,6 +8,8 @@
 export const MINIMUM_DEVICE_PRICE_FLOOR_VND = 1_200_000;
 /** Below this, an earbuds listing is treated as an accessory or part. */
 export const MINIMUM_EARBUDS_PRICE_FLOOR_VND = 400_000;
+/** Below this, a small home-appliance listing (e.g. air purifier) is treated as a filter/part. */
+export const MINIMUM_APPLIANCE_PRICE_FLOOR_VND = 400_000;
 /**
  * Titles or URLs of earbuds listings. A model number or tier may follow the
  * name with no space ("Buds3", "Buds2Pro", "BudsPro3", "Buds3ProFE",
@@ -31,12 +33,56 @@ export const EARBUDS_TITLE_REGEX =
 /** Keeps a word boundary between the joined title and URL. */
 const TEXT_SEPARATOR = ' ';
 
+const SERVICE_CATEGORY_SLUGS = new Set([
+  'bank-savings',
+  'internet-telecom',
+  'services',
+]);
+const SMALL_APPLIANCE_CATEGORY_SLUGS = new Set(['air-purifiers']);
+
+export interface MinimumListingPriceOptions {
+  categorySlug?: string | null;
+  entityType?: 'product' | 'service' | null;
+  currency?: string | null;
+}
+
 /**
- * The floor for a listing: the earbuds floor when the texts (title, URL) name
- * earbuds, else the device floor. They are read as one text, so an over-ear
- * model in the title also wins over "tai-nghe" in the URL.
+ * The floor for a listing: 0 for Wave E2 services or PCT-denominated rates,
+ * the small-appliance floor for air purifiers, the earbuds floor when the
+ * category is `earbuds` or the texts (title, URL) name earbuds (without a
+ * conflicting non-earbuds category), else the device floor.
  */
-export function minimumListingPriceVnd(texts: readonly string[]): number {
+export function minimumListingPriceVnd(
+  texts: readonly string[],
+  options?: MinimumListingPriceOptions | null
+): number {
+  const entityType = options?.entityType ?? null;
+  const currency = options?.currency?.trim().toUpperCase() ?? null;
+  const categorySlug = options?.categorySlug?.trim().toLowerCase() || null;
+
+  if (
+    entityType === 'service' ||
+    currency === 'PCT' ||
+    (categorySlug !== null && SERVICE_CATEGORY_SLUGS.has(categorySlug))
+  ) {
+    return 0;
+  }
+
+  if (categorySlug === 'earbuds') {
+    return MINIMUM_EARBUDS_PRICE_FLOOR_VND;
+  }
+
+  if (
+    categorySlug !== null &&
+    SMALL_APPLIANCE_CATEGORY_SLUGS.has(categorySlug)
+  ) {
+    return MINIMUM_APPLIANCE_PRICE_FLOOR_VND;
+  }
+
+  if (categorySlug !== null) {
+    return MINIMUM_DEVICE_PRICE_FLOOR_VND;
+  }
+
   return EARBUDS_TITLE_REGEX.test(texts.join(TEXT_SEPARATOR))
     ? MINIMUM_EARBUDS_PRICE_FLOOR_VND
     : MINIMUM_DEVICE_PRICE_FLOOR_VND;

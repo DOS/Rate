@@ -100,28 +100,32 @@ export const RegulatorySchema = z.object({
   certifications: z.string().max(500).optional(),
 });
 
-export const ProductSpecificationsSchema = z.object({
-  category_slug: z.string().max(64).optional(),
-  availability: AvailabilitySchema.optional(),
-  design: DesignSchema.optional(),
-  display: DisplaySchema.optional(),
-  hardware: HardwareSchema.optional(),
-  battery: BatterySchema.optional(),
-  camera: CameraSchema.optional(),
-  connectivity: ConnectivitySchema.optional(),
-  cellular: CellularSchema.optional(),
-  multimedia: MultimediaSchema.optional(),
-  regulatory: RegulatorySchema.optional(),
-});
+export const ProductSpecificationsSchema = z
+  .object({
+    category_slug: z.string().max(64).optional(),
+    availability: AvailabilitySchema.optional(),
+    design: DesignSchema.optional(),
+    display: DisplaySchema.optional(),
+    hardware: HardwareSchema.optional(),
+    battery: BatterySchema.optional(),
+    camera: CameraSchema.optional(),
+    connectivity: ConnectivitySchema.optional(),
+    cellular: CellularSchema.optional(),
+    multimedia: MultimediaSchema.optional(),
+    regulatory: RegulatorySchema.optional(),
+  })
+  .passthrough();
 
-export const KeySpecsSchema = z.object({
-  screen: z.string().max(200).optional(),
-  chip: z.string().max(200).optional(),
-  camera: z.string().max(200).optional(),
-  battery: z.string().max(200).optional(),
-  storage: z.string().max(200).optional(),
-  ram: z.string().max(200).optional(),
-});
+export const KeySpecsSchema = z
+  .object({
+    screen: z.string().max(200).optional(),
+    chip: z.string().max(200).optional(),
+    camera: z.string().max(200).optional(),
+    battery: z.string().max(200).optional(),
+    storage: z.string().max(200).optional(),
+    ram: z.string().max(200).optional(),
+  })
+  .passthrough();
 
 // Defined with the price rules so `@repo/shared-data/rules` stays free of zod.
 export { MAX_VALID_VND_PRICE };
@@ -206,6 +210,36 @@ export type SupportedEcommercePlatform = z.infer<
   typeof SupportedEcommercePlatformSchema
 >;
 
+export const SUPPORTED_SERVICE_PLATFORMS = [
+  'vietcombank',
+  'acb',
+  'vnpt',
+  'fpttelecom',
+] as const;
+
+export const SupportedServicePlatformSchema = z.enum(
+  SUPPORTED_SERVICE_PLATFORMS
+);
+
+export type SupportedServicePlatform = z.infer<
+  typeof SupportedServicePlatformSchema
+>;
+
+export const SupportedIngestionPlatformSchema = z.enum([
+  ...SupportedEcommercePlatformSchema.options,
+  ...SUPPORTED_SERVICE_PLATFORMS,
+]);
+
+export type SupportedIngestionPlatform = z.infer<
+  typeof SupportedIngestionPlatformSchema
+>;
+
+export const SupportedPriceCurrencySchema = z.enum(['VND', 'PCT']);
+
+export type SupportedPriceCurrency = z.infer<
+  typeof SupportedPriceCurrencySchema
+>;
+
 export const ScrapedReviewerSchema = z.object({
   key: z.string().max(128).optional(),
   isAnonymous: z.boolean().optional(),
@@ -241,12 +275,14 @@ export const ScrapedReviewSchema = z.object({
 });
 
 export const ScrapedProductSchema = z.object({
-  platform: SupportedEcommercePlatformSchema.optional(),
+  platform: SupportedIngestionPlatformSchema.optional(),
   itemId: z.string().min(1).max(128),
   shopId: z.string().min(1).max(128),
   url: HttpUrlSchema,
   title: z.string().min(1).max(1000),
   description: z.string().max(50_000).optional(),
+  entity_type: z.enum(['product', 'service']).optional(),
+  category_slug: z.string().max(64).optional(),
   priceMin: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
   priceMax: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
   priceBeforeDiscount: z
@@ -254,7 +290,7 @@ export const ScrapedProductSchema = z.object({
     .nonnegative()
     .transform((v) => (v > MAX_VALID_VND_PRICE ? undefined : v))
     .optional(),
-  currency: z.string().min(1).max(16).default('VND'),
+  currency: SupportedPriceCurrencySchema.default('VND'),
   historicalSold: z.number().int().nonnegative().default(0),
   /** Marketplace sold label (e.g. "20k+") when historicalSold is only its floor. */
   // Cosmetic: a malformed label is dropped, never a reason to reject the listing.
@@ -308,6 +344,7 @@ export const ScrapedProductSchema = z.object({
   }),
   reviews: z.array(ScrapedReviewSchema).max(500).default([]),
   pricesOnly: z.boolean().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type Availability = z.infer<typeof AvailabilitySchema>;

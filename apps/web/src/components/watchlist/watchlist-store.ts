@@ -1,9 +1,16 @@
 'use client';
 
 import {
+  formatListingPrice,
+  normalizePriceCurrency,
+  sanitizeCurrencyPriceValue,
+} from '@/lib/locale-format';
+import {
+  ALL_CANONICAL_CATEGORY_SLUGS,
   MAX_VALID_VND_PRICE,
   getCategoryRouteHref,
   getMasterProductCategorySlug,
+  resolveListingPriceCurrency,
   resolveProductImageUrl,
 } from '@/lib/rate-domain';
 
@@ -15,6 +22,7 @@ export interface WatchlistItem {
   thumbnail: string | null;
   priceWhenAdded: number;
   targetPrice: number;
+  currency?: 'VND' | 'PCT';
   addedAt: string;
 }
 
@@ -22,13 +30,17 @@ const STORAGE_KEY = 'rate_price_watchlist_v1';
 const EVENT_NAME = 'rate:watchlist:change';
 export const MAX_WATCHLIST_ITEMS = 50;
 export const MIN_WATCHLIST_TARGET_PRICE = 10_000;
+export const MIN_WATCHLIST_TARGET_PRICE_PCT = 0.01;
 
-export function sanitizeWatchlistPrice(value: unknown): number {
+export function sanitizeWatchlistPrice(
+  value: unknown,
+  currency?: string | null
+): number {
   const num = Number(value);
   if (!Number.isFinite(num) || num < 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  return Math.round(num);
+  return sanitizeCurrencyPriceValue(num, currency);
 }
 
 /**
@@ -38,9 +50,27 @@ export function sanitizeWatchlistPrice(value: unknown): number {
  */
 export function computeWatchlistTargetPrice(
   basePrice: unknown,
-  discountPct = 5
+  discountPct = 5,
+  currency?: string | null
 ): number {
-  const safeBase = sanitizeWatchlistPrice(basePrice);
+  const resolvedCurrency = normalizePriceCurrency(currency);
+  const safeBase = sanitizeWatchlistPrice(basePrice, resolvedCurrency);
+  if (resolvedCurrency === 'PCT') {
+    if (safeBase <= 0) return 1;
+    const rawPct = Number(discountPct);
+    const safePct = Number.isFinite(rawPct)
+      ? Math.max(1, Math.min(90, rawPct))
+      : 5;
+    const discounted = Math.round(safeBase * (1 - safePct / 100) * 100) / 100;
+    const capped =
+      safeBase > 0.05 && discounted >= safeBase
+        ? Math.round((safeBase - 0.05) * 100) / 100
+        : discounted;
+    return Math.max(
+      MIN_WATCHLIST_TARGET_PRICE_PCT,
+      Math.min(MAX_VALID_VND_PRICE, capped)
+    );
+  }
   if (safeBase <= 0) return 10_000_000;
   const rawPct = Number(discountPct);
   const safePct = Number.isFinite(rawPct)
@@ -64,16 +94,37 @@ export function computeWatchlistTargetPrice(
  */
 export function sanitizeWatchlistTargetPrice(
   customTarget: unknown,
-  fallbackBasePrice?: unknown
+  fallbackBasePrice?: unknown,
+  currency?: string | null
 ): number {
+  const resolvedCurrency = normalizePriceCurrency(currency);
   const num = Number(customTarget);
   if (!Number.isFinite(num) || num <= 0) {
-    return computeWatchlistTargetPrice(fallbackBasePrice, 5);
+    return computeWatchlistTargetPrice(fallbackBasePrice, 5, resolvedCurrency);
+  }
+  if (resolvedCurrency === 'PCT') {
+    return Math.max(
+      MIN_WATCHLIST_TARGET_PRICE_PCT,
+      Math.min(
+        MAX_VALID_VND_PRICE,
+        sanitizeCurrencyPriceValue(num, resolvedCurrency)
+      )
+    );
   }
   return Math.max(
     MIN_WATCHLIST_TARGET_PRICE,
     Math.min(MAX_VALID_VND_PRICE, Math.round(num))
   );
+}
+
+export function formatWatchlistPrice(
+  value: unknown,
+  currency: string | null | undefined,
+  locale?: string | null
+): string {
+  const resolvedCurrency = normalizePriceCurrency(currency);
+  const safe = sanitizeWatchlistPrice(value, resolvedCurrency);
+  return formatListingPrice(safe, resolvedCurrency, locale);
 }
 
 const WATCHLIST_CONTROL_CHAR_RE = /\p{Cc}+/gu;
@@ -88,7 +139,8 @@ export function sanitizeWatchlistSlug(raw: unknown): string {
 }
 
 export function resolveWatchlistItemCurrentPrices(
-  item: Pick<WatchlistItem, 'priceWhenAdded'>,
+  item: Pick<WatchlistItem, 'priceWhenAdded'> &
+    Partial<Pick<WatchlistItem, 'currency' | 'categoryPath'>>,
   liveDeal?: {
     readonly current_min_price?: unknown;
     readonly current_max_price?: unknown;
@@ -96,16 +148,29 @@ export function resolveWatchlistItemCurrentPrices(
   liveProd?: {
     readonly min_price?: unknown;
     readonly max_price?: unknown;
+    readonly metadata?: unknown;
   } | null
 ): { currentMin: number; currentMax: number } {
-  const dealMin = sanitizeWatchlistPrice(liveDeal?.current_min_price);
-  const prodMin = sanitizeWatchlistPrice(liveProd?.min_price);
-  const fallbackMin = sanitizeWatchlistPrice(item.priceWhenAdded);
+  const itemCurrency =
+    item.currency ??
+    resolveListingPriceCurrency({
+      master: liveProd ?? undefined,
+      categorySlug: item.categoryPath?.replace(/^\/+/, ''),
+    });
+  const dealMin = sanitizeWatchlistPrice(
+    liveDeal?.current_min_price,
+    itemCurrency
+  );
+  const prodMin = sanitizeWatchlistPrice(liveProd?.min_price, itemCurrency);
+  const fallbackMin = sanitizeWatchlistPrice(item.priceWhenAdded, itemCurrency);
   const currentMin =
     dealMin > 0 ? dealMin : prodMin > 0 ? prodMin : fallbackMin;
 
-  const dealMax = sanitizeWatchlistPrice(liveDeal?.current_max_price);
-  const prodMax = sanitizeWatchlistPrice(liveProd?.max_price);
+  const dealMax = sanitizeWatchlistPrice(
+    liveDeal?.current_max_price,
+    itemCurrency
+  );
+  const prodMax = sanitizeWatchlistPrice(liveProd?.max_price, itemCurrency);
   const rawMax = dealMax > 0 ? dealMax : prodMax > 0 ? prodMax : currentMin;
   const currentMax = Math.max(currentMin, rawMax);
 
@@ -118,17 +183,19 @@ export function normalizeWatchlistItem(item: WatchlistItem): WatchlistItem {
   const cleanBrand = sanitizeWatchlistText(item.brand, 128);
   const pathMatch =
     typeof item.categoryPath === 'string'
-      ? /^\/(smartphones|tablets|laptops|smartwatches|earbuds)(?:\/|$)/.exec(
-          item.categoryPath.trim()
-        )
+      ? new RegExp(
+          `^\\/(${ALL_CANONICAL_CATEGORY_SLUGS.join('|')})(?:\\/|$)`
+        ).exec(item.categoryPath.trim())
       : null;
   const catSlug = getMasterProductCategorySlug({
     slug: cleanSlug,
     name: cleanName,
     metadata: pathMatch ? { category_slug: pathMatch[1] } : undefined,
   });
-  const priceWhenAdded = sanitizeWatchlistPrice(item.priceWhenAdded);
-  const targetPrice = sanitizeWatchlistPrice(item.targetPrice);
+  const currency =
+    item.currency === 'PCT' || catSlug === 'bank-savings' ? 'PCT' : 'VND';
+  const priceWhenAdded = sanitizeWatchlistPrice(item.priceWhenAdded, currency);
+  const targetPrice = sanitizeWatchlistPrice(item.targetPrice, currency);
   const parsedAddedAt =
     typeof item.addedAt === 'string' ? Date.parse(item.addedAt) : Number.NaN;
   const safeAddedAt = Number.isFinite(parsedAddedAt)
@@ -143,6 +210,7 @@ export function normalizeWatchlistItem(item: WatchlistItem): WatchlistItem {
     thumbnail: resolveProductImageUrl(cleanSlug, item.thumbnail),
     priceWhenAdded,
     targetPrice,
+    currency,
     addedAt: safeAddedAt,
   };
 }

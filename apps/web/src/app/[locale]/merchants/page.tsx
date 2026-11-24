@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
-import { getCachedMerchantsList } from '@/server/rate';
+import {
+  getCachedMerchantsList,
+  getCachedPopulatedCategorySlugs,
+} from '@/server/rate';
 import { withPublicReviewRisk } from '@/server/rate/api-handler';
 import {
   hasReviewRiskEvidence,
@@ -114,7 +117,10 @@ export default async function MerchantsDirectoryPage({
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'merchants' });
-  const merchants = await getCachedMerchantsList();
+  const [merchants, populatedCategorySlugs] = await Promise.all([
+    getCachedMerchantsList(),
+    getCachedPopulatedCategorySlugs(),
+  ]);
 
   // Only the first page and whole-directory stats go to the browser; the
   // explorer fetches further pages and exports from the directory API.
@@ -132,7 +138,10 @@ export default async function MerchantsDirectoryPage({
 
   return (
     <ClientMessages scope="merchants">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedCategorySlugs}
+      >
         <div
           className="hero-banner rate-surface-dark rate-ink-on-dark position-relative overflow-hidden"
           style={{

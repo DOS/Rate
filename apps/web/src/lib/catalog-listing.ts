@@ -21,6 +21,13 @@ const CANONICAL_CATEGORY_SLUGS: ReadonlySet<string> =
     'laptops',
     'smartwatches',
     'earbuds',
+    'tvs',
+    'air-conditioners',
+    'refrigerators',
+    'washing-machines',
+    'air-purifiers',
+    'bank-savings',
+    'internet-telecom',
   ]);
 
 /**

@@ -66,6 +66,8 @@ import {
   buildPopular1v1BattlesForCategory,
   getMasterProductCategorySlug,
   getMasterProductHref,
+  isCategoryVisibleInDirectory,
+  isWaveE2ServiceCategorySlug,
   rankMasterProductsForLeaderboard,
   resolveCompareBatteryMah,
   resolveCompareDisplaySizeInch,
@@ -76,6 +78,7 @@ import {
   resolveCompareMemoryScore,
   resolveCompareRamGb,
   resolveCompareStorageGb,
+  resolveListingPriceCurrency,
   resolveProductImageUrl,
 } from '@/lib/rate-domain';
 import {
@@ -126,8 +129,10 @@ import { masterSiblingKeyPrefix } from '@/lib/product-variant-links';
 import StarRating from '@/components/elementary/StarRating';
 import {
   formatDecimal,
+  formatListingPrice,
   formatNumber,
   formatPriceVnd,
+  sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import {
   displayedScore5,
@@ -261,6 +266,8 @@ export function buildCompareJsonProductEntry(
 ) {
   const u = getEffectiveRating(p);
   const e = resolveCompareExpertRating5(p);
+  const currency = resolveListingPriceCurrency({ master: p });
+  const minPrice = sanitizeComparePriceVnd(p.min_price, currency);
   return {
     slug: p.slug,
     name: p.name,
@@ -268,7 +275,9 @@ export function buildCompareJsonProductEntry(
     userRating: u > 0 ? u : null,
     ratingScore5: u > 0 ? shownRating(p) : null,
     expertRating: e,
-    minPriceVnd: sanitizeComparePriceVnd(p.min_price),
+    currency,
+    minPrice,
+    minPriceVnd: minPrice,
     dealRadar: radarExportFields(signal),
   };
 }
@@ -300,19 +309,17 @@ export interface CompareHeadToHeadSummary {
 export function pickLowestPrice(
   products: readonly MasterProduct[]
 ): MasterProduct | null {
-  const byPrice = products
-    .filter((p) => sanitizeComparePriceVnd(p.min_price) > 0)
-    .sort(
-      (a, b) =>
-        sanitizeComparePriceVnd(a.min_price) -
-        sanitizeComparePriceVnd(b.min_price)
+  const priceOf = (p: MasterProduct) =>
+    sanitizeComparePriceVnd(
+      p.min_price,
+      resolveListingPriceCurrency({ master: p })
     );
+  const byPrice = products
+    .filter((p) => priceOf(p) > 0)
+    .sort((a, b) => priceOf(a) - priceOf(b));
   const [first, second] = byPrice;
   if (!first || !second) return null;
-  if (
-    sanitizeComparePriceVnd(first.min_price) ===
-    sanitizeComparePriceVnd(second.min_price)
-  ) {
+  if (priceOf(first) === priceOf(second)) {
     return null;
   }
   return first;
@@ -374,7 +381,10 @@ export function computeCompareHeadToHeadSummary(
 
 const COMPARE_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
-export function sanitizeComparePriceVnd(value: unknown): number {
+export function sanitizeComparePriceVnd(
+  value: unknown,
+  currency?: string | null
+): number {
   if (typeof value !== 'number' && typeof value !== 'string') return 0;
   let num: number;
   if (typeof value === 'string') {
@@ -390,25 +400,44 @@ export function sanitizeComparePriceVnd(value: unknown): number {
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  const rounded = Math.round(num);
-  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
+  const normalized = sanitizeCurrencyPriceValue(num, currency);
+  return normalized > 0 && normalized <= MAX_VALID_VND_PRICE ? normalized : 0;
 }
 
 export function formatComparePriceVnd(
   value: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): string {
-  const safe = sanitizeComparePriceVnd(value);
-  return safe > 0 ? formatPriceVnd(safe, locale) : '-';
+  const safe = sanitizeComparePriceVnd(value, currency);
+  if (safe <= 0) return '-';
+  return currency
+    ? formatListingPrice(safe, currency, locale)
+    : formatPriceVnd(safe, locale);
 }
 
 export function buildCompareMarkdownMinPriceRow(
   rowLabel: string,
-  items: readonly Pick<MasterProduct, 'min_price'>[],
+  items: readonly (Pick<MasterProduct, 'min_price'> &
+    Partial<
+      Pick<
+        MasterProduct,
+        'slug' | 'category_id' | 'metadata' | 'specifications'
+      >
+    >)[],
   locale?: string | null
 ): string {
   return `| **${rowLabel}** | ${items
-    .map((p) => formatComparePriceVnd(p.min_price, locale))
+    .map((p) => {
+      const catSlug = p.slug
+        ? getMasterProductCategorySlug(p as MasterProduct)
+        : null;
+      const cur = resolveListingPriceCurrency({
+        categorySlug: catSlug,
+        metadata: p.metadata as Record<string, unknown> | null | undefined,
+      });
+      return formatComparePriceVnd(p.min_price, locale, cur);
+    })
     .join(' | ')} |`;
 }
 
@@ -644,6 +673,9 @@ export function resolveCompareTrayRestore(
         )
       : undefined;
     if (standingSibling) {
+      const siblingCurrency =
+        trayItem.currency ??
+        resolveListingPriceCurrency({ master: standingSibling });
       matched.push({
         ...standingSibling,
         id: `tray-${trayItem.slug}`,
@@ -652,9 +684,9 @@ export function resolveCompareTrayRestore(
         brand: trayItem.brand || standingSibling.brand,
         thumbnail: trayItem.thumbnail ?? standingSibling.thumbnail,
         min_price:
-          sanitizeComparePriceVnd(trayItem.min_price) ||
+          sanitizeComparePriceVnd(trayItem.min_price, siblingCurrency) ||
           standingSibling.min_price,
-        max_price: sanitizeComparePriceVnd(trayItem.min_price),
+        max_price: sanitizeComparePriceVnd(trayItem.min_price, siblingCurrency),
       });
     }
   }
@@ -1189,6 +1221,41 @@ function buildCategoryTabs(t: CompareTranslator): Array<{
       label: t('catEarbuds'),
       unitLabel: t('catEarbudsUnit'),
     },
+    {
+      slug: 'tvs',
+      label: t('catTvs'),
+      unitLabel: t('catTvsUnit'),
+    },
+    {
+      slug: 'air-conditioners',
+      label: t('catAirConditioners'),
+      unitLabel: t('catAirConditionersUnit'),
+    },
+    {
+      slug: 'refrigerators',
+      label: t('catRefrigerators'),
+      unitLabel: t('catRefrigeratorsUnit'),
+    },
+    {
+      slug: 'washing-machines',
+      label: t('catWashingMachines'),
+      unitLabel: t('catWashingMachinesUnit'),
+    },
+    {
+      slug: 'air-purifiers',
+      label: t('catAirPurifiers'),
+      unitLabel: t('catAirPurifiersUnit'),
+    },
+    {
+      slug: 'bank-savings',
+      label: t('catBankSavings'),
+      unitLabel: t('catBankSavingsUnit'),
+    },
+    {
+      slug: 'internet-telecom',
+      label: t('catInternetTelecom'),
+      unitLabel: t('catInternetTelecomUnit'),
+    },
   ];
 }
 
@@ -1259,9 +1326,19 @@ export function buildSpecGroups(
         {
           id: 'min_price',
           label: t('rowMinPrice'),
-          renderValue: (p) => formatComparePriceVnd(p.min_price, locale),
+          renderValue: (p) => {
+            const pCurrency = resolveListingPriceCurrency({
+              categorySlug: getMasterProductCategorySlug(p),
+              metadata: p.metadata,
+            });
+            return formatComparePriceVnd(p.min_price, locale, pCurrency);
+          },
           numericValue: (p) => {
-            const safe = sanitizeComparePriceVnd(p.min_price);
+            const pCurrency = resolveListingPriceCurrency({
+              categorySlug: getMasterProductCategorySlug(p),
+              metadata: p.metadata,
+            });
+            const safe = sanitizeComparePriceVnd(p.min_price, pCurrency);
             return safe > 0 ? safe : null;
           },
           higherIsBetter: false,
@@ -1270,13 +1347,17 @@ export function buildSpecGroups(
           id: 'price_range',
           label: t('rowPriceRange'),
           renderValue: (p) => {
-            const min = sanitizeComparePriceVnd(p.min_price);
-            const max = sanitizeComparePriceVnd(p.max_price);
+            const pCurrency = resolveListingPriceCurrency({
+              categorySlug: getMasterProductCategorySlug(p),
+              metadata: p.metadata,
+            });
+            const min = sanitizeComparePriceVnd(p.min_price, pCurrency);
+            const max = sanitizeComparePriceVnd(p.max_price, pCurrency);
             if (min <= 0) return '-';
             if (max > min) {
-              return `${formatPriceVnd(min, locale)} - ${formatPriceVnd(max, locale)}`;
+              return `${formatListingPrice(min, pCurrency, locale)} - ${formatListingPrice(max, pCurrency, locale)}`;
             }
-            return formatPriceVnd(min, locale);
+            return formatListingPrice(min, pCurrency, locale);
           },
         },
         {
@@ -1293,7 +1374,15 @@ export function buildSpecGroups(
           id: 'value_per_point',
           label: t('rowValuePerPoint'),
           renderValue: (p) => {
-            const min = sanitizeComparePriceVnd(p.min_price);
+            const catSlug = getMasterProductCategorySlug(p);
+            const pCurrency = resolveListingPriceCurrency({
+              categorySlug: catSlug,
+              metadata: p.metadata,
+            });
+            if (pCurrency === 'PCT' || isWaveE2ServiceCategorySlug(catSlug)) {
+              return '-';
+            }
+            const min = sanitizeComparePriceVnd(p.min_price, pCurrency);
             if (min <= 0) return '-';
             const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
             const exp5 = resolveCompareExpertRating5(p);
@@ -1311,7 +1400,15 @@ export function buildSpecGroups(
             });
           },
           numericValue: (p) => {
-            const min = sanitizeComparePriceVnd(p.min_price);
+            const catSlug = getMasterProductCategorySlug(p);
+            const pCurrency = resolveListingPriceCurrency({
+              categorySlug: catSlug,
+              metadata: p.metadata,
+            });
+            if (pCurrency === 'PCT' || isWaveE2ServiceCategorySlug(catSlug)) {
+              return null;
+            }
+            const min = sanitizeComparePriceVnd(p.min_price, pCurrency);
             if (min <= 0) return null;
             const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
             const exp5 = resolveCompareExpertRating5(p);
@@ -1330,13 +1427,29 @@ export function buildSpecGroups(
           id: 'daily_cost_2y',
           label: t('rowDailyCost2y'),
           renderValue: (p) => {
-            const min = sanitizeComparePriceVnd(p.min_price);
+            const catSlug = getMasterProductCategorySlug(p);
+            const pCurrency = resolveListingPriceCurrency({
+              categorySlug: catSlug,
+              metadata: p.metadata,
+            });
+            if (pCurrency === 'PCT' || isWaveE2ServiceCategorySlug(catSlug)) {
+              return '-';
+            }
+            const min = sanitizeComparePriceVnd(p.min_price, pCurrency);
             if (min <= 0) return '-';
             const daily = Math.round(min / 730);
             return t('valPerDay', { cost: formatNumber(daily, locale) });
           },
           numericValue: (p) => {
-            const min = sanitizeComparePriceVnd(p.min_price);
+            const catSlug = getMasterProductCategorySlug(p);
+            const pCurrency = resolveListingPriceCurrency({
+              categorySlug: catSlug,
+              metadata: p.metadata,
+            });
+            if (pCurrency === 'PCT' || isWaveE2ServiceCategorySlug(catSlug)) {
+              return null;
+            }
+            const min = sanitizeComparePriceVnd(p.min_price, pCurrency);
             return min > 0 ? Math.round(min / 730) : null;
           },
           higherIsBetter: false,
@@ -2493,14 +2606,21 @@ export default function CompareWorkspace({
     setActiveCategory(targetCat);
     setProducts(sameCategoryProducts);
     setCompareTray(
-      sameCategoryProducts.map((p) => ({
-        slug: p.slug,
-        name: p.name,
-        brand: p.brand,
-        thumbnail: resolveProductImageUrl(p.slug, productImageUrl(p)),
-        min_price: sanitizeComparePriceVnd(p.min_price),
-        categorySlug: targetCat,
-      }))
+      sameCategoryProducts.map((p) => {
+        const pCurrency = resolveListingPriceCurrency({ master: p });
+        return {
+          slug: p.slug,
+          name: p.name,
+          brand: p.brand,
+          thumbnail: resolveProductImageUrl(p.slug, productImageUrl(p)),
+          min_price: sanitizeComparePriceVnd(p.min_price),
+          ...(pCurrency === 'PCT'
+            ? { min_price: sanitizeComparePriceVnd(p.min_price, pCurrency) }
+            : {}),
+          currency: pCurrency,
+          categorySlug: targetCat,
+        };
+      })
     );
     const slugsCsv = sameCategoryProducts.map((p) => p.slug).join(',');
     const baseQuery = slugsCsv
@@ -2954,11 +3074,25 @@ export default function CompareWorkspace({
 
   const handleWatchAllCompared = () => {
     for (const p of products) {
+      const catSlug = getMasterProductCategorySlug(p);
+      const pCur = resolveListingPriceCurrency({
+        categorySlug: catSlug,
+        metadata: p.metadata,
+      });
       const minP = sanitizeComparePriceVnd(p.min_price);
+      const effectiveMinPrice =
+        pCur === 'PCT' ? sanitizeComparePriceVnd(p.min_price, pCur) : minP;
       const targetP =
-        minP > 0
-          ? Math.max(100_000, Math.round((minP * 0.95) / 100_000) * 100_000)
-          : 10_000_000;
+        pCur === 'PCT'
+          ? effectiveMinPrice > 0
+            ? Number((effectiveMinPrice * 1.05).toFixed(2))
+            : 0
+          : effectiveMinPrice > 0
+            ? Math.max(
+                100_000,
+                Math.round((effectiveMinPrice * 0.95) / 100_000) * 100_000
+              )
+            : 10_000_000;
       const thumb = resolveProductImageUrl(p.slug, productImageUrl(p));
       const resolvedHref = getMasterProductHref(p);
       const resolvedCategoryPath =
@@ -2969,7 +3103,7 @@ export default function CompareWorkspace({
         brand: p.brand,
         categoryPath: resolvedCategoryPath,
         thumbnail: thumb,
-        priceWhenAdded: minP,
+        priceWhenAdded: effectiveMinPrice,
         targetPrice: targetP,
         addedAt: new Date().toISOString(),
       });
@@ -3091,27 +3225,38 @@ export default function CompareWorkspace({
             role="group"
             aria-label={t('categoryTabsAria')}
           >
-            {categoryTabs.map((tab) => {
-              const isActive = tab.slug === activeCategory;
-              const count = dedupedCatalogCandidates.filter(
-                (c) => getMasterProductCategorySlug(c) === tab.slug
-              ).length;
-              return (
-                <button
-                  key={tab.slug}
-                  type="button"
-                  aria-pressed={isActive}
-                  onClick={() => handleSwitchCategoryTab(tab.slug)}
-                  className={`btn btn-sm rounded-pill fw-semibold px-3 py-1 ${
-                    isActive
-                      ? 'btn-dark text-white'
-                      : 'btn-light text-secondary border'
-                  }`}
-                >
-                  {tab.label} <span className="rate-tabular">({count})</span>
-                </button>
-              );
-            })}
+            {categoryTabs
+              .filter((tab) => {
+                const tabCount = dedupedCatalogCandidates.filter(
+                  (c) => getMasterProductCategorySlug(c) === tab.slug
+                ).length;
+                return isCategoryVisibleInDirectory(
+                  tab.slug,
+                  tabCount,
+                  activeCategory
+                );
+              })
+              .map((tab) => {
+                const isActive = tab.slug === activeCategory;
+                const count = dedupedCatalogCandidates.filter(
+                  (c) => getMasterProductCategorySlug(c) === tab.slug
+                ).length;
+                return (
+                  <button
+                    key={tab.slug}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => handleSwitchCategoryTab(tab.slug)}
+                    className={`btn btn-sm rounded-pill fw-semibold px-3 py-1 ${
+                      isActive
+                        ? 'btn-dark text-white'
+                        : 'btn-light text-secondary border'
+                    }`}
+                  >
+                    {tab.label} <span className="rate-tabular">({count})</span>
+                  </button>
+                );
+              })}
           </div>
         </div>
       </div>

@@ -299,6 +299,13 @@ function buildBaseRateOpenApiSpec(
     'laptops',
     'smartwatches',
     'earbuds',
+    'tvs',
+    'air-conditioners',
+    'refrigerators',
+    'washing-machines',
+    'air-purifiers',
+    'bank-savings',
+    'internet-telecom',
   ];
   const supportedPlatforms = Object.keys(EXTENSION_CAPABILITY_MATRIX);
 
@@ -2461,7 +2468,8 @@ function buildBaseRateOpenApiSpec(
         CanonicalRateCategorySlug: {
           type: 'string',
           enum: categorySlugs,
-          description: '5 canonical hardware categories on Rate.vn.',
+          description:
+            '12 canonical product and service categories on Rate.vn.',
         },
         PriceVerdictLevel: {
           type: 'string',

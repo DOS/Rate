@@ -6,6 +6,7 @@ import {
   getRequestedComparison,
   parseCompareSlugs,
 } from '@/server/rate/compare-selection';
+import { getCachedPopulatedCategorySlugs } from '@/server/rate';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
@@ -87,14 +88,20 @@ export default async function ComparePhonesPage({
   setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
-  const {
-    catalogCandidates,
-    rawCandidateSlugs,
-    activeCategory,
-    initialProducts,
-    hasExplicitSlugs,
-    resolvedSelection,
-  } = await getComparePageSelection(await searchParams);
+  const [
+    {
+      catalogCandidates,
+      rawCandidateSlugs,
+      activeCategory,
+      initialProducts,
+      hasExplicitSlugs,
+      resolvedSelection,
+    },
+    populatedCategorySlugs,
+  ] = await Promise.all([
+    getComparePageSelection(await searchParams),
+    getCachedPopulatedCategorySlugs(),
+  ]);
   // RATE_ITEM_MODEL on: versus links name Items (DOS/Rate#1290, DOS/Rate#1768); off: null.
   const baseItemSlugBySlug = await getItemSlugsFor(
     [
@@ -112,7 +119,10 @@ export default async function ComparePhonesPage({
 
   return (
     <ClientMessages scope="compare">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedCategorySlugs}
+      >
         <div
           className="min-vh-100 py-md-5 py-4"
           style={{ backgroundColor: 'var(--rate-bg-canvas)' }}

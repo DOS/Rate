@@ -55,7 +55,11 @@ import {
   STRICT_UUID_REGEX,
   type KeysetFilter,
 } from '../paging.js';
-import { detectCategorySlug, type CanonicalCategorySlug } from '../product-normalizer.js';
+import {
+  CANONICAL_CATEGORY_SLUGS,
+  detectCategorySlug,
+  type CanonicalCategorySlug,
+} from '../product-normalizer.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
 
 const logger = createImporterLogger('PriceAlertsDigestJob');
@@ -68,14 +72,6 @@ export const ALERT_ATL_WINDOW_DAYS = 90;
 export const ALERT_ATL_WINDOW_MS = ALERT_ATL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 const FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const IN_QUERY_CHUNK_SIZE = 150;
-
-const CANONICAL_CATEGORY_SLUGS = new Set<CanonicalCategorySlug>([
-  'smartphones',
-  'tablets',
-  'laptops',
-  'smartwatches',
-  'earbuds',
-]);
 
 const SAFE_PRODUCT_SLUG_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,255}$/;
 const RESERVED_SLUG_RE = /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i;

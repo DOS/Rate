@@ -61,9 +61,10 @@ import {
 } from '@/components/merchants/MerchantShareAuditButton';
 import {
   collapseWhitespace,
+  formatListingPrice,
   formatNumber,
   formatPlainNumber,
-  formatPriceVnd,
+  sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import StarRating from '@/components/elementary/StarRating';
 
@@ -279,12 +280,13 @@ export function merchantDirectoryTrustDisplay(trustScore: unknown): {
 }
 
 export function sanitizeMerchantDirectoryPriceVnd(
-  value: unknown
+  value: unknown,
+  currency?: string | null
 ): number | null {
   const raw = parseFiniteDirectoryNumber(value);
   if (raw == null || raw <= 0 || raw > MAX_VALID_VND_PRICE) return null;
-  const rounded = Math.round(raw);
-  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : null;
+  const sanitized = sanitizeCurrencyPriceValue(raw, currency);
+  return sanitized > 0 && sanitized <= MAX_VALID_VND_PRICE ? sanitized : null;
 }
 
 export function formatMerchantDirectoryPriceRange(
@@ -292,23 +294,31 @@ export function formatMerchantDirectoryPriceRange(
     | {
         min_price?: unknown;
         max_price?: unknown;
+        currency?: string | null;
       }
     | null
     | undefined,
   locale?: string | null
 ): string | null {
   if (!merchant) return null;
-  const safeMin = sanitizeMerchantDirectoryPriceVnd(merchant.min_price);
-  const safeMax = sanitizeMerchantDirectoryPriceVnd(merchant.max_price);
+  const currency = merchant.currency ?? null;
+  const safeMin = sanitizeMerchantDirectoryPriceVnd(
+    merchant.min_price,
+    currency
+  );
+  const safeMax = sanitizeMerchantDirectoryPriceVnd(
+    merchant.max_price,
+    currency
+  );
   if (safeMin == null && safeMax == null) return null;
   if (safeMin != null && safeMax != null) {
     const low = Math.min(safeMin, safeMax);
     const high = Math.max(safeMin, safeMax);
     return high > low
-      ? `${formatPriceVnd(low, locale)} - ${formatPriceVnd(high, locale)}`
-      : formatPriceVnd(low, locale);
+      ? `${formatListingPrice(low, currency, locale)} - ${formatListingPrice(high, currency, locale)}`
+      : formatListingPrice(low, currency, locale);
   }
-  return formatPriceVnd((safeMin ?? safeMax)!, locale);
+  return formatListingPrice((safeMin ?? safeMax)!, currency, locale);
 }
 
 export type MerchantDirectoryExplorerItem = Omit<

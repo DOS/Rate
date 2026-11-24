@@ -185,18 +185,18 @@ test('a non-Apple tablet outside the registry gets no flash', () => {
 });
 
 test('a title that names no phone gets no phone hardware', () => {
-  for (const title of [
-    'Loa JBL Charge 5',
-    'Loa Bluetooth Xiaomi Mi Portable Speaker',
-    'Máy lọc không khí Xiaomi Smart Air Purifier 4',
-    'Xiaomi Smart Air Purifier 4 Pro',
-    'Robot hút bụi Xiaomi Vacuum S20',
-    'Xiaomi Mi Band 8',
-    'Apple HomePod mini',
-  ]) {
+  const nonPhoneExpectations: ReadonlyArray<readonly [string, string]> = [
+    ['Loa JBL Charge 5', 'smartphones'],
+    ['Loa Bluetooth Xiaomi Mi Portable Speaker', 'smartphones'],
+    ['Máy lọc không khí Xiaomi Smart Air Purifier 4', 'air-purifiers'],
+    ['Xiaomi Smart Air Purifier 4 Pro', 'air-purifiers'],
+    ['Robot hút bụi Xiaomi Vacuum S20', 'smartphones'],
+    ['Xiaomi Mi Band 8', 'smartphones'],
+    ['Apple HomePod mini', 'smartphones'],
+  ];
+  for (const [title, expectedCategory] of nonPhoneExpectations) {
     const n = normalize(title);
-    // 'smartphones' is the category of a title that names no category.
-    assert.equal(n.category_slug, 'smartphones', title);
+    assert.equal(n.category_slug, expectedCategory, title);
     assert.ok(!namesPhone(title, n.model), title);
     const out = n.specifications;
     assert.equal(out.camera?.flash, undefined, title);

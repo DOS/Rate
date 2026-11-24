@@ -1134,15 +1134,15 @@ function main() {
 
   try {
     process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2 = '1';
-    const tvsHtml = renderReviewsSection('en', {
+    const monitorsHtml = renderReviewsSection('en', {
       categorySlug: 'smartphones',
-      reviewCategorySlug: 'tvs',
+      reviewCategorySlug: 'monitors',
       defaultWriteFormOpen: true,
     });
     assert.doesNotMatch(
-      tvsHtml,
+      monitorsHtml,
       /review-form-v2/,
-      'non-criteria DB category tvs must not render v2 review form'
+      'non-criteria DB category monitors must not render v2 review form'
     );
   } finally {
     if (prevV2 === undefined)

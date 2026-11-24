@@ -12,6 +12,19 @@ import type { SpecGroupKey } from './spec-template.js';
 /** Bump whenever a list, a key or a weight changes. */
 export const RATING_CRITERIA_VERSION = 1;
 
+/** Schema version for Wave E1 appliance and Wave E2 service criteria. */
+export const RATING_CRITERIA_V2_VERSION = 2;
+
+const V2_RATING_CRITERIA_CATEGORIES = new Set<string>([
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
+]);
+
 const CRITERION_KEYS = [
   'performance',
   'camera',
@@ -28,6 +41,16 @@ const CRITERION_KEYS = [
   'anc',
   'comfort',
   'calls',
+  'connectivity',
+  'cooling',
+  'energy_efficiency',
+  'noise',
+  'durability',
+  'features',
+  'capacity',
+  'wash_quality',
+  'filtration',
+  'filter_cost',
   'service_quality',
   'price',
   'attitude',
@@ -266,7 +289,211 @@ const RATING_CRITERIA: Readonly<Record<string, readonly RatingCriterion[]>> = {
     ),
     c('speed', 'Tốc độ', 'Speed', 'Rychlost', 20, null),
   ],
+  tvs: [
+    c(
+      'display',
+      'Màn hình và hình ảnh',
+      'Display',
+      'Displej a obraz',
+      30,
+      'display'
+    ),
+    c('sound', 'Âm thanh', 'Sound quality', 'Kvalita zvuku', 15, 'multimedia'),
+    c(
+      'software',
+      'Hệ điều hành và Smart TV',
+      'Software and Smart TV',
+      'Software a Smart TV',
+      15,
+      null
+    ),
+    c(
+      'connectivity',
+      'Cổng kết nối',
+      'Connectivity',
+      'Konektivita',
+      10,
+      'connectivity'
+    ),
+    c('design', 'Thiết kế', 'Design', 'Design', 10, 'design'),
+    c(
+      'value',
+      'Đáng tiền',
+      'Value for money',
+      'Poměr cena / výkon',
+      20,
+      null,
+      true
+    ),
+  ],
+  'air-conditioners': [
+    c('cooling', 'Làm lạnh', 'Cooling performance', 'Chladicí výkon', 30, null),
+    c(
+      'energy_efficiency',
+      'Tiết kiệm điện',
+      'Energy efficiency',
+      'Energetická účinnost',
+      20,
+      null
+    ),
+    c('noise', 'Độ ồn', 'Noise level', 'Hlučnost', 15, null),
+    c('durability', 'Độ bền', 'Durability', 'Odolnost', 10, null),
+    c('features', 'Tính năng', 'Features', 'Funkce', 10, null),
+    VALUE,
+  ],
+  refrigerators: [
+    c(
+      'cooling',
+      'Làm lạnh và bảo quản',
+      'Cooling performance',
+      'Chlazení a uchování',
+      25,
+      null
+    ),
+    c(
+      'energy_efficiency',
+      'Tiết kiệm điện',
+      'Energy efficiency',
+      'Energetická účinnost',
+      20,
+      null
+    ),
+    c(
+      'capacity',
+      'Dung tích và bố trí',
+      'Capacity and layout',
+      'Objem a uspořádání',
+      15,
+      null
+    ),
+    c('noise', 'Độ ồn', 'Noise level', 'Hlučnost', 15, null),
+    c('design', 'Thiết kế', 'Design', 'Design', 10, 'design'),
+    VALUE,
+  ],
+  'washing-machines': [
+    c(
+      'wash_quality',
+      'Hiệu quả giặt',
+      'Wash quality',
+      'Kvalita praní',
+      30,
+      null
+    ),
+    c(
+      'noise',
+      'Độ ồn và chống rung',
+      'Noise and vibration',
+      'Hlučnost a vibrace',
+      15,
+      null
+    ),
+    c(
+      'energy_efficiency',
+      'Tiết kiệm điện nước',
+      'Energy efficiency',
+      'Energetická účinnost',
+      15,
+      null
+    ),
+    c('durability', 'Độ bền', 'Durability', 'Odolnost', 15, null),
+    c('features', 'Tính năng', 'Features', 'Funkce', 10, null),
+    VALUE,
+  ],
+  'air-purifiers': [
+    c(
+      'filtration',
+      'Hiệu quả lọc khí',
+      'Filtration performance',
+      'Účinnost filtrace',
+      30,
+      null
+    ),
+    c('noise', 'Độ ồn', 'Noise level', 'Hlučnost', 20, null),
+    c(
+      'filter_cost',
+      'Chi phí thay lõi lọc',
+      'Filter replacement cost',
+      'Cena náhradních filtrů',
+      15,
+      null
+    ),
+    c(
+      'features',
+      'Tính năng và cảm biến',
+      'Features and sensors',
+      'Funkce a senzory',
+      10,
+      null
+    ),
+    c('design', 'Thiết kế', 'Design', 'Design', 10, 'design'),
+    VALUE,
+  ],
+  'bank-savings': [
+    c(
+      'service_quality',
+      'Chất lượng dịch vụ',
+      'Service quality',
+      'Kvalita služeb',
+      35,
+      null
+    ),
+    c(
+      'price',
+      'Lãi suất và phí',
+      'Rates and fees',
+      'Úroky a poplatky',
+      25,
+      null,
+      true
+    ),
+    c(
+      'attitude',
+      'Thái độ phục vụ',
+      'Staff attitude',
+      'Přístup personálu',
+      20,
+      null
+    ),
+    c('speed', 'Tốc độ', 'Speed', 'Rychlost', 20, null),
+  ],
+  'internet-telecom': [
+    c(
+      'service_quality',
+      'Chất lượng dịch vụ',
+      'Service quality',
+      'Kvalita služeb',
+      35,
+      null
+    ),
+    c('price', 'Giá cước', 'Price', 'Cena', 25, null, true),
+    c(
+      'attitude',
+      'Thái độ phục vụ',
+      'Staff attitude',
+      'Přístup personálu',
+      20,
+      null
+    ),
+    c('speed', 'Tốc độ', 'Speed', 'Rychlost', 20, null),
+  ],
 };
+
+/**
+ * Criteria schema version for a category slug.
+ * Existing v1 categories stay pinned at 1 while Wave E1/E2 categories use v2.
+ */
+export function getRatingCriteriaVersion(
+  categorySlug: string | null | undefined
+): 1 | 2 {
+  const raw = categorySlug;
+  const normalized =
+    typeof raw === 'string'
+      ? raw.replace(LOCALE_CONTROL_CHARS_RE, '').trim().toLowerCase()
+      : '';
+  return V2_RATING_CRITERIA_CATEGORIES.has(normalized)
+    ? RATING_CRITERIA_V2_VERSION
+    : RATING_CRITERIA_VERSION;
+}
 
 /** Categories with their own criteria list. */
 export const RATING_CRITERIA_CATEGORIES: readonly string[] =
@@ -428,6 +655,13 @@ const LEGACY_MAP: Readonly<
     value: 'value',
   },
   services: {},
+  tvs: {},
+  'air-conditioners': {},
+  refrigerators: {},
+  'washing-machines': {},
+  'air-purifiers': {},
+  'bank-savings': {},
+  'internet-telecom': {},
 };
 
 /**
@@ -835,6 +1069,69 @@ const RATING_USE_CASE_PRESETS: Readonly<
       'Balanced default',
       'Vyvážený výchozí',
       defaultPresetWeights('services')
+    ),
+  ],
+  tvs: [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('tvs')
+    ),
+  ],
+  'air-conditioners': [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('air-conditioners')
+    ),
+  ],
+  refrigerators: [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('refrigerators')
+    ),
+  ],
+  'washing-machines': [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('washing-machines')
+    ),
+  ],
+  'air-purifiers': [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('air-purifiers')
+    ),
+  ],
+  'bank-savings': [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('bank-savings')
+    ),
+  ],
+  'internet-telecom': [
+    p(
+      'default',
+      'Cân bằng mặc định',
+      'Balanced default',
+      'Vyvážený výchozí',
+      defaultPresetWeights('internet-telecom')
     ),
   ],
 };

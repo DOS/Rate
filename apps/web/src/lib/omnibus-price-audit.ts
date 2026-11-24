@@ -18,7 +18,12 @@ import {
   plausibleOffers,
 } from '@repo/shared-data/rules';
 import type { RadarSignal } from '@/lib/deal-radar';
-import { formatPlainNumber, formatPriceVnd } from '@/lib/locale-format';
+import {
+  formatListingPrice,
+  formatPlainNumber,
+  normalizePriceCurrency,
+  sanitizeCurrencyPriceValue,
+} from '@/lib/locale-format';
 import {
   isOfferUnavailable,
   type OfferAvailability,
@@ -107,6 +112,8 @@ export interface EvaluateOmnibusPriceAuditParams {
   readonly unavailableOfferIds?: ReadonlySet<string> | null;
   readonly implausibleOfferIds?: ReadonlySet<string> | null;
   readonly minValidPriceVnd?: number;
+  /** Listing price currency (`'VND'` default, or `'PCT'` for percent rates). */
+  readonly currency?: string | null;
   /** Optional deterministic anchor timestamp in ms; defaults to latest valid point timestamp. */
   readonly referenceTimestampMs?: number | null;
 }
@@ -142,6 +149,7 @@ export interface OmnibusPriceAuditResult {
   readonly claimedVsPriorFloorMarkupPct: number | null;
   readonly validObservationCount: number;
   readonly cycle90d: Cycle90dEvaluation;
+  readonly currency?: 'VND' | 'PCT';
 }
 
 export type OmnibusVerdictMessageKey =
@@ -211,23 +219,42 @@ function parseStrictFiniteNumber(raw: unknown): number | null {
   return null;
 }
 
+function resolveOmnibusMinFloor(
+  rawFloor: number | null | undefined,
+  currency?: string | null
+): number {
+  const normalizedCurrency = normalizePriceCurrency(currency);
+  if (
+    typeof rawFloor === 'number' &&
+    Number.isFinite(rawFloor) &&
+    rawFloor >= 0
+  ) {
+    return rawFloor === 0
+      ? 0
+      : sanitizeCurrencyPriceValue(rawFloor, normalizedCurrency);
+  }
+  return normalizedCurrency === 'PCT' ? 0 : MINIMUM_EARBUDS_PRICE_FLOOR_VND;
+}
+
 export function sanitizeOmnibusPriceVnd(
   raw: unknown,
-  minFloorVnd = MINIMUM_EARBUDS_PRICE_FLOOR_VND
+  minFloorVnd?: number,
+  currency?: string | null
 ): number | null {
+  const normalizedCurrency = normalizePriceCurrency(currency);
   const parsed = parseStrictFiniteNumber(raw);
   if (parsed == null || parsed <= 0 || parsed > MAX_VALID_VND_PRICE) {
     return null;
   }
-  const rounded = Math.round(parsed);
-  const safeFloor =
-    Number.isFinite(minFloorVnd) && minFloorVnd > 0
-      ? Math.round(minFloorVnd)
-      : MINIMUM_EARBUDS_PRICE_FLOOR_VND;
-  if (rounded < safeFloor || rounded > MAX_VALID_VND_PRICE) {
+  const sanitized = sanitizeCurrencyPriceValue(parsed, normalizedCurrency);
+  if (sanitized <= 0 || sanitized > MAX_VALID_VND_PRICE) {
     return null;
   }
-  return rounded;
+  const safeFloor = resolveOmnibusMinFloor(minFloorVnd, normalizedCurrency);
+  if (sanitized < safeFloor || sanitized > MAX_VALID_VND_PRICE) {
+    return null;
+  }
+  return sanitized;
 }
 
 function parseRecordedAtMs(raw: unknown): number | null {
@@ -259,13 +286,19 @@ function roundDisplayPct(value: number): number {
   return Object.is(rounded1, -0) ? 0 : rounded1;
 }
 
-function computeSortedMedian(sortedAsc: readonly number[]): number | null {
+function computeSortedMedian(
+  sortedAsc: readonly number[],
+  currency?: string | null
+): number | null {
   if (sortedAsc.length === 0) return null;
   const mid = Math.floor(sortedAsc.length / 2);
   if (sortedAsc.length % 2 === 1) {
     return sortedAsc[mid] ?? null;
   }
-  return Math.round(((sortedAsc[mid - 1] ?? 0) + (sortedAsc[mid] ?? 0)) / 2);
+  return sanitizeCurrencyPriceValue(
+    ((sortedAsc[mid - 1] ?? 0) + (sortedAsc[mid] ?? 0)) / 2,
+    currency
+  );
 }
 
 interface CleanHistoryPoint {
@@ -284,6 +317,7 @@ function buildOfferExclusionSets(params: {
   readonly unavailableOfferIds?: ReadonlySet<string> | null;
   readonly implausibleOfferIds?: ReadonlySet<string> | null;
   readonly minFloorVnd: number;
+  readonly currency?: string | null;
 }): {
   excludedIds: Set<string>;
   inStockPlausibleOffers: { id: string; price_current: number }[];
@@ -320,7 +354,8 @@ function buildOfferExclusionSets(params: {
     const id = normalizeOfferId(rawId) || rawId;
     const price = sanitizeOmnibusPriceVnd(
       off.price_current,
-      params.minFloorVnd
+      params.minFloorVnd,
+      params.currency
     );
     if (price != null) pricedAll.push({ rawId, id, price_current: price });
     if (
@@ -475,8 +510,9 @@ function evaluate90dCycleFromSeries(params: {
   readonly series: readonly SeriesPoint[];
   readonly anchorMs: number;
   readonly currentInStockPriceVnd: number | null;
+  readonly currency?: string | null;
 }): Cycle90dEvaluation {
-  const { series, anchorMs, currentInStockPriceVnd } = params;
+  const { series, anchorMs, currentInStockPriceVnd, currency } = params;
   const cutoff90dMs = anchorMs - CYCLE_90D_WINDOW_DAYS * DAY_MS;
   const in90d = series.filter(
     (pt) => pt.recordedMs >= cutoff90dMs && pt.recordedMs <= anchorMs
@@ -518,7 +554,7 @@ function evaluate90dCycleFromSeries(params: {
     rawHigh90d != null && currentInStockPriceVnd != null
       ? Math.max(rawHigh90d, currentInStockPriceVnd)
       : rawHigh90d;
-  const median90dVnd = computeSortedMedian(sortedDailyPrices);
+  const median90dVnd = computeSortedMedian(sortedDailyPrices, currency);
 
   if (
     currentInStockPriceVnd == null ||
@@ -552,7 +588,10 @@ function evaluate90dCycleFromSeries(params: {
     ((belowCount + 0.5 * equalCount) / sortedDailyPrices.length) * 100;
   const percentile = Math.min(100, Math.max(0, Math.round(rawPercentile)));
   const topPercentileDisplay = Math.max(1, percentile);
-  const aboveFloorVnd = Math.max(0, currentInStockPriceVnd - low90dVnd);
+  const aboveFloorVnd = sanitizeCurrencyPriceValue(
+    Math.max(0, currentInStockPriceVnd - low90dVnd),
+    currency
+  );
   const aboveFloorPct =
     low90dVnd > 0 && aboveFloorVnd > 0
       ? roundDisplayPct((aboveFloorVnd / low90dVnd) * 100)
@@ -597,6 +636,7 @@ function extractCleanHistoryPoints(params: {
   }[];
   readonly minFloorVnd: number;
   readonly explicitAnchorMs: number | null;
+  readonly currency?: string | null;
 }): CleanHistoryPoint[] {
   const rawPoints = Array.isArray(params.points) ? params.points : [];
   const peerMedianVnd =
@@ -622,7 +662,11 @@ function extractCleanHistoryPoints(params: {
       continue;
     }
 
-    const priceVnd = sanitizeOmnibusPriceVnd(pt.price, params.minFloorVnd);
+    const priceVnd = sanitizeOmnibusPriceVnd(
+      pt.price,
+      params.minFloorVnd,
+      params.currency
+    );
     if (priceVnd == null) continue;
     if (
       peerMedianVnd != null &&
@@ -660,18 +704,16 @@ export function resolveOmnibusReferenceAnchorMs(params: {
   readonly unavailableOfferIds?: ReadonlySet<string> | null;
   readonly implausibleOfferIds?: ReadonlySet<string> | null;
   readonly minValidPriceVnd?: number | null;
+  readonly currency?: string | null;
 }): number | null {
-  const minFloorVnd =
-    typeof params.minValidPriceVnd === 'number' &&
-    Number.isFinite(params.minValidPriceVnd) &&
-    params.minValidPriceVnd > 0
-      ? Math.round(params.minValidPriceVnd)
-      : MINIMUM_EARBUDS_PRICE_FLOOR_VND;
+  const currency = normalizePriceCurrency(params.currency);
+  const minFloorVnd = resolveOmnibusMinFloor(params.minValidPriceVnd, currency);
   const { excludedIds, inStockPlausibleOffers } = buildOfferExclusionSets({
     referenceOffers: params.referenceOffers,
     unavailableOfferIds: params.unavailableOfferIds,
     implausibleOfferIds: params.implausibleOfferIds,
     minFloorVnd,
+    currency,
   });
   const cleanPoints = extractCleanHistoryPoints({
     points: params.points,
@@ -679,6 +721,7 @@ export function resolveOmnibusReferenceAnchorMs(params: {
     inStockPlausibleOffers,
     minFloorVnd,
     explicitAnchorMs: null,
+    currency,
   });
   const { series } = buildEffectiveSeries(cleanPoints, 'market');
   return series.length > 0 ? series[series.length - 1]!.recordedMs : null;
@@ -694,23 +737,24 @@ export function evaluateOmnibusPriceAudit(
           currentPriceVnd: null,
         } as EvaluateOmnibusPriceAuditParams);
 
-  const minFloorVnd =
-    typeof safeParams.minValidPriceVnd === 'number' &&
-    Number.isFinite(safeParams.minValidPriceVnd) &&
-    safeParams.minValidPriceVnd > 0
-      ? Math.round(safeParams.minValidPriceVnd)
-      : MINIMUM_EARBUDS_PRICE_FLOOR_VND;
+  const currency = normalizePriceCurrency(safeParams.currency);
+  const minFloorVnd = resolveOmnibusMinFloor(
+    safeParams.minValidPriceVnd,
+    currency
+  );
 
   const { excludedIds, inStockPlausibleOffers } = buildOfferExclusionSets({
     referenceOffers: safeParams.referenceOffers,
     unavailableOfferIds: safeParams.unavailableOfferIds,
     implausibleOfferIds: safeParams.implausibleOfferIds,
     minFloorVnd,
+    currency,
   });
 
   const rawCurrent = sanitizeOmnibusPriceVnd(
     safeParams.currentPriceVnd,
-    minFloorVnd
+    minFloorVnd,
+    currency
   );
   const currentIsBaitAgainstPeers =
     rawCurrent != null &&
@@ -726,7 +770,8 @@ export function evaluateOmnibusPriceAudit(
 
   const rawClaimedOrig = sanitizeOmnibusPriceVnd(
     safeParams.claimedOriginalPriceVnd,
-    minFloorVnd
+    minFloorVnd,
+    currency
   );
   const claimedOriginalPriceVnd =
     currentPriceVnd != null &&
@@ -737,7 +782,10 @@ export function evaluateOmnibusPriceAudit(
 
   const claimedDiscountVnd =
     currentPriceVnd != null && claimedOriginalPriceVnd != null
-      ? claimedOriginalPriceVnd - currentPriceVnd
+      ? sanitizeCurrencyPriceValue(
+          claimedOriginalPriceVnd - currentPriceVnd,
+          currency
+        )
       : null;
   const claimedDiscountPct =
     claimedDiscountVnd != null && claimedOriginalPriceVnd != null
@@ -749,7 +797,8 @@ export function evaluateOmnibusPriceAudit(
       if (safeParams.currentInStockPriceVnd === null) return null;
       const candidate = sanitizeOmnibusPriceVnd(
         safeParams.currentInStockPriceVnd,
-        minFloorVnd
+        minFloorVnd,
+        currency
       );
       if (
         candidate != null &&
@@ -776,6 +825,7 @@ export function evaluateOmnibusPriceAudit(
     inStockPlausibleOffers,
     minFloorVnd,
     explicitAnchorMs,
+    currency,
   });
 
   const mode = safeParams.mode === 'market' ? 'market' : 'offer';
@@ -803,6 +853,7 @@ export function evaluateOmnibusPriceAudit(
     claimedVsPriorFloorMarkupPct: null,
     validObservationCount,
     cycle90d,
+    currency,
   });
 
   if (series.length === 0) {
@@ -821,6 +872,7 @@ export function evaluateOmnibusPriceAudit(
     series,
     anchorMs,
     currentInStockPriceVnd: resolvedInStockPrice,
+    currency,
   });
 
   // Require multi-day actual observations (>= 1 full day between real points
@@ -968,8 +1020,13 @@ export function evaluateOmnibusPriceAudit(
         ? OMNIBUS_WINDOW_DAYS
         : Math.min(OMNIBUS_WINDOW_DAYS - 1, Math.max(1, observedSpanDays));
 
+  const signedCurrencyDelta = (a: number, b: number): number =>
+    currency === 'PCT' ? Math.round((a - b) * 100) / 100 : a - b;
+
   const deltaVsPriorFloorVnd =
-    priorFloorPriceVnd != null ? currentPriceVnd - priorFloorPriceVnd : null;
+    priorFloorPriceVnd != null
+      ? signedCurrencyDelta(currentPriceVnd, priorFloorPriceVnd)
+      : null;
   const deltaVsPriorFloorPct =
     deltaVsPriorFloorVnd != null && priorFloorPriceVnd != null
       ? roundDisplayPct((deltaVsPriorFloorVnd / priorFloorPriceVnd) * 100)
@@ -977,13 +1034,18 @@ export function evaluateOmnibusPriceAudit(
 
   const claimedVsPriorFloorMarkupVnd =
     claimedOriginalPriceVnd != null && priorFloorPriceVnd != null
-      ? claimedOriginalPriceVnd - priorFloorPriceVnd
+      ? signedCurrencyDelta(claimedOriginalPriceVnd, priorFloorPriceVnd)
       : null;
   const claimedVsPriorFloorMarkupPct =
     claimedVsPriorFloorMarkupVnd != null && priorFloorPriceVnd != null
       ? roundDisplayPct(
           (claimedVsPriorFloorMarkupVnd / priorFloorPriceVnd) * 100
         )
+      : null;
+
+  const exaggeratedThreshold =
+    priorFloorPriceVnd != null
+      ? sanitizeCurrencyPriceValue(priorFloorPriceVnd * 1.02, currency)
       : null;
 
   let verdict: OmnibusAuditVerdict = 'unverified_window';
@@ -995,7 +1057,8 @@ export function evaluateOmnibusPriceAudit(
       ) {
         verdict = 'fake_strikethrough_above_floor';
       } else if (
-        claimedOriginalPriceVnd > Math.round(priorFloorPriceVnd * 1.02) &&
+        exaggeratedThreshold != null &&
+        claimedOriginalPriceVnd > exaggeratedThreshold &&
         currentPriceVnd < priorFloorPriceVnd
       ) {
         verdict = 'exaggerated_strikethrough';
@@ -1029,6 +1092,7 @@ export function evaluateOmnibusPriceAudit(
     claimedVsPriorFloorMarkupPct,
     validObservationCount: series.length,
     cycle90d,
+    currency,
   };
 }
 
@@ -1039,7 +1103,8 @@ export function evaluateOmnibusPriceAudit(
 export function formatOmnibusAuditCopy(
   audit: OmnibusPriceAuditResult,
   t: OmnibusVerdictTranslator,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): FormattedOmnibusAuditCopy {
   const {
     windowStatus: ws,
@@ -1056,9 +1121,11 @@ export function formatOmnibusAuditCopy(
     claimedVsPriorFloorMarkupPct: mkPct,
     cycle90d: c,
   } = audit;
-  const priceOrDash = (vnd: number | null) =>
-    vnd != null && vnd > 0 ? formatPriceVnd(vnd, locale) : '-';
-  const fmtVnd = (vnd: number) => formatPriceVnd(vnd, locale);
+  const resolvedCurrency = normalizePriceCurrency(currency ?? audit.currency);
+  const fmtVnd = (amount: number) =>
+    formatListingPrice(amount, resolvedCurrency, locale);
+  const priceOrDash = (amount: number | null) =>
+    amount != null && amount > 0 ? fmtVnd(amount) : '-';
   const fmtNum = (num: number) => formatPlainNumber(num, locale);
 
   const isFake = vd === 'fake_strikethrough_above_floor';
@@ -1093,7 +1160,9 @@ export function formatOmnibusAuditCopy(
   } else if (flrVnd == null) {
     currentSubText = t('oNeed');
   } else if (
-    (isFake || isExag || origVnd > Math.round(flrVnd * 1.02)) &&
+    (isFake ||
+      isExag ||
+      origVnd > sanitizeCurrencyPriceValue(flrVnd * 1.02, resolvedCurrency)) &&
     mkVnd != null &&
     mkVnd > 0 &&
     mkPct != null
@@ -1205,10 +1274,13 @@ export function formatOmnibusAuditCopy(
   };
 }
 
-const validPosVnd = (v: unknown): number | null => {
+const validPosAmount = (
+  v: unknown,
+  currency?: string | null
+): number | null => {
   const n = parseStrictFiniteNumber(v);
-  if (n == null) return null;
-  const r = Math.round(n);
+  if (n == null || n <= 0 || n > MAX_VALID_VND_PRICE) return null;
+  const r = sanitizeCurrencyPriceValue(n, currency);
   return r > 0 && r <= MAX_VALID_VND_PRICE ? r : null;
 };
 
@@ -1221,6 +1293,11 @@ export function matchesSeasonalSaleFilter(
 ): boolean {
   if (mode === 'all') return true;
   if (!signal || typeof signal !== 'object') return false;
+  const signalCurrency =
+    signal.currency ??
+    signal.genuineDeal?.currency ??
+    signal.fakeSaleTrap?.currency ??
+    signal.priceSpread?.currency;
   if (mode === 'genuine_sale_drops') {
     const g = signal.genuineDeal;
     return Boolean(
@@ -1229,16 +1306,20 @@ export function matchesSeasonalSaleFilter(
       typeof signal.savingsPct === 'number' &&
       Number.isFinite(signal.savingsPct) &&
       signal.savingsPct > 0 &&
-      validPosVnd(g.priceCurrent) != null &&
-      validPosVnd(g.savingsVsMedianVnd) != null
+      validPosAmount(g.priceCurrent, signalCurrency) != null &&
+      validPosAmount(g.savingsVsMedianVnd, signalCurrency) != null
     );
   }
   if (mode === 'inflated_presale_warnings') {
     const trap = signal.fakeSaleTrap;
     const cur =
-      trap && typeof trap === 'object' ? validPosVnd(trap.priceCurrent) : null;
+      trap && typeof trap === 'object'
+        ? validPosAmount(trap.priceCurrent, signalCurrency)
+        : null;
     const orig =
-      trap && typeof trap === 'object' ? validPosVnd(trap.priceOriginal) : null;
+      trap && typeof trap === 'object'
+        ? validPosAmount(trap.priceOriginal, signalCurrency)
+        : null;
     return Boolean(
       typeof signal.fakeMarkupPct === 'number' &&
       Number.isFinite(signal.fakeMarkupPct) &&

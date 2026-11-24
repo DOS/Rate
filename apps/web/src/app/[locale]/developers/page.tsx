@@ -349,9 +349,16 @@ export default async function DevelopersPage({
     },
   ];
 
+  const populatedCategorySlugs = stats.categoriesWithCounts
+    .filter((cat) => cat.productCount > 0)
+    .map((cat) => cat.slug);
+
   return (
     <ClientMessages scope="developers">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedCategorySlugs}
+      >
         {/* Hero Header */}
         <section
           className="hero-banner rate-surface-dark rate-ink-on-dark border-bottom border-secondary border-opacity-25 py-5 text-white"

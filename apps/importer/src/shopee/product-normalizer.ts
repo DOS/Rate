@@ -57,12 +57,59 @@ function normalizeHttpAssetUrl(raw: unknown): string | null {
 }
 
 export type CanonicalCategorySlug =
-  'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
+  | 'smartphones'
+  | 'tablets'
+  | 'laptops'
+  | 'smartwatches'
+  | 'earbuds'
+  | 'tvs'
+  | 'air-conditioners'
+  | 'refrigerators'
+  | 'washing-machines'
+  | 'air-purifiers'
+  | 'bank-savings'
+  | 'internet-telecom';
+
+export const CANONICAL_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
+  'smartphones',
+  'tablets',
+  'laptops',
+  'smartwatches',
+  'earbuds',
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
+]);
+
+export const WAVE_E1_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+]);
+
+export const WAVE_E2_SERVICE_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
+  'bank-savings',
+  'internet-telecom',
+]);
+
+export const SIZELESS_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
+  'earbuds',
+  ...WAVE_E1_CATEGORY_SLUGS,
+  ...WAVE_E2_SERVICE_CATEGORY_SLUGS,
+]);
 
 export type ProductCondition = 'new' | 'like_new_99' | 'used' | 'refurbished';
 
 export interface NormalizedProductCandidate {
   category_slug: CanonicalCategorySlug;
+  entity_type?: 'product' | 'service';
+  metadata?: Record<string, unknown>;
   brand: string;
   model: string;
   variant_name: string;
@@ -472,7 +519,7 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
 // "combo", "bộ" or "set" before the accessory, and titles typed without diacritics
 // ("Op lung"), count too.
 const ACCESSORY_OPENER =
-  /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*(?:cường\s*lực|camera|bảo\s*vệ)|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc|cáp|dây|giá\s*đỡ|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
+  /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*(?:cường\s*lực|camera|bảo\s*vệ)|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc|cáp|dây|giá\s*đỡ|lõi\s*lọc|màng\s*lọc|ống\s*đồng|điều\s*khiển\s*(?:tivi|tv|điều\s*hòa|máy\s*lạnh)|remote\s*(?:tivi|tv|điều\s*hòa|máy\s*lạnh)|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
 // Words that make "Apple Pencil" what something fits or copies, not what it is.
 const PENCIL_FIT_WORD =
   /(?<![\p{L}\d])(?:cho|for|thay|như|giống|kiểu|dùng|tương\s*thích|compatible|khe|đựng|ngăn)(?![\p{L}\d])/iu;
@@ -574,10 +621,22 @@ export function isAccessoryTitle(title: string): boolean {
 }
 
 /**
- * Detect canonical category slug from product title across all 5 tech categories.
+ * Detect canonical category slug from product title (or optional upstream hint)
+ * across all 12 canonical categories.
  */
-export function detectCategorySlug(title: string): CanonicalCategorySlug {
-  const t = typeof title === 'string' ? title.normalize('NFC').toLowerCase() : '';
+export function detectCategorySlug(
+  title: string,
+  categoryHint?: string | null
+): CanonicalCategorySlug {
+  const cleanHint =
+    typeof categoryHint === 'string'
+      ? (stripControlChars(categoryHint).trim().toLowerCase() as CanonicalCategorySlug)
+      : null;
+  if (cleanHint && CANONICAL_CATEGORY_SLUGS.has(cleanHint)) {
+    return cleanHint;
+  }
+  const raw = typeof title === 'string' ? stripControlChars(title).normalize('NFC') : '';
+  const t = raw.toLowerCase();
   // A gift or bundle after the product is not its category: "AirPods Pro 2 tặng dây Apple
   // Watch" is earbuds, "iPhone 15 Plus tặng đồng hồ thông minh" a phone (DOS/Rate#1407). An own
   // part that names no category falls back to the whole title, unless it names another
@@ -597,6 +656,20 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
 
 /** The category a lower-cased title names, or null (DOS/Rate#1407). */
 function categorySlugOf(t: string): CanonicalCategorySlug | null {
+  if (
+    /(?<![\p{L}\d])(?:gửi\s*tiết\s*kiệm|tiết\s*kiệm\s*(?:online|trực\s*tuyến|có\s*kỳ\s*hạn|tại\s*quầy|ngân\s*hàng)|lãi\s*suất\s*(?:tiết\s*kiệm|huy\s*động|tiền\s*gửi)|tiền\s*gửi\s*(?:tiết\s*kiệm|có\s*kỳ\s*hạn)|bank\s*savings?|term\s*deposit)(?![\p{L}\d])/iu.test(
+      t
+    )
+  ) {
+    return 'bank-savings';
+  }
+  if (
+    /(?<![\p{L}\d])(?:gói\s*cước\s*(?:internet|cáp\s*quang|wifi|4g|5g|di\s*động|data|truyền\s*hình)|internet\s*(?:cáp\s*quang|gia\s*đình|doanh\s*nghiệp|giga|sky|meta|f-game)|lắp\s*(?:mạng|đặt)\s*(?:internet|wifi|cáp\s*quang)|cáp\s*quang\s*(?:vnpt|viettel|fpt)|home\s*(?:net|combo|internet)|fiber\s*(?:internet|wifi)|sim\s*data\s*trọn\s*gói)(?![\p{L}\d])/iu.test(
+      t
+    )
+  ) {
+    return 'internet-telecom';
+  }
   if (
     /airpods|galaxy\s*buds|nothing\s*(?:ear|headphone)\b|cmf\s*(?:by\s*nothing\s*)?buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
@@ -624,6 +697,42 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
     )
   ) {
     return 'tablets';
+  }
+  if (
+    /(?<![\p{L}\d])(?:máy\s*lọc\s*(?:không\s*)?khí|air\s*purifier|lọc\s*không\s*khí)(?![\p{L}\d])/iu.test(
+      t
+    )
+  ) {
+    return 'air-purifiers';
+  }
+  if (
+    /(?<![\p{L}\d])(?:máy\s*giặt(?:\s*sấy)?|washing\s*machine|washer(?:\s*dryer)?)(?![\p{L}\d])/iu.test(
+      t
+    )
+  ) {
+    return 'washing-machines';
+  }
+  if (/(?<![\p{L}\d])(?:tủ\s*lạnh|refrigerator|fridge)(?![\p{L}\d])/iu.test(t)) {
+    return 'refrigerators';
+  }
+  if (
+    /(?<![\p{L}\d])(?:điều\s*hòa|điều\s*hoà|máy\s*lạnh|air\s*conditioner|split\s*ac)(?![\p{L}\d])/iu.test(
+      t
+    )
+  ) {
+    return 'air-conditioners';
+  }
+  const tTv = stripServiceMentions(t).toLowerCase();
+  if (
+    (/(?<![\p{L}\d])tivi(?![\p{L}\d])/iu.test(tTv) ||
+      /(?<![\p{L}\d])(?:smart|google|android|qled|oled|mini\s*led|4k|8k)\s*tv(?![\p{L}\d])/iu.test(
+        tTv
+      )) &&
+    !/(?<![\p{L}\d])(?:apple\s*tv|tv\s*box|android\s*tv\s*box|mi\s*tv\s*stick|chromecast)(?![\p{L}\d])/iu.test(
+      tTv
+    )
+  ) {
+    return 'tvs';
   }
   return null;
 }
@@ -2317,63 +2426,156 @@ function slugify(text: string): string {
 
 export class ProductNormalizer {
   /**
-   * Normalizes raw Shopee product into canonical master product candidate across all 5 categories
+   * Normalizes raw scraped product or service into canonical master product candidate across all 12 categories
    */
   public normalize(raw: ShopeeProduct): NormalizedProductCandidate {
     const safeRaw = raw && typeof raw === 'object' ? raw : ({} as ShopeeProduct);
+    const safeRawRecord = safeRaw as unknown as Record<string, unknown>;
+    const explicitCategorySlug =
+      safeRaw.categorySlug ??
+      (typeof safeRawRecord.category_slug === 'string' ? safeRawRecord.category_slug : undefined);
+    const explicitEntityType =
+      safeRaw.entityType ??
+      (safeRawRecord.entity_type === 'service' || safeRawRecord.entity_type === 'product'
+        ? safeRawRecord.entity_type
+        : undefined);
     const title =
       typeof safeRaw.title === 'string'
         ? stripControlChars(safeRaw.title).replace(/\s+/g, ' ').trim().slice(0, 1000)
         : '';
-    const categorySlug = detectCategorySlug(title);
+    const platformSlugHint =
+      safeRaw.platform === 'vietcombank' || safeRaw.platform === 'acb'
+        ? 'bank-savings'
+        : safeRaw.platform === 'vnpt' || safeRaw.platform === 'fpttelecom'
+          ? 'internet-telecom'
+          : null;
+    const categorySlug = detectCategorySlug(title, explicitCategorySlug ?? platformSlugHint);
 
     // 1. Extract Brand
     // An app or service the product supports names no brand or model: "Smart Tivi Samsung
     // ... hỗ trợ Apple TV" is a Samsung TV (DOS/Rate#1195).
     const identityTitle = stripServiceMentions(title);
     let brand = 'Khác';
-    // Not the "ipad" in Xiaomi's "Mipad" (DOS/Rate#826).
-    if (/apple|iphone|(?<![a-z])ipad|macbook|airpods/i.test(identityTitle)) brand = 'Apple';
-    else if (/samsung|galaxy/i.test(identityTitle)) brand = 'Samsung';
-    else if (/xiaomi|redmi|poco|\bmi\s*pad\b/i.test(identityTitle)) brand = 'Xiaomi';
-    else if (/\bsony\b|w[fh]-1000|w[fh]1000xm|xperia/i.test(identityTitle)) brand = 'Sony';
-    else if (
-      /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(
-        identityTitle
+    if (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug)) {
+      if (/\bvietcombank\b|\bvcb\b/i.test(identityTitle)) brand = 'Vietcombank';
+      else if (/\bacb\b/i.test(identityTitle)) brand = 'ACB';
+      else if (/\bvnpt\b/i.test(identityTitle)) brand = 'VNPT';
+      else if (
+        /fpt\s*telecom/i.test(identityTitle) ||
+        (categorySlug === 'internet-telecom' && /\bfpt\b/i.test(identityTitle))
       )
-    )
-      brand = 'Garmin';
-    else if (/\blenovo\b|thinkpad|ideapad|legion/i.test(identityTitle)) brand = 'Lenovo';
-    else if (/oppo/i.test(identityTitle)) brand = 'OPPO';
-    // Not "Vivobook" / "Vivo Book" (Asus) (DOS/Rate#761); Garmin's Vivo lines are matched above.
-    else if (/\bvivo(?!\s*book)/i.test(identityTitle)) brand = 'Vivo';
-    else if (/realme/i.test(identityTitle)) brand = 'Realme';
-    else if (/google|pixel/i.test(identityTitle)) brand = 'Google';
-    else if (/\basus\b|\brog\b|zenbook|vivo\s*book|tuf\s*gaming/i.test(identityTitle))
-      brand = 'Asus';
-    else if (/\bdell\b|inspiron|\bxps\b|alienware|latitude/i.test(identityTitle)) brand = 'Dell';
-    // "Omen" as a word: Sennheiser "Momentum" is not HP.
-    else if (/\bhp\b|pavilion|victus|\bomen\b|elitebook|envy/i.test(identityTitle)) brand = 'HP';
-    else if (/\bacer\b|nitro\s*\d|swift|predator|aspire/i.test(identityTitle)) brand = 'Acer';
-    else if (/\bmsi\b|katana|cyborg|stealth|prestige/i.test(identityTitle)) brand = 'MSI';
-    else if (/\bhuawei\b|matepad|freebuds|watch\s*gt/i.test(identityTitle)) brand = 'Huawei';
-    else if (/\bbose\b|quietcomfort/i.test(identityTitle)) brand = 'Bose';
-    else if (/\bjbl\b|tour\s*pro|tune\s*\d+/i.test(identityTitle)) brand = 'JBL';
-    else if (/sennheiser|momentum/i.test(identityTitle)) brand = 'Sennheiser';
-    else if (/oneplus/i.test(identityTitle)) brand = 'OnePlus';
-    // Nothing and its CMF line, only with a product line after the name: "nothing" alone
-    // is an English word. "Nothing Phone (3)", "CMF by Nothing Phone 2 Pro", "CMF Phone 1".
-    // Read from the product's own part, so "Honor X9c kèm tai nghe Nothing Ear (a)" stays
-    // the Honor (DOS/Rate#1446).
-    else if (NOTHING_BRAND.test(ownProductPart(identityTitle))) brand = 'Nothing';
-    else if (/\bhonor\b|magicbook/i.test(identityTitle)) brand = 'Honor';
-    // Apple's desktops and speakers, last so another brand wins, and not when the title
-    // only names what it fits or looks like ("Bàn phím cho Mac mini") (DOS/Rate#819).
-    else if (
-      /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod|\bvision\s*pro\b/i.test(identityTitle) &&
-      !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod|vision)/i.test(identityTitle)
-    )
-      brand = 'Apple';
+        brand = 'FPT Telecom';
+      else if (/\bviettel\b/i.test(identityTitle) && !/viettel\s*store/i.test(identityTitle))
+        brand = 'Viettel';
+      else if (/techcombank|\btcb\b/i.test(identityTitle)) brand = 'Techcombank';
+      else if (/\bbidv\b/i.test(identityTitle)) brand = 'BIDV';
+      else if (/vietinbank/i.test(identityTitle)) brand = 'VietinBank';
+      else if (/\bmbbank\b|\bmb\s*bank\b/i.test(identityTitle)) brand = 'MB Bank';
+      else if (/tpbank/i.test(identityTitle)) brand = 'TPBank';
+      else if (/vpbank/i.test(identityTitle)) brand = 'VPBank';
+      else if (safeRaw.platform === 'vietcombank') brand = 'Vietcombank';
+      else if (safeRaw.platform === 'acb') brand = 'ACB';
+      else if (safeRaw.platform === 'vnpt') brand = 'VNPT';
+      else if (safeRaw.platform === 'fpttelecom') brand = 'FPT Telecom';
+    } else if (WAVE_E1_CATEGORY_SLUGS.has(categorySlug)) {
+      if (/\bsamsung\b/i.test(identityTitle)) brand = 'Samsung';
+      else if (/\blg\b/i.test(identityTitle)) brand = 'LG';
+      else if (/\bsony\b/i.test(identityTitle)) brand = 'Sony';
+      else if (/\bxiaomi\b|\bredmi\b/i.test(identityTitle)) brand = 'Xiaomi';
+      else if (/daikin/i.test(identityTitle)) brand = 'Daikin';
+      else if (/panasonic/i.test(identityTitle)) brand = 'Panasonic';
+      else if (/electrolux/i.test(identityTitle)) brand = 'Electrolux';
+      else if (/toshiba/i.test(identityTitle)) brand = 'Toshiba';
+      else if (/\bsharp\b/i.test(identityTitle)) brand = 'Sharp';
+      else if (/mitsubishi/i.test(identityTitle)) brand = 'Mitsubishi';
+      else if (/\btcl\b/i.test(identityTitle)) brand = 'TCL';
+      else if (/hisense/i.test(identityTitle)) brand = 'Hisense';
+      else if (/\bcasper\b/i.test(identityTitle)) brand = 'Casper';
+      else if (/\baqua\b/i.test(identityTitle)) brand = 'Aqua';
+      else if (/philips/i.test(identityTitle)) brand = 'Philips';
+      else if (/dyson/i.test(identityTitle)) brand = 'Dyson';
+      else if (/coway/i.test(identityTitle)) brand = 'Coway';
+      else if (/kangaroo/i.test(identityTitle)) brand = 'Kangaroo';
+      else if (/sunhouse/i.test(identityTitle)) brand = 'Sunhouse';
+      else if (/karofi/i.test(identityTitle)) brand = 'Karofi';
+      else if (/midea/i.test(identityTitle)) brand = 'Midea';
+      else if (/\bgree\b/i.test(identityTitle)) brand = 'Gree';
+      else if (/hitachi/i.test(identityTitle)) brand = 'Hitachi';
+      else if (/\bbosch\b/i.test(identityTitle)) brand = 'Bosch';
+      else if (/\bbeko\b/i.test(identityTitle)) brand = 'Beko';
+      else if (/coocaa/i.test(identityTitle)) brand = 'Coocaa';
+    }
+    if (brand === 'Khác') {
+      // Not the "ipad" in Xiaomi's "Mipad" (DOS/Rate#826).
+      if (/apple|iphone|(?<![a-z])ipad|macbook|airpods/i.test(identityTitle)) brand = 'Apple';
+      else if (/samsung|galaxy/i.test(identityTitle)) brand = 'Samsung';
+      else if (/xiaomi|redmi|poco|\bmi\s*pad\b/i.test(identityTitle)) brand = 'Xiaomi';
+      else if (/\bsony\b|w[fh]-1000|w[fh]1000xm|xperia/i.test(identityTitle)) brand = 'Sony';
+      else if (
+        /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(
+          identityTitle
+        )
+      )
+        brand = 'Garmin';
+      else if (/\blenovo\b|thinkpad|ideapad|legion/i.test(identityTitle)) brand = 'Lenovo';
+      else if (/oppo/i.test(identityTitle)) brand = 'OPPO';
+      // Not "Vivobook" / "Vivo Book" (Asus) (DOS/Rate#761); Garmin's Vivo lines are matched above.
+      else if (/\bvivo(?!\s*book)/i.test(identityTitle)) brand = 'Vivo';
+      else if (/realme/i.test(identityTitle)) brand = 'Realme';
+      else if (/google|pixel/i.test(identityTitle)) brand = 'Google';
+      else if (/\basus\b|\brog\b|zenbook|vivo\s*book|tuf\s*gaming/i.test(identityTitle))
+        brand = 'Asus';
+      else if (/\bdell\b|inspiron|\bxps\b|alienware|latitude/i.test(identityTitle)) brand = 'Dell';
+      // "Omen" as a word: Sennheiser "Momentum" is not HP; skip horsepower like "1 HP".
+      else if (
+        (categorySlug !== 'air-conditioners' && /\bhp\b/i.test(identityTitle)) ||
+        /pavilion|victus|\bomen\b|elitebook|envy/i.test(identityTitle)
+      )
+        brand = 'HP';
+      else if (/\bacer\b|nitro\s*\d|swift|predator|aspire/i.test(identityTitle)) brand = 'Acer';
+      else if (/\bmsi\b|katana|cyborg|stealth|prestige/i.test(identityTitle)) brand = 'MSI';
+      else if (/\bhuawei\b|matepad|freebuds|watch\s*gt/i.test(identityTitle)) brand = 'Huawei';
+      else if (/\bbose\b|quietcomfort/i.test(identityTitle)) brand = 'Bose';
+      else if (/\bjbl\b|tour\s*pro|tune\s*\d+/i.test(identityTitle)) brand = 'JBL';
+      else if (/sennheiser|momentum/i.test(identityTitle)) brand = 'Sennheiser';
+      else if (/oneplus/i.test(identityTitle)) brand = 'OnePlus';
+      // Nothing and its CMF line, only with a product line after the name: "nothing" alone
+      // is an English word. "Nothing Phone (3)", "CMF by Nothing Phone 2 Pro", "CMF Phone 1".
+      // Read from the product's own part, so "Honor X9c kèm tai nghe Nothing Ear (a)" stays
+      // the Honor (DOS/Rate#1446).
+      else if (NOTHING_BRAND.test(ownProductPart(identityTitle))) brand = 'Nothing';
+      else if (/\bhonor\b|magicbook/i.test(identityTitle)) brand = 'Honor';
+      else if (/\blg\b/i.test(identityTitle)) brand = 'LG';
+      else if (/daikin/i.test(identityTitle)) brand = 'Daikin';
+      else if (/panasonic/i.test(identityTitle)) brand = 'Panasonic';
+      else if (/electrolux/i.test(identityTitle)) brand = 'Electrolux';
+      else if (/toshiba/i.test(identityTitle)) brand = 'Toshiba';
+      else if (/\bsharp\b/i.test(identityTitle)) brand = 'Sharp';
+      else if (/mitsubishi/i.test(identityTitle)) brand = 'Mitsubishi';
+      else if (/\btcl\b/i.test(identityTitle)) brand = 'TCL';
+      else if (/hisense/i.test(identityTitle)) brand = 'Hisense';
+      else if (/\bcasper\b/i.test(identityTitle)) brand = 'Casper';
+      else if (/\baqua\b/i.test(identityTitle)) brand = 'Aqua';
+      else if (/philips/i.test(identityTitle)) brand = 'Philips';
+      else if (/dyson/i.test(identityTitle)) brand = 'Dyson';
+      else if (/coway/i.test(identityTitle)) brand = 'Coway';
+      else if (/kangaroo/i.test(identityTitle)) brand = 'Kangaroo';
+      else if (/sunhouse/i.test(identityTitle)) brand = 'Sunhouse';
+      else if (/karofi/i.test(identityTitle)) brand = 'Karofi';
+      else if (/midea/i.test(identityTitle)) brand = 'Midea';
+      else if (/\bgree\b/i.test(identityTitle)) brand = 'Gree';
+      else if (/hitachi/i.test(identityTitle)) brand = 'Hitachi';
+      else if (/\bbosch\b/i.test(identityTitle)) brand = 'Bosch';
+      else if (/\bbeko\b/i.test(identityTitle)) brand = 'Beko';
+      else if (/coocaa/i.test(identityTitle)) brand = 'Coocaa';
+      // Apple's desktops and speakers, last so another brand wins, and not when the title
+      // only names what it fits or looks like ("Bàn phím cho Mac mini") (DOS/Rate#819).
+      else if (
+        /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod|\bvision\s*pro\b/i.test(identityTitle) &&
+        !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod|vision)/i.test(identityTitle)
+      )
+        brand = 'Apple';
+    }
 
     // 2. Extract Model
     let model = '';
@@ -2716,6 +2918,78 @@ export class ProductNormalizer {
       model = 'Pad 6S Pro';
     } else if (brand === 'Xiaomi' && /pad\s*7\s*pro/i.test(modelTitle)) {
       model = 'Pad 7 Pro';
+    } else if (WAVE_E1_CATEGORY_SLUGS.has(categorySlug)) {
+      const ownModelTitle = ownProductPart(
+        withoutLeadingPromoWords(modelTitle.replace(LEADING_PROMO_GROUPS, '').trim(), brand)
+      );
+      const skuIgnoreRe =
+        /^(?:\d+(?:[.,]\d+)?(?:gb|tb|mb|kb|btu|hp|w|kw|v|a|hz|khz|mhz|ghz|db|dba|l|lit|kg|g|ml|mm|cm|m|m2|m3|inch|in|mah|wh|min|ms)|[248]k|uhd|qhd|fhd|hd|hdr10\+?|\d{3,4}p|[2-6]g|wifi\d*|wi-?fi\d*|airplay\d*|bt\d.*|usb\d.*|hdmi\d*|lan\d*|rj\d+|sata\d*|pcie\d*|m\.?2|r32|r410a|r290|r600a|pm1\.?0|pm2\.?5|hepa\d*|h\d{2}|ip\d{1,2}[xk]?|e\d|(?:19|20)\d{2}|\d+%)$/i;
+      let extractedSku: string | null = null;
+      for (const rawTok of ownModelTitle.split(/\s+/)) {
+        const cleanTok = rawTok.replace(/^[,;()[\]【】]+|[,;()[\]【】]+$/gu, '');
+        if (cleanTok.length < 5 || skuIgnoreRe.test(cleanTok)) continue;
+        if (!/[a-z]/i.test(cleanTok) || !/\d/.test(cleanTok)) continue;
+        const digitCount = (cleanTok.match(/\d/g) ?? []).length;
+        if (/[a-z0-9]-[a-z0-9]/i.test(cleanTok) || digitCount >= 2 || cleanTok.length >= 6) {
+          extractedSku = cleanTok.replace(/\//g, '-');
+          break;
+        }
+      }
+      if (extractedSku) {
+        model = extractedSku;
+      } else {
+        const brandRe = brand !== 'Khác' ? new RegExp(`\\b${escapeRegExp(brand)}\\b`, 'gi') : null;
+        let cleanedAppliance = (brandRe ? ownModelTitle.replace(brandRe, ' ') : ownModelTitle)
+          .replace(/ {2,}/g, ' ')
+          .trim();
+        if (categorySlug !== 'tvs') {
+          const withoutCatPrefix = cleanedAppliance
+            .replace(
+              /^(?:hàng\s+)?(?:chính\s+hãng\s+)?(?:máy\s*lọc\s*(?:không\s*)?khí|air\s*purifier|máy\s*giặt(?:\s*sấy)?|tủ\s*lạnh|điều\s*hòa|điều\s*hoà|máy\s*lạnh)\s+/iu,
+              ''
+            )
+            .trim();
+          if (
+            withoutCatPrefix &&
+            /^[a-z]/i.test(withoutCatPrefix) &&
+            !/^(?:inverter|wifi|1|2)\b/i.test(withoutCatPrefix)
+          ) {
+            cleanedAppliance = withoutCatPrefix;
+          }
+        }
+        const tokens: string[] = [];
+        for (const tok of cleanedAppliance.split(/\s+/).filter(Boolean)) {
+          if (tokens.length >= 5) break;
+          if (
+            /^(?:inch|hỗ|tích|có|tặng|kèm|quà|\+|\(|\[|-|chính|mới|inverter|wifi|netflix|youtube|4k|8k)$/iu.test(
+              tok.normalize('NFC')
+            )
+          ) {
+            break;
+          }
+          tokens.push(tok.replace(/[,;]+$/g, ''));
+        }
+        model = tokens.join(' ');
+      }
+    } else if (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug)) {
+      const ownServiceTitle = ownProductPart(
+        withoutLeadingPromoWords(modelTitle.replace(LEADING_PROMO_GROUPS, '').trim(), brand)
+      );
+      const brandVariants = [brand, ...(brand === 'FPT Telecom' ? ['FPT'] : [])];
+      const brandRe =
+        brand !== 'Khác'
+          ? new RegExp(`\\b(?:${brandVariants.map(escapeRegExp).join('|')})\\b`, 'gi')
+          : null;
+      const cleanedService = (brandRe ? ownServiceTitle.replace(brandRe, ' ') : ownServiceTitle)
+        .replace(/ {2,}/g, ' ')
+        .trim();
+      const tokens: string[] = [];
+      for (const tok of cleanedService.split(/\s+/).filter(Boolean)) {
+        if (tokens.length >= 8) break;
+        if (/^(?:\(|\[|-|tặng|kèm|\+)$/iu.test(tok.normalize('NFC'))) break;
+        tokens.push(tok.replace(/[,;]+$/g, ''));
+      }
+      model = tokens.join(' ');
     } else {
       const withoutLeadingPromo = withoutLeadingPromoWords(
         modelTitle.replace(LEADING_PROMO_GROUPS, '').trim(),
@@ -3114,12 +3388,18 @@ export class ProductNormalizer {
         ? val
         : null;
 
+    const isSizeless = SIZELESS_CATEGORY_SLUGS.has(categorySlug);
+    const isWaveE1 = WAVE_E1_CATEGORY_SLUGS.has(categorySlug);
+    const isWaveE2 = WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug);
+    const isWaveE1OrE2 = isWaveE1 || isWaveE2;
+
     let storageGb: number | null = null;
     let storageConfident = false;
     let variantSource: NormalizedProductCandidate['variant_source'] = null;
     const marker = romExplicit ?? romLoose;
-    if (categorySlug === 'earbuds') {
-      // Earbuds have no storage variant and must key as :unknown with null storage (DOS/Rate#643, #657).
+    if (isSizeless) {
+      // Earbuds, Wave E1 appliances, and Wave E2 services have no storage axis
+      // and key as :unknown with null storage.
       storageGb = null;
       storageConfident = true;
       variantSource = 'single_variant';
@@ -3203,20 +3483,18 @@ export class ProductNormalizer {
     const variantKey = storageKnown ? `${storageGb}gb` : UNKNOWN_VARIANT_KEY;
     const modelKey = `${itemKey}:${variantKey}`;
     const itemName = `${brand} ${model}`.trim();
-    const storageDisplay =
-      categorySlug === 'earbuds'
-        ? 'Standard'
-        : storageGb === null
-          ? 'Không rõ dung lượng'
-          : storageGb >= 1024 && storageGb % 512 === 0
-            ? `${storageGb / 1024}TB`
-            : `${storageGb}GB`;
-    const canonicalName =
-      categorySlug === 'earbuds'
-        ? `${brand} ${model}`
-        : storageKnown
-          ? `${brand} ${model} ${storageDisplay}`
-          : `${brand} ${model}`;
+    const storageDisplay = isSizeless
+      ? 'Standard'
+      : storageGb === null
+        ? 'Không rõ dung lượng'
+        : storageGb >= 1024 && storageGb % 512 === 0
+          ? `${storageGb / 1024}TB`
+          : `${storageGb}GB`;
+    const canonicalName = isSizeless
+      ? `${brand} ${model}`
+      : storageKnown
+        ? `${brand} ${model} ${storageDisplay}`
+        : `${brand} ${model}`;
     const slug = slugify(canonicalName);
 
     // 6. Enrich with 10 Field Groups (PhoneArena structure + GSMArena depth)
@@ -3238,16 +3516,21 @@ export class ProductNormalizer {
       generic: string
     ): string | undefined => (iphoneSpecs ? iphoneSpecs[field] : generic);
 
-    const titleScreenMatch =
-      categorySlug === 'earbuds' ? null : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i);
+    const hasScreenAxis = !isSizeless || categorySlug === 'tvs';
+    const titleScreenMatch = !hasScreenAxis
+      ? null
+      : categorySlug === 'tvs'
+        ? title.match(/\b(\d{2,3}(?:[.,]\d)?)\s*(?:inch|in\b|")/i)
+        : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i);
     const parsedTitleScreen = titleScreenMatch
       ? parseFloat(titleScreenMatch[1].replace(',', '.'))
       : null;
     const titleScreenSize =
       parsedTitleScreen !== null &&
       Number.isFinite(parsedTitleScreen) &&
-      parsedTitleScreen >= 0.8 &&
-      parsedTitleScreen <= 20
+      (categorySlug === 'tvs'
+        ? parsedTitleScreen >= 20 && parsedTitleScreen <= 120
+        : parsedTitleScreen >= 0.8 && parsedTitleScreen <= 20)
         ? parsedTitleScreen
         : null;
 
@@ -3260,10 +3543,10 @@ export class ProductNormalizer {
       claimedRamValue <= MAX_VALID_RAM_GB
         ? claimedRamValue
         : null;
-    // Title-stated RAM takes precedence over benchmark RAM; earbuds and smartwatches
-    // have no GB RAM spec (DOS/Rate#657).
+    // Title-stated RAM takes precedence over benchmark RAM; earbuds, smartwatches,
+    // and Wave E1/E2 categories have no GB RAM spec (DOS/Rate#657).
     const ramGb =
-      categorySlug === 'earbuds' || categorySlug === 'smartwatches'
+      isSizeless || categorySlug === 'smartwatches'
         ? null
         : (validClaimedRam ??
           (storageGb !== null ? benchmark?.ram_by_storage_gb?.[storageGb] : undefined) ??
@@ -3284,27 +3567,30 @@ export class ProductNormalizer {
         Math.floor(benchmark.screen_size_inch ?? NaN) === Math.floor(appleInches))
         ? benchmark
         : undefined;
-    const screenSize =
-      categorySlug === 'earbuds'
-        ? null
-        : (benchmarkSized?.screen_size_inch ?? titleScreenSize ?? appleInches);
-    const batteryMah = benchmarkSized ? benchmarkSized.battery_mah : null;
+    const screenSize = !hasScreenAxis
+      ? null
+      : (benchmarkSized?.screen_size_inch ??
+        titleScreenSize ??
+        (isWaveE1OrE2 ? null : appleInches));
+    const batteryMah = isWaveE1OrE2 ? null : benchmarkSized ? benchmarkSized.battery_mah : null;
     // A phone or tablet title that names no 5G does not say it lacks it: unknown, not
-    // false (and not true for every phone). Laptops, watches and earbuds have no 5G
+    // false (and not true for every phone). Laptops, watches, earbuds and E1/E2 have no 5G
     // (DOS/Rate#1196).
-    const has5g: boolean | null = benchmark
-      ? benchmark.has_5g
-      : /\b5 ?g\b/i.test(title)
-        ? true
-        : categorySlug === 'smartphones' || categorySlug === 'tablets'
-          ? null
-          : false;
+    const has5g: boolean | null = isWaveE1OrE2
+      ? false
+      : benchmark
+        ? benchmark.has_5g
+        : /\b5 ?g\b/i.test(title)
+          ? true
+          : categorySlug === 'smartphones' || categorySlug === 'tablets'
+            ? null
+            : false;
 
     // OS, screen, chip, battery and charging come from a registry entry or the title only:
     // a category guess ("Android 14", "IPS / OLED Anti-Glare", "Snapdragon / Dimensity",
     // "5000 mAh", a 45 W charger) describes no listing a source checked (DOS/Rate#1790).
     // Earbuds have no screen: a driver, ANC or status LED is no display type (DOS/Rate#1792).
-    const screenType = categorySlug === 'earbuds' ? undefined : benchmark?.screen_type || undefined;
+    const screenType = isSizeless ? undefined : benchmark?.screen_type || undefined;
 
     // Camera text comes only from a registry entry: no category guess (a laptop's "1080p
     // FHD Webcam", an earbud's microphones, a watch's heart sensor, a phone's "50 MP") is a
@@ -3340,196 +3626,225 @@ export class ProductNormalizer {
         ? rawPriceMin
         : 0;
 
-    const specifications: ProductSpecifications = {
-      category_slug: categorySlug,
-      availability: {
-        // No year guess for a listing outside the registry (DOS/Rate#1790).
-        announced: benchmark?.release_date || undefined,
-        status: 'Available',
-        prices_msrp: `${storageDisplay}: ${safePriceMin.toLocaleString('vi-VN')}₫`,
-      },
-      design: {
-        dimensions: (caseMismatch ? undefined : benchmark?.dimensions) || undefined,
-        weight_g: (caseMismatch ? undefined : benchmark?.weight_g) || undefined,
-        // Materials, water resistance and biometrics differ by phone (an IP67 iPhone SE, a
-        // side-key fingerprint reader, a plastic back): a non-Apple phone gets only what
-        // its registry entry states, and no listing outside the registry gets an IP rating
-        // (DOS/Rate#1787). An iPhone outside the registry gets no Apple materials text: the
-        // SE and older models have no Ceramic Shield (DOS/Rate#1790).
-        materials: isSmartphone
-          ? (benchmark?.materials ??
-            (isApple && benchmark ? 'Ceramic Shield front, glass back, metal frame' : undefined))
-          : undefined,
-        resistance: benchmark?.ip_rating || undefined,
-        biometrics: isSmartphone
-          ? (benchmark?.biometrics ??
-            (isApple ? (/^iPhone SE\b/i.test(model) ? 'Touch ID' : 'Face ID') : undefined))
-          : undefined,
-        // Keys, glass, pixel density and refresh rate differ by phone: a non-Apple phone gets
-        // only what its registry entry states (DOS/Rate#1790).
-        keys: isSmartphone
-          ? (benchmark?.keys ??
-            (isApple
-              ? appleIphoneText('keys', 'Action Button, Camera Control, Volume, Power')
-              : undefined))
-          : undefined,
-        colors: colors.length > 0 ? colors : ['Tiêu chuẩn'],
-      },
-      display: {
-        size_inch: categorySlug === 'earbuds' ? undefined : screenSize || undefined,
-        type: screenType,
-        resolution:
-          (caseMismatch || categorySlug === 'earbuds' ? undefined : benchmark?.resolution) ||
-          undefined,
-        refresh_rate_hz:
-          categorySlug === 'earbuds'
-            ? undefined
-            : // A registry model whose sources state no refresh rate gets none (DOS/Rate#1739),
-              // and so does a phone outside the registry (a ProMotion iPhone is not 60 Hz).
-              benchmark?.refresh_rate_hz,
-        // The density the registry resolution states (DOS/Rate#1790).
-        ppi: isSmartphone ? ppiFromResolution(benchmark?.resolution) : undefined,
-        // An iPhone 11 or SE has no Ceramic Shield: only a registry iPhone gets Apple's text.
-        protection: isSmartphone
-          ? (benchmark?.protection ?? (isApple && benchmark ? 'Ceramic Shield' : undefined))
-          : undefined,
-        features: isSmartphone
-          ? (benchmark?.display_features ??
-            (isApple
-              ? appleIphoneText(
-                  'display_features',
-                  'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
-                )
-              : undefined))
-          : undefined,
-      },
-      hardware: {
-        chipset: benchmark?.chipset || undefined,
-        cpu: benchmark?.cpu || undefined,
-        gpu: benchmark?.gpu || undefined,
-        ram_gb: ramGb || undefined,
-        storage_gb: storageGb !== null && storageGb > 0 ? storageGb : undefined,
-        // Many Android phones and tablets take a microSD card (DOS/Rate#1790).
-        storage_expansion: benchmark?.storage_expansion ?? undefined,
-        os: benchmark?.os || undefined,
-      },
-      battery: {
-        capacity_mah: batteryMah || undefined,
-        // Battery chemistry and reverse charging differ by model (DOS/Rate#1790).
-        type: benchmark?.battery_type ?? undefined,
-        // MagSafe/Qi2 and the satellite and UWB line below describe an iPhone, not an
-        // Apple laptop, tablet, watch or earbuds (DOS/Rate#1748); a non-Apple phone gets the
-        // charging its registry entry states, not generic USB-C PD/PPS text (DOS/Rate#1790).
-        charging:
-          benchmark?.charging ??
-          (isSmartphone && isApple
-            ? appleIphoneText('charging', 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2')
-            : undefined),
-        fast_charging_w: chargingW,
-        reverse_charging: benchmark?.reverse_charging ?? undefined,
-      },
-      camera: {
-        rear_setup: rearSetupLabel,
-        // A benchmark phone with one rear camera (iPhone 16e) gets no invented ultrawide
-        // (DOS/Rate#1718): its 'Single Camera' label already exempts it from the audit.
-        main_camera: benchmark?.rear_camera || undefined,
-        second_camera: benchmark?.second_camera || undefined,
-        third_camera: benchmark?.third_camera || undefined,
-        fourth_camera: benchmark?.fourth_camera || undefined,
-        front_camera: benchmark?.front_camera || undefined,
-        // Flash and video differ by model (the iPad Air has no flash; no checked Apple page
-        // states "Dual-LED"): a device gets the ones its registry entry states, or none
-        // (DOS/Rate#1754, #1761, #1787).
-        flash: benchmark?.flash ?? undefined,
-        video_recording: benchmark?.video_recording ?? undefined,
-      },
-      connectivity: {
-        // Bluetooth and Wi-Fi versions differ by model: only a registry entry states them.
-        // USB-C with OTG is Android phone text: an iPhone before the 15 has Lightning, an
-        // Apple Watch no port (DOS/Rate#1761).
-        bluetooth: benchmark?.bluetooth ?? undefined,
-        wlan: benchmark?.wlan ?? undefined,
-        // A non-Apple phone gets no generic USB-C/OTG text either (DOS/Rate#1790).
-        usb: benchmark?.usb ?? undefined,
-        // An iPhone outside the registry gets no Apple sensor list: the SE has Touch ID, not
-        // Face ID (DOS/Rate#1790).
-        sensors: isSmartphone
-          ? (benchmark?.sensors ??
-            (isApple && benchmark
-              ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
-              : undefined))
-          : undefined,
-        // A device gets the GNSS list its registry entry states or none: the systems
-        // differ by model (NavIC, dual-frequency GPS, BDS) (DOS/Rate#1754, #1761, #1787).
-        location: benchmark?.location ?? undefined,
-        // Not every phone or watch has NFC, and a laptop, tablet or earbuds gets none unless
-        // a source states it (DOS/Rate#1754): a device gets the value its registry entry
-        // states. A registry iPhone without an `nfc` field, or an iPhone 11 to 17 outside the
-        // registry, keeps NFC, which every iPhone from the XS on has (DOS/Rate#1790).
-        nfc:
-          benchmark?.nfc ??
-          (isSmartphone && isApple ? (iphoneSpecs ? iphoneSpecs.nfc : true) : undefined),
-        other:
-          benchmark?.connectivity_other ??
-          (isSmartphone && isApple
-            ? appleIphoneText('connectivity_other', 'Ultra Wideband (UWB), SOS vệ tinh')
-            : undefined),
-      },
-      // Nothing is known about the network of a phone or tablet whose 5G is unknown. A
-      // laptop, watch, earbuds or tablet without 5G gets no "Wi-Fi / Bluetooth", "No SIM",
-      // VoLTE or Wi-Fi calling guess: an LTE watch or tablet has a SIM (DOS/Rate#1790).
-      cellular:
-        has5g === null
-          ? {}
-          : !has5g && categorySlug !== 'smartphones'
-            ? {
-                has_5g: false,
-                technology: benchmark?.cellular_technology ?? undefined,
-                sim_type: benchmark?.sim_type ?? undefined,
-              }
-            : {
-                has_5g: has5g,
-                // Only a registry entry states 5G bands, not "SA/NSA/Sub6" (DOS/Rate#1790).
-                bands_5g: has5g ? (benchmark?.bands_5g ?? undefined) : undefined,
-                // LTE bands, SIM slots, VoLTE and Wi-Fi calling differ by model and market:
-                // only a registry entry states them (DOS/Rate#1787).
-                bands_4g: benchmark?.bands_4g ?? undefined,
-                // The network technologies differ by model (CDMA, no 2G, a watch's LTE): only a
-                // registry entry states them, not "GSM / HSPA / LTE / 5G" (DOS/Rate#1790).
-                technology: benchmark?.cellular_technology ?? undefined,
-                sim_type: benchmark?.sim_type ?? undefined,
-              },
-      multimedia: {
-        // A device gets only the loudspeaker and SAR its sources state (DOS/Rate#1748,
-        // #1754); `null` in the registry means none is stated.
-        loudspeaker: benchmark?.loudspeaker ?? undefined,
-        // A device gets a jack value, audio features and certifications only from its
-        // registry entry: many phones, tablets and most laptops have a jack, and no
-        // source states "Dolby Atmos, Hi-Res Audio" or "CE, FCC, RoHS" for every device
-        // (DOS/Rate#1754, #1761).
-        headphone_jack_35mm: benchmark?.headphone_jack_35mm ?? undefined,
-        audio_features: benchmark?.audio_features ?? undefined,
-      },
-      regulatory: {
-        certifications: benchmark?.certifications ?? undefined,
-        sar_head: isSmartphone ? (benchmark?.sar_head ?? undefined) : undefined,
-        sar_body: isSmartphone ? (benchmark?.sar_body ?? undefined) : undefined,
-      },
-    };
+    const specifications: ProductSpecifications = isWaveE2
+      ? {
+          category_slug: categorySlug,
+          availability: {
+            status: 'Available',
+          },
+        }
+      : isWaveE1
+        ? {
+            category_slug: categorySlug,
+            availability: {
+              status: 'Available',
+              ...(safePriceMin > 0
+                ? { prices_msrp: `${safePriceMin.toLocaleString('vi-VN')}₫` }
+                : {}),
+            },
+            ...(colors.length > 0 ? { design: { colors } } : {}),
+            ...(categorySlug === 'tvs' && screenSize ? { display: { size_inch: screenSize } } : {}),
+          }
+        : {
+            category_slug: categorySlug,
+            availability: {
+              // No year guess for a listing outside the registry (DOS/Rate#1790).
+              announced: benchmark?.release_date || undefined,
+              status: 'Available',
+              prices_msrp: `${storageDisplay}: ${safePriceMin.toLocaleString('vi-VN')}₫`,
+            },
+            design: {
+              dimensions: (caseMismatch ? undefined : benchmark?.dimensions) || undefined,
+              weight_g: (caseMismatch ? undefined : benchmark?.weight_g) || undefined,
+              // Materials, water resistance and biometrics differ by phone (an IP67 iPhone SE, a
+              // side-key fingerprint reader, a plastic back): a non-Apple phone gets only what
+              // its registry entry states, and no listing outside the registry gets an IP rating
+              // (DOS/Rate#1787). An iPhone outside the registry gets no Apple materials text: the
+              // SE and older models have no Ceramic Shield (DOS/Rate#1790).
+              materials: isSmartphone
+                ? (benchmark?.materials ??
+                  (isApple && benchmark
+                    ? 'Ceramic Shield front, glass back, metal frame'
+                    : undefined))
+                : undefined,
+              resistance: benchmark?.ip_rating || undefined,
+              biometrics: isSmartphone
+                ? (benchmark?.biometrics ??
+                  (isApple ? (/^iPhone SE\b/i.test(model) ? 'Touch ID' : 'Face ID') : undefined))
+                : undefined,
+              // Keys, glass, pixel density and refresh rate differ by phone: a non-Apple phone gets
+              // only what its registry entry states (DOS/Rate#1790).
+              keys: isSmartphone
+                ? (benchmark?.keys ??
+                  (isApple
+                    ? appleIphoneText('keys', 'Action Button, Camera Control, Volume, Power')
+                    : undefined))
+                : undefined,
+              colors: colors.length > 0 ? colors : ['Tiêu chuẩn'],
+            },
+            display: {
+              size_inch: categorySlug === 'earbuds' ? undefined : screenSize || undefined,
+              type: screenType,
+              resolution:
+                (caseMismatch || categorySlug === 'earbuds' ? undefined : benchmark?.resolution) ||
+                undefined,
+              refresh_rate_hz:
+                categorySlug === 'earbuds'
+                  ? undefined
+                  : // A registry model whose sources state no refresh rate gets none (DOS/Rate#1739),
+                    // and so does a phone outside the registry (a ProMotion iPhone is not 60 Hz).
+                    benchmark?.refresh_rate_hz,
+              // The density the registry resolution states (DOS/Rate#1790).
+              ppi: isSmartphone ? ppiFromResolution(benchmark?.resolution) : undefined,
+              // An iPhone 11 or SE has no Ceramic Shield: only a registry iPhone gets Apple's text.
+              protection: isSmartphone
+                ? (benchmark?.protection ?? (isApple && benchmark ? 'Ceramic Shield' : undefined))
+                : undefined,
+              features: isSmartphone
+                ? (benchmark?.display_features ??
+                  (isApple
+                    ? appleIphoneText(
+                        'display_features',
+                        'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
+                      )
+                    : undefined))
+                : undefined,
+            },
+            hardware: {
+              chipset: benchmark?.chipset || undefined,
+              cpu: benchmark?.cpu || undefined,
+              gpu: benchmark?.gpu || undefined,
+              ram_gb: ramGb || undefined,
+              storage_gb: storageGb !== null && storageGb > 0 ? storageGb : undefined,
+              // Many Android phones and tablets take a microSD card (DOS/Rate#1790).
+              storage_expansion: benchmark?.storage_expansion ?? undefined,
+              os: benchmark?.os || undefined,
+            },
+            battery: {
+              capacity_mah: batteryMah || undefined,
+              // Battery chemistry and reverse charging differ by model (DOS/Rate#1790).
+              type: benchmark?.battery_type ?? undefined,
+              // MagSafe/Qi2 and the satellite and UWB line below describe an iPhone, not an
+              // Apple laptop, tablet, watch or earbuds (DOS/Rate#1748); a non-Apple phone gets the
+              // charging its registry entry states, not generic USB-C PD/PPS text (DOS/Rate#1790).
+              charging:
+                benchmark?.charging ??
+                (isSmartphone && isApple
+                  ? appleIphoneText('charging', 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2')
+                  : undefined),
+              fast_charging_w: chargingW,
+              reverse_charging: benchmark?.reverse_charging ?? undefined,
+            },
+            camera: {
+              rear_setup: rearSetupLabel,
+              // A benchmark phone with one rear camera (iPhone 16e) gets no invented ultrawide
+              // (DOS/Rate#1718): its 'Single Camera' label already exempts it from the audit.
+              main_camera: benchmark?.rear_camera || undefined,
+              second_camera: benchmark?.second_camera || undefined,
+              third_camera: benchmark?.third_camera || undefined,
+              fourth_camera: benchmark?.fourth_camera || undefined,
+              front_camera: benchmark?.front_camera || undefined,
+              // Flash and video differ by model (the iPad Air has no flash; no checked Apple page
+              // states "Dual-LED"): a device gets the ones its registry entry states, or none
+              // (DOS/Rate#1754, #1761, #1787).
+              flash: benchmark?.flash ?? undefined,
+              video_recording: benchmark?.video_recording ?? undefined,
+            },
+            connectivity: {
+              // Bluetooth and Wi-Fi versions differ by model: only a registry entry states them.
+              // USB-C with OTG is Android phone text: an iPhone before the 15 has Lightning, an
+              // Apple Watch no port (DOS/Rate#1761).
+              bluetooth: benchmark?.bluetooth ?? undefined,
+              wlan: benchmark?.wlan ?? undefined,
+              // A non-Apple phone gets no generic USB-C/OTG text either (DOS/Rate#1790).
+              usb: benchmark?.usb ?? undefined,
+              // An iPhone outside the registry gets no Apple sensor list: the SE has Touch ID, not
+              // Face ID (DOS/Rate#1790).
+              sensors: isSmartphone
+                ? (benchmark?.sensors ??
+                  (isApple && benchmark
+                    ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
+                    : undefined))
+                : undefined,
+              // A device gets the GNSS list its registry entry states or none: the systems
+              // differ by model (NavIC, dual-frequency GPS, BDS) (DOS/Rate#1754, #1761, #1787).
+              location: benchmark?.location ?? undefined,
+              // Not every phone or watch has NFC, and a laptop, tablet or earbuds gets none unless
+              // a source states it (DOS/Rate#1754): a device gets the value its registry entry
+              // states. A registry iPhone without an `nfc` field, or an iPhone 11 to 17 outside the
+              // registry, keeps NFC, which every iPhone from the XS on has (DOS/Rate#1790).
+              nfc:
+                benchmark?.nfc ??
+                (isSmartphone && isApple ? (iphoneSpecs ? iphoneSpecs.nfc : true) : undefined),
+              other:
+                benchmark?.connectivity_other ??
+                (isSmartphone && isApple
+                  ? appleIphoneText('connectivity_other', 'Ultra Wideband (UWB), SOS vệ tinh')
+                  : undefined),
+            },
+            // Nothing is known about the network of a phone or tablet whose 5G is unknown. A
+            // laptop, watch, earbuds or tablet without 5G gets no "Wi-Fi / Bluetooth", "No SIM",
+            // VoLTE or Wi-Fi calling guess: an LTE watch or tablet has a SIM (DOS/Rate#1790).
+            cellular:
+              has5g === null
+                ? {}
+                : !has5g && categorySlug !== 'smartphones'
+                  ? {
+                      has_5g: false,
+                      technology: benchmark?.cellular_technology ?? undefined,
+                      sim_type: benchmark?.sim_type ?? undefined,
+                    }
+                  : {
+                      has_5g: has5g,
+                      // Only a registry entry states 5G bands, not "SA/NSA/Sub6" (DOS/Rate#1790).
+                      bands_5g: has5g ? (benchmark?.bands_5g ?? undefined) : undefined,
+                      // LTE bands, SIM slots, VoLTE and Wi-Fi calling differ by model and market:
+                      // only a registry entry states them (DOS/Rate#1787).
+                      bands_4g: benchmark?.bands_4g ?? undefined,
+                      // The network technologies differ by model (CDMA, no 2G, a watch's LTE): only a
+                      // registry entry states them, not "GSM / HSPA / LTE / 5G" (DOS/Rate#1790).
+                      technology: benchmark?.cellular_technology ?? undefined,
+                      sim_type: benchmark?.sim_type ?? undefined,
+                    },
+            multimedia: {
+              // A device gets only the loudspeaker and SAR its sources state (DOS/Rate#1748,
+              // #1754); `null` in the registry means none is stated.
+              loudspeaker: benchmark?.loudspeaker ?? undefined,
+              // A device gets a jack value, audio features and certifications only from its
+              // registry entry: many phones, tablets and most laptops have a jack, and no
+              // source states "Dolby Atmos, Hi-Res Audio" or "CE, FCC, RoHS" for every device
+              // (DOS/Rate#1754, #1761).
+              headphone_jack_35mm: benchmark?.headphone_jack_35mm ?? undefined,
+              audio_features: benchmark?.audio_features ?? undefined,
+            },
+            regulatory: {
+              certifications: benchmark?.certifications ?? undefined,
+              sar_head: isSmartphone ? (benchmark?.sar_head ?? undefined) : undefined,
+              sar_body: isSmartphone ? (benchmark?.sar_body ?? undefined) : undefined,
+            },
+          };
 
-    const keySpecs: KeySpecs = {
-      // Only the size and type a registry entry or the title states (DOS/Rate#1790).
-      screen:
-        [screenSize ? `${screenSize}"` : undefined, screenType?.split(',')[0]]
-          .filter(Boolean)
-          .join(' ') || undefined,
-      chip: benchmark?.chipset?.split('(')[0]?.trim() || undefined,
-      // The main rear camera, or a laptop's webcam, as its registry entry states it.
-      camera: (benchmark?.rear_camera ?? benchmark?.front_camera)?.split(',')[0] || undefined,
-      battery: batteryMah ? `${batteryMah} mAh${chargingW ? ` (${chargingW}W)` : ''}` : undefined,
-      storage: storageDisplay,
-      ram: ramGb ? `${ramGb}GB` : undefined,
-    };
+    const keySpecs: KeySpecs = isWaveE2
+      ? {}
+      : isWaveE1
+        ? categorySlug === 'tvs' && screenSize
+          ? { screen: `${screenSize}"` }
+          : {}
+        : {
+            // Only the size and type a registry entry or the title states (DOS/Rate#1790).
+            screen:
+              [screenSize ? `${screenSize}"` : undefined, screenType?.split(',')[0]]
+                .filter(Boolean)
+                .join(' ') || undefined,
+            chip: benchmark?.chipset?.split('(')[0]?.trim() || undefined,
+            // The main rear camera, or a laptop's webcam, as its registry entry states it.
+            camera: (benchmark?.rear_camera ?? benchmark?.front_camera)?.split(',')[0] || undefined,
+            battery: batteryMah
+              ? `${batteryMah} mAh${chargingW ? ` (${chargingW}W)` : ''}`
+              : undefined,
+            storage: storageDisplay,
+            ram: ramGb ? `${ramGb}GB` : undefined,
+          };
 
     const sanitizedDescription =
       typeof safeRaw.description === 'string'
@@ -3537,9 +3852,17 @@ export class ProductNormalizer {
         : undefined;
     const condition = detectProductCondition(title, sanitizedDescription);
     const origin = detectProductOrigin(title, sanitizedDescription);
+    const entityType: 'product' | 'service' =
+      explicitEntityType === 'service' || isWaveE2 ? 'service' : 'product';
+    const normalizedMetadata =
+      safeRaw.metadata && typeof safeRaw.metadata === 'object' && !Array.isArray(safeRaw.metadata)
+        ? safeRaw.metadata
+        : undefined;
 
     return {
       category_slug: categorySlug,
+      entity_type: entityType,
+      ...(normalizedMetadata ? { metadata: normalizedMetadata } : {}),
       brand,
       model,
       variant_name: storageDisplay,
@@ -3548,7 +3871,7 @@ export class ProductNormalizer {
       variant_key: variantKey,
       item_name: itemName,
       item_slug: slugify(itemName),
-      variant_known: storageKnown || categorySlug === 'earbuds',
+      variant_known: storageKnown || isSizeless,
       variant_source: variantSource,
       keyable,
       name: canonicalName,

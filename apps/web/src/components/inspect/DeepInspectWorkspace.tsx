@@ -87,14 +87,19 @@ import {
   isOfferUnavailable,
   type OfferAvailability,
 } from '@/lib/product-market-stats';
-import { productImageUrl } from '@/lib/rate-domain-core';
+import {
+  productImageUrl,
+  resolveListingPriceCurrency,
+} from '@/lib/rate-domain-core';
 import {
   collapseWhitespace,
   formatDecimal,
+  formatListingPrice,
   formatNumber,
   formatPercent,
   formatPlainNumber,
   formatPriceVnd,
+  sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
 import StarRating from '@/components/elementary/StarRating';
 
@@ -125,32 +130,43 @@ function parseInspectFiniteNumber(value: unknown): number | null {
   return null;
 }
 
-export function sanitizeInspectPriceVnd(value: unknown): number {
+export function sanitizeInspectPriceVnd(
+  value: unknown,
+  currency?: string | null
+): number {
   const num = parseInspectFiniteNumber(value);
   if (num == null || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  const rounded = Math.round(num);
-  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
+  const sanitized = sanitizeCurrencyPriceValue(num, currency);
+  return sanitized > 0 && sanitized <= MAX_VALID_VND_PRICE ? sanitized : 0;
 }
 
 export function formatInspectPriceVndOrDash(
   value: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): string {
-  const safePrice = sanitizeInspectPriceVnd(value);
-  return safePrice > 0 ? formatPriceVnd(safePrice, locale) : '-';
+  const safePrice = sanitizeInspectPriceVnd(value, currency);
+  if (safePrice <= 0) return '-';
+  return currency === 'PCT'
+    ? formatListingPrice(safePrice, currency, locale)
+    : formatPriceVnd(safePrice, locale);
 }
 
 export function formatInspectSuggestionLabel(
   name: string,
   minPrice: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): string {
-  const safePrice = sanitizeInspectPriceVnd(minPrice);
-  return safePrice > 0
-    ? `${name} (${formatPriceVnd(safePrice, locale)})`
-    : name;
+  const safePrice = sanitizeInspectPriceVnd(minPrice, currency);
+  if (safePrice <= 0) return name;
+  const formatted =
+    currency === 'PCT'
+      ? formatListingPrice(safePrice, currency, locale)
+      : formatPriceVnd(safePrice, locale);
+  return `${name} (${formatted})`;
 }
 
 export function sanitizeInspectDownloadSlug(
@@ -247,7 +263,9 @@ export function orderInspectOffers<
     availability?: OfferAvailability | null;
   },
 >(
-  offers: readonly T[] | null | undefined
+  offers: readonly T[] | null | undefined,
+  minFloorVnd = MINIMUM_EARBUDS_PRICE_FLOOR_VND,
+  currency?: string | null
 ): {
   inStockOffers: T[];
   plausibilityOffers: T[];
@@ -280,7 +298,7 @@ export function orderInspectOffers<
       ) {
         validPrices.push(p);
       } else {
-        const sp = sanitizeInspectPriceVnd(p);
+        const sp = sanitizeInspectPriceVnd(p, currency);
         if (sp > 0) validPrices.push(sp);
       }
     }
@@ -306,12 +324,12 @@ export function orderInspectOffers<
         ? Number.isFinite(rawPrice) &&
           rawPrice > 0 &&
           rawPrice <= MAX_VALID_VND_PRICE
-          ? Math.round(rawPrice)
+          ? sanitizeCurrencyPriceValue(rawPrice, currency)
           : 0
-        : sanitizeInspectPriceVnd(rawPrice);
+        : sanitizeInspectPriceVnd(rawPrice, currency);
     const subFloorOrExplicit =
       (offer as { implausiblyLow?: boolean | null }).implausiblyLow === true ||
-      (safePrice > 0 && safePrice < MINIMUM_EARBUDS_PRICE_FLOOR_VND);
+      (safePrice > 0 && minFloorVnd > 0 && safePrice < minFloorVnd);
 
     if (!unavailable) {
       const idx = inStockCursor++;
@@ -334,7 +352,13 @@ export function orderInspectOffers<
     ) {
       unavailablePlausible.push(offer);
     } else if (
-      isInspectOfferBait(offer, implausibleOfferIds, plausibilityOffers)
+      isInspectOfferBait(
+        offer,
+        implausibleOfferIds,
+        plausibilityOffers,
+        minFloorVnd,
+        currency
+      )
     ) {
       unavailableBait.push(offer);
     } else {
@@ -384,10 +408,11 @@ export function inspectMarkdownPriceVerdict(
 
 export function sanitizeInspectOriginalPriceVnd(
   priceOriginal: unknown,
-  priceCurrent: unknown
+  priceCurrent: unknown,
+  currency?: string | null
 ): number {
-  const safeCurrent = sanitizeInspectPriceVnd(priceCurrent);
-  const safeOrig = sanitizeInspectPriceVnd(priceOriginal);
+  const safeCurrent = sanitizeInspectPriceVnd(priceCurrent, currency);
+  const safeOrig = sanitizeInspectPriceVnd(priceOriginal, currency);
   return safeCurrent > 0 && safeOrig > safeCurrent ? safeOrig : 0;
 }
 
@@ -418,23 +443,36 @@ export function resolveInspectMasterMinPriceVnd(params: {
   master?: {
     min_price?: unknown;
   } | null;
+  minFloorVnd?: number;
+  currency?: string | null;
 }): number {
   const { matchedOffer, allOffers, master } = params;
-  const rawMasterMin = sanitizeInspectPriceVnd(master?.min_price);
-  const safeOfferCurrent = sanitizeInspectPriceVnd(matchedOffer?.price_current);
+  const currency = params.currency ?? null;
+  const minFloorVnd =
+    typeof params.minFloorVnd === 'number' &&
+    Number.isFinite(params.minFloorVnd) &&
+    params.minFloorVnd >= 0
+      ? params.minFloorVnd
+      : MINIMUM_EARBUDS_PRICE_FLOOR_VND;
+  const rawMasterMin = sanitizeInspectPriceVnd(master?.min_price, currency);
+  const safeOfferCurrent = sanitizeInspectPriceVnd(
+    matchedOffer?.price_current,
+    currency
+  );
   const hasAllOffers = Array.isArray(allOffers) && allOffers.length > 0;
   const hasExplicitInStock =
     Array.isArray(params.inStockOffers) && params.inStockOffers.length > 0;
 
   if (!hasAllOffers && !hasExplicitInStock) {
-    if (rawMasterMin > 0 && rawMasterMin < MINIMUM_EARBUDS_PRICE_FLOOR_VND) {
+    if (minFloorVnd > 0 && rawMasterMin > 0 && rawMasterMin < minFloorVnd) {
       return 0;
     }
     const explicitBait =
       params.offerImplausiblyLow === true ||
       matchedOffer?.implausiblyLow === true ||
-      (safeOfferCurrent > 0 &&
-        safeOfferCurrent < MINIMUM_EARBUDS_PRICE_FLOOR_VND);
+      (minFloorVnd > 0 &&
+        safeOfferCurrent > 0 &&
+        safeOfferCurrent < minFloorVnd);
     if (
       explicitBait &&
       safeOfferCurrent > 0 &&
@@ -452,15 +490,14 @@ export function resolveInspectMasterMinPriceVnd(params: {
   const excludeMatchedBait =
     params.offerImplausiblyLow === true ||
     matchedOffer?.implausiblyLow === true ||
-    (safeOfferCurrent > 0 &&
-      safeOfferCurrent < MINIMUM_EARBUDS_PRICE_FLOOR_VND);
+    (minFloorVnd > 0 && safeOfferCurrent > 0 && safeOfferCurrent < minFloorVnd);
 
   const pricedNonBaitInStock = candidateOffers.filter((o) => {
     if (!o || typeof o !== 'object' || Array.isArray(o)) return false;
     if (isOfferUnavailable(o)) return false;
     if (o.implausiblyLow === true) return false;
-    const price = sanitizeInspectPriceVnd(o.price_current);
-    if (price < MINIMUM_EARBUDS_PRICE_FLOOR_VND) return false;
+    const price = sanitizeInspectPriceVnd(o.price_current, currency);
+    if (price <= 0 || (minFloorVnd > 0 && price < minFloorVnd)) return false;
     if (excludeMatchedBait && matchedOffer) {
       if (o === matchedOffer) return false;
       if (
@@ -515,6 +552,8 @@ export function resolveInspectPriceVerdictPrices(params: {
     lowestEverPrice?: unknown;
     highestEverPrice?: unknown;
   } | null;
+  minFloorVnd?: number;
+  currency?: string | null;
 }): {
   currentPriceVnd: number;
   claimedOriginalVnd: number;
@@ -522,14 +561,24 @@ export function resolveInspectPriceVerdictPrices(params: {
   historicalHighVnd: number;
 } {
   const { matchedOffer, allOffers, master, priceHistory } = params;
-  const safeOfferCurrent = sanitizeInspectPriceVnd(matchedOffer?.price_current);
-  const rawMasterMin = sanitizeInspectPriceVnd(master?.min_price);
+  const currency = params.currency ?? null;
+  const minFloorVnd =
+    typeof params.minFloorVnd === 'number' &&
+    Number.isFinite(params.minFloorVnd) &&
+    params.minFloorVnd >= 0
+      ? params.minFloorVnd
+      : MINIMUM_EARBUDS_PRICE_FLOOR_VND;
+  const safeOfferCurrent = sanitizeInspectPriceVnd(
+    matchedOffer?.price_current,
+    currency
+  );
+  const rawMasterMin = sanitizeInspectPriceVnd(master?.min_price, currency);
   const hasAllOffers = Array.isArray(allOffers) && allOffers.length > 0;
   let cachedOrdered: ReturnType<typeof orderInspectOffers> | null = null;
   const getOrdered = () => {
     if (!hasAllOffers) return null;
     if (!cachedOrdered) {
-      cachedOrdered = orderInspectOffers(allOffers);
+      cachedOrdered = orderInspectOffers(allOffers, minFloorVnd, currency);
     }
     return cachedOrdered;
   };
@@ -546,13 +595,15 @@ export function resolveInspectPriceVerdictPrices(params: {
       return true;
     }
     if (
+      minFloorVnd > 0 &&
       safeOfferCurrent > 0 &&
-      safeOfferCurrent < MINIMUM_EARBUDS_PRICE_FLOOR_VND
+      safeOfferCurrent < minFloorVnd
     ) {
       return true;
     }
     if (
-      rawMasterMin >= MINIMUM_EARBUDS_PRICE_FLOOR_VND &&
+      minFloorVnd > 0 &&
+      rawMasterMin >= minFloorVnd &&
       safeOfferCurrent > 0 &&
       safeOfferCurrent < rawMasterMin * IMPLAUSIBLY_LOW_RATIO
     ) {
@@ -584,7 +635,7 @@ export function resolveInspectPriceVerdictPrices(params: {
         ((typeof o.id === 'string' && o.id === matchedOffer.id) ||
           (matchedCanonicalId !== '' &&
             normalizeOfferId(o.id) === matchedCanonicalId)) &&
-        sanitizeInspectPriceVnd(o.price_current) === safeOfferCurrent
+        sanitizeInspectPriceVnd(o.price_current, currency) === safeOfferCurrent
       ) {
         return false;
       }
@@ -597,7 +648,9 @@ export function resolveInspectPriceVerdictPrices(params: {
         isInspectOfferBait(
           candidate,
           ordered.implausibleOfferIds,
-          ordered.plausibilityOffers
+          ordered.plausibilityOffers,
+          minFloorVnd,
+          currency
         )
       ) {
         return true;
@@ -632,6 +685,8 @@ export function resolveInspectPriceVerdictPrices(params: {
       (hasAllOffers ? (getOrdered()?.inStockOffers ?? null) : null),
     offerImplausiblyLow: bait,
     master,
+    minFloorVnd,
+    currency,
   });
 
   const suppressOfferPrices = unavailable || bait;
@@ -641,17 +696,19 @@ export function resolveInspectPriceVerdictPrices(params: {
     ? 0
     : sanitizeInspectOriginalPriceVnd(
         matchedOffer?.price_original,
-        currentPriceVnd
+        currentPriceVnd,
+        currency
       );
 
   return {
     currentPriceVnd,
     claimedOriginalVnd,
     historicalLowVnd:
-      sanitizeInspectPriceVnd(priceHistory?.lowestEverPrice) || safeFallbackMin,
+      sanitizeInspectPriceVnd(priceHistory?.lowestEverPrice, currency) ||
+      safeFallbackMin,
     historicalHighVnd:
-      sanitizeInspectPriceVnd(priceHistory?.highestEverPrice) ||
-      sanitizeInspectPriceVnd(master?.max_price),
+      sanitizeInspectPriceVnd(priceHistory?.highestEverPrice, currency) ||
+      sanitizeInspectPriceVnd(master?.max_price, currency),
   };
 }
 
@@ -669,24 +726,30 @@ export function buildInspectMarkdownPriceLines(params: {
     historicalHighLabel: string;
   };
   locale?: string | null;
+  currency?: string | null;
 }): string[] {
-  const current = sanitizeInspectPriceVnd(params.currentListedPrice);
-  const orig = sanitizeInspectPriceVnd(params.claimedOrigPrice);
-  const low = sanitizeInspectPriceVnd(params.histLow);
-  const high = sanitizeInspectPriceVnd(params.histHigh);
+  const currency = params.currency ?? null;
+  const fmtAmount = (amount: number) =>
+    currency === 'PCT'
+      ? formatListingPrice(amount, currency, params.locale)
+      : formatPriceVnd(amount, params.locale);
+  const current = sanitizeInspectPriceVnd(params.currentListedPrice, currency);
+  const orig = sanitizeInspectPriceVnd(params.claimedOrigPrice, currency);
+  const low = sanitizeInspectPriceVnd(params.histLow, currency);
+  const high = sanitizeInspectPriceVnd(params.histHigh, currency);
   const out: string[] = [];
   if (current > 0) {
     const origSuffix =
       orig > current
-        ? ` | ${params.labels.claimedOriginalLabel}: ${formatPriceVnd(orig, params.locale)}`
+        ? ` | ${params.labels.claimedOriginalLabel}: ${fmtAmount(orig)}`
         : '';
     out.push(
-      `- **${params.labels.currentPriceLabel}:** ${formatPriceVnd(current, params.locale)}${origSuffix}`
+      `- **${params.labels.currentPriceLabel}:** ${fmtAmount(current)}${origSuffix}`
     );
   }
   if (low > 0 || high > 0) {
-    const lowStr = low > 0 ? formatPriceVnd(low, params.locale) : '-';
-    const highStr = high > 0 ? formatPriceVnd(high, params.locale) : '-';
+    const lowStr = low > 0 ? fmtAmount(low) : '-';
+    const highStr = high > 0 ? fmtAmount(high) : '-';
     out.push(
       `- **${params.labels.historicalLowLabel} / ${params.labels.historicalHighLabel}:** ${lowStr} - ${highStr}`
     );
@@ -757,9 +820,12 @@ export type InspectMarkdownKey =
   | 'historicalLowLabel'
   | 'historicalHighLabel'
   | 'radarGenuinePill'
+  | 'radarGenuinePillCurrency'
   | 'radarBelowMedianPill'
+  | 'radarBelowMedianPillCurrency'
   | 'radarFakePill'
   | 'radarSpreadPill'
+  | 'radarSpreadPillCurrency'
   | 'mdSeller'
   | 'unknownShop'
   | 'mdTrustScore'
@@ -796,6 +862,7 @@ export function buildInspectAuditMarkdown(params: {
   safeMerchantTrust: number | null;
   dosafeDisplay: ReturnType<typeof inspectDosafeDisplay>;
   reviewRiskDisplay: ReturnType<typeof inspectReviewRiskDisplay>;
+  currency?: string | null;
 }): string {
   const {
     queryInput,
@@ -817,7 +884,14 @@ export function buildInspectAuditMarkdown(params: {
     safeMerchantTrust,
     dosafeDisplay,
     reviewRiskDisplay,
+    currency,
   } = params;
+  const mdCurrency =
+    currency ||
+    resolveListingPriceCurrency({
+      categorySlug: master ? getMasterProductCategorySlug(master) : null,
+      metadata: master?.metadata,
+    });
   const cleanQuery = sanitizeInspectQuery(queryInput);
   const cleanOrigin =
     (typeof origin === 'string'
@@ -831,15 +905,25 @@ export function buildInspectAuditMarkdown(params: {
     historicalHighVnd: histHigh,
   } = verdictPrices;
   const matchedGenuineDeal = radarSignal.genuineDeal ?? null;
+  const genuineDealCurrency = matchedGenuineDeal?.currency ?? mdCurrency;
   const genuinePillKey = isMultiPlatformFloor(matchedGenuineDeal)
-    ? 'radarGenuinePill'
-    : 'radarBelowMedianPill';
+    ? genuineDealCurrency === 'PCT'
+      ? 'radarGenuinePillCurrency'
+      : 'radarGenuinePill'
+    : genuineDealCurrency === 'PCT'
+      ? 'radarBelowMedianPillCurrency'
+      : 'radarBelowMedianPill';
   const matchedFakeTrap = radarSignal.fakeSaleTrap ?? null;
   const matchedPriceSpread = radarSignal.priceSpread ?? null;
+  const priceSpreadCurrency = matchedPriceSpread?.currency ?? mdCurrency;
   const genuineDealPriceVnd = sanitizeInspectPriceVnd(
-    matchedGenuineDeal?.priceCurrent
+    matchedGenuineDeal?.priceCurrent,
+    genuineDealCurrency
   );
-  const spreadVnd = sanitizeInspectPriceVnd(matchedPriceSpread?.spreadVnd);
+  const spreadVnd = sanitizeInspectPriceVnd(
+    matchedPriceSpread?.spreadVnd,
+    priceSpreadCurrency
+  );
   const parsedUserRating = parseInspectFiniteNumber(masterUserRating);
   const clampedUserRating =
     parsedUserRating != null && parsedUserRating > 0
@@ -908,6 +992,7 @@ export function buildInspectAuditMarkdown(params: {
       histLow,
       histHigh,
       locale,
+      currency: mdCurrency,
       labels: {
         currentPriceLabel: t('currentPriceLabel'),
         claimedOriginalLabel: t('claimedOriginalLabel'),
@@ -928,7 +1013,14 @@ export function buildInspectAuditMarkdown(params: {
               locale,
               32
             ).toUpperCase(),
-            price: formatNumber(genuineDealPriceVnd, locale),
+            price:
+              genuineDealCurrency === 'PCT'
+                ? formatListingPrice(
+                    genuineDealPriceVnd,
+                    genuineDealCurrency,
+                    locale
+                  )
+                : formatNumber(genuineDealPriceVnd, locale),
           })}`,
         ]
       : []),
@@ -950,25 +1042,33 @@ export function buildInspectAuditMarkdown(params: {
       : []),
     ...(matchedPriceSpread && spreadVnd > 0
       ? [
-          `- ${t('radarSpreadPill', {
-            pct: formatInspectNonNegativePlainNumber(
-              matchedPriceSpread.spreadPct,
-              locale
-            ),
-            vnd: formatNumber(spreadVnd, locale),
-            cheapest: sanitizeInspectMarkdownInline(
-              matchedPriceSpread.cheapestPlatform,
-              'shopee',
-              locale,
-              32
-            ).toUpperCase(),
-            priciest: sanitizeInspectMarkdownInline(
-              matchedPriceSpread.priciestPlatform,
-              'lazada',
-              locale,
-              32
-            ).toUpperCase(),
-          })}`,
+          `- ${t(
+            priceSpreadCurrency === 'PCT'
+              ? 'radarSpreadPillCurrency'
+              : 'radarSpreadPill',
+            {
+              pct: formatInspectNonNegativePlainNumber(
+                matchedPriceSpread.spreadPct,
+                locale
+              ),
+              vnd:
+                priceSpreadCurrency === 'PCT'
+                  ? formatListingPrice(spreadVnd, priceSpreadCurrency, locale)
+                  : formatNumber(spreadVnd, locale),
+              cheapest: sanitizeInspectMarkdownInline(
+                matchedPriceSpread.cheapestPlatform,
+                'shopee',
+                locale,
+                32
+              ).toUpperCase(),
+              priciest: sanitizeInspectMarkdownInline(
+                matchedPriceSpread.priciestPlatform,
+                'lazada',
+                locale,
+                32
+              ).toUpperCase(),
+            }
+          )}`,
         ]
       : []),
     ...(merchant
@@ -999,20 +1099,20 @@ export function isInspectOfferBait(
     | null
     | undefined,
   implausibleOfferIds: ReadonlySet<string>,
-  inStockOffers: readonly { id?: string | null; price_current: number }[]
+  inStockOffers: readonly { id?: string | null; price_current: number }[],
+  minFloorVnd = MINIMUM_EARBUDS_PRICE_FLOOR_VND,
+  currency?: string | null
 ): boolean {
   if (!offer) return false;
   if (offer.implausiblyLow === true) return true;
-  const rawPrice = offer.price_current;
-  const safePrice =
-    typeof rawPrice === 'number'
-      ? Number.isFinite(rawPrice) &&
-        rawPrice > 0 &&
-        rawPrice <= MAX_VALID_VND_PRICE
-        ? Math.round(rawPrice)
-        : 0
-      : sanitizeInspectPriceVnd(rawPrice);
-  if (safePrice > 0 && safePrice < MINIMUM_EARBUDS_PRICE_FLOOR_VND) {
+  const safeFloor =
+    typeof minFloorVnd === 'number' &&
+    Number.isFinite(minFloorVnd) &&
+    minFloorVnd >= 0
+      ? minFloorVnd
+      : MINIMUM_EARBUDS_PRICE_FLOOR_VND;
+  const safePrice = sanitizeInspectPriceVnd(offer.price_current, currency);
+  if (safeFloor > 0 && safePrice > 0 && safePrice < safeFloor) {
     return true;
   }
   return isOfferImplausiblyLowAgainstInStock(
@@ -1189,22 +1289,64 @@ export default function DeepInspectWorkspace({
   };
 
   const master = result?.masterProduct ?? null;
+  const matchedRawOffer = result?.matchedOffer ?? null;
+  const inspectCategorySlug = master
+    ? getMasterProductCategorySlug(master)
+    : null;
+  const inspectCurrency = resolveListingPriceCurrency({
+    categorySlug: inspectCategorySlug,
+    currency:
+      matchedRawOffer?.currency ??
+      result?.allOffers?.find((o) => o?.currency)?.currency,
+    metadata: master?.metadata,
+  });
+  const rawCategoryOfferFloor = minimumListingPriceVnd(
+    [master?.name ?? '', matchedRawOffer?.title ?? '', result?.query ?? ''],
+    {
+      categorySlug: inspectCategorySlug,
+      entityType: master?.entity_type,
+      currency: inspectCurrency,
+    }
+  );
+  const inspectOfferFloorVnd =
+    rawCategoryOfferFloor < MINIMUM_EARBUDS_PRICE_FLOOR_VND
+      ? rawCategoryOfferFloor
+      : MINIMUM_EARBUDS_PRICE_FLOOR_VND;
   const {
     inStockOffers,
     plausibilityOffers,
     implausibleOfferIds,
     listedOffers,
-  } = useMemo(() => orderInspectOffers(result?.allOffers), [result?.allOffers]);
+  } = useMemo(
+    () =>
+      orderInspectOffers(
+        result?.allOffers,
+        inspectOfferFloorVnd,
+        inspectCurrency
+      ),
+    [result?.allOffers, inspectOfferFloorVnd, inspectCurrency]
+  );
   // A sold-out, unpriced, or bait listing is never the fallback match (DOS/Rate#1177, #1810).
   const matchedOffer =
     result?.matchedOffer ??
     plausibleOffers(
-      inStockOffers.filter(
-        (o) =>
-          sanitizeInspectPriceVnd(o.price_current) >=
-            MINIMUM_EARBUDS_PRICE_FLOOR_VND &&
-          !isInspectOfferBait(o, implausibleOfferIds, plausibilityOffers)
-      )
+      inStockOffers.filter((o) => {
+        const safePrice = sanitizeInspectPriceVnd(
+          o.price_current,
+          inspectCurrency
+        );
+        return (
+          safePrice > 0 &&
+          (inspectOfferFloorVnd === 0 || safePrice >= inspectOfferFloorVnd) &&
+          !isInspectOfferBait(
+            o,
+            implausibleOfferIds,
+            plausibilityOffers,
+            inspectOfferFloorVnd,
+            inspectCurrency
+          )
+        );
+      })
     )[0] ??
     null;
   const apiVerdictImplausiblyLow = Boolean(
@@ -1214,9 +1356,13 @@ export default function DeepInspectWorkspace({
       } | null
     )?.priceVerdict?.implausiblyLow === true
   );
-  const rawMasterMinForBait = sanitizeInspectPriceVnd(master?.min_price);
+  const rawMasterMinForBait = sanitizeInspectPriceVnd(
+    master?.min_price,
+    inspectCurrency
+  );
   const safeMatchedOfferPrice = sanitizeInspectPriceVnd(
-    matchedOffer?.price_current
+    matchedOffer?.price_current,
+    inspectCurrency
   );
   // Judged among in-stock listings, as the product page's offers table does (#797, #1141).
   const offerImplausiblyLow = Boolean(
@@ -1225,9 +1371,13 @@ export default function DeepInspectWorkspace({
       isInspectOfferBait(
         matchedOffer,
         implausibleOfferIds,
-        plausibilityOffers
+        plausibilityOffers,
+        inspectOfferFloorVnd,
+        inspectCurrency
       ) ||
-      (rawMasterMinForBait >= MINIMUM_EARBUDS_PRICE_FLOOR_VND &&
+      (rawMasterMinForBait > 0 &&
+        (inspectOfferFloorVnd === 0 ||
+          rawMasterMinForBait >= inspectOfferFloorVnd) &&
         safeMatchedOfferPrice > 0 &&
         safeMatchedOfferPrice < rawMasterMinForBait * IMPLAUSIBLY_LOW_RATIO))
   );
@@ -1236,7 +1386,9 @@ export default function DeepInspectWorkspace({
   );
   const allOffersUnavailable = Boolean(
     hasAllOffersList &&
-    !inStockOffers.some((o) => sanitizeInspectPriceVnd(o.price_current) > 0)
+    !inStockOffers.some(
+      (o) => sanitizeInspectPriceVnd(o.price_current, inspectCurrency) > 0
+    )
   );
   const matchedOfferUnavailable = Boolean(
     (matchedOffer && isOfferUnavailable(matchedOffer)) ||
@@ -1249,14 +1401,20 @@ export default function DeepInspectWorkspace({
     }
     if (
       matchedOffer &&
-      safeMatchedOfferPrice < MINIMUM_EARBUDS_PRICE_FLOOR_VND
+      (safeMatchedOfferPrice <= 0 ||
+        (inspectOfferFloorVnd > 0 &&
+          safeMatchedOfferPrice < inspectOfferFloorVnd))
     ) {
       return null;
     }
     const safeDiscountPrice = sanitizeInspectPriceVnd(
-      rawDiscount.price_current
+      rawDiscount.price_current,
+      inspectCurrency
     );
-    if (safeDiscountPrice < MINIMUM_EARBUDS_PRICE_FLOOR_VND) {
+    if (
+      safeDiscountPrice <= 0 ||
+      (inspectOfferFloorVnd > 0 && safeDiscountPrice < inspectOfferFloorVnd)
+    ) {
       return null;
     }
     if (
@@ -1269,7 +1427,9 @@ export default function DeepInspectWorkspace({
           price_current: safeDiscountPrice,
         },
         implausibleOfferIds,
-        plausibilityOffers
+        plausibilityOffers,
+        inspectOfferFloorVnd,
+        inspectCurrency
       )
     ) {
       return null;
@@ -1293,6 +1453,8 @@ export default function DeepInspectWorkspace({
     offerImplausiblyLow,
     master,
     priceHistory,
+    minFloorVnd: inspectOfferFloorVnd,
+    currency: inspectCurrency,
   });
   const safeMasterMinPriceVnd = resolveInspectMasterMinPriceVnd({
     matchedOffer,
@@ -1300,6 +1462,8 @@ export default function DeepInspectWorkspace({
     inStockOffers,
     offerImplausiblyLow,
     master,
+    minFloorVnd: inspectOfferFloorVnd,
+    currency: inspectCurrency,
   });
   const watchableMinPriceVnd =
     safeMasterMinPriceVnd || verdictPrices.currentPriceVnd;
@@ -1313,13 +1477,19 @@ export default function DeepInspectWorkspace({
     result?.radarSignal ??
     (master ? getRadarSignal(radarIndex, master.slug) : EMPTY_RADAR_SIGNAL);
   const matchedGenuineDeal = radarSignal.genuineDeal ?? null;
+  const genuineDealCurrency = matchedGenuineDeal?.currency ?? inspectCurrency;
   // Only a multi-platform floor is the lowest price across stores; any other
   // genuine deal is just below the median (DOS/Rate#1661).
   const genuinePillKey = isMultiPlatformFloor(matchedGenuineDeal)
-    ? 'radarGenuinePill'
-    : 'radarBelowMedianPill';
+    ? genuineDealCurrency === 'PCT'
+      ? 'radarGenuinePillCurrency'
+      : 'radarGenuinePill'
+    : genuineDealCurrency === 'PCT'
+      ? 'radarBelowMedianPillCurrency'
+      : 'radarBelowMedianPill';
   const matchedFakeTrap = radarSignal.fakeSaleTrap ?? null;
   const matchedPriceSpread = radarSignal.priceSpread ?? null;
+  const priceSpreadCurrency = matchedPriceSpread?.currency ?? inspectCurrency;
 
   const masterUserRating = master
     ? resolveCompareEffectiveUserRating(master)
@@ -1345,20 +1515,36 @@ export default function DeepInspectWorkspace({
       return null;
     }
 
+    const inspectCategorySlug = master
+      ? getMasterProductCategorySlug(master)
+      : null;
     const minValidPriceVnd =
-      master && getMasterProductCategorySlug(master) === 'earbuds'
+      inspectCategorySlug === 'earbuds'
         ? MINIMUM_EARBUDS_PRICE_FLOOR_VND
-        : minimumListingPriceVnd([
-            master?.name ?? '',
-            explicitMatchedOffer?.title ?? matchedOffer?.title ?? '',
-            result?.query ?? '',
-          ]);
+        : minimumListingPriceVnd(
+            [
+              master?.name ?? '',
+              explicitMatchedOffer?.title ?? matchedOffer?.title ?? '',
+              result?.query ?? '',
+            ],
+            {
+              categorySlug: inspectCategorySlug,
+              entityType: master?.entity_type,
+              currency: resolveListingPriceCurrency({
+                categorySlug: inspectCategorySlug,
+                currency:
+                  explicitMatchedOffer?.currency ?? matchedOffer?.currency,
+                metadata: master?.metadata,
+              }),
+            }
+          );
 
     const anchorMs = resolveOmnibusReferenceAnchorMs({
       points: priceHistory.points,
       referenceOffers: result?.allOffers,
       implausibleOfferIds,
       minValidPriceVnd,
+      currency: inspectCurrency,
     });
 
     if (explicitMatchedOffer?.id) {
@@ -1367,21 +1553,25 @@ export default function DeepInspectWorkspace({
         isInspectOfferBait(
           explicitMatchedOffer,
           implausibleOfferIds,
-          plausibilityOffers
+          plausibilityOffers,
+          minValidPriceVnd,
+          inspectCurrency
         )
       ) {
         return null;
       }
       const listingCurrentVnd = sanitizeOmnibusPriceVnd(
         explicitMatchedOffer.price_current,
-        minValidPriceVnd
+        minValidPriceVnd,
+        inspectCurrency
       );
       if (listingCurrentVnd == null) {
         return null;
       }
       const rawListingOrig = sanitizeInspectOriginalPriceVnd(
         explicitMatchedOffer.price_original,
-        listingCurrentVnd
+        listingCurrentVnd,
+        inspectCurrency
       );
       const listingOrigVnd = rawListingOrig > 0 ? rawListingOrig : null;
 
@@ -1403,6 +1593,7 @@ export default function DeepInspectWorkspace({
         implausibleOfferIds,
         minValidPriceVnd,
         referenceTimestampMs: anchorMs,
+        currency: inspectCurrency,
       });
       const offerAudit = evaluateOmnibusPriceAudit({
         points: offerPts,
@@ -1414,6 +1605,7 @@ export default function DeepInspectWorkspace({
         implausibleOfferIds,
         minValidPriceVnd,
         referenceTimestampMs: anchorMs,
+        currency: inspectCurrency,
       });
       return {
         audit: {
@@ -1433,15 +1625,27 @@ export default function DeepInspectWorkspace({
         : verdictPrices.currentPriceVnd;
     let bestInStockOrig: number | null = null;
     for (const off of inStockOffers) {
-      if (isInspectOfferBait(off, implausibleOfferIds, plausibilityOffers)) {
+      if (
+        isInspectOfferBait(
+          off,
+          implausibleOfferIds,
+          plausibilityOffers,
+          minValidPriceVnd,
+          inspectCurrency
+        )
+      ) {
         continue;
       }
-      if (sanitizeInspectPriceVnd(off.price_current) !== inStockFloorVnd) {
+      if (
+        sanitizeInspectPriceVnd(off.price_current, inspectCurrency) !==
+        inStockFloorVnd
+      ) {
         continue;
       }
       const orig = sanitizeInspectOriginalPriceVnd(
         off.price_original,
-        inStockFloorVnd
+        inStockFloorVnd,
+        inspectCurrency
       );
       if (orig > 0 && (bestInStockOrig == null || orig > bestInStockOrig)) {
         bestInStockOrig = orig;
@@ -1459,6 +1663,7 @@ export default function DeepInspectWorkspace({
       implausibleOfferIds,
       minValidPriceVnd,
       referenceTimestampMs: anchorMs,
+      currency: inspectCurrency,
     });
 
     return {
@@ -1469,7 +1674,9 @@ export default function DeepInspectWorkspace({
     explicitMatchedOffer,
     implausibleOfferIds,
     inStockOffers,
+    inspectCurrency,
     master,
+    matchedOffer?.currency,
     matchedOffer?.title,
     matchedOfferUnavailable,
     offerImplausiblyLow,
@@ -1485,7 +1692,12 @@ export default function DeepInspectWorkspace({
     tVerdict(key, values);
   const inspectOmnibusCopy =
     inspectOmnibusState && inspectOmnibusState.audit.currentPriceVnd != null
-      ? formatOmnibusAuditCopy(inspectOmnibusState.audit, tOmnibus, locale)
+      ? formatOmnibusAuditCopy(
+          inspectOmnibusState.audit,
+          tOmnibus,
+          locale,
+          inspectCurrency
+        )
       : null;
 
   const handleCopyAuditMarkdown = async () => {
@@ -1511,6 +1723,7 @@ export default function DeepInspectWorkspace({
         safeMerchantTrust,
         dosafeDisplay,
         reviewRiskDisplay,
+        currency: inspectCurrency,
       });
       await navigator.clipboard.writeText(md);
       setCopiedMd(true);
@@ -1553,13 +1766,25 @@ export default function DeepInspectWorkspace({
         'shopee'
       ).toUpperCase(),
       o.title || master?.name || cleanQuery,
-      sanitizeInspectPriceVnd(o.price_current),
-      sanitizeInspectOriginalPriceVnd(o.price_original, o.price_current),
+      sanitizeInspectPriceVnd(o.price_current, inspectCurrency),
+      sanitizeInspectOriginalPriceVnd(
+        o.price_original,
+        o.price_current,
+        inspectCurrency
+      ),
       histLow,
       histHigh,
       matchedPriceSpread?.spreadPct ?? 0,
       (() => {
-        if (isInspectOfferBait(o, implausibleOfferIds, plausibilityOffers)) {
+        if (
+          isInspectOfferBait(
+            o,
+            implausibleOfferIds,
+            plausibilityOffers,
+            inspectOfferFloorVnd,
+            inspectCurrency
+          )
+        ) {
           return t('implausiblyLowBadge');
         }
         const canonicalOfferId = normalizeOfferId(o.id);
@@ -1574,9 +1799,13 @@ export default function DeepInspectWorkspace({
           Object.hasOwn(byOfferMap, canonicalOfferId)
             ? byOfferMap[canonicalOfferId]
             : undefined;
+        const safeRowPrice = sanitizeInspectPriceVnd(
+          o.price_current,
+          inspectCurrency
+        );
         const rawAnalysis =
-          sanitizeInspectPriceVnd(o.price_current) >=
-          MINIMUM_EARBUDS_PRICE_FLOOR_VND
+          safeRowPrice > 0 &&
+          (inspectOfferFloorVnd === 0 || safeRowPrice >= inspectOfferFloorVnd)
             ? (directByOffer ??
               canonicalByOffer ??
               (o.id === matchedOffer?.id ? result?.discountAnalysis : null))
@@ -1615,6 +1844,7 @@ export default function DeepInspectWorkspace({
     const payload = {
       source: 'Rate.vn Deep URL & Fake Discount Inspector',
       query: sanitizeInspectQuery(queryInput),
+      currency: inspectCurrency,
       exportedAt: new Date().toISOString(),
       dealRadar: radarExportFields(radarSignal),
       dealRadarContext: {
@@ -1627,7 +1857,13 @@ export default function DeepInspectWorkspace({
           ...implausibleOfferIds,
           ...listedOffers
             .filter((o) =>
-              isInspectOfferBait(o, implausibleOfferIds, plausibilityOffers)
+              isInspectOfferBait(
+                o,
+                implausibleOfferIds,
+                plausibilityOffers,
+                inspectOfferFloorVnd,
+                inspectCurrency
+              )
             )
             .map((o) => normalizeOfferId(o.id))
             .filter(Boolean),
@@ -1838,7 +2074,8 @@ export default function DeepInspectWorkspace({
                         >
                           {formatInspectPriceVndOrDash(
                             verdictPrices.currentPriceVnd,
-                            locale
+                            locale,
+                            inspectCurrency
                           )}
                         </div>
                       </div>
@@ -1858,7 +2095,8 @@ export default function DeepInspectWorkspace({
                         >
                           {formatInspectPriceVndOrDash(
                             verdictPrices.claimedOriginalVnd,
-                            locale
+                            locale,
+                            inspectCurrency
                           )}
                         </div>
                       </div>
@@ -1878,7 +2116,8 @@ export default function DeepInspectWorkspace({
                         >
                           {formatInspectPriceVndOrDash(
                             verdictPrices.historicalLowVnd,
-                            locale
+                            locale,
+                            inspectCurrency
                           )}
                         </div>
                       </div>
@@ -1898,7 +2137,8 @@ export default function DeepInspectWorkspace({
                         >
                           {formatInspectPriceVndOrDash(
                             verdictPrices.historicalHighVnd,
-                            locale
+                            locale,
+                            inspectCurrency
                           )}
                         </div>
                       </div>
@@ -2077,12 +2317,16 @@ export default function DeepInspectWorkspace({
                   )}
 
                   {((matchedGenuineDeal &&
-                    sanitizeInspectPriceVnd(matchedGenuineDeal.priceCurrent) >
-                      0) ||
+                    sanitizeInspectPriceVnd(
+                      matchedGenuineDeal.priceCurrent,
+                      genuineDealCurrency
+                    ) > 0) ||
                     matchedFakeTrap ||
                     (matchedPriceSpread &&
-                      sanitizeInspectPriceVnd(matchedPriceSpread.spreadVnd) >
-                        0)) && (
+                      sanitizeInspectPriceVnd(
+                        matchedPriceSpread.spreadVnd,
+                        priceSpreadCurrency
+                      ) > 0)) && (
                     <div
                       className="rounded-3 bg-light mt-3 border p-3"
                       data-testid="inspect-deal-radar-verdict"
@@ -2101,7 +2345,8 @@ export default function DeepInspectWorkspace({
                       <div className="d-flex align-items-center flex-wrap gap-2">
                         {matchedGenuineDeal &&
                           sanitizeInspectPriceVnd(
-                            matchedGenuineDeal.priceCurrent
+                            matchedGenuineDeal.priceCurrent,
+                            genuineDealCurrency
                           ) > 0 && (
                             <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-3 py-2">
                               {t(genuinePillKey, {
@@ -2111,12 +2356,23 @@ export default function DeepInspectWorkspace({
                                 ),
                                 platform:
                                   matchedGenuineDeal.platform.toUpperCase(),
-                                price: formatNumber(
-                                  sanitizeInspectPriceVnd(
-                                    matchedGenuineDeal.priceCurrent
-                                  ),
-                                  locale
-                                ),
+                                price:
+                                  genuineDealCurrency === 'PCT'
+                                    ? formatListingPrice(
+                                        sanitizeInspectPriceVnd(
+                                          matchedGenuineDeal.priceCurrent,
+                                          genuineDealCurrency
+                                        ),
+                                        genuineDealCurrency,
+                                        locale
+                                      )
+                                    : formatNumber(
+                                        sanitizeInspectPriceVnd(
+                                          matchedGenuineDeal.priceCurrent,
+                                          genuineDealCurrency
+                                        ),
+                                        locale
+                                      ),
                               })}
                             </span>
                           )}
@@ -2133,25 +2389,42 @@ export default function DeepInspectWorkspace({
                         )}
                         {matchedPriceSpread &&
                           sanitizeInspectPriceVnd(
-                            matchedPriceSpread.spreadVnd
+                            matchedPriceSpread.spreadVnd,
+                            priceSpreadCurrency
                           ) > 0 && (
                             <span className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill border px-3 py-2">
-                              {t('radarSpreadPill', {
-                                pct: formatPlainNumber(
-                                  matchedPriceSpread.spreadPct,
-                                  locale
-                                ),
-                                vnd: formatNumber(
-                                  sanitizeInspectPriceVnd(
-                                    matchedPriceSpread.spreadVnd
+                              {t(
+                                priceSpreadCurrency === 'PCT'
+                                  ? 'radarSpreadPillCurrency'
+                                  : 'radarSpreadPill',
+                                {
+                                  pct: formatPlainNumber(
+                                    matchedPriceSpread.spreadPct,
+                                    locale
                                   ),
-                                  locale
-                                ),
-                                cheapest:
-                                  matchedPriceSpread.cheapestPlatform.toUpperCase(),
-                                priciest:
-                                  matchedPriceSpread.priciestPlatform.toUpperCase(),
-                              })}
+                                  vnd:
+                                    priceSpreadCurrency === 'PCT'
+                                      ? formatListingPrice(
+                                          sanitizeInspectPriceVnd(
+                                            matchedPriceSpread.spreadVnd,
+                                            priceSpreadCurrency
+                                          ),
+                                          priceSpreadCurrency,
+                                          locale
+                                        )
+                                      : formatNumber(
+                                          sanitizeInspectPriceVnd(
+                                            matchedPriceSpread.spreadVnd,
+                                            priceSpreadCurrency
+                                          ),
+                                          locale
+                                        ),
+                                  cheapest:
+                                    matchedPriceSpread.cheapestPlatform.toUpperCase(),
+                                  priciest:
+                                    matchedPriceSpread.priciestPlatform.toUpperCase(),
+                                }
+                              )}
                             </span>
                           )}
                       </div>
@@ -2184,6 +2457,7 @@ export default function DeepInspectWorkspace({
                           name: master.name,
                           brand: master.brand,
                           categoryPath: productCategoryPath,
+                          currency: inspectCurrency,
                           thumbnail: resolveProductImageUrl(
                             master.slug,
                             productImageUrl(master)
@@ -2197,6 +2471,7 @@ export default function DeepInspectWorkspace({
                           name={master.name}
                           brand={master.brand}
                           categoryPath={productCategoryPath}
+                          currency={inspectCurrency}
                           thumbnail={resolveProductImageUrl(
                             master.slug,
                             productImageUrl(master)
@@ -2315,19 +2590,25 @@ export default function DeepInspectWorkspace({
                             </td>
                             <td
                               className={`fw-bold ${
-                                sanitizeInspectPriceVnd(offer.price_current) > 0
+                                sanitizeInspectPriceVnd(
+                                  offer.price_current,
+                                  offer.currency ?? inspectCurrency
+                                ) > 0
                                   ? 'text-danger'
                                   : 'text-muted'
                               }`}
                             >
                               {formatInspectPriceVndOrDash(
                                 offer.price_current,
-                                locale
+                                locale,
+                                offer.currency ?? inspectCurrency
                               )}
                               {isInspectOfferBait(
                                 offer,
                                 implausibleOfferIds,
-                                plausibilityOffers
+                                plausibilityOffers,
+                                inspectOfferFloorVnd,
+                                offer.currency ?? inspectCurrency
                               ) && (
                                 <span
                                   className="badge bg-warning text-dark d-block mt-1"
@@ -2353,7 +2634,8 @@ export default function DeepInspectWorkspace({
                               className={`small text-muted ${
                                 sanitizeInspectOriginalPriceVnd(
                                   offer.price_original,
-                                  offer.price_current
+                                  offer.price_current,
+                                  offer.currency ?? inspectCurrency
                                 ) > 0
                                   ? 'text-decoration-line-through'
                                   : ''
@@ -2362,9 +2644,11 @@ export default function DeepInspectWorkspace({
                               {formatInspectPriceVndOrDash(
                                 sanitizeInspectOriginalPriceVnd(
                                   offer.price_original,
-                                  offer.price_current
+                                  offer.price_current,
+                                  offer.currency ?? inspectCurrency
                                 ),
-                                locale
+                                locale,
+                                offer.currency ?? inspectCurrency
                               )}
                             </td>
                             <td>
@@ -2567,7 +2851,11 @@ export default function DeepInspectWorkspace({
                       {formatInspectSuggestionLabel(
                         item.name,
                         item.min_price,
-                        locale
+                        locale,
+                        resolveListingPriceCurrency({
+                          categorySlug: getMasterProductCategorySlug(item),
+                          metadata: item.metadata,
+                        })
                       )}
                     </Link>
                   ))}

@@ -6,6 +6,7 @@ import { BsChevronDown, BsChevronUp, BsPhone } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { buildWatchlistComboHref } from '@/lib/combo-cart-links';
 import type { CanonicalCategorySlug } from '@/lib/rate-domain';
+import { resolveListingPriceCurrency } from '@/lib/rate-domain-core';
 import {
   clearCompareTray,
   type CompareTrayItem,
@@ -18,7 +19,7 @@ import {
   setCompareTray,
   subscribeCompareTray,
 } from './compare-tray';
-import { formatPriceVnd } from '@/lib/locale-format';
+import { formatListingPrice, formatPriceVnd } from '@/lib/locale-format';
 
 // Per-tab memory of the user's last choice; phones start collapsed (#607).
 const COLLAPSED_KEY = 'rate_compare_tray_collapsed';
@@ -26,17 +27,25 @@ const PHONE_QUERY = '(max-width: 767.98px)';
 
 export function formatCompareTrayPriceVnd(
   value: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): string {
-  return formatPriceVnd(sanitizeTrayPriceVnd(value), locale);
+  const safe = sanitizeTrayPriceVnd(value, currency);
+  return currency
+    ? formatListingPrice(safe, currency, locale)
+    : formatPriceVnd(safe, locale);
 }
 
 export function formatCompareTrayPriceDisplay(
   value: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): string {
-  const safePrice = sanitizeTrayPriceVnd(value);
-  return safePrice <= 0 ? '-' : formatPriceVnd(safePrice, locale);
+  const safePrice = sanitizeTrayPriceVnd(value, currency);
+  if (safePrice <= 0) return '-';
+  return currency
+    ? formatListingPrice(safePrice, currency, locale)
+    : formatPriceVnd(safePrice, locale);
 }
 
 export function resolveCompareTrayPrimaryCategory(
@@ -276,7 +285,17 @@ export default function CompareTrayBar({ initialItems }: CompareTrayBarProps) {
                         className="text-warning fw-bold rate-tabular text-nowrap"
                         style={{ fontSize: '0.8125rem' }}
                       >
-                        {formatCompareTrayPriceDisplay(item.min_price, locale)}
+                        {formatCompareTrayPriceDisplay(
+                          item.min_price,
+                          locale,
+                          resolveListingPriceCurrency({
+                            categorySlug:
+                              item.categorySlug ??
+                              (typeof item.categoryPath === 'string'
+                                ? item.categoryPath.replace(/^\//, '')
+                                : undefined),
+                          })
+                        )}
                       </div>
                     </div>
                     <button

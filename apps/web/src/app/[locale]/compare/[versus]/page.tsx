@@ -6,6 +6,7 @@ import { Link } from '@/lib/navigation';
 import {
   getCachedCompareMasterProducts,
   getCachedMasterProducts,
+  getCachedPopulatedCategorySlugs,
   getMasterProductCategorySlug,
   getMasterProductHref,
 } from '@/server/rate';
@@ -250,13 +251,14 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
       ? [plan.slugA, plan.slugB]
       : canonicalVersusOrder(parsed[0], parsed[1]);
 
-  const [compared, directory] = await Promise.all([
+  const [compared, directory, populatedCategorySlugs] = await Promise.all([
     getCachedCompareMasterProducts(pair.join(',')),
     getCachedMasterProducts({
       categorySlug: 'all',
       limit: 60,
       sort: 'rating_desc',
     }),
+    getCachedPopulatedCategorySlugs(),
   ]);
 
   if (compared.length < 2 || !compared[0] || !compared[1]) {
@@ -295,7 +297,10 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
 
   return (
     <ClientMessages scope="compare">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedCategorySlugs}
+      >
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { getCachedMasterProducts } from '@/server/rate';
+import {
+  getCachedMasterProducts,
+  getCachedPopulatedCategorySlugs,
+} from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
@@ -47,11 +50,17 @@ export default async function WatchlistPage({
   setRequestLocale(locale);
   // No empty fallback: it would be cached for the whole revalidate window. A
   // failed regeneration keeps the last good page instead (DOS/Rate#491).
-  const catalogProducts = await loadWatchlistCatalogProducts();
+  const [catalogProducts, populatedCategorySlugs] = await Promise.all([
+    loadWatchlistCatalogProducts(),
+    getCachedPopulatedCategorySlugs(),
+  ]);
 
   return (
     <ClientMessages scope="watchlist">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedCategorySlugs}
+      >
         <WatchlistWorkspace
           catalogProducts={catalogProducts.map(withoutSpecSheet)}
           locale={locale}

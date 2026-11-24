@@ -4,12 +4,19 @@
  * from private scraper implementations (see DOS/Rate-Services).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { SupportedPriceCurrency } from '@repo/shared-data';
 export {
   MAX_VALID_VND_PRICE,
   SupportedEcommercePlatformSchema,
+  SupportedServicePlatformSchema,
+  SupportedIngestionPlatformSchema,
+  SupportedPriceCurrencySchema,
   ScrapedReviewerSchema,
   ScrapedReviewSchema,
   ScrapedProductSchema,
+  type SupportedServicePlatform,
+  type SupportedIngestionPlatform,
+  type SupportedPriceCurrency,
   type ValidatedScrapedProduct,
 } from '@repo/shared-data';
 
@@ -52,6 +59,9 @@ export type SupportedEcommercePlatform =
   | 'mediamart'
   | 'memoryzone'
   | 'anphatpc';
+
+export type SupportedPlatform =
+  SupportedEcommercePlatform | 'vietcombank' | 'acb' | 'vnpt' | 'fpttelecom';
 
 /**
  * Reviewer metadata scraped alongside a review. What each platform exposes differs
@@ -101,7 +111,17 @@ export interface ShopeeReview {
 
 export interface ShopeeProduct {
   /** Platform identifier (defaults to 'shopee' for backward compatibility) */
-  platform?: SupportedEcommercePlatform;
+  platform?: SupportedPlatform;
+  /** Entity type supplied by trusted sources (e.g. 'service' for Wave E2). */
+  entityType?: 'product' | 'service';
+  /** Snake-case alias accepted by ScrapedProductSchema for entityType. */
+  entity_type?: 'product' | 'service';
+  /** Optional explicit category slug hint from upstream crawler/feed. */
+  categorySlug?: string;
+  /** Snake-case alias accepted by ScrapedProductSchema for categorySlug. */
+  category_slug?: string;
+  /** Optional category-specific metadata payload. */
+  metadata?: Record<string, unknown>;
   itemId: string;
   shopId: string;
   url: string;
@@ -110,7 +130,7 @@ export interface ShopeeProduct {
   priceMin: number;
   priceMax: number;
   priceBeforeDiscount?: number;
-  currency: string;
+  currency: SupportedPriceCurrency | (string & {});
   historicalSold: number;
   /**
    * Marketplace sold label (e.g. "20k+") when historicalSold is only that

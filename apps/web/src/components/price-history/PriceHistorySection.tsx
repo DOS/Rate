@@ -57,14 +57,20 @@ import {
   collapseWhitespace,
   formatDate,
   formatDecimal,
+  formatListingPrice,
   formatNumber,
+  formatPercent,
   formatPlainNumber,
   formatPriceVnd,
+  normalizePriceCurrency,
+  sanitizeCurrencyPriceValue,
   toFormatLocale,
 } from '@/lib/locale-format';
 
 interface PriceHistorySectionProps {
   productName: string;
+  categorySlug?: string;
+  currency?: string | null;
   history: MasterProductPriceHistorySummary;
   radarSignal?: RadarSignal | null;
   offers?: readonly OmnibusReferenceOfferInput[] | null;
@@ -113,22 +119,32 @@ const PRICE_HISTORY_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
 export function formatPriceHistoryVnd(
   price: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): string {
   const num = Number(price);
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return '-';
   }
-  return formatPriceVnd(Math.round(num), locale);
+  const normalized = sanitizeCurrencyPriceValue(num, currency);
+  if (normalized <= 0) return '-';
+  return currency
+    ? formatListingPrice(normalized, currency, locale)
+    : formatPriceVnd(normalized, locale);
 }
 
 export function formatCompactPriceHistoryVnd(
   price: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): string {
   const num = Number(price);
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return '0';
+  }
+  if (normalizePriceCurrency(currency) === 'PCT') {
+    const pct = sanitizeCurrencyPriceValue(num, 'PCT');
+    return formatPercent(pct, locale);
   }
   const rounded = Math.round(num);
   if (rounded >= 1_000_000) {
@@ -161,9 +177,6 @@ export function sanitizePriceHistoryMarkdownCell(
     .slice(0, 160);
   return cleaned || fallback;
 }
-
-const formatVnd = formatPriceHistoryVnd;
-const formatCompactVnd = formatCompactPriceHistoryVnd;
 
 export type PriceHistoryMarkdownKey =
   | 'priceHistoryMdHeading'
@@ -254,6 +267,7 @@ function defaultPriceHistoryMarkdownTranslator(
 
 export function buildPriceHistoryMarkdown(params: {
   productName: string;
+  currency?: string | null;
   history: MasterProductPriceHistorySummary;
   offerAnalyses: readonly OfferDiscountAnalysis[];
   radarSignal?: RadarSignal | null;
@@ -261,8 +275,20 @@ export function buildPriceHistoryMarkdown(params: {
   tVerdict: VerdictTranslator;
   locale: string;
 }): string {
-  const { productName, history, offerAnalyses, radarSignal, tVerdict, locale } =
-    params;
+  const {
+    productName,
+    currency,
+    history,
+    offerAnalyses,
+    radarSignal,
+    tVerdict,
+    locale,
+  } = params;
+  const resolvedCur = normalizePriceCurrency(
+    currency ?? history.points?.[0]?.currency
+  );
+  const fmtPrice = (val: unknown, loc?: string | null) =>
+    formatPriceHistoryVnd(val, loc, resolvedCur);
   const tr = params.t ?? defaultPriceHistoryMarkdownTranslator(locale);
   const headers = [
     sanitizePriceHistoryMarkdownCell(
@@ -307,10 +333,10 @@ export function buildPriceHistoryMarkdown(params: {
   const rows = offerAnalyses.map((oa) => [
     sanitizePriceHistoryMarkdownCell(oa.merchant_name, '-', locale),
     sanitizePriceHistoryMarkdownCell(oa.platform, '-', locale).toUpperCase(),
-    formatVnd(oa.price_current, locale),
-    formatVnd(oa.price_original, locale),
-    formatVnd(oa.historical_median_price, locale),
-    formatVnd(oa.historical_min_price, locale),
+    fmtPrice(oa.price_current, locale),
+    fmtPrice(oa.price_original, locale),
+    fmtPrice(oa.historical_median_price, locale),
+    fmtPrice(oa.historical_min_price, locale),
     sanitizePriceHistoryMarkdownCell(
       discountVerdictCopy(tVerdict, oa, locale).label,
       '-',
@@ -321,8 +347,8 @@ export function buildPriceHistoryMarkdown(params: {
     tr('priceHistoryMdHeading', {
       name: sanitizePriceHistoryMarkdownCell(productName, '-', locale),
     }),
-    `- **${tr('priceHistoryMdCurrentLowest')}**: ${formatVnd(history.currentMinPrice, locale)}`,
-    `- **${tr('priceHistoryMdAllTimeLowest')}**: ${formatVnd(history.lowestEverPrice, locale)}`,
+    `- **${tr('priceHistoryMdCurrentLowest')}**: ${fmtPrice(history.currentMinPrice, locale)}`,
+    `- **${tr('priceHistoryMdAllTimeLowest')}**: ${fmtPrice(history.lowestEverPrice, locale)}`,
     `- **${tr('priceHistoryMdFakeAlerts')}**: ${formatNumber(safeFakeCount, locale)} | **${tr('priceHistoryMdGenuineDeals')}**: ${formatNumber(safeGenuineCount, locale)}`,
     ...(radarSignal
       ? [
@@ -349,6 +375,8 @@ function formatDateShort(locale: string, iso: string): string {
 
 export default function PriceHistorySection({
   productName,
+  categorySlug,
+  currency,
   history,
   radarSignal,
   offers,
@@ -356,6 +384,29 @@ export default function PriceHistorySection({
   const t = useTranslations('productDetail');
   const tVerdict = useTranslations('priceVerdict');
   const locale = useLocale();
+  const firstOfferCurrency = Array.isArray(offers)
+    ? offers.find(
+        (
+          off
+        ): off is OmnibusReferenceOfferInput & { currency?: string | null } =>
+          Boolean(off && typeof off === 'object') &&
+          typeof (off as { currency?: unknown }).currency === 'string'
+      )?.currency
+    : undefined;
+  const firstPointCurrency = Array.isArray(history?.points)
+    ? history.points.find(
+        (pt) =>
+          Boolean(pt && typeof pt === 'object') &&
+          typeof pt.currency === 'string'
+      )?.currency
+    : undefined;
+  const sectionCurrency = normalizePriceCurrency(
+    currency ?? firstOfferCurrency ?? firstPointCurrency
+  );
+  const formatVnd = (p: unknown, loc?: string | null) =>
+    formatPriceHistoryVnd(p, loc, sectionCurrency);
+  const formatCompactVnd = (p: unknown, loc?: string | null) =>
+    formatCompactPriceHistoryVnd(p, loc, sectionCurrency);
   const storeFilterLabelId = useId();
   const [selectedProductId, setSelectedProductId] = useState<string>('ALL');
   const [timeRange, setTimeRange] = useState<TimeRangeKey>('all');
@@ -606,13 +657,15 @@ export default function PriceHistorySection({
 
   const handleDownloadPriceHistoryCsv = () => {
     if (typeof document === 'undefined' || filteredPoints.length === 0) return;
+    const isPercent = sectionCurrency === 'PCT';
     const headers = [
       'RecordedAt',
       'ProductID',
       'Platform',
       'MerchantName',
-      'PriceVND',
-      'OriginalPriceVND',
+      isPercent ? 'Price' : 'PriceVND',
+      isPercent ? 'OriginalPrice' : 'OriginalPriceVND',
+      'Currency',
       ...(radarSignal ? RADAR_CSV_HEADERS : []),
     ];
     const rows = filteredPoints.map((pt) => [
@@ -622,6 +675,7 @@ export default function PriceHistorySection({
       pt.merchant_name,
       String(pt.price),
       String(pt.price_original || ''),
+      sectionCurrency,
       ...(radarSignal ? radarCsvCells(radarSignal) : []),
     ]);
     const csvContent =
@@ -647,7 +701,10 @@ export default function PriceHistorySection({
     const payload = {
       source: 'Rate.vn price history and fake sale check',
       productName,
+      currency: sectionCurrency,
       exportedAt: new Date().toISOString(),
+      currentMinPrice: history.currentMinPrice,
+      lowestEverPrice: history.lowestEverPrice,
       currentMinPriceVnd: history.currentMinPrice,
       lowestEverPriceVnd: history.lowestEverPrice,
       fakeDiscountCount: sanitizePriceHistoryCount(history.fakeDiscountCount),
@@ -670,8 +727,12 @@ export default function PriceHistorySection({
   const hasAuditEvidence = validPoints.length > 0 || offerAnalyses.length > 0;
 
   const minValidPriceVnd = useMemo(
-    () => minimumListingPriceVnd([productName]),
-    [productName]
+    () =>
+      minimumListingPriceVnd([productName], {
+        categorySlug,
+        currency: sectionCurrency,
+      }),
+    [productName, categorySlug, sectionCurrency]
   );
 
   const safeCurrentMinPrice = useMemo<number | null>(() => {
@@ -679,8 +740,9 @@ export default function PriceHistorySection({
     if (!Number.isFinite(raw) || raw <= 0 || raw > MAX_VALID_VND_PRICE) {
       return null;
     }
-    return Math.round(raw);
-  }, [history.currentMinPrice]);
+    const normalized = sanitizeCurrencyPriceValue(raw, sectionCurrency);
+    return normalized > 0 ? normalized : null;
+  }, [history.currentMinPrice, sectionCurrency]);
 
   const safeOffersInput = useMemo<OmnibusReferenceOfferInput[]>(
     () =>
@@ -768,7 +830,7 @@ export default function PriceHistorySection({
         safeCurrentMinPrice != null &&
         Number.isFinite(p) &&
         p > 0 &&
-        Math.round(p) < safeCurrentMinPrice
+        sanitizeCurrencyPriceValue(p, sectionCurrency) < safeCurrentMinPrice
       ) {
         addId(rawId);
       }
@@ -793,7 +855,7 @@ export default function PriceHistorySection({
         safeCurrentMinPrice != null &&
         Number.isFinite(p) &&
         p > 0 &&
-        Math.round(p) < safeCurrentMinPrice
+        sanitizeCurrencyPriceValue(p, sectionCurrency) < safeCurrentMinPrice
       ) {
         addId(oa.product_id);
         continue;
@@ -822,7 +884,7 @@ export default function PriceHistorySection({
       }
     }
     return ids;
-  }, [offerAnalyses, safeCurrentMinPrice, safeOffersInput]);
+  }, [offerAnalyses, safeCurrentMinPrice, safeOffersInput, sectionCurrency]);
 
   const isUnavailId = useCallback(
     (id: string) =>
@@ -882,7 +944,8 @@ export default function PriceHistorySection({
       if (isOfferUnavailable(off) || off.implausiblyLow === true) return;
       const price = sanitizeOmnibusPriceVnd(
         off.price_current,
-        minValidPriceVnd
+        minValidPriceVnd,
+        sectionCurrency
       );
       if (price == null) return;
       inStockSized.push({
@@ -894,7 +957,7 @@ export default function PriceHistorySection({
       });
     });
     return plausibleOffers(inStockSized).length === 0;
-  }, [effectiveReferenceOffers, minValidPriceVnd]);
+  }, [effectiveReferenceOffers, minValidPriceVnd, sectionCurrency]);
 
   // Historical anchor uses the exact same evidence-eligibility rules as the
   // Omnibus evaluator so rows below `minValidPriceVnd`, `live_listing` rows,
@@ -906,10 +969,12 @@ export default function PriceHistorySection({
         referenceOffers: effectiveReferenceOffers,
         unavailableOfferIds,
         minValidPriceVnd,
+        currency: sectionCurrency,
       }),
     [
       effectiveReferenceOffers,
       minValidPriceVnd,
+      sectionCurrency,
       unavailableOfferIds,
       validPoints,
     ]
@@ -920,12 +985,14 @@ export default function PriceHistorySection({
       referenceOffers: effectiveReferenceOffers,
       unavailableOfferIds,
       minValidPriceVnd,
+      currency: sectionCurrency,
       referenceTimestampMs: omnibusAnchorMs,
     }),
     [
       effectiveReferenceOffers,
       minValidPriceVnd,
       omnibusAnchorMs,
+      sectionCurrency,
       unavailableOfferIds,
     ]
   );
@@ -993,19 +1060,25 @@ export default function PriceHistorySection({
     if (safeCurrentMinPrice != null) {
       const atMin = offerAnalyses.filter(
         (oa) =>
-          Math.round(Number(oa.price_current)) === safeCurrentMinPrice &&
-          !isUnavailId(oa.product_id)
+          sanitizeCurrencyPriceValue(
+            Number(oa.price_current),
+            sectionCurrency
+          ) === safeCurrentMinPrice && !isUnavailId(oa.product_id)
       );
       const genuines = atMin.filter((oa) => oa.verdict === 'genuine_deal');
       for (const oa of genuines.length > 0 ? genuines : atMin) {
         const orig = Number(oa.price_original);
+        const normalizedOrig = sanitizeCurrencyPriceValue(
+          orig,
+          sectionCurrency
+        );
         if (
           Number.isFinite(orig) &&
-          orig > safeCurrentMinPrice &&
+          normalizedOrig > safeCurrentMinPrice &&
           orig <= MAX_VALID_VND_PRICE &&
-          (bestClaimedOrig == null || orig > bestClaimedOrig)
+          (bestClaimedOrig == null || normalizedOrig > bestClaimedOrig)
         ) {
-          bestClaimedOrig = Math.round(orig);
+          bestClaimedOrig = normalizedOrig;
         }
       }
     }
@@ -1030,6 +1103,7 @@ export default function PriceHistorySection({
     omnibusByOffer,
     omnibusSharedOpts,
     safeCurrentMinPrice,
+    sectionCurrency,
     selectedProductId,
     validPoints,
   ]);
@@ -1038,7 +1112,7 @@ export default function PriceHistorySection({
     tVerdict(key, values);
   const omnibusCopy =
     validPoints.length > 0 && omnibusAudit.currentPriceVnd != null
-      ? formatOmnibusAuditCopy(omnibusAudit, tOmnibus, locale)
+      ? formatOmnibusAuditCopy(omnibusAudit, tOmnibus, locale, sectionCurrency)
       : null;
 
   const activeNode =

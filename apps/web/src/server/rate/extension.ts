@@ -37,6 +37,11 @@ import {
 } from '../../lib/rate-api';
 import { isOfferUnavailable } from '../../lib/product-market-stats';
 import {
+  formatListingPrice,
+  sanitizeCurrencyPriceValue,
+} from '../../lib/locale-format';
+import { resolveListingPriceCurrency } from '../../lib/rate-domain-core';
+import {
   computeProductStandingInCategory,
   type ProductLeaderboardBadgeInfo,
 } from '../../lib/leaderboard-engine';
@@ -623,6 +628,9 @@ export function detectAccessoryOrJunk(params: {
   title?: string | null;
   url?: string | null;
   price?: number | null;
+  categorySlug?: string | null;
+  entityType?: 'product' | 'service' | null;
+  currency?: string | null;
 }): {
   isAccessory: boolean;
   reason: string | null;
@@ -662,7 +670,11 @@ export function detectAccessoryOrJunk(params: {
     }
   }
 
-  const minFloor = minimumListingPriceVnd([titleLower, urlLower]);
+  const minFloor = minimumListingPriceVnd([titleLower, urlLower], {
+    categorySlug: safeParams.categorySlug,
+    entityType: safeParams.entityType,
+    currency: safeParams.currency,
+  });
 
   if (
     typeof safeParams.price === 'number' &&
@@ -774,7 +786,7 @@ export function extractStorageAndAmbiguity(params: {
   };
 }
 
-function computeMedian(values: number[]): number {
+function computeMedian(values: number[], currency?: string | null): number {
   const valid = (Array.isArray(values) ? values : []).filter(
     (v) =>
       typeof v === 'number' &&
@@ -787,7 +799,10 @@ function computeMedian(values: number[]): number {
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 !== 0
     ? sorted[mid]!
-    : Math.round((sorted[mid - 1]! + sorted[mid]!) / 2);
+    : sanitizeCurrencyPriceValue(
+        (sorted[mid - 1]! + sorted[mid]!) / 2,
+        currency
+      );
 }
 
 /**
@@ -864,6 +879,10 @@ export function evaluateExtensionPriceVerdict(params: {
     };
   }
 
+  const offerCurrency = resolveListingPriceCurrency({ offers: safeOffers });
+  const fmtExtPrice = (amount: number) =>
+    formatListingPrice(amount, offerCurrency, 'vi');
+
   // The market reference leaves bait-price listings out, whichever caller
   // (extension lookup or the inspect API) passes the offers (DOS/Rate#797).
   const marketOffers = plausibleOffers(safeOffers);
@@ -882,7 +901,7 @@ export function evaluateExtensionPriceVerdict(params: {
   const marketMaxPrice =
     offerPrices.length > 0 ? Math.max(...offerPrices) : null;
   const marketMedianPrice =
-    offerPrices.length > 0 ? computeMedian(offerPrices) : null;
+    offerPrices.length > 0 ? computeMedian(offerPrices, offerCurrency) : null;
 
   const rawHistMin = priceHistory?.lowestEverPrice;
   const historicalMinPrice =
@@ -1000,14 +1019,16 @@ export function evaluateExtensionPriceVerdict(params: {
         return Number.NaN;
       })
       .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
-    const roundedMedian = Math.round(
-      marketMedianPrice ?? computeMedian(fallbackPlausiblePrices)
+    const roundedMedian = sanitizeCurrencyPriceValue(
+      marketMedianPrice ??
+        computeMedian(fallbackPlausiblePrices, offerCurrency),
+      offerCurrency
     );
     return {
       verdict: 'insufficient_data',
       badgeLabel: 'Giá thấp bất thường',
       implausiblyLow: true,
-      explanation: `Giá ${observedPrice.toLocaleString('vi-VN')} ₫ thấp hơn nhiều so với các nơi bán khác (trung vị ${roundedMedian.toLocaleString('vi-VN')} ₫): có thể là hàng giả, phụ kiện hoặc tin câu khách. Hãy kiểm tra kỹ gian hàng trước khi mua.`,
+      explanation: `Giá ${fmtExtPrice(observedPrice)} thấp hơn nhiều so với các nơi bán khác (trung vị ${fmtExtPrice(roundedMedian)}): có thể là hàng giả, phụ kiện hoặc tin câu khách. Hãy kiểm tra kỹ gian hàng trước khi mua.`,
       messageKey: 'implausibly_low',
       messageParams: { observedPrice, marketMedianPrice: roundedMedian },
       observedPrice,
@@ -1076,17 +1097,20 @@ export function evaluateExtensionPriceVerdict(params: {
       ((effectivePrice - marketMedianPrice) / marketMedianPrice) * 1000
     ) / 10;
 
+  const cheaperMargin = offerCurrency === 'PCT' ? 0 : 50_000;
   const cheaperOffers = marketOffers.filter(
     (o) =>
       Number.isFinite(o.price_current) &&
       o.price_current > 0 &&
       o.price_current <= MAX_VALID_VND_PRICE &&
-      o.price_current < effectivePrice - 50_000
+      o.price_current < effectivePrice - cheaperMargin
   );
   const cheaperOfferCount = cheaperOffers.length;
   const maxSavingsAmount =
     marketMinPrice && effectivePrice > marketMinPrice
-      ? effectivePrice - marketMinPrice
+      ? offerCurrency === 'PCT'
+        ? Math.round((effectivePrice - marketMinPrice) * 100) / 100
+        : effectivePrice - marketMinPrice
       : 0;
 
   const histMax = historicalMaxPrice || marketMaxPrice || effectivePrice;
@@ -1103,7 +1127,7 @@ export function evaluateExtensionPriceVerdict(params: {
     return {
       verdict: 'inflated_fake_sale',
       badgeLabel: 'Cảnh báo giảm giá ảo',
-      explanation: `Gian hàng treo giá gạch ngang ${effectiveOriginalPrice.toLocaleString('vi-VN')} ₫ (-${claimedDiscountPct}%), nhưng giá bán thực tế (${effectivePrice.toLocaleString('vi-VN')} ₫) vẫn cao hơn hoặc ngang trung vị thị trường (${marketMedianPrice.toLocaleString('vi-VN')} ₫) và vượt đỉnh lịch sử (${histMax.toLocaleString('vi-VN')} ₫).`,
+      explanation: `Gian hàng treo giá gạch ngang ${fmtExtPrice(effectiveOriginalPrice)} (-${claimedDiscountPct}%), nhưng giá bán thực tế (${fmtExtPrice(effectivePrice)}) vẫn cao hơn hoặc ngang trung vị thị trường (${fmtExtPrice(marketMedianPrice)}) và vượt đỉnh lịch sử (${fmtExtPrice(histMax)}).`,
       messageKey: 'fake_discount',
       messageParams: {
         originalPrice: effectiveOriginalPrice,
@@ -1146,8 +1170,11 @@ export function evaluateExtensionPriceVerdict(params: {
       ? hasLiveObservedPrice && validCallerObservedPrice !== null
       : validCallerObservedPrice !== null &&
         (matchedOfferStoredPrice === null ||
-          Math.round(validCallerObservedPrice) !==
-            Math.round(matchedOfferStoredPrice));
+          sanitizeCurrencyPriceValue(
+            validCallerObservedPrice,
+            offerCurrency
+          ) !==
+            sanitizeCurrencyPriceValue(matchedOfferStoredPrice, offerCurrency));
   const suppressUnavailableDeal =
     Boolean(matchedObservedOffer && isOfferUnavailable(matchedObservedOffer)) &&
     !hasLiveCallerOverride;
@@ -1160,7 +1187,7 @@ export function evaluateExtensionPriceVerdict(params: {
     return {
       verdict: 'genuine_deal',
       badgeLabel: 'Giá Tốt Thực Sự',
-      explanation: `Giá hiện tại (${effectivePrice.toLocaleString('vi-VN')} ₫) đang ở vùng đáy lịch sử (trung vị thị trường: ${marketMedianPrice.toLocaleString('vi-VN')} ₫).`,
+      explanation: `Giá hiện tại (${fmtExtPrice(effectivePrice)}) đang ở vùng đáy lịch sử (trung vị thị trường: ${fmtExtPrice(marketMedianPrice)}).`,
       messageKey: 'genuine_deal',
       messageParams: { effectivePrice, marketMedianPrice },
       observedPrice: effectivePrice,
@@ -1182,7 +1209,7 @@ export function evaluateExtensionPriceVerdict(params: {
     return {
       verdict: 'above_market',
       badgeLabel: `Cao hơn thị trường +${vsMarketMedianPct}%`,
-      explanation: `Giá đang xem (${effectivePrice.toLocaleString('vi-VN')} ₫) cao hơn trung vị thị trường (${marketMedianPrice.toLocaleString('vi-VN')} ₫) khoảng ${vsMarketMedianPct}%, nhưng shop không treo giá gạch ngang khống.`,
+      explanation: `Giá đang xem (${fmtExtPrice(effectivePrice)}) cao hơn trung vị thị trường (${fmtExtPrice(marketMedianPrice)}) khoảng ${vsMarketMedianPct}%, nhưng shop không treo giá gạch ngang khống.`,
       messageKey: 'above_market',
       messageParams: { effectivePrice, marketMedianPrice, vsMarketMedianPct },
       observedPrice: effectivePrice,
@@ -1203,7 +1230,7 @@ export function evaluateExtensionPriceVerdict(params: {
   return {
     verdict: 'fair_market_price',
     badgeLabel: 'Giá Chuẩn Thị Trường',
-    explanation: `Giá hiện tại (${effectivePrice.toLocaleString('vi-VN')} ₫) nằm trong biên độ ổn định quanh trung vị thị trường (${marketMedianPrice.toLocaleString('vi-VN')} ₫).`,
+    explanation: `Giá hiện tại (${fmtExtPrice(effectivePrice)}) nằm trong biên độ ổn định quanh trung vị thị trường (${fmtExtPrice(marketMedianPrice)}).`,
     messageKey: 'fair_market',
     messageParams: { effectivePrice, marketMedianPrice },
     observedPrice: effectivePrice,

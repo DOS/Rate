@@ -35,6 +35,7 @@ export default async function FooterDynamic({
   // Without a locale the request locale is used, so a caller
   // that forgets to pass it no longer renders Vietnamese (DOS/Rate#646).
   locale,
+  populatedCategorySlugs,
 }: {
   readonly sections: readonly FooterSection[];
   readonly links: readonly FooterSectionLink[];
@@ -42,6 +43,7 @@ export default async function FooterDynamic({
   readonly copyRight?: string | null;
   readonly socialLinks?: readonly FooterSectionLink[] | null;
   readonly locale?: string;
+  readonly populatedCategorySlugs?: readonly string[];
 }) {
   const tFooter = await getTranslations({
     locale: locale ?? (await getLocale()),
@@ -52,6 +54,21 @@ export default async function FooterDynamic({
     '{YEAR}',
     yearText
   );
+
+  const extraFooterLinks: FooterSectionLink[] = [
+    'tvs',
+    'air-conditioners',
+    'refrigerators',
+    'washing-machines',
+    'air-purifiers',
+    'bank-savings',
+    'internet-telecom',
+  ]
+    .filter((slug) => populatedCategorySlugs?.includes(slug))
+    .map((slug) => ({
+      label: tFooter(`links.${slug}`),
+      href: `/${slug}`,
+    }));
 
   const fallback1: FooterSection = {
     title: tFooter('col1Title'),
@@ -67,6 +84,7 @@ export default async function FooterDynamic({
         label: tFooter('links.earbuds'),
         href: '/earbuds',
       },
+      ...extraFooterLinks,
     ],
   };
 

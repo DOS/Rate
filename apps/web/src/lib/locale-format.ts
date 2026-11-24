@@ -95,6 +95,41 @@ export function formatPriceVnd(
   return `${formatNumber(value, locale)}${space}${symbol}`;
 }
 
+export function normalizePriceCurrency(
+  currency?: string | null
+): 'VND' | 'PCT' {
+  return typeof currency === 'string' && currency.trim().toUpperCase() === 'PCT'
+    ? 'PCT'
+    : 'VND';
+}
+
+export function sanitizeCurrencyPriceValue(
+  raw: number,
+  currency?: string | null
+): number {
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return normalizePriceCurrency(currency) === 'PCT'
+    ? Math.round(raw * 100) / 100
+    : Math.round(raw);
+}
+
+/**
+ * Formats a product price in VND or a service rate in percent (`PCT`),
+ * preserving up to 2 decimal places for `PCT` (e.g. `5.4%`, `0.15%`).
+ */
+export function formatListingPrice(
+  value: number,
+  currency: string | null | undefined,
+  locale?: string | null
+): string {
+  const normalizedCurrency = normalizePriceCurrency(currency);
+  if (normalizedCurrency === 'PCT') {
+    const safePct = Math.round(value * 100) / 100;
+    return formatPercent(safePct, locale);
+  }
+  return formatPriceVnd(Math.round(value), locale);
+}
+
 export interface DecimalFormatOptions {
   /** Group thousands in cs (vi/en never group, like `toFixed`). */
   grouping?: boolean;

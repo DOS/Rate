@@ -3,8 +3,10 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
   resolveCompareEffectiveUserRating,
+  resolveListingPriceCurrency,
   resolveProductImageUrl,
 } from './rate-domain-core';
+import { sanitizeCurrencyPriceValue } from './locale-format';
 import { catalogRowSlug, type ItemCatalogRow } from './item-directory';
 import { canonicalVersusOrder } from './item-compare';
 import { displayedScore5, roundScore } from './rating-display';
@@ -108,6 +110,13 @@ export const VALID_LEADERBOARD_CATEGORIES: readonly CanonicalCategorySlug[] = [
   'laptops',
   'smartwatches',
   'earbuds',
+  'tvs',
+  'air-conditioners',
+  'refrigerators',
+  'washing-machines',
+  'air-purifiers',
+  'bank-savings',
+  'internet-telecom',
 ] as const;
 
 export function normalizeLeaderboardCategory(
@@ -258,9 +267,24 @@ export function leaderboardSpecsOnly(specs: unknown): ProductSpecifications {
 export function leaderboardCriteriaForCategory(
   categorySlug: CanonicalCategorySlug
 ): readonly LeaderboardScoreCriterion[] {
-  return categorySlug === 'earbuds'
-    ? LEADERBOARD_SCORE_CRITERIA.filter((c) => c !== 'screen')
-    : LEADERBOARD_SCORE_CRITERIA;
+  if (categorySlug === 'earbuds') {
+    return LEADERBOARD_SCORE_CRITERIA.filter((c) => c !== 'screen');
+  }
+  if (categorySlug === 'tvs') {
+    return ['screen', 'value'];
+  }
+  if (
+    categorySlug === 'air-conditioners' ||
+    categorySlug === 'refrigerators' ||
+    categorySlug === 'washing-machines' ||
+    categorySlug === 'air-purifiers'
+  ) {
+    return ['value'];
+  }
+  if (categorySlug === 'bank-savings' || categorySlug === 'internet-telecom') {
+    return ['value'];
+  }
+  return LEADERBOARD_SCORE_CRITERIA;
 }
 
 // The stored keys each criterion reads from criteria_scores and
@@ -270,7 +294,7 @@ const CRITERION_SCORE_KEYS: Record<LeaderboardScoreCriterion, string[]> = {
   performance: ['performance', 'hardware', 'hieu_nang', 'connectivity'],
   camera: ['camera', 'audio', 'multimedia', 'sound', 'sensors'],
   battery: ['battery', 'pin', 'endurance'],
-  value: ['value', 'price_value', 'dang_tien'],
+  value: ['value', 'price_value', 'dang_tien', 'price'],
 };
 
 /** Writers a criterion score needs to be shown, and to rank (D9). */
@@ -489,15 +513,24 @@ export function scoreMasterProductForLeaderboard(
     safeItem.id
   );
 
+  const itemCurrency = resolveListingPriceCurrency({ master: safeItem });
   const rawMinPrice = toSafePositiveNumber(safeItem.min_price);
-  const minPrice =
+  const sanitizedMinPrice =
     rawMinPrice > 0 && rawMinPrice <= 1_000_000_000
-      ? Math.round(rawMinPrice)
+      ? sanitizeCurrencyPriceValue(rawMinPrice, itemCurrency)
+      : 0;
+  const minPrice =
+    sanitizedMinPrice > 0 && sanitizedMinPrice <= 1_000_000_000
+      ? sanitizedMinPrice
       : 0;
   const rawMaxPrice = toSafePositiveNumber(safeItem.max_price);
-  const maxPrice =
+  const sanitizedMaxPrice =
     rawMaxPrice > 0 && rawMaxPrice <= 1_000_000_000
-      ? Math.max(minPrice, Math.round(rawMaxPrice))
+      ? sanitizeCurrencyPriceValue(rawMaxPrice, itemCurrency)
+      : 0;
+  const maxPrice =
+    sanitizedMaxPrice > 0 && sanitizedMaxPrice <= 1_000_000_000
+      ? Math.max(minPrice, sanitizedMaxPrice)
       : minPrice;
   const rawMerchantCount = toSafePositiveNumber(safeItem.merchant_count);
   const merchantCount =

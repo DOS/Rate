@@ -12,12 +12,14 @@ import {
   resolveProductImageUrl,
 } from '@/lib/rate-api';
 import {
+  ALL_CANONICAL_CATEGORY_SLUGS,
   MAX_VALID_VND_PRICE,
   sizedStoreImageUrl,
 } from '@/lib/rate-domain-core';
 import { deviceImageSrcSet } from '@/lib/device-images';
 import {
   getCachedMerchantProfileById,
+  getCachedPopulatedCategorySlugs,
   getCrossPlatformDealRadar,
 } from '@/server/rate';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
@@ -57,11 +59,14 @@ import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import {
   formatDecimal,
+  formatListingPrice,
   formatNumber,
   formatPercent,
   formatPlainNumber,
   formatPriceVnd,
+  sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
+import { resolveListingPriceCurrency } from '@/lib/rate-domain-core';
 import StarRating from '@/components/elementary/StarRating';
 
 // Cached after the first request, refreshed every 5 minutes or when the
@@ -96,40 +101,57 @@ function parseFiniteNumber(value: unknown): number | null {
   return value === 0 ? 0 : value;
 }
 
-export function sanitizeMerchantPagePriceVnd(value: unknown): number | null {
+export function sanitizeMerchantPagePriceVnd(
+  value: unknown,
+  currency?: string | null
+): number | null {
   const raw = parseFiniteNumber(value);
   if (raw == null || raw <= 0 || raw > MAX_VALID_VND_PRICE) return null;
-  const rounded = Math.round(raw);
-  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : null;
+  const normalized = sanitizeCurrencyPriceValue(raw, currency);
+  return normalized > 0 && normalized <= MAX_VALID_VND_PRICE
+    ? normalized
+    : null;
 }
 
 export function formatMerchantPagePriceVnd(
   value: unknown,
-  locale?: string | null
+  locale?: string | null,
+  currency?: string | null
 ): string {
-  const safe = sanitizeMerchantPagePriceVnd(value);
-  return safe != null ? formatPriceVnd(safe, locale) : '-';
+  const safe = sanitizeMerchantPagePriceVnd(value, currency);
+  if (safe == null) return '-';
+  return currency
+    ? formatListingPrice(safe, currency, locale)
+    : formatPriceVnd(safe, locale);
 }
 
 export function MerchantProfilePriceBlock({
   priceCurrent,
   priceOriginal,
+  currency,
   unavailable = false,
   locale,
 }: {
   readonly priceCurrent: unknown;
   readonly priceOriginal?: unknown;
+  readonly currency?: string | null;
   readonly unavailable?: boolean;
   readonly locale?: string | null;
 }) {
-  const safeCurrentPrice = sanitizeMerchantPagePriceVnd(priceCurrent);
-  const safeOrigPrice = sanitizeMerchantPagePriceVnd(priceOriginal);
-  const priceDisplay = formatMerchantPagePriceVnd(safeCurrentPrice, locale);
+  const safeCurrentPrice = sanitizeMerchantPagePriceVnd(priceCurrent, currency);
+  const safeOrigPrice = sanitizeMerchantPagePriceVnd(priceOriginal, currency);
+  const priceDisplay = formatMerchantPagePriceVnd(
+    safeCurrentPrice,
+    locale,
+    currency
+  );
   const origPriceDisplay =
     safeCurrentPrice != null &&
     safeOrigPrice != null &&
     safeOrigPrice > safeCurrentPrice
-      ? formatPriceVnd(safeOrigPrice, locale)
+      ? currency
+        ? formatListingPrice(safeOrigPrice, currency, locale)
+        : formatPriceVnd(safeOrigPrice, locale)
       : null;
 
   return (
@@ -198,8 +220,10 @@ export function resolveMerchantReviewRiskScore(merchant: {
 
 const SAFE_ROUTE_SLUG_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/;
 const SAFE_HASH_FRAGMENT_RE = /^#[a-zA-Z0-9_-]{1,80}$/;
-const PRODUCT_ROUTE_HREF_RE =
-  /^(?:\/(?:vi|en|cs))?\/(smartphones|tablets|laptops|smartwatches|earbuds)\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,119})(?:[?#].*)?$/i;
+const PRODUCT_ROUTE_HREF_RE = new RegExp(
+  `^(?:\\/(?:vi|en|cs))?\\/(${ALL_CANONICAL_CATEGORY_SLUGS.join('|')})\\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,119})(?:[?#].*)?$`,
+  'i'
+);
 
 function isSafeRouteSlug(slug: string): boolean {
   return (
@@ -454,12 +478,13 @@ export default async function MerchantProfilePage({
   // page writes (DOS/Rate#1344). The key is the merchant id from the URL,
   // cut short: any string reaches this page.
   const timing = startRenderTiming('merchant', id.slice(0, 64));
-  const [merchant, dealRadar] = await Promise.all([
+  const [merchant, dealRadar, populatedCategorySlugs] = await Promise.all([
     timing.time('merchant', getCachedMerchantProfileById(id)),
     timing.time(
       'dealRadar',
       getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 })
     ),
+    timing.time('populatedCategories', getCachedPopulatedCategorySlugs()),
   ]);
 
   if (!merchant) {
@@ -572,7 +597,10 @@ export default async function MerchantProfilePage({
 
   return (
     <ClientMessages scope="merchantProfile">
-      <PageShell locale={locale}>
+      <PageShell
+        locale={locale}
+        populatedCategorySlugs={populatedCategorySlugs}
+      >
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -1461,7 +1489,12 @@ export default async function MerchantProfilePage({
                                   <strong className="font-monospace">
                                     {formatMerchantPagePriceVnd(
                                       item.master_product.market_min_price,
-                                      locale
+                                      locale,
+                                      resolveListingPriceCurrency({
+                                        currency: item.currency,
+                                        categorySlug:
+                                          item.master_product.category_slug,
+                                      })
                                     )}
                                   </strong>
                                 </div>
@@ -1476,6 +1509,11 @@ export default async function MerchantProfilePage({
                             <MerchantProfilePriceBlock
                               priceCurrent={item.price_current}
                               priceOriginal={item.price_original}
+                              currency={resolveListingPriceCurrency({
+                                currency: item.currency,
+                                categorySlug:
+                                  item.master_product?.category_slug,
+                              })}
                               unavailable={unavailable}
                               locale={locale}
                             />

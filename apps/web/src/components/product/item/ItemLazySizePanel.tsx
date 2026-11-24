@@ -13,7 +13,8 @@ import {
   type ItemSizeStripContext,
 } from '@/lib/item-size-panel';
 import { useSelectedVariant } from './selected-variant';
-import { formatNumber, formatPriceVnd } from '@/lib/locale-format';
+import { formatListingPrice, formatNumber } from '@/lib/locale-format';
+import { resolveListingPriceCurrency } from '@/lib/rate-domain';
 
 export type ItemSizePanelKind = 'strip' | 'history' | 'offers';
 
@@ -77,6 +78,10 @@ export function ItemSizePriceStrip({
   const tSale = useTranslations('saleState');
   const locale = useLocale();
   const { stats, priceHistory, product } = data;
+  const effectiveCurrency = resolveListingPriceCurrency({
+    categorySlug: context.categoryPath.replace(/^\/+/, ''),
+    offers: data.offers,
+  });
   return (
     <div className="rounded-4 bg-light mb-2 border p-3">
       <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
@@ -86,7 +91,7 @@ export function ItemSizePriceStrip({
           </div>
           <div className="fw-bold text-dark rate-tabular fs-5">
             {stats.minPrice > 0 ? (
-              formatPriceVnd(stats.minPrice, locale)
+              formatListingPrice(stats.minPrice, effectiveCurrency, locale)
             ) : data.saleStateKey ? (
               <span data-sale-state={data.saleState}>
                 {tSale(data.saleStateKey)}
@@ -96,15 +101,27 @@ export function ItemSizePriceStrip({
             )}
             {stats.minPrice > 0 && stats.minPrice !== stats.maxPrice && (
               <span className="small fw-normal text-muted ms-2">
-                ~ {formatPriceVnd(stats.maxPrice, locale)}
+                ~{' '}
+                {formatListingPrice(stats.maxPrice, effectiveCurrency, locale)}
               </span>
             )}
             {priceHistory.lowestEverPrice != null &&
               priceHistory.lowestEverPrice > 0 && (
                 <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                  {t('allTimeLowBadge', {
-                    price: formatNumber(priceHistory.lowestEverPrice, locale),
-                  })}
+                  {effectiveCurrency === 'PCT'
+                    ? t('allTimeLowBadgeCurrency', {
+                        price: formatListingPrice(
+                          priceHistory.lowestEverPrice,
+                          effectiveCurrency,
+                          locale
+                        ),
+                      })
+                    : t('allTimeLowBadge', {
+                        price: formatNumber(
+                          priceHistory.lowestEverPrice,
+                          locale
+                        ),
+                      })}
                 </span>
               )}
           </div>
@@ -118,6 +135,7 @@ export function ItemSizePriceStrip({
               categoryPath={context.categoryPath}
               thumbnail={product.image}
               currentMinPrice={stats.minPrice}
+              currency={effectiveCurrency}
               size="sm"
             />
           )}
@@ -135,6 +153,7 @@ export function ItemSizePriceStrip({
             expertScore10={context.expertScore10}
             authenticReviews={context.authenticReviews}
             minPriceVnd={stats.minPrice}
+            currency={effectiveCurrency}
             offerCount={stats.sellerCount}
             keySpecLine={context.keySpecLine}
             radarSignal={data.radarSignal}
