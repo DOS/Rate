@@ -4,12 +4,22 @@ import {
   OG_TRUTH_CARD_WIDTH,
   SOCIAL_TRUTH_CARD_HEIGHT,
   SOCIAL_TRUTH_CARD_WIDTH,
+  isOgComboMaxStores,
+  isOgComboMinTrust,
+  isOgComboShippingPreset,
   isValidOgSlug,
   isValidOgVariantKey,
   parseOgVersusPair,
   type OgTruthCardFormat,
   type OgTruthCardLocale,
 } from './seo';
+import {
+  COMBO_CART_DEFAULT_MAX_STORES,
+  COMBO_CART_DEFAULT_MIN_TRUST,
+  COMBO_CART_DEFAULT_SHIPPING_VND,
+  COMBO_CART_MAX_ITEMS,
+  COMBO_CART_MIN_ITEMS,
+} from './combo-cart-optimizer';
 import { formatNumber, localizeDecimalPoints } from './locale-format';
 import { displayedScore5, formatScoreFixed } from './rating-display';
 import { MAX_VALID_VND_PRICE } from './rate-domain';
@@ -20,6 +30,7 @@ export const OG_TRUTH_CARD_CACHE_CONTROL =
   'public, s-maxage=3600, stale-while-revalidate=86400';
 
 const MAX_OG_QUERY_LENGTH = 512;
+const MAX_OG_COMBO_QUERY_LENGTH = 800;
 
 // Exact codepoint ranges present in Next's bundled Geist-Regular.ttf cmap
 // (ASCII, Latin-1 excluding U+00AD SHY, Czech Latin-Extended glyphs, and
@@ -86,8 +97,43 @@ export interface DealsTruthCardData {
   readonly topDeals: readonly DealsTruthCardHighlight[];
 }
 
+export interface ComboTruthCardItem {
+  readonly slug: string;
+  readonly name: string;
+}
+
+export interface ComboTruthCardPlanSummary {
+  readonly distinctStoreCount: number;
+  readonly itemsSubtotalVnd: number;
+  readonly shippingVnd: number;
+  readonly totalVnd: number;
+  readonly allOfficial: boolean;
+  readonly avgTrustScore: number | null;
+  readonly verifiedSafeStoreCount: number;
+  readonly storeNames: readonly string[];
+}
+
+export interface ComboTruthCardData {
+  readonly type: 'combo';
+  readonly items: readonly ComboTruthCardItem[];
+  readonly query: {
+    readonly officialOnly: boolean;
+    readonly minTrust: number;
+    readonly maxStores: number;
+    readonly shippingVnd: number;
+  };
+  readonly singleStoreBest: ComboTruthCardPlanSummary | null;
+  readonly multiStoreOptimal: ComboTruthCardPlanSummary | null;
+  readonly savingsVsSingleStoreVnd: number;
+  readonly savingsVsSingleStorePct: number;
+  readonly snapshotTimestampIso: string;
+}
+
 export type OgTruthCardData =
-  ProductTruthCardData | VersusTruthCardData | DealsTruthCardData;
+  | ProductTruthCardData
+  | VersusTruthCardData
+  | DealsTruthCardData
+  | ComboTruthCardData;
 
 export type ParsedOgTruthCardQuery =
   | {
@@ -108,6 +154,17 @@ export type ParsedOgTruthCardQuery =
     }
   | {
       readonly type: 'deals';
+      readonly locale: OgTruthCardLocale;
+      readonly format: OgTruthCardFormat;
+      readonly download: boolean;
+    }
+  | {
+      readonly type: 'combo';
+      readonly items: readonly string[];
+      readonly officialOnly: boolean;
+      readonly minTrust: number;
+      readonly maxStores: number;
+      readonly shippingVnd: number;
       readonly locale: OgTruthCardLocale;
       readonly format: OgTruthCardFormat;
       readonly download: boolean;
@@ -152,6 +209,9 @@ export function sanitizeOgFileToken(raw: unknown): string {
   );
 }
 
+const STRICT_NON_NEG_INT_RE = /^(?:0|[1-9]\d{0,6})$/;
+const STRICT_MAX_STORES_RE = /^[1-5]$/;
+
 /**
  * Strictly validates query parameters for `GET /api/v1/rate/og`.
  * Rejects unknown/untrusted query keys (such as `title`, `price`, or cache-busting params),
@@ -161,15 +221,32 @@ export function parseOgTruthCardQuery(
   searchParams: URLSearchParams,
   rawSearch = ''
 ): ParsedOgTruthCardQuery | null {
-  if (typeof rawSearch === 'string' && rawSearch.length > MAX_OG_QUERY_LENGTH) {
+  if (!searchParams || typeof searchParams.get !== 'function') {
     return null;
   }
-  if (!searchParams || typeof searchParams.get !== 'function') {
+  if (
+    typeof rawSearch === 'string' &&
+    rawSearch.length > MAX_OG_COMBO_QUERY_LENGTH
+  ) {
     return null;
   }
 
   const rawType = searchParams.get('type');
-  if (rawType !== 'product' && rawType !== 'versus' && rawType !== 'deals') {
+  if (
+    rawType !== 'product' &&
+    rawType !== 'versus' &&
+    rawType !== 'deals' &&
+    rawType !== 'combo'
+  ) {
+    return null;
+  }
+
+  const maxQueryLength =
+    rawType === 'combo' ? MAX_OG_COMBO_QUERY_LENGTH : MAX_OG_QUERY_LENGTH;
+  if (typeof rawSearch === 'string' && rawSearch.length > maxQueryLength) {
+    return null;
+  }
+  if (searchParams.toString().length > maxQueryLength) {
     return null;
   }
 
@@ -178,7 +255,19 @@ export function parseOgTruthCardQuery(
       ? new Set(['type', 'slug', 'variant', 'locale', 'format', 'download'])
       : rawType === 'versus'
         ? new Set(['type', 'versus', 'locale', 'format', 'download'])
-        : new Set(['type', 'locale', 'format', 'download']);
+        : rawType === 'combo'
+          ? new Set([
+              'type',
+              'items',
+              'officialOnly',
+              'minTrust',
+              'maxStores',
+              'shippingVnd',
+              'locale',
+              'format',
+              'download',
+            ])
+          : new Set(['type', 'locale', 'format', 'download']);
 
   const seenKeys = new Set<string>();
   for (const [key, val] of searchParams.entries()) {
@@ -262,6 +351,96 @@ export function parseOgTruthCardQuery(
     };
   }
 
+  if (rawType === 'combo') {
+    const rawItems = searchParams.get('items');
+    if (typeof rawItems !== 'string' || !rawItems) {
+      return null;
+    }
+    const tokens = rawItems.split(',');
+    const uniqueItems: string[] = [];
+    const seenLower = new Set<string>();
+    for (const token of tokens) {
+      if (!isValidOgSlug(token, 120)) {
+        return null;
+      }
+      const lower = token.toLowerCase();
+      if (seenLower.has(lower)) {
+        return null;
+      }
+      seenLower.add(lower);
+      uniqueItems.push(token);
+    }
+    if (
+      uniqueItems.length < COMBO_CART_MIN_ITEMS ||
+      uniqueItems.length > COMBO_CART_MAX_ITEMS
+    ) {
+      return null;
+    }
+
+    const rawOfficial = searchParams.get('officialOnly');
+    let officialOnly = false;
+    if (rawOfficial !== null) {
+      if (rawOfficial === '1') {
+        officialOnly = true;
+      } else if (rawOfficial === '0') {
+        officialOnly = false;
+      } else {
+        return null;
+      }
+    }
+
+    const rawMinTrust = searchParams.get('minTrust');
+    let minTrust = COMBO_CART_DEFAULT_MIN_TRUST;
+    if (rawMinTrust !== null) {
+      if (!STRICT_NON_NEG_INT_RE.test(rawMinTrust)) {
+        return null;
+      }
+      const parsedMinTrust = Number(rawMinTrust);
+      if (!isOgComboMinTrust(parsedMinTrust)) {
+        return null;
+      }
+      minTrust = parsedMinTrust;
+    }
+
+    const rawMaxStores = searchParams.get('maxStores');
+    let maxStores = COMBO_CART_DEFAULT_MAX_STORES;
+    if (rawMaxStores !== null) {
+      if (!STRICT_MAX_STORES_RE.test(rawMaxStores)) {
+        return null;
+      }
+      const parsedMaxStores = Number(rawMaxStores);
+      if (!isOgComboMaxStores(parsedMaxStores)) {
+        return null;
+      }
+      maxStores = parsedMaxStores;
+    }
+
+    const rawShipping = searchParams.get('shippingVnd');
+    let shippingVnd = COMBO_CART_DEFAULT_SHIPPING_VND;
+    if (rawShipping !== null) {
+      if (!STRICT_NON_NEG_INT_RE.test(rawShipping)) {
+        return null;
+      }
+      const parsedShipping = Number(rawShipping);
+      if (!isOgComboShippingPreset(parsedShipping)) {
+        return null;
+      }
+      shippingVnd = parsedShipping;
+    }
+
+    return {
+      type: 'combo',
+      items: uniqueItems,
+      officialOnly,
+      minTrust,
+      maxStores,
+      shippingVnd,
+      locale,
+      format,
+      download,
+    };
+  }
+
   return {
     type: 'deals',
     locale,
@@ -292,6 +471,40 @@ function formatOgPriceVnd(amount: number, locale: OgTruthCardLocale): string {
   if (safe <= 0) return '';
   const num = sanitizeOgCardText(formatNumber(safe, locale), 40);
   return locale === 'vi' ? `${num} đ` : `${num} VND`;
+}
+
+function formatOgPriceVndOrZero(
+  amount: number,
+  locale: OgTruthCardLocale
+): string {
+  const safe = clampSafeVnd(amount);
+  if (safe <= 0) {
+    return locale === 'vi' ? '0 đ' : '0 VND';
+  }
+  return formatOgPriceVnd(safe, locale);
+}
+
+function csPlural(
+  count: number,
+  one: string,
+  few: string,
+  other: string
+): string {
+  if (count === 1) return one;
+  if (count >= 2 && count <= 4) return few;
+  return other;
+}
+
+function formatComboSnapshotStamp(iso: string): string {
+  const parsedMs = Date.parse(iso);
+  if (!Number.isFinite(parsedMs)) return '';
+  const utc = new Date(parsedMs);
+  const vn = new Date(parsedMs + 7 * 3_600_000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const vnHm = `${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}`;
+  const utcHm = `${pad(utc.getUTCHours())}:${pad(utc.getUTCMinutes())}`;
+  const vnDate = `${pad(vn.getUTCDate())}/${pad(vn.getUTCMonth() + 1)}/${vn.getUTCFullYear()}`;
+  return `${vnHm} VN (${utcHm} UTC) ${vnDate}`;
 }
 
 function formatOgScore5(score: number, locale: OgTruthCardLocale): string {
@@ -335,6 +548,24 @@ interface OgCopyDict {
   readonly dealsTopListLabel: string;
   readonly dealsSavingsBadge: (pct: string) => string;
   readonly dealsEmptyHint: string;
+  readonly headerCombo: (itemCount: number) => string;
+  readonly comboBadgeSavings: (amount: string, pct: string) => string;
+  readonly comboBadgeSingleOptimal: string;
+  readonly comboBadgeMultiOnly: string;
+  readonly comboBadgeUnavailable: string;
+  readonly comboFilterOfficial: string;
+  readonly comboFilterAllSellers: string;
+  readonly comboFilterMinTrust: (trust: number) => string;
+  readonly comboFilterMaxStores: (stores: number) => string;
+  readonly comboFilterShipping: (amount: string) => string;
+  readonly comboPlanATitle: string;
+  readonly comboPlanBTitle: string;
+  readonly comboPlanAEmpty: (itemCount: number) => string;
+  readonly comboPlanBEmpty: string;
+  readonly comboPlanStoresMeta: (stores: number, safeCount: number) => string;
+  readonly comboPlanAvgTrust: (score: string) => string;
+  readonly comboPlanBreakdown: (subtotal: string, shipping: string) => string;
+  readonly comboFooterNote: (stamp: string) => string;
 }
 
 const OG_COPY: Record<OgTruthCardLocale, OgCopyDict> = {
@@ -384,6 +615,32 @@ const OG_COPY: Record<OgTruthCardLocale, OgCopyDict> = {
     dealsTopListLabel: 'ĐÁY GIÁ THẬT NỔI BẬT HIỆN TẠI',
     dealsSavingsBadge: (pct) => `-${pct}% so với trung vị`,
     dealsEmptyHint: `Hệ thống đang quét liên tục ${TOTAL_TRACKED_PLATFORMS} chuỗi bán lẻ Việt Nam.`,
+    headerCombo: (itemCount) =>
+      `TỐI ƯU GIỎ COMBO ${itemCount} MÓN (${TOTAL_TRACKED_PLATFORMS} CHUỖI)`,
+    comboBadgeSavings: (amount, pct) =>
+      pct ? `Tiết kiệm -${amount} (-${pct}%)` : `Tiết kiệm -${amount}`,
+    comboBadgeSingleOptimal: '1 cửa hàng đã tối ưu nhất',
+    comboBadgeMultiOnly: 'Chỉ có phương án tách đa sàn',
+    comboBadgeUnavailable: 'Chưa có tổ hợp đạt bộ lọc',
+    comboFilterOfficial: 'Chỉ Official Mall',
+    comboFilterAllSellers: 'Tất cả nơi bán',
+    comboFilterMinTrust: (trust) => `Trust >= ${trust}/100`,
+    comboFilterMaxStores: (stores) => `<= ${stores} shop`,
+    comboFilterShipping: (amount) => `Ship ${amount}/đơn`,
+    comboPlanATitle: 'PHƯƠNG ÁN A - 1 CỬA HÀNG',
+    comboPlanBTitle: 'PHƯƠNG ÁN B - TỐI ƯU ĐA SÀN',
+    comboPlanAEmpty: (itemCount) =>
+      `Chưa có 1 cửa hàng gom đủ ${itemCount} món đạt lọc`,
+    comboPlanBEmpty: 'Không có tổ hợp đa sàn đạt bộ lọc hiện tại',
+    comboPlanStoresMeta: (stores, safeCount) =>
+      `${stores} chuỗi - ${safeCount}/${stores} Verified Safe`,
+    comboPlanAvgTrust: (score) => `Trust TB ${score}/100`,
+    comboPlanBreakdown: (subtotal, shipping) =>
+      `Hàng ${subtotal} + Ship ${shipping}`,
+    comboFooterNote: (stamp) =>
+      stamp
+        ? `${stamp} - Đã lọc giá mồi & hết hàng`
+        : 'Dữ liệu độc lập - Đã lọc giá mồi & hết hàng',
   },
   en: {
     headerAudit22: `VERIFIED ACROSS ${TOTAL_TRACKED_PLATFORMS} RETAIL CHAINS`,
@@ -432,6 +689,33 @@ const OG_COPY: Record<OgTruthCardLocale, OgCopyDict> = {
     dealsTopListLabel: 'TOP VERIFIED FLOOR DEALS',
     dealsSavingsBadge: (pct) => `-${pct}% vs median`,
     dealsEmptyHint: `Continuously auditing ${TOTAL_TRACKED_PLATFORMS} Vietnamese retail chains.`,
+    headerCombo: (itemCount) =>
+      `COMBO CART OPTIMIZER (${itemCount} ITEMS, ${TOTAL_TRACKED_PLATFORMS} CHAINS)`,
+    comboBadgeSavings: (amount, pct) =>
+      pct ? `Save -${amount} (-${pct}%)` : `Save -${amount}`,
+    comboBadgeSingleOptimal: 'Single store already optimal',
+    comboBadgeMultiOnly: 'Multi-store split only',
+    comboBadgeUnavailable: 'No valid combo for filters',
+    comboFilterOfficial: 'Official Mall only',
+    comboFilterAllSellers: 'All sellers',
+    comboFilterMinTrust: (trust) => `Trust >= ${trust}/100`,
+    comboFilterMaxStores: (stores) =>
+      `<= ${stores} ${stores === 1 ? 'store' : 'stores'}`,
+    comboFilterShipping: (amount) => `Ship ${amount}/order`,
+    comboPlanATitle: 'PLAN A - SINGLE STORE',
+    comboPlanBTitle: 'PLAN B - MULTI-STORE OPTIMAL',
+    comboPlanAEmpty: (itemCount) =>
+      `No single store covers all ${itemCount} items under filters`,
+    comboPlanBEmpty: 'No multi-store split matches current filters',
+    comboPlanStoresMeta: (stores, safeCount) =>
+      `${stores} ${stores === 1 ? 'store' : 'stores'} - ${safeCount}/${stores} Verified Safe`,
+    comboPlanAvgTrust: (score) => `Avg trust ${score}/100`,
+    comboPlanBreakdown: (subtotal, shipping) =>
+      `Items ${subtotal} + Ship ${shipping}`,
+    comboFooterNote: (stamp) =>
+      stamp
+        ? `${stamp} - Bait & OOS filtered`
+        : 'Independent data - Bait & OOS filtered',
   },
   cs: {
     headerAudit22: `OVĚŘENO NAPŘÍČ ${TOTAL_TRACKED_PLATFORMS} OBCHODY`,
@@ -480,6 +764,33 @@ const OG_COPY: Record<OgTruthCardLocale, OgCopyDict> = {
     dealsTopListLabel: 'NEJLEPŠÍ OVĚŘENÉ NABÍDKY',
     dealsSavingsBadge: (pct) => `-${pct} % oproti mediánu`,
     dealsEmptyHint: `Průběžná kontrola cen napříč ${TOTAL_TRACKED_PLATFORMS} prodejci.`,
+    headerCombo: (itemCount) =>
+      `KOMBINOVANÝ KOŠÍK (${itemCount} ${csPlural(itemCount, 'POLOŽKA', 'POLOŽKY', 'POLOŽEK')}, ${TOTAL_TRACKED_PLATFORMS} SÍTÍ)`,
+    comboBadgeSavings: (amount, pct) =>
+      pct ? `Úspora -${amount} (-${pct} %)` : `Úspora -${amount}`,
+    comboBadgeSingleOptimal: 'Jeden obchod už je nejvýhodnější',
+    comboBadgeMultiOnly: 'Dostupné jen rozdělení mezi obchody',
+    comboBadgeUnavailable: 'Pro zvolené filtry není kombinace',
+    comboFilterOfficial: 'Jen Official Mall',
+    comboFilterAllSellers: 'Všichni prodejci',
+    comboFilterMinTrust: (trust) => `Důvěra >= ${trust}/100`,
+    comboFilterMaxStores: (stores) =>
+      `<= ${stores} ${csPlural(stores, 'obchod', 'obchody', 'obchodů')}`,
+    comboFilterShipping: (amount) => `Doprava ${amount}/obj.`,
+    comboPlanATitle: 'PLÁN A - 1 OBCHOD',
+    comboPlanBTitle: 'PLÁN B - OPTIMÁLNÍ ROZDĚLENÍ',
+    comboPlanAEmpty: (itemCount) =>
+      `Žádný 1 obchod nemá skladem všech ${itemCount} položek`,
+    comboPlanBEmpty: 'Žádná kombinace obchodů nesplňuje filtry',
+    comboPlanStoresMeta: (stores, safeCount) =>
+      `${stores} ${csPlural(stores, 'obchod', 'obchody', 'obchodů')} - ${safeCount}/${stores} Verified Safe`,
+    comboPlanAvgTrust: (score) => `Prům. důvěra ${score}/100`,
+    comboPlanBreakdown: (subtotal, shipping) =>
+      `Zboží ${subtotal} + Doprava ${shipping}`,
+    comboFooterNote: (stamp) =>
+      stamp
+        ? `${stamp} - Ověřená dostupnost`
+        : 'Nezávislá data - Ověřená dostupnost',
   },
 };
 
@@ -1488,6 +1799,340 @@ function renderDealsCardElement(
   );
 }
 
+function renderComboPlanBox(params: {
+  readonly title: string;
+  readonly plan: ComboTruthCardPlanSummary | null;
+  readonly emptyText: string;
+  readonly isWinner: boolean;
+  readonly locale: OgTruthCardLocale;
+  readonly isPortrait: boolean;
+}) {
+  const copy = OG_COPY[params.locale];
+  const plan = params.plan;
+  const stores = plan
+    ? Math.max(1, clampSafeCount(plan.distinctStoreCount, 10))
+    : 0;
+  const safeCount = plan
+    ? Math.min(stores, clampSafeCount(plan.verifiedSafeStoreCount, stores))
+    : 0;
+  const avgTrustStr =
+    plan &&
+    typeof plan.avgTrustScore === 'number' &&
+    Number.isFinite(plan.avgTrustScore)
+      ? localizeDecimalPoints(
+          Number.isInteger(plan.avgTrustScore)
+            ? String(plan.avgTrustScore)
+            : plan.avgTrustScore.toFixed(1),
+          params.locale
+        )
+      : '';
+  const storePreview = plan
+    ? plan.storeNames
+        .slice(0, 3)
+        .map((n) => sanitizeOgCardText(n, 28))
+        .filter(Boolean)
+        .join(' + ')
+    : '';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        flex: 1,
+        background: '#161a1e',
+        border: params.isWinner
+          ? '2px solid #34d399'
+          : '1.5px solid rgba(255, 255, 255, 0.12)',
+        borderRadius: 20,
+        padding: params.isPortrait ? '28px 30px' : '20px 24px',
+        gap: params.isPortrait ? 14 : 10,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 10,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            color: params.isWinner ? '#34d399' : '#94a3b8',
+            fontSize: params.isPortrait ? 20 : 15,
+            fontWeight: 800,
+            letterSpacing: '0.05em',
+          }}
+        >
+          {sanitizeOgCardText(params.title, 48)}
+        </div>
+        {plan && plan.allOfficial ? (
+          <div
+            style={{
+              display: 'flex',
+              background: 'rgba(96, 165, 250, 0.14)',
+              border: '1px solid rgba(96, 165, 250, 0.4)',
+              color: '#93c5fd',
+              borderRadius: 9999,
+              padding: '3px 10px',
+              fontSize: params.isPortrait ? 16 : 13,
+              fontWeight: 700,
+            }}
+          >
+            Official Mall
+          </div>
+        ) : null}
+      </div>
+
+      {!plan ? (
+        <div
+          style={{
+            display: 'flex',
+            color: '#94a3b8',
+            fontSize: params.isPortrait ? 22 : 18,
+            fontWeight: 600,
+            lineHeight: 1.35,
+          }}
+        >
+          {sanitizeOgCardText(params.emptyText, 96)}
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: params.isPortrait ? 10 : 6,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              color: params.isWinner ? '#34d399' : '#f8fafc',
+              fontSize: params.isPortrait ? 46 : 36,
+              fontWeight: 800,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            {sanitizeOgCardText(
+              formatOgPriceVndOrZero(plan.totalVnd, params.locale),
+              36
+            )}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              color: '#cbd5e1',
+              fontSize: params.isPortrait ? 20 : 15,
+              fontWeight: 600,
+            }}
+          >
+            {sanitizeOgCardText(
+              copy.comboPlanBreakdown(
+                formatOgPriceVndOrZero(plan.itemsSubtotalVnd, params.locale),
+                formatOgPriceVndOrZero(plan.shippingVnd, params.locale)
+              ),
+              72
+            )}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              color: '#94a3b8',
+              fontSize: params.isPortrait ? 19 : 15,
+              fontWeight: 600,
+            }}
+          >
+            {sanitizeOgCardText(
+              avgTrustStr
+                ? `${copy.comboPlanStoresMeta(stores, safeCount)} - ${copy.comboPlanAvgTrust(avgTrustStr)}`
+                : copy.comboPlanStoresMeta(stores, safeCount),
+              72
+            )}
+          </div>
+          {storePreview ? (
+            <div
+              style={{
+                display: 'flex',
+                color: '#e2e8f0',
+                fontSize: params.isPortrait ? 19 : 15,
+                fontWeight: 600,
+              }}
+            >
+              {sanitizeOgCardText(storePreview, 64)}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderComboCardElement(
+  data: ComboTruthCardData,
+  locale: OgTruthCardLocale,
+  isPortrait: boolean
+) {
+  const copy = OG_COPY[locale];
+  const itemCount = data.items.length;
+  const savingsVnd = clampSafeVnd(data.savingsVsSingleStoreVnd);
+  const savingsPctStr =
+    data.savingsVsSingleStorePct > 0
+      ? localizeDecimalPoints(
+          clampSafePct(data.savingsVsSingleStorePct).toFixed(1),
+          locale
+        )
+      : '';
+
+  const topBadge =
+    savingsVnd > 0 && data.multiStoreOptimal
+      ? {
+          text: copy.comboBadgeSavings(
+            formatOgPriceVnd(savingsVnd, locale),
+            savingsPctStr
+          ),
+          tone: 'green' as const,
+        }
+      : data.singleStoreBest
+        ? { text: copy.comboBadgeSingleOptimal, tone: 'blue' as const }
+        : data.multiStoreOptimal
+          ? { text: copy.comboBadgeMultiOnly, tone: 'green' as const }
+          : { text: copy.comboBadgeUnavailable, tone: 'amber' as const };
+
+  const itemsLine = data.items
+    .map((item) => sanitizeOgCardText(item.name || item.slug, 38))
+    .filter(Boolean)
+    .join(' + ');
+
+  const filterPills = [
+    data.query.officialOnly
+      ? copy.comboFilterOfficial
+      : copy.comboFilterAllSellers,
+    copy.comboFilterMinTrust(clampSafeCount(data.query.minTrust, 100)),
+    copy.comboFilterMaxStores(
+      Math.max(1, clampSafeCount(data.query.maxStores, 5))
+    ),
+    copy.comboFilterShipping(
+      formatOgPriceVndOrZero(data.query.shippingVnd, locale)
+    ),
+  ];
+
+  const isMultiWinner = Boolean(data.multiStoreOptimal) && savingsVnd > 0;
+  const isSingleWinner = Boolean(data.singleStoreBest) && !isMultiWinner;
+  const stamp = formatComboSnapshotStamp(data.snapshotTimestampIso);
+  const itemsQuery = data.items.map((item) => item.slug).join(',');
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#0f1113',
+        backgroundImage:
+          'radial-gradient(circle at 86% 16%, rgba(52, 211, 153, 0.15), transparent 44%), radial-gradient(circle at 14% 84%, rgba(255, 46, 41, 0.14), transparent 44%)',
+        color: '#f8fafc',
+        padding: isPortrait ? '60px 52px' : '40px 52px',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+      }}
+    >
+      {renderHeaderBar({
+        eyebrow: copy.headerCombo(itemCount),
+        badgeText: topBadge.text,
+        badgeTone: topBadge.tone,
+        isPortrait,
+      })}
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: isPortrait ? 22 : 14,
+          width: '100%',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            color: '#ffffff',
+            fontSize: isPortrait ? 32 : 24,
+            fontWeight: 800,
+            lineHeight: 1.24,
+            letterSpacing: '-0.01em',
+          }}
+        >
+          {sanitizeOgCardText(itemsLine, isPortrait ? 130 : 108)}
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: isPortrait ? 12 : 10,
+          }}
+        >
+          {filterPills.map((pillText, idx) => (
+            <div
+              key={idx}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid rgba(255, 255, 255, 0.14)',
+                color: '#cbd5e1',
+                borderRadius: 9999,
+                padding: isPortrait ? '8px 16px' : '5px 14px',
+                fontSize: isPortrait ? 19 : 15,
+                fontWeight: 600,
+              }}
+            >
+              {sanitizeOgCardText(pillText, 44)}
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: isPortrait ? 'column' : 'row',
+            alignItems: 'stretch',
+            gap: isPortrait ? 18 : 18,
+            width: '100%',
+          }}
+        >
+          {renderComboPlanBox({
+            title: copy.comboPlanATitle,
+            plan: data.singleStoreBest,
+            emptyText: copy.comboPlanAEmpty(itemCount),
+            isWinner: isSingleWinner,
+            locale,
+            isPortrait,
+          })}
+          {renderComboPlanBox({
+            title: copy.comboPlanBTitle,
+            plan: data.multiStoreOptimal,
+            emptyText: copy.comboPlanBEmpty,
+            isWinner: isMultiWinner,
+            locale,
+            isPortrait,
+          })}
+        </div>
+      </div>
+
+      {renderFooterBar({
+        canonicalPath: `/watchlist?items=${itemsQuery}`,
+        note: copy.comboFooterNote(stamp),
+        isPortrait,
+      })}
+    </div>
+  );
+}
+
 export function buildOgTruthCardElement(
   card: OgTruthCardData,
   format: OgTruthCardFormat = 'og',
@@ -1499,6 +2144,9 @@ export function buildOgTruthCardElement(
   }
   if (card.type === 'versus') {
     return renderVersusCardElement(card, locale, isPortrait);
+  }
+  if (card.type === 'combo') {
+    return renderComboCardElement(card, locale, isPortrait);
   }
   return renderDealsCardElement(card, locale, isPortrait);
 }
@@ -1528,7 +2176,11 @@ export function createOgTruthCardResponse(
       ? sanitizeOgFileToken(card.slug)
       : card.type === 'versus'
         ? sanitizeOgFileToken(card.versusSlug)
-        : 'deal-radar';
+        : card.type === 'combo'
+          ? sanitizeOgFileToken(
+              `combo-${card.items.map((item) => item.slug).join('-')}`
+            )
+          : 'deal-radar';
   const suffix = format === 'social' ? '-4x5' : '';
   const disposition = options?.download === true ? 'attachment' : 'inline';
   const filename = `rate-truth-card-${baseToken}${suffix}.png`;

@@ -350,6 +350,8 @@
     "trayCompareNow": "Compare now ({count} devices) →",
     "trayRemoveTitle": "Remove from comparison tray",
     "trayRemoveAria": "Remove {name}",
+    "trayComboCartBtn": "Combo cart ({count})",
+    "comboCartBtn": "{count, plural, one {Optimize combo (# item)} other {Optimize combo (# items)}}",
     "quickToggleShortAdd": "Compare",
     "quickToggleShortSelected": "Added",
     "quickToggleShortLimit": "Max 4",
@@ -884,7 +886,12 @@
     "comboStoreTrust": "Store trust: {score}/100",
     "comboStoreTrustUnknown": "Store trust: not enough data",
     "comboStoreShippingNote": "Includes {price} shipping",
-    "comboBuyAtStoreLink": "View offer ↗"
+    "comboBuyAtStoreLink": "View offer ↗",
+    "comboExportOgPngBtn": "Download combo card (PNG 4:5)",
+    "comboExportOgPngTitle": "Download a 4:5 PNG combo comparison card for social posts and group chats",
+    "comboOgInvalidMinTrustHint": "PNG card export requires minimum trust in steps of 5 (0-100). Current: {minTrust}/100.",
+    "comboOgSnapMinTrustBtn": "Set to {target}/100",
+    "comboOgInvalidShippingHint": "PNG card export only supports standard shipping presets (0, 15k, 20k, 25k, 30k, 40k, 50k, 100k):"
   },
   "deals": {
     "metaTitle": "Best-value tech deals, checked across 22 stores | Rate.vn",
@@ -1297,6 +1304,7 @@
     "competitorsTitle": "Alternatives to {name}",
     "dealHub10PlatformsBtn": "Deals across 22 stores",
     "compareAllPeersBtn": "{count, plural, =2 {Compare both models} other {Compare all # models}} →",
+    "comboCartBtn": "Build combo cart",
     "peerNoRating": "N/A",
     "cheaperByBadge": "{amount} ₫ cheaper",
     "costPerPointUnit": "{cost} ₫ / 1.0 pt",

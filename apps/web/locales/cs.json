@@ -350,6 +350,8 @@
     "trayCompareNow": "Porovnat nyní ({count} zařízení) →",
     "trayRemoveTitle": "Odebrat z panelu porovnání",
     "trayRemoveAria": "Odebrat {name}",
+    "trayComboCartBtn": "Kombinovaný košík ({count})",
+    "comboCartBtn": "{count, plural, one {Optimalizovat košík (# položka)} few {Optimalizovat košík (# položky)} other {Optimalizovat košík (# položek)}}",
     "quickToggleShortAdd": "Porovnat",
     "quickToggleShortSelected": "Přidáno",
     "quickToggleShortLimit": "Max. 4",
@@ -884,7 +886,12 @@
     "comboStoreTrust": "Důvěra obchodu: {score}/100",
     "comboStoreTrustUnknown": "Důvěra obchodu: nedostatek dat",
     "comboStoreShippingNote": "Včetně dopravy {price}",
-    "comboBuyAtStoreLink": "Zobrazit nabídku ↗"
+    "comboBuyAtStoreLink": "Zobrazit nabídku ↗",
+    "comboExportOgPngBtn": "Stáhnout kartu kombinace (PNG 4:5)",
+    "comboExportOgPngTitle": "Stáhnout srovnávací kartu kombinace PNG 4:5 pro sociální sítě a chat",
+    "comboOgInvalidMinTrustHint": "Export PNG karty vyžaduje minimální důvěru v krocích po 5 (0-100). Aktuálně: {minTrust}/100.",
+    "comboOgSnapMinTrustBtn": "Nastavit na {target}/100",
+    "comboOgInvalidShippingHint": "Export PNG karty podporuje jen standardní sazby dopravy (0, 15k, 20k, 25k, 30k, 40k, 50k, 100k):"
   },
   "deals": {
     "metaTitle": "Výhodné nabídky ověřené ve 22 obchodech | Rate.vn",
@@ -1297,6 +1304,7 @@
     "competitorsTitle": "Alternativy pro {name}",
     "dealHub10PlatformsBtn": "Slevy z 22 obchodů",
     "compareAllPeersBtn": "{count, plural, =2 {Porovnat oba modely} few {Porovnat všechny # modely} other {Porovnat všech # modelů}} →",
+    "comboCartBtn": "Sestavit kombinaci",
     "peerNoRating": "není",
     "cheaperByBadge": "O {amount} ₫ levnější",
     "costPerPointUnit": "{cost} ₫ / 1,0 b.",

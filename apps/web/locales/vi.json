@@ -350,6 +350,8 @@
     "trayCompareNow": "So sánh ngay ({count} máy) →",
     "trayRemoveTitle": "Xóa khỏi khay so sánh",
     "trayRemoveAria": "Xóa {name}",
+    "trayComboCartBtn": "Ghép giỏ combo ({count})",
+    "comboCartBtn": "Tối ưu giỏ combo ({count} món)",
     "quickToggleShortAdd": "So sánh",
     "quickToggleShortSelected": "Đã chọn",
     "quickToggleShortLimit": "Tối đa 4",
@@ -884,7 +886,12 @@
     "comboStoreTrust": "Điểm tin cậy: {score}/100",
     "comboStoreTrustUnknown": "Điểm tin cậy: chưa đủ dữ liệu",
     "comboStoreShippingNote": "Đã gồm {price} phí ship",
-    "comboBuyAtStoreLink": "Mở nơi bán ↗"
+    "comboBuyAtStoreLink": "Mở nơi bán ↗",
+    "comboExportOgPngBtn": "Tải ảnh thẻ combo (PNG 4:5)",
+    "comboExportOgPngTitle": "Tải ảnh thẻ so sánh combo PNG 4:5 để chia sẻ lên mạng xã hội hoặc nhóm chat",
+    "comboOgInvalidMinTrustHint": "Ảnh thẻ PNG yêu cầu điểm tin cậy tối thiểu là bội số của 5 (0-100). Hiện tại: {minTrust}/100.",
+    "comboOgSnapMinTrustBtn": "Chỉnh về {target}/100",
+    "comboOgInvalidShippingHint": "Ảnh thẻ PNG chỉ hỗ trợ phí vận chuyển theo các mức chuẩn (0, 15k, 20k, 25k, 30k, 40k, 50k, 100k):"
   },
   "deals": {
     "metaTitle": "Deal công nghệ đã kiểm tra trên 22 sàn | Rate.vn",
@@ -1297,6 +1304,7 @@
     "competitorsTitle": "Lựa chọn thay thế cho {name}",
     "dealHub10PlatformsBtn": "Xem deal trên 22 sàn",
     "compareAllPeersBtn": "So sánh cả {count} máy →",
+    "comboCartBtn": "Ghép giỏ combo",
     "peerNoRating": "chưa có",
     "cheaperByBadge": "Rẻ hơn {amount} ₫",
     "costPerPointUnit": "{cost} ₫ / 1.0 điểm",

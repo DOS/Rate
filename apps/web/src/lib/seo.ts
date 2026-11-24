@@ -169,6 +169,41 @@ export const OG_TRUTH_CARD_HEIGHT = 630;
 export const SOCIAL_TRUTH_CARD_WIDTH = 1080;
 export const SOCIAL_TRUTH_CARD_HEIGHT = 1350;
 
+export const OG_COMBO_SHIPPING_PRESETS = [
+  0, 15_000, 20_000, 25_000, 30_000, 40_000, 50_000, 100_000,
+] as const;
+
+export type OgComboShippingPreset = (typeof OG_COMBO_SHIPPING_PRESETS)[number];
+
+export function isOgComboShippingPreset(
+  value: unknown
+): value is OgComboShippingPreset {
+  return (
+    typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    (OG_COMBO_SHIPPING_PRESETS as readonly number[]).includes(value)
+  );
+}
+
+export function isOgComboMinTrust(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    value >= 0 &&
+    value <= 100 &&
+    value % 5 === 0
+  );
+}
+
+export function isOgComboMaxStores(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    value >= 1 &&
+    value <= 5
+  );
+}
+
 export type OgTruthCardLocale = 'vi' | 'en' | 'cs';
 export type OgTruthCardFormat = 'og' | 'social';
 
@@ -190,6 +225,17 @@ export type OgTruthCardTarget =
     }
   | {
       readonly type: 'deals';
+      readonly locale?: string | null;
+      readonly format?: OgTruthCardFormat;
+      readonly download?: boolean;
+    }
+  | {
+      readonly type: 'combo';
+      readonly items: readonly string[];
+      readonly officialOnly?: boolean;
+      readonly minTrust?: number;
+      readonly maxStores?: number;
+      readonly shippingVnd?: number;
       readonly locale?: string | null;
       readonly format?: OgTruthCardFormat;
       readonly download?: boolean;
@@ -323,6 +369,45 @@ export function buildOgTruthCardPath(target: OgTruthCardTarget): string {
     params.set('versus', `${pair[0]}-vs-${pair[1]}`);
   } else if (target.type === 'deals') {
     params.set('type', 'deals');
+  } else if (target.type === 'combo') {
+    if (!Array.isArray(target.items)) return SHARE_IMAGE.url;
+    const cleanItems: string[] = [];
+    const seenLower = new Set<string>();
+    for (const raw of target.items) {
+      if (typeof raw !== 'string') return SHARE_IMAGE.url;
+      const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+      if (!isValidOgSlug(cleaned, 120)) return SHARE_IMAGE.url;
+      const lower = cleaned.toLowerCase();
+      if (seenLower.has(lower)) return SHARE_IMAGE.url;
+      seenLower.add(lower);
+      cleanItems.push(cleaned);
+    }
+    if (cleanItems.length < 2 || cleanItems.length > 5) {
+      return SHARE_IMAGE.url;
+    }
+    if (
+      target.officialOnly !== undefined &&
+      typeof target.officialOnly !== 'boolean'
+    ) {
+      return SHARE_IMAGE.url;
+    }
+    const officialOnly = Boolean(target.officialOnly);
+    const minTrust = target.minTrust ?? 80;
+    const maxStores = target.maxStores ?? 3;
+    const shippingVnd = target.shippingVnd ?? 0;
+    if (
+      !isOgComboMinTrust(minTrust) ||
+      !isOgComboMaxStores(maxStores) ||
+      !isOgComboShippingPreset(shippingVnd)
+    ) {
+      return SHARE_IMAGE.url;
+    }
+    params.set('type', 'combo');
+    params.set('items', cleanItems.join(','));
+    params.set('officialOnly', officialOnly ? '1' : '0');
+    params.set('minTrust', String(minTrust));
+    params.set('maxStores', String(maxStores));
+    params.set('shippingVnd', String(shippingVnd));
   } else {
     return SHARE_IMAGE.url;
   }

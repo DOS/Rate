@@ -21,6 +21,8 @@ import type { CrossPlatformDealRadarResponse } from '../../server/rate/deals';
 import WatchlistWorkspace from '../../components/watchlist/WatchlistWorkspace';
 import WatchlistComboOptimizer, {
   buildComboCartApiUrl,
+  doesComboResultMatchQueryState,
+  evaluateComboOgExportEligibility,
   formatComboTrustScore,
   isSafeComboSlugToken,
   mergeComboCartSearchParams,
@@ -34,6 +36,8 @@ import WatchlistComboOptimizer, {
   shouldShowComboBoundedSearchNote,
   type ComboCartApiPayload,
 } from '../../components/watchlist/WatchlistComboOptimizer';
+import { buildWatchlistComboHref } from '../combo-cart-links';
+import { OG_COMBO_SHIPPING_PRESETS } from '../seo';
 import MerchantDirectoryExplorer, {
   copyMerchantsMarkdownWithClipboard,
   evaluateMerchantDirectoryTrustBadge,
@@ -1499,6 +1503,356 @@ async function main() {
     assert.deepEqual(unhandledRejections, []);
   } finally {
     process.off('unhandledRejection', onUnhandled);
+  }
+
+  // =========================================================================
+  // 7. 8D.2 Cross-Feature Combo CTAs & Watchlist Combo OG PNG Gating Guards
+  // =========================================================================
+  // 7.1 buildWatchlistComboHref dedupe, cap, and safety bounds
+  assert.equal(
+    buildWatchlistComboHref([
+      'apple-iphone-16',
+      'APPLE-IPHONE-16',
+      'apple-airpods-pro-2-usb-c',
+      '__proto__',
+      's3',
+      's4',
+      's5',
+      's6',
+    ]),
+    '/watchlist?items=apple-iphone-16,apple-airpods-pro-2-usb-c,s3,s4,s5'
+  );
+  assert.equal(buildWatchlistComboHref(['single-only']), null);
+  assert.equal(
+    buildWatchlistComboHref(['single-only'], { minItems: 1 }),
+    '/watchlist?items=single-only'
+  );
+
+  // 7.2 Locale key parity & zero em/en-dash for compare + productDetail CTA keys
+  for (const ns of ['compare', 'productDetail'] as const) {
+    const viNs = viMessages[ns] as Record<string, string>;
+    const enNs = enMessages[ns] as Record<string, string>;
+    const csNs = csMessages[ns] as Record<string, string>;
+    assert.deepEqual(
+      Object.keys(viNs).sort(),
+      Object.keys(enNs).sort(),
+      `${ns}: vi/en keys must match`
+    );
+    assert.deepEqual(
+      Object.keys(csNs).sort(),
+      Object.keys(enNs).sort(),
+      `${ns}: cs/en keys must match`
+    );
+  }
+  for (const [locName, cat] of Object.entries(localeCatalogs)) {
+    for (const [ns, keys] of [
+      ['compare', ['trayComboCartBtn', 'comboCartBtn']],
+      ['productDetail', ['comboCartBtn']],
+      [
+        'watchlist',
+        [
+          'comboExportOgPngBtn',
+          'comboExportOgPngTitle',
+          'comboOgInvalidMinTrustHint',
+          'comboOgSnapMinTrustBtn',
+          'comboOgInvalidShippingHint',
+        ],
+      ],
+    ] as const) {
+      const nsObj = cat[ns] as Record<string, string>;
+      for (const k of keys) {
+        const val = nsObj[k];
+        assert.ok(val && val.trim().length > 0, `${locName}.${ns}.${k}`);
+        assert.equal(
+          val.includes('\u2014') || val.includes('\u2013'),
+          false,
+          `${locName}.${ns}.${k} must not contain em/en-dash`
+        );
+      }
+    }
+  }
+
+  // 7.3 All 3 UI gating guards for Combo OG PNG export
+  const syncedComboResult: ComboCartApiPayload = {
+    ...comboPayload,
+    query: {
+      items: ['apple-iphone-16', 'apple-airpods-pro-2-usb-c'],
+      officialOnly: false,
+      minTrust: 80,
+      maxStores: 3,
+      shippingVnd: 30_000,
+    },
+    items: comboPayload.items.slice(0, 2),
+    missingSlugs: [],
+    uncoveredSlugs: [],
+  };
+  const syncedUiState = {
+    items: ['apple-iphone-16', 'apple-airpods-pro-2-usb-c'],
+    officialOnly: false,
+    minTrust: 80,
+    maxStores: 3,
+    shippingVnd: 30_000,
+  };
+  assert.equal(
+    doesComboResultMatchQueryState(syncedComboResult, syncedUiState),
+    true
+  );
+  assert.equal(
+    doesComboResultMatchQueryState(syncedComboResult, {
+      ...syncedUiState,
+      shippingVnd: 15_000,
+    }),
+    false
+  );
+
+  // Guard 1: enabled when synced + valid; disabled when loading, error, missing, or stale
+  const okExport = evaluateComboOgExportEligibility({
+    state: syncedUiState,
+    loading: false,
+    fetchError: null,
+    result: syncedComboResult,
+    locale: 'vi',
+  });
+  assert.equal(okExport.canExport, true);
+  assert.equal(
+    okExport.downloadUrl,
+    '/api/v1/rate/og?type=combo&items=apple-iphone-16%2Capple-airpods-pro-2-usb-c&officialOnly=0&minTrust=80&maxStores=3&shippingVnd=30000&locale=vi&format=social&download=1'
+  );
+  assert.equal(
+    evaluateComboOgExportEligibility({
+      state: syncedUiState,
+      loading: true,
+      fetchError: null,
+      result: syncedComboResult,
+      locale: 'vi',
+    }).canExport,
+    false
+  );
+  assert.equal(
+    evaluateComboOgExportEligibility({
+      state: syncedUiState,
+      loading: false,
+      fetchError: 'Network error',
+      result: syncedComboResult,
+      locale: 'vi',
+    }).canExport,
+    false
+  );
+  assert.equal(
+    evaluateComboOgExportEligibility({
+      state: { ...syncedUiState, officialOnly: true },
+      loading: false,
+      fetchError: null,
+      result: syncedComboResult,
+      locale: 'vi',
+    }).canExport,
+    false
+  );
+
+  // Guard 2: minTrust must be multiple of 5 in 0..100; shippingVnd must be in 8 CDN presets
+  for (const preset of OG_COMBO_SHIPPING_PRESETS) {
+    assert.equal(
+      evaluateComboOgExportEligibility({
+        state: { ...syncedUiState, shippingVnd: preset },
+        loading: false,
+        fetchError: null,
+        result: {
+          ...syncedComboResult,
+          query: { ...syncedComboResult.query, shippingVnd: preset },
+        },
+        locale: 'en',
+      }).canExport,
+      true,
+      `shipping preset ${preset} must be eligible`
+    );
+  }
+  const oddTrustEval = evaluateComboOgExportEligibility({
+    state: { ...syncedUiState, minTrust: 81 },
+    loading: false,
+    fetchError: null,
+    result: {
+      ...syncedComboResult,
+      query: { ...syncedComboResult.query, minTrust: 81 },
+    },
+    locale: 'vi',
+  });
+  assert.equal(oddTrustEval.canExport, false);
+  assert.equal(oddTrustEval.minTrustValid, false);
+
+  const offPresetShipEval = evaluateComboOgExportEligibility({
+    state: { ...syncedUiState, shippingVnd: 12_345 },
+    loading: false,
+    fetchError: null,
+    result: {
+      ...syncedComboResult,
+      query: { ...syncedComboResult.query, shippingVnd: 12_345 },
+    },
+    locale: 'vi',
+  });
+  assert.equal(offPresetShipEval.canExport, false);
+  assert.equal(offPresetShipEval.shippingPresetValid, false);
+
+  // Guard 3 SSR checks: enabled button, disabled + hint on minTrust=81 / shippingVnd=12345 / stale query
+  for (const loc of ['vi', 'en', 'cs'] as const) {
+    const messages = pickClientMessages(localeCatalogs[loc], 'watchlist');
+    const wlMsgs = messages.watchlist as Record<string, string>;
+
+    const enabledHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter as never },
+        React.createElement(
+          IntlProvider,
+          { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+          React.createElement(WatchlistComboOptimizer, {
+            watchedItems: [],
+            catalogProducts: catalogSample,
+            locale: loc,
+            initialSelectedSlugs: [
+              'apple-iphone-16',
+              'apple-airpods-pro-2-usb-c',
+            ],
+            initialOptions: {
+              officialOnly: false,
+              minTrust: 80,
+              maxStores: 3,
+              shippingVnd: 30_000,
+            },
+            initialResult: syncedComboResult,
+          })
+        )
+      )
+    );
+    const enabledBtnMatch = enabledHtml.match(
+      /<button\b[^>]*data-testid="combo-export-og-png-btn"[^>]*>/
+    );
+    assert.ok(enabledBtnMatch, `${loc}: PNG export button must render`);
+    assert.equal(
+      /\bdisabled\b/.test(enabledBtnMatch![0]),
+      false,
+      `${loc}: synced preset state must enable PNG export button`
+    );
+    assert.equal(
+      enabledHtml.includes('data-testid="combo-og-gating-hint"'),
+      false
+    );
+    for (const banned of [
+      'radar',
+      'audit',
+      'kiểm toán',
+      'kiểm định',
+      'seeding',
+    ]) {
+      assert.equal(
+        enabledHtml.toLowerCase().includes(banned),
+        false,
+        `${loc}: WatchlistComboOptimizer PNG controls must not contain "${banned}"`
+      );
+    }
+
+    const oddTrustHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter as never },
+        React.createElement(
+          IntlProvider,
+          { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+          React.createElement(WatchlistComboOptimizer, {
+            watchedItems: [],
+            catalogProducts: catalogSample,
+            locale: loc,
+            initialSelectedSlugs: [
+              'apple-iphone-16',
+              'apple-airpods-pro-2-usb-c',
+            ],
+            initialOptions: { minTrust: 81, shippingVnd: 30_000 },
+            initialResult: {
+              ...syncedComboResult,
+              query: { ...syncedComboResult.query, minTrust: 81 },
+            },
+          })
+        )
+      )
+    );
+    const oddTrustBtnMatch = oddTrustHtml.match(
+      /<button\b[^>]*data-testid="combo-export-og-png-btn"[^>]*>/
+    );
+    assert.ok(oddTrustBtnMatch && /\bdisabled\b/.test(oddTrustBtnMatch[0]));
+    assert.ok(oddTrustHtml.includes('data-testid="combo-og-gating-hint"'));
+    assert.ok(
+      oddTrustHtml.includes('data-testid="combo-og-snap-mintrust-btn"')
+    );
+    assert.ok(
+      oddTrustHtml.includes(
+        wlMsgs.comboOgInvalidMinTrustHint!.replace('{minTrust}', '81')
+      )
+    );
+
+    const offPresetHtml = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter as never },
+        React.createElement(
+          IntlProvider,
+          { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+          React.createElement(WatchlistComboOptimizer, {
+            watchedItems: [],
+            catalogProducts: catalogSample,
+            locale: loc,
+            initialSelectedSlugs: [
+              'apple-iphone-16',
+              'apple-airpods-pro-2-usb-c',
+            ],
+            initialOptions: { minTrust: 80, shippingVnd: 12_345 },
+            initialResult: {
+              ...syncedComboResult,
+              query: { ...syncedComboResult.query, shippingVnd: 12_345 },
+            },
+          })
+        )
+      )
+    );
+    const offPresetBtnMatch = offPresetHtml.match(
+      /<button\b[^>]*data-testid="combo-export-og-png-btn"[^>]*>/
+    );
+    assert.ok(offPresetBtnMatch && /\bdisabled\b/.test(offPresetBtnMatch[0]));
+    assert.ok(offPresetHtml.includes('data-testid="combo-og-gating-hint"'));
+    assert.ok(
+      offPresetHtml.includes('data-testid="combo-og-shipping-preset-30000"')
+    );
+  }
+
+  // 7.4 Source wiring & prefetch={false} checks across all 5 categories & compare components
+  const pdvSrc = readFileSync(
+    path.join(webRoot, 'src/app/[locale]/smartphones/[slug]/page.tsx'),
+    'utf8'
+  );
+  assert.match(
+    pdvSrc,
+    /href=\{comboCartHref\}[\s\S]{0,160}prefetch=\{false\}/,
+    'ProductDetailView must pass prefetch={false} on combo CTA Link'
+  );
+  for (const cat of ['laptops', 'tablets', 'smartwatches', 'earbuds']) {
+    const catSrc = readFileSync(
+      path.join(webRoot, `src/app/[locale]/${cat}/[slug]/page.tsx`),
+      'utf8'
+    );
+    assert.ok(
+      catSrc.includes('ProductDetailView'),
+      `${cat}/[slug]/page.tsx must render shared ProductDetailView`
+    );
+  }
+  for (const rel of [
+    'src/components/compare/CompareTrayBar.tsx',
+    'src/components/compare/CompareWorkspace.tsx',
+    'src/components/compare/VersusInteractiveScoreboard.tsx',
+  ]) {
+    const src = readFileSync(path.join(webRoot, rel), 'utf8');
+    assert.match(
+      src,
+      /href=\{comboCartHref\}[\s\S]{0,160}prefetch=\{false\}/,
+      `${rel} must pass prefetch={false} on combo CTA Link`
+    );
   }
 
   console.warn('✅ All F8 combo cart UI & verified safe merchant tests passed');

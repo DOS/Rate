@@ -26,6 +26,7 @@ import {
   BsVolumeUp,
 } from 'react-icons/bs';
 import { Link, useRouter } from '@/lib/navigation';
+import { buildWatchlistComboHref } from '@/lib/combo-cart-links';
 import { IntentLink } from '@/components/elementary/IntentLink';
 import type {
   KeySpecs,
@@ -3065,6 +3066,17 @@ export default function CompareWorkspace({
     t('customWeightsActive')
   );
 
+  const comboCartHref = useMemo(
+    () =>
+      products.length >= 2
+        ? buildWatchlistComboHref(
+            products.map((p) => p.slug),
+            { minItems: 2 }
+          )
+        : null,
+    [products]
+  );
+
   const controlsBlock = (
     <>
       {/* 5-Category Lock Switcher Bar */}
@@ -3476,6 +3488,17 @@ export default function CompareWorkspace({
                     ? t('savedWatchlistToast')
                     : t('watchAllGroupBtn', { count: products.length })}
                 </button>
+              )}
+
+              {comboCartHref && (
+                <Link
+                  href={comboCartHref}
+                  prefetch={false}
+                  data-testid="compare-combo-cart-link"
+                  className="btn btn-sm btn-outline-success rounded-pill fw-medium px-3 py-2"
+                >
+                  {t('comboCartBtn', { count: products.length })}
+                </Link>
               )}
             </div>
           </div>

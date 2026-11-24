@@ -13,6 +13,7 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   BsCheckCircle,
+  BsDownload,
   BsExclamationTriangle,
   BsLink45Deg,
   BsPlus,
@@ -22,6 +23,14 @@ import {
 } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import ContentText from '@/components/elementary/ContentText';
+import {
+  OG_COMBO_SHIPPING_PRESETS,
+  SHARE_IMAGE,
+  buildOgTruthCardPath,
+  isOgComboMaxStores,
+  isOgComboMinTrust,
+  isOgComboShippingPreset,
+} from '@/lib/seo';
 import type { MasterProduct } from '@repo/shared-data';
 import type { WatchlistItem } from './watchlist-store';
 import {
@@ -451,6 +460,118 @@ export function shouldShowComboBoundedSearchNote(
     !result.diagnostics.searchComplete &&
     Boolean(result.singleStoreBest || result.multiStoreOptimal)
   );
+}
+
+export function doesComboResultMatchQueryState(
+  result: Pick<ComboCartApiPayload, 'query'> | null | undefined,
+  state: ComboCartQueryState
+): boolean {
+  if (!result?.query) return false;
+  if (
+    Boolean(result.query.officialOnly) !== Boolean(state.officialOnly) ||
+    result.query.minTrust !== state.minTrust ||
+    result.query.maxStores !== state.maxStores ||
+    result.query.shippingVnd !== state.shippingVnd
+  ) {
+    return false;
+  }
+  if (
+    !Array.isArray(result.query.items) ||
+    result.query.items.length !== state.items.length
+  ) {
+    return false;
+  }
+  for (let i = 0; i < state.items.length; i++) {
+    if (
+      (result.query.items[i] ?? '').toLowerCase() !==
+      (state.items[i] ?? '').toLowerCase()
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export interface ComboOgExportEligibility {
+  readonly canExport: boolean;
+  readonly minTrustValid: boolean;
+  readonly shippingPresetValid: boolean;
+  readonly maxStoresValid: boolean;
+  readonly resultMatchesUi: boolean;
+  readonly downloadUrl: string | null;
+}
+
+export function evaluateComboOgExportEligibility(params: {
+  readonly state: ComboCartQueryState;
+  readonly loading: boolean;
+  readonly fetchError: string | null;
+  readonly result: ComboCartApiPayload | null;
+  readonly locale: string;
+}): ComboOgExportEligibility {
+  const { state, loading, fetchError, result, locale } = params;
+  const hasEnoughItems =
+    state.items.length >= COMBO_CART_MIN_ITEMS &&
+    state.items.length <= COMBO_CART_MAX_ITEMS;
+  const minTrustValid = isOgComboMinTrust(state.minTrust);
+  const shippingPresetValid = isOgComboShippingPreset(state.shippingVnd);
+  const maxStoresValid = isOgComboMaxStores(state.maxStores);
+  const resultMatchesUi =
+    !loading &&
+    !fetchError &&
+    result !== null &&
+    result.missingSlugs.length === 0 &&
+    result.items.filter((item) => item.found).length >= COMBO_CART_MIN_ITEMS &&
+    doesComboResultMatchQueryState(result, state);
+
+  const eligible =
+    hasEnoughItems &&
+    minTrustValid &&
+    shippingPresetValid &&
+    maxStoresValid &&
+    resultMatchesUi;
+
+  if (!eligible) {
+    return {
+      canExport: false,
+      minTrustValid,
+      shippingPresetValid,
+      maxStoresValid,
+      resultMatchesUi,
+      downloadUrl: null,
+    };
+  }
+
+  const url = buildOgTruthCardPath({
+    type: 'combo',
+    items: state.items,
+    officialOnly: state.officialOnly,
+    minTrust: state.minTrust,
+    maxStores: state.maxStores,
+    shippingVnd: state.shippingVnd,
+    format: 'social',
+    download: true,
+    locale,
+  });
+
+  if (!url || url === SHARE_IMAGE.url) {
+    return {
+      canExport: false,
+      minTrustValid,
+      shippingPresetValid,
+      maxStoresValid,
+      resultMatchesUi,
+      downloadUrl: null,
+    };
+  }
+
+  return {
+    canExport: true,
+    minTrustValid,
+    shippingPresetValid,
+    maxStoresValid,
+    resultMatchesUi,
+    downloadUrl: url,
+  };
 }
 
 function hasAnyComboParam(searchParams: Pick<URLSearchParams, 'has'>): boolean {
@@ -913,6 +1034,60 @@ export default function WatchlistComboOptimizer({
     setRetryNonce((n) => n + 1);
   };
 
+  const ogExport = useMemo(
+    () =>
+      evaluateComboOgExportEligibility({
+        state: {
+          items: selectedSlugs,
+          officialOnly,
+          minTrust,
+          maxStores,
+          shippingVnd,
+        },
+        loading,
+        fetchError,
+        result,
+        locale,
+      }),
+    [
+      fetchError,
+      loading,
+      locale,
+      maxStores,
+      minTrust,
+      officialOnly,
+      result,
+      selectedSlugs,
+      shippingVnd,
+    ]
+  );
+
+  const showOgGatingHint =
+    selectedSlugs.length >= COMBO_CART_MIN_ITEMS &&
+    (!ogExport.minTrustValid || !ogExport.shippingPresetValid);
+
+  const snappedMinTrust = Math.max(
+    0,
+    Math.min(100, Math.round(minTrust / 5) * 5)
+  );
+
+  const handleDownloadComboPng = () => {
+    if (
+      typeof window === 'undefined' ||
+      !ogExport.canExport ||
+      !ogExport.downloadUrl
+    ) {
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = ogExport.downloadUrl;
+    a.download = 'rate-truth-card-combo-4x5.png';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   const retiredItems = useMemo(
     () => (result?.items ?? []).filter((item) => item.retiredVariant),
     [result]
@@ -1276,6 +1451,20 @@ export default function WatchlistComboOptimizer({
           )}
           <button
             type="button"
+            disabled={!ogExport.canExport}
+            onClick={handleDownloadComboPng}
+            title={t('comboExportOgPngTitle')}
+            aria-describedby={
+              showOgGatingHint ? `${sectionId}-og-gating-hint` : undefined
+            }
+            data-testid="combo-export-og-png-btn"
+            className="btn btn-sm btn-outline-light rounded-pill fw-semibold d-inline-flex align-items-center gap-1 px-3"
+          >
+            <BsDownload aria-hidden="true" />
+            {t('comboExportOgPngBtn')}
+          </button>
+          <button
+            type="button"
             disabled={selectedSlugs.length < COMBO_CART_MIN_ITEMS}
             onClick={() => void handleCopyShareLink()}
             data-testid="combo-copy-share-btn"
@@ -1547,6 +1736,7 @@ export default function WatchlistComboOptimizer({
           </label>
           <input
             id={`${sectionId}-shipping-vnd`}
+            list={`${sectionId}-shipping-presets`}
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
@@ -1567,8 +1757,64 @@ export default function WatchlistComboOptimizer({
               borderColor: 'var(--rate-border-strong)',
             }}
           />
+          <datalist id={`${sectionId}-shipping-presets`}>
+            {OG_COMBO_SHIPPING_PRESETS.map((preset) => (
+              <option key={preset} value={String(preset)}>
+                {formatPriceVnd(preset, locale)}
+              </option>
+            ))}
+          </datalist>
         </div>
       </div>
+
+      {showOgGatingHint && (
+        <div
+          id={`${sectionId}-og-gating-hint`}
+          role="status"
+          data-testid="combo-og-gating-hint"
+          className="rounded-3 small mb-3 d-flex flex-column gap-2 px-3 py-2"
+          style={{
+            backgroundColor: 'var(--rate-glass-bg)',
+            border: '1px solid var(--rate-ink-warning)',
+            color: 'var(--rate-ink-warning)',
+          }}
+        >
+          {!ogExport.minTrustValid && (
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <span>{t('comboOgInvalidMinTrustHint', { minTrust })}</span>
+              <button
+                type="button"
+                data-testid="combo-og-snap-mintrust-btn"
+                onClick={() => applyComboUpdate({ minTrust: snappedMinTrust })}
+                className="btn btn-sm btn-outline-light rounded-pill px-2 py-1"
+              >
+                {t('comboOgSnapMinTrustBtn', { target: snappedMinTrust })}
+              </button>
+            </div>
+          )}
+          {!ogExport.shippingPresetValid && (
+            <div className="d-flex flex-column gap-1">
+              <span>{t('comboOgInvalidShippingHint')}</span>
+              <div className="d-flex flex-wrap gap-1">
+                {OG_COMBO_SHIPPING_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    data-testid={`combo-og-shipping-preset-${preset}`}
+                    onClick={() => {
+                      setShippingDraft(String(preset));
+                      applyComboUpdate({ shippingVnd: preset });
+                    }}
+                    className="btn btn-sm btn-outline-light rounded-pill rate-tabular px-2 py-1"
+                  >
+                    {preset === 0 ? '0' : `${preset / 1000}k`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Results / Loading / Error / Empty States */}
       {selectedSlugs.length < COMBO_CART_MIN_ITEMS ? (
