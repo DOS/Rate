@@ -803,5 +803,36 @@
   },
   "pinnedAlertUnpinShort": {
     "message": "Unpin"
+  },
+  "offerChannelAuthorizedVat": {
+    "message": "Authorized VAT"
+  },
+  "offerChannelOfficialMall": {
+    "message": "Official Mall"
+  },
+  "offerOriginOfficialVna": {
+    "message": "VN/A"
+  },
+  "offerOriginImported": {
+    "message": "Imported"
+  },
+  "offerHighTrust": {
+    "message": "High Trust"
+  },
+  "pinnedAlertsComboCta": {
+    "message": "Optimize combo cart ($COUNT$ pinned items)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "pinnedAlertsComboCtaCapped": {
+    "message": "Optimize $COUNT$ newest pinned items",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   }
 }

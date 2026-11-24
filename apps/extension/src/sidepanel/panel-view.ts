@@ -3,6 +3,10 @@
  * test suite can render them. Every interpolated value goes through
  * escapeHtml or a formatSafe* helper.
  */
+import {
+  classifySellerChannel,
+  detectProductOrigin,
+} from '@repo/shared-data/rules';
 import type {
   ExtensionLookupData,
   ExtensionOfferItem,
@@ -223,6 +227,52 @@ export function officialBadgeHtml(): string {
   return `<span style="color:#34d399;font-size: 13px;">${escapeHtml(t('officialStore'))}</span>`;
 }
 
+/**
+ * Seller channel pill from Open-Core rules, deduplicating against
+ * `officialBadgeHtml()` so official merchants never render redundant pills.
+ */
+export function renderOfferChannelBadgeHtml(
+  off: Pick<ExtensionOfferItem, 'platform' | 'title' | 'merchant'>
+): string {
+  const safeTitle = stripLoneSurrogates(String(off.title ?? ''));
+  const origin = detectProductOrigin(safeTitle);
+  const channel = classifySellerChannel({
+    platform: off.platform,
+    isOfficial: off.merchant?.is_official,
+    merchantName: stripLoneSurrogates(String(off.merchant?.name ?? '')),
+    title: safeTitle,
+  });
+  if (channel === 'authorized_vat') {
+    return `<span class="offer-mark offer-mark-best">${escapeHtml(t('offerChannelAuthorizedVat'))}</span>`;
+  }
+  if (channel === 'official_mall') {
+    return `<span class="offer-mark offer-mark-best">${escapeHtml(t('offerChannelOfficialMall'))}</span>`;
+  }
+  if (off.merchant?.is_official === true && origin !== 'imported') {
+    return officialBadgeHtml();
+  }
+  return '';
+}
+
+/**
+ * Distribution origin pill (`VN/A` vs parallel import), returning empty string
+ * when origin is unknown so unverified labels are never fabricated.
+ */
+export function renderOfferOriginBadgeHtml(
+  off: Pick<ExtensionOfferItem, 'title'>
+): string {
+  const origin = detectProductOrigin(
+    stripLoneSurrogates(String(off.title ?? ''))
+  );
+  if (origin === 'official_vna') {
+    return `<span class="offer-mark offer-mark-info">${escapeHtml(t('offerOriginOfficialVna'))}</span>`;
+  }
+  if (origin === 'imported') {
+    return `<span class="offer-mark offer-mark-warn">${escapeHtml(t('offerOriginImported'))}</span>`;
+  }
+  return '';
+}
+
 function renderOfferRowHtml(
   off: ExtensionOfferItem,
   cheapest: boolean,
@@ -231,6 +281,7 @@ function renderOfferRowHtml(
   const marks = offerMarkItems(off);
   const muted = !isOfferBuyable(off);
   const star = ratingStarText(off.rating_star, locale);
+  const isHighTrust = merchantTrustColor(off.merchant) === '#34d399';
   const meta = [
     escapeHtml(String(off.platform ?? '').toUpperCase()),
     star,
@@ -247,7 +298,14 @@ function renderOfferRowHtml(
             ),
           ])
     ),
+    ...(isHighTrust
+      ? [
+          `<span class="offer-trust-high">${escapeHtml(t('offerHighTrust'))}</span>`,
+        ]
+      : []),
   ].filter(Boolean);
+  const channelBadgeHtml = renderOfferChannelBadgeHtml(off);
+  const originBadgeHtml = renderOfferOriginBadgeHtml(off);
   const marksHtml = [
     ...(cheapest
       ? [
@@ -259,16 +317,18 @@ function renderOfferRowHtml(
         `<span class="offer-mark ${m.warn ? 'offer-mark-warn' : 'offer-mark-muted'}">${escapeHtml(m.text)}</span>`
     ),
   ].join(' ');
+  const shopBadgesHtml = [channelBadgeHtml, originBadgeHtml, marksHtml]
+    .filter(Boolean)
+    .join(' ');
   const priceTitle = isOfferSoldOut(off)
     ? ` title="${escapeHtml(t('offerLastSeenPrice'))}"`
     : '';
   return `
             <div class="offer-item${muted ? ' offer-item-muted' : ''}">
-              <div>
+              <div class="offer-main">
                 <div class="offer-shop">
                   ${contentTextHtml(off.merchant.name)}
-                  ${off.merchant.is_official ? officialBadgeHtml() : ''}
-                  ${marksHtml}
+                  ${shopBadgesHtml}
                 </div>
                 <div class="offer-meta">
                   ${meta.join(' - ')}
@@ -548,6 +608,30 @@ export function riskScoreText(
 
 export const MAX_PINNED_ALERTS = 50;
 export const PINNED_ALERTS_STORAGE_KEY = 'pinnedAlerts';
+export const EXTENSION_COMBO_MAX_ITEMS = 5;
+export const EXTENSION_COMBO_MIN_ITEMS = 2;
+export const MAX_COMBO_SLUG_LENGTH = 120;
+export const MAX_COMBO_QUERY_ITEMS_LENGTH = 1000;
+
+const UNSAFE_COMBO_SLUG_TOKENS = new Set([
+  '0',
+  'null',
+  'undefined',
+  'nan',
+  'none',
+  'n/a',
+  'na',
+  'false',
+  'true',
+  'infinity',
+  '-infinity',
+  '__proto__',
+  'constructor',
+  'prototype',
+  ...Object.getOwnPropertyNames(Object.prototype).map((key) =>
+    key.toLowerCase()
+  ),
+]);
 
 const ALLOWED_PIN_CATEGORIES = new Set<PinnedPriceAlert['categorySlug']>([
   'smartphones',
@@ -794,6 +878,95 @@ export function buildWatchlistEmailAlertUrl(
   );
 }
 
+export type ComboAlertSlugSource = Pick<PinnedPriceAlert, 'slug'> | string;
+
+function isComboCartEligibleSlug(cleanSlug: string): boolean {
+  if (!isValidPinnedProductSlug(cleanSlug)) return false;
+  if (cleanSlug.length > MAX_COMBO_SLUG_LENGTH) return false;
+  const lower = cleanSlug.toLowerCase();
+  if (
+    Object.prototype.hasOwnProperty.call(Object.prototype, cleanSlug) ||
+    Object.prototype.hasOwnProperty.call(Object.prototype, lower) ||
+    UNSAFE_COMBO_SLUG_TOKENS.has(lower)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function collectComboEligibleSlugs(
+  alerts: unknown,
+  options: { maxCount: number; maxJoinedLength: number }
+): string[] {
+  if (!Array.isArray(alerts)) return [];
+  const out: string[] = [];
+  const seenLower = new Set<string>();
+  let joinedLength = 0;
+
+  for (const item of alerts) {
+    if (out.length >= options.maxCount) break;
+    let rawSlug: unknown;
+    if (typeof item === 'string') {
+      rawSlug = item;
+    } else if (item && typeof item === 'object' && !Array.isArray(item)) {
+      rawSlug = Object.prototype.hasOwnProperty.call(item, 'slug')
+        ? (item as Record<string, unknown>).slug
+        : undefined;
+    }
+    if (typeof rawSlug !== 'string') continue;
+    const cleanSlug = stripLoneSurrogates(rawSlug)
+      .replace(/\p{Cc}+/gu, '')
+      .trim();
+    if (!isComboCartEligibleSlug(cleanSlug)) continue;
+    const lower = cleanSlug.toLowerCase();
+    if (seenLower.has(lower)) continue;
+    const nextJoinedLength =
+      out.length === 0 ? cleanSlug.length : joinedLength + 1 + cleanSlug.length;
+    if (nextJoinedLength > options.maxJoinedLength) continue;
+    seenLower.add(lower);
+    out.push(cleanSlug);
+    joinedLength = nextJoinedLength;
+  }
+  return out;
+}
+
+/**
+ * Extracts up to `EXTENSION_COMBO_MAX_ITEMS` (5) valid, case-insensitively
+ * deduplicated product slugs compatible with the web Combo Cart Optimizer
+ * contract (`<= 120` chars per slug, `<= 1000` chars joined).
+ */
+export function extractValidPinnedComboSlugs(alerts: unknown): string[] {
+  return collectComboEligibleSlugs(alerts, {
+    maxCount: EXTENSION_COMBO_MAX_ITEMS,
+    maxJoinedLength: MAX_COMBO_QUERY_ITEMS_LENGTH,
+  });
+}
+
+/**
+ * Builds the 1-click Combo Cart Optimizer URL (`/{locale}/watchlist?items=...`)
+ * when at least `EXTENSION_COMBO_MIN_ITEMS` (2) valid unique pinned slugs exist,
+ * capped at `EXTENSION_COMBO_MAX_ITEMS` (5) items.
+ */
+export function buildWatchlistComboCartUrl(
+  apiBaseUrl: string | null | undefined,
+  alerts: readonly ComboAlertSlugSource[] | unknown,
+  locale = t('langCode')
+): string | null {
+  const slugs = extractValidPinnedComboSlugs(alerts);
+  if (slugs.length < EXTENSION_COMBO_MIN_ITEMS) {
+    return null;
+  }
+  const localePrefix = resolveExtensionUrlLocalePrefix(locale);
+  const encodedItems = slugs
+    .map((slug) => encodeSurrogateSafeUriComponent(slug, MAX_COMBO_SLUG_LENGTH))
+    .join(',');
+  return resolveSafeApiRelativeUrl(
+    apiBaseUrl,
+    `/${localePrefix}/watchlist?items=${encodedItems}`,
+    `/${localePrefix}/watchlist`
+  );
+}
+
 export function renderPinAlertButtonHtml(options: {
   pinnedAlert: PinnedPriceAlert | null;
   defaultTargetVnd: number | null;
@@ -897,10 +1070,45 @@ export function renderPinnedAlertsCardHtml(
     })
     .join('');
 
+  const allEligibleSlugs = collectComboEligibleSlugs(safeAlerts, {
+    maxCount: MAX_PINNED_ALERTS,
+    maxJoinedLength: Number.POSITIVE_INFINITY,
+  });
+  const selectedComboSlugs = extractValidPinnedComboSlugs(safeAlerts);
+  const comboCartUrl = buildWatchlistComboCartUrl(
+    options.apiBaseUrl,
+    selectedComboSlugs,
+    locale
+  );
+  const comboCtaHtml = comboCartUrl
+    ? (() => {
+        const isCapped = allEligibleSlugs.length > selectedComboSlugs.length;
+        const countStr = formatSafeNumber(
+          selectedComboSlugs.length,
+          { min: EXTENSION_COMBO_MIN_ITEMS, max: EXTENSION_COMBO_MAX_ITEMS },
+          locale
+        );
+        const label = isCapped
+          ? t('pinnedAlertsComboCtaCapped', [countStr])
+          : t('pinnedAlertsComboCta', [countStr]);
+        return `
+        <div class="btn-row" style="margin-top: 10px;">
+          <a
+            href="${comboCartUrl}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-primary"
+            data-combo-cart-bridge="true"
+          ><span aria-hidden="true">🛒 </span>${escapeHtml(label)}</a>
+        </div>`;
+      })()
+    : '';
+
   return `
       <div class="card">
         <div class="card-title"><span aria-hidden="true">📌 </span>${escapeHtml(t('pinnedAlertsTitle', [formatSafeNumber(safeAlerts.length, { min: 1, max: MAX_PINNED_ALERTS }, locale)]))}</div>
         ${rows}
+        ${comboCtaHtml}
       </div>
     `;
 }
