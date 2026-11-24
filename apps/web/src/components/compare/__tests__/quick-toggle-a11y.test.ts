@@ -830,8 +830,8 @@ const traySrc = fs.readFileSync(
 );
 assert.match(
   traySrc,
-  /href=\{comboCartHref\}[\s\S]{0,120}prefetch=\{false\}/,
-  'CompareTrayBar combo cart link must set prefetch={false}'
+  /!collapsed\s*&&\s*comboCartHref[\s\S]{0,160}prefetch=\{false\}/,
+  'CompareTrayBar combo cart link must hide when collapsed on phones and set prefetch={false}'
 );
 assert.equal(
   traySrc.includes("t('trayComboCartBtn'"),

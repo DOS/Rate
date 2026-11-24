@@ -209,7 +209,7 @@ export default function CompareTrayBar({ initialItems }: CompareTrayBarProps) {
                   {t('trayClearAll')}
                 </button>
               )}
-              {comboCartHref && (
+              {!collapsed && comboCartHref && (
                 <Link
                   href={comboCartHref}
                   prefetch={false}
