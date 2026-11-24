@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import {
   MAX_DESCRIPTION_LENGTH,
   MAX_TITLE_LENGTH,
+  OG_COMBO_SHIPPING_PRESETS,
   OG_TRUTH_CARD_HEIGHT,
   OG_TRUTH_CARD_WIDTH,
   SHARE_IMAGE,
@@ -17,6 +18,9 @@ import {
   defaultTwitterCard,
   fitDescription,
   fitTitle,
+  isOgComboMaxStores,
+  isOgComboMinTrust,
+  isOgComboShippingPreset,
   isValidOgSlug,
   normalizeOgLocale,
   parseOgVersusPair,
@@ -288,6 +292,192 @@ function main() {
     null
   );
 
+  // 8D.2: Combo OG Truth Card query cap (512 preserved for non-combo, 800 for type=combo) & finite allowlist
+  assert.deepEqual(
+    [...OG_COMBO_SHIPPING_PRESETS],
+    [0, 15_000, 20_000, 25_000, 30_000, 40_000, 50_000, 100_000]
+  );
+  assert.equal(isOgComboShippingPreset(30_000), true);
+  assert.equal(isOgComboShippingPreset(12_345), false);
+  assert.equal(isOgComboMinTrust(80), true);
+  assert.equal(isOgComboMinTrust(81), false);
+  assert.equal(isOgComboMaxStores(3), true);
+  assert.equal(isOgComboMaxStores(6), false);
+
+  assert.equal(
+    buildOgTruthCardPath({
+      type: 'combo',
+      items: ['apple-iphone-17-pro-256gb', 'apple-airpods-pro-2-usb-c'],
+      officialOnly: true,
+      minTrust: 85,
+      maxStores: 2,
+      shippingVnd: 30_000,
+      locale: 'vi',
+      format: 'social',
+      download: true,
+    }),
+    '/api/v1/rate/og?type=combo&items=apple-iphone-17-pro-256gb%2Capple-airpods-pro-2-usb-c&officialOnly=1&minTrust=85&maxStores=2&shippingVnd=30000&locale=vi&format=social&download=1'
+  );
+  // Fail-closed buildOgTruthCardPath on invalid combo inputs
+  assert.equal(
+    buildOgTruthCardPath({ type: 'combo', items: ['only-one'] }),
+    SHARE_IMAGE.url
+  );
+  assert.equal(
+    buildOgTruthCardPath({
+      type: 'combo',
+      items: ['s1', 's2', 's3', 's4', 's5', 's6'],
+    }),
+    SHARE_IMAGE.url
+  );
+  assert.equal(
+    buildOgTruthCardPath({ type: 'combo', items: ['a', 'A'] }),
+    SHARE_IMAGE.url
+  );
+  assert.equal(
+    buildOgTruthCardPath({ type: 'combo', items: ['../bad', 'iphone-17'] }),
+    SHARE_IMAGE.url
+  );
+  assert.equal(
+    buildOgTruthCardPath({
+      type: 'combo',
+      items: ['iphone-17', 'airpods-pro-2'],
+      minTrust: 81,
+    }),
+    SHARE_IMAGE.url
+  );
+  assert.equal(
+    buildOgTruthCardPath({
+      type: 'combo',
+      items: ['iphone-17', 'airpods-pro-2'],
+      maxStores: 6,
+    }),
+    SHARE_IMAGE.url
+  );
+  assert.equal(
+    buildOgTruthCardPath({
+      type: 'combo',
+      items: ['iphone-17', 'airpods-pro-2'],
+      shippingVnd: 12_345,
+    }),
+    SHARE_IMAGE.url
+  );
+
+  // Valid combo query with explicit params and defaults
+  assert.deepEqual(
+    parseOgTruthCardQuery(
+      new URLSearchParams('type=combo&items=iphone-17,airpods-pro-2')
+    ),
+    {
+      type: 'combo',
+      items: ['iphone-17', 'airpods-pro-2'],
+      officialOnly: false,
+      minTrust: 80,
+      maxStores: 3,
+      shippingVnd: 0,
+      locale: 'vi',
+      format: 'og',
+      download: false,
+    }
+  );
+  assert.deepEqual(
+    parseOgTruthCardQuery(
+      new URLSearchParams(
+        'type=combo&items=iphone-17%2Cairpods-pro-2&officialOnly=1&minTrust=95&maxStores=4&shippingVnd=50000&locale=cs&format=social&download=1'
+      )
+    ),
+    {
+      type: 'combo',
+      items: ['iphone-17', 'airpods-pro-2'],
+      officialOnly: true,
+      minTrust: 95,
+      maxStores: 4,
+      shippingVnd: 50_000,
+      locale: 'cs',
+      format: 'social',
+      download: true,
+    }
+  );
+
+  // Query length boundary: 512 strict for product/versus/deals, 800 strictly for combo
+  const fiveMaxSlugs = [1, 2, 3, 4, 5].map((n) => `p${n}-${'x'.repeat(117)}`);
+  const maxComboPath = buildOgTruthCardPath({
+    type: 'combo',
+    items: fiveMaxSlugs,
+    officialOnly: true,
+    minTrust: 100,
+    maxStores: 5,
+    shippingVnd: 100_000,
+    locale: 'vi',
+    format: 'social',
+    download: true,
+  });
+  const maxComboSearch = maxComboPath.slice(maxComboPath.indexOf('?'));
+  assert.ok(
+    maxComboSearch.length > 512 && maxComboSearch.length <= 800,
+    `5 max-length slugs query (${maxComboSearch.length} chars) must sit in (512, 800]`
+  );
+  assert.ok(
+    parseOgTruthCardQuery(
+      new URLSearchParams(maxComboSearch),
+      maxComboSearch
+    ) !== null,
+    'type=combo must accept valid queries up to 800 chars'
+  );
+  assert.equal(
+    parseOgTruthCardQuery(
+      new URLSearchParams('type=combo&items=a,b'),
+      `?${'a'.repeat(800)}`
+    ),
+    null,
+    'type=combo must reject queries exceeding 800 chars'
+  );
+  for (const nonComboSearch of [
+    'type=product&slug=iphone-17',
+    'type=versus&versus=iphone-17-vs-galaxy-s26',
+    'type=deals',
+  ]) {
+    assert.equal(
+      parseOgTruthCardQuery(
+        new URLSearchParams(nonComboSearch),
+        `?${'a'.repeat(512)}`
+      ),
+      null,
+      `${nonComboSearch} must keep strict 512-char query cap`
+    );
+  }
+
+  // Finite allowlist rejections for type=combo (mapping to HTTP 400)
+  for (const badComboQuery of [
+    'type=combo',
+    'type=combo&items=only-one',
+    'type=combo&items=s1,s2,s3,s4,s5,s6',
+    'type=combo&items=iphone-17,IPHONE-17',
+    'type=combo&items=iphone-17,,airpods-pro-2',
+    'type=combo&items=-bad,airpods-pro-2',
+    'type=combo&items=_bad,airpods-pro-2',
+    'type=combo&items=iphone-17,__proto__',
+    'type=combo&items=iphone-17,airpods-pro-2&officialOnly=true',
+    'type=combo&items=iphone-17,airpods-pro-2&officialOnly=2',
+    'type=combo&items=iphone-17,airpods-pro-2&minTrust=81',
+    'type=combo&items=iphone-17,airpods-pro-2&minTrust=080',
+    'type=combo&items=iphone-17,airpods-pro-2&minTrust=105',
+    'type=combo&items=iphone-17,airpods-pro-2&minTrust=-5',
+    'type=combo&items=iphone-17,airpods-pro-2&maxStores=0',
+    'type=combo&items=iphone-17,airpods-pro-2&maxStores=6',
+    'type=combo&items=iphone-17,airpods-pro-2&shippingVnd=12345',
+    'type=combo&items=iphone-17,airpods-pro-2&shippingVnd=030000',
+    'type=combo&items=iphone-17,airpods-pro-2&shippingVnd=10000',
+    'type=combo&items=iphone-17,airpods-pro-2&shippingVnd=200000',
+    'type=combo&items=iphone-17,airpods-pro-2&bust=1',
+  ]) {
+    assert.equal(
+      parseOgTruthCardQuery(new URLSearchParams(badComboQuery)),
+      null,
+      `Expected null (HTTP 400) for ${badComboQuery}`
+    );
+  }
+
   // Verify metadata wiring on product detail, compare/[versus], and deals pages
   for (const relPage of [
     '../../app/[locale]/smartphones/[slug]/page.tsx',
@@ -398,6 +588,108 @@ async function runOgTruthCardAsyncSuite() {
       ],
     };
 
+    const sampleCombo = {
+      type: 'combo' as const,
+      items: [
+        { slug: 'apple-iphone-17-pro-256gb', name: 'iPhone 17 Pro 256GB' },
+        {
+          slug: 'apple-airpods-pro-2-usb-c',
+          name: 'AirPods Pro 2 Čtečka ě ů',
+        },
+      ],
+      query: {
+        officialOnly: false,
+        minTrust: 80,
+        maxStores: 3,
+        shippingVnd: 30_000,
+      },
+      singleStoreBest: {
+        distinctStoreCount: 1,
+        itemsSubtotalVnd: 34_500_000,
+        shippingVnd: 30_000,
+        totalVnd: 34_530_000,
+        allOfficial: true,
+        avgTrustScore: 92,
+        verifiedSafeStoreCount: 1,
+        storeNames: ['CellphoneS'],
+      },
+      multiStoreOptimal: {
+        distinctStoreCount: 2,
+        itemsSubtotalVnd: 32_900_000,
+        shippingVnd: 60_000,
+        totalVnd: 32_960_000,
+        allOfficial: true,
+        avgTrustScore: 93.5,
+        verifiedSafeStoreCount: 2,
+        storeNames: ['Apple Flagship Store', 'Tiki Trading'],
+      },
+      savingsVsSingleStoreVnd: 1_570_000,
+      savingsVsSingleStorePct: 4.5,
+      snapshotTimestampIso: '2026-11-24T02:15:00.000Z',
+    };
+
+    const sampleComboSingleOnly = {
+      type: 'combo' as const,
+      items: [
+        { slug: 'item-1', name: 'Workstation A' },
+        { slug: 'item-2', name: 'Workstation B' },
+        { slug: 'item-3', name: 'Display C' },
+        { slug: 'item-4', name: 'Dock D' },
+        { slug: 'item-5', name: 'Keyboard E' },
+      ],
+      query: {
+        officialOnly: true,
+        minTrust: 90,
+        maxStores: 5,
+        shippingVnd: 0,
+      },
+      singleStoreBest: {
+        distinctStoreCount: 1,
+        itemsSubtotalVnd: 1_450_000_000,
+        shippingVnd: 0,
+        totalVnd: 1_450_000_000,
+        allOfficial: true,
+        avgTrustScore: 95,
+        verifiedSafeStoreCount: 1,
+        storeNames: ['Phong Vu'],
+      },
+      multiStoreOptimal: null,
+      savingsVsSingleStoreVnd: 0,
+      savingsVsSingleStorePct: 0,
+      snapshotTimestampIso: '2026-11-24T02:15:00.000Z',
+    };
+
+    const sampleComboMultiAndOverflow = {
+      ...sampleCombo,
+      singleStoreBest: null,
+      multiStoreOptimal: {
+        distinctStoreCount: 5,
+        itemsSubtotalVnd: 1_350_000_000,
+        shippingVnd: 150_000,
+        totalVnd: 1_350_150_000,
+        allOfficial: false,
+        avgTrustScore: 88,
+        verifiedSafeStoreCount: 3,
+        storeNames: [
+          'CellphoneS',
+          'Tiki Trading',
+          'FPT Shop',
+          'Phong Vu',
+          'GearVN',
+        ],
+      },
+      savingsVsSingleStoreVnd: 0,
+      savingsVsSingleStorePct: 0,
+    };
+
+    const sampleComboBothNull = {
+      ...sampleCombo,
+      singleStoreBest: null,
+      multiStoreOptimal: null,
+      savingsVsSingleStoreVnd: 0,
+      savingsVsSingleStorePct: 0,
+    };
+
     for (const locale of ['vi', 'en', 'cs'] as const) {
       for (const format of ['og', 'social'] as const) {
         const expectedWidth =
@@ -405,7 +697,15 @@ async function runOgTruthCardAsyncSuite() {
         const expectedHeight =
           format === 'social' ? SOCIAL_TRUTH_CARD_HEIGHT : OG_TRUTH_CARD_HEIGHT;
 
-        for (const card of [sampleProduct, sampleVersus, sampleDeals]) {
+        for (const card of [
+          sampleProduct,
+          sampleVersus,
+          sampleDeals,
+          sampleCombo,
+          sampleComboSingleOnly,
+          sampleComboMultiAndOverflow,
+          sampleComboBothNull,
+        ]) {
           const bytes = Buffer.from(
             await renderOgTruthCardPng(card, format, locale)
           );
@@ -445,6 +745,8 @@ async function runOgTruthCardAsyncSuite() {
       resolveVersus: async (pair: readonly [string, string]) =>
         pair[0] === 'apple-iphone-17-pro' ? sampleVersus : null,
       resolveDeals: async () => sampleDeals,
+      resolveCombo: async (query: { readonly items: readonly string[] }) =>
+        query.items[0] === 'apple-iphone-17-pro-256gb' ? sampleCombo : null,
     };
 
     // 200 OK product social download
@@ -528,6 +830,55 @@ async function runOgTruthCardAsyncSuite() {
     const errBody = (await errRes.json()) as { ok: boolean; error: string };
     assert.equal(errBody.ok, false);
     assert.ok(!errBody.error.includes('PGRST'));
+
+    // Combo route handler: 200 PNG, 400 allowlist rejections, 404 missing entities
+    const comboOkRes = await handleOgTruthCardRequest(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/og?type=combo&items=apple-iphone-17-pro-256gb%2Capple-airpods-pro-2-usb-c&officialOnly=0&minTrust=80&maxStores=3&shippingVnd=30000&locale=vi&format=social&download=1',
+        { headers: { 'x-forwarded-for': '203.0.113.55' } }
+      ),
+      mockResolvers
+    );
+    assert.equal(comboOkRes.status, 200);
+    assert.equal(comboOkRes.headers.get('content-type'), 'image/png');
+    assert.equal(
+      comboOkRes.headers.get('cache-control'),
+      OG_TRUTH_CARD_CACHE_CONTROL
+    );
+    assert.match(
+      comboOkRes.headers.get('content-disposition') ?? '',
+      /^attachment; filename="rate-truth-card-combo-.*-4x5\.png"$/
+    );
+    const comboBytes = Buffer.from(await comboOkRes.arrayBuffer());
+    assert.ok(comboBytes.subarray(0, 8).equals(pngMagic));
+    const comboMeta = await sharp(comboBytes).metadata();
+    assert.equal(comboMeta.width, SOCIAL_TRUTH_CARD_WIDTH);
+    assert.equal(comboMeta.height, SOCIAL_TRUTH_CARD_HEIGHT);
+
+    for (const badPath of [
+      '/api/v1/rate/og?type=combo&items=apple-iphone-17-pro-256gb,apple-airpods-pro-2-usb-c&shippingVnd=12345',
+      '/api/v1/rate/og?type=combo&items=apple-iphone-17-pro-256gb,apple-airpods-pro-2-usb-c&minTrust=81',
+      '/api/v1/rate/og?type=combo&items=apple-iphone-17-pro-256gb,apple-airpods-pro-2-usb-c&maxStores=6',
+      '/api/v1/rate/og?type=combo&items=apple-iphone-17-pro-256gb,apple-airpods-pro-2-usb-c&officialOnly=true',
+    ]) {
+      const badComboRes = await handleOgTruthCardRequest(
+        new NextRequest(`https://rate.vn${badPath}`, {
+          headers: { 'x-forwarded-for': '203.0.113.56' },
+        }),
+        mockResolvers
+      );
+      assert.equal(badComboRes.status, 400, `Expected 400 for ${badPath}`);
+      assert.equal(badComboRes.headers.get('cache-control'), 'no-store');
+    }
+
+    const comboMissingRes = await handleOgTruthCardRequest(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/og?type=combo&items=unknown-one,unknown-two',
+        { headers: { 'x-forwarded-for': '203.0.113.57' } }
+      ),
+      mockResolvers
+    );
+    assert.equal(comboMissingRes.status, 404);
   } finally {
     globalThis.fetch = originalFetch;
   }

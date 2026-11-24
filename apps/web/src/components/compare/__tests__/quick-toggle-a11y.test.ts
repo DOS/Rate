@@ -753,6 +753,42 @@ for (const locale of locales) {
     /href="\/compare\?cat=earbuds&amp;slugs=marshall-minor-iv,airpods-pro-2"/,
     `${locale} CompareTrayBar link includes cat=earbuds and slugs`
   );
+  assert.match(
+    trayHtml,
+    /data-testid="compare-tray-combo-btn"[^>]*href="\/watchlist\?items=marshall-minor-iv,airpods-pro-2"|href="\/watchlist\?items=marshall-minor-iv,airpods-pro-2"[^>]*data-testid="compare-tray-combo-btn"/,
+    `${locale} CompareTrayBar renders combo cart CTA when 2+ items`
+  );
+  const singleTrayHtml = renderToStaticMarkup(
+    React.createElement(
+      AppRouterContext.Provider,
+      { value: mockTrayRouter },
+      React.createElement(
+        TrayIntlProvider,
+        {
+          locale,
+          messages: sharedClientMessages,
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(CompareTrayBar, {
+          initialItems: [
+            {
+              slug: 'marshall-minor-iv',
+              name: 'Marshall Minor IV',
+              brand: 'Marshall',
+              thumbnail: null,
+              min_price: 2_490_000,
+              categoryPath: '/earbuds',
+            },
+          ],
+        })
+      )
+    )
+  );
+  assert.equal(
+    singleTrayHtml.includes('data-testid="compare-tray-combo-btn"'),
+    false,
+    `${locale} CompareTrayBar hides combo cart CTA when only 1 item`
+  );
   assert.doesNotMatch(
     trayHtml,
     />0[\s\u00a0]*₫</,
@@ -783,5 +819,24 @@ for (const locale of locales) {
     `${locale} CompareTrayBar wraps remove button × inside <span aria-hidden="true">`
   );
 }
+
+// 8D.2: CompareTrayBar prefetch={false} and compare.tray* namespace enforcement
+const traySrc = fs.readFileSync(
+  path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../CompareTrayBar.tsx'
+  ),
+  'utf8'
+);
+assert.match(
+  traySrc,
+  /!collapsed\s*&&\s*comboCartHref[\s\S]{0,160}prefetch=\{false\}/,
+  'CompareTrayBar combo cart link must hide when collapsed on phones and set prefetch={false}'
+);
+assert.equal(
+  traySrc.includes("t('trayComboCartBtn'"),
+  true,
+  'CompareTrayBar combo CTA must use compare.tray* namespace key'
+);
 
 console.log('quick-toggle-a11y: ok');

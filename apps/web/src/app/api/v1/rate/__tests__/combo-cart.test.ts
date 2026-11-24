@@ -9,6 +9,8 @@ import {
   isSafeComboSlugToken,
 } from '@/server/rate/combo-cart';
 import * as comboCartRouteModule from '../combo-cart/route';
+import { GET as ogGet } from '../og/route';
+import { OG_TRUTH_CARD_CACHE_CONTROL } from '@/lib/og-truth-card';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.test';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
@@ -206,18 +208,31 @@ async function main() {
   );
   assert.equal(routeSrc.includes('@repo/shared-data/server'), false);
   assert.equal(routeSrc.includes('SUPABASE_SECRET_KEY'), false);
+  const ogRouteSrc = readFileSync(
+    path.resolve(__dirname, '../og/route.ts'),
+    'utf8'
+  );
+  assert.equal(ogRouteSrc.includes('@repo/shared-data/server'), false);
+  assert.equal(ogRouteSrc.includes('SUPABASE_SECRET_KEY'), false);
+  assert.ok(ogRouteSrc.includes('executeComboCartOptimization'));
 
   const origFetch = globalThis.fetch;
   const prevItemModelFlag = process.env.RATE_ITEM_MODEL;
 
   try {
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
       const url =
         typeof input === 'string'
           ? input
           : input instanceof URL
             ? input.href
             : input.url;
+      if (url.startsWith('data:')) {
+        return origFetch(input, init);
+      }
       const { pathname, searchParams } = new URL(url);
 
       if (pathname === '/rest/v1/categories') {
@@ -1480,6 +1495,121 @@ async function main() {
         [PLAN_A_MERCHANT, PLAN_B_MERCHANT].sort()
       );
     }
+
+    // End-to-end GET /api/v1/rate/og?type=combo via shared combo-cart reader (#1898)
+    const OG_PHONE_ID = '55555555-5555-4555-8555-555555555551';
+    const OG_BUDS_ID = '55555555-5555-4555-8555-555555555552';
+    const OG_MERCHANT_A = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+    const OG_MERCHANT_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+    itemRows = [];
+    masterRows = [
+      makeMaster(
+        OG_PHONE_ID,
+        'og-combo-phone-256gb',
+        'OG Combo Phone 256GB',
+        'cat-phone',
+        'smartphones'
+      ),
+      makeMaster(
+        OG_BUDS_ID,
+        'og-combo-buds-pro',
+        'OG Combo Buds Pro',
+        'cat-earbud',
+        'earbuds'
+      ),
+    ];
+    trustViewRows = [
+      makeTrustOfferRow({
+        id: 'og-o1',
+        clusterId: OG_PHONE_ID,
+        merchantId: OG_MERCHANT_A,
+        merchantName: 'CellphoneS',
+        platform: 'cellphones',
+        priceCurrent: 21_000_000,
+        isOfficial: true,
+        dosafeRisk: 5,
+        reviewRisk: 5,
+      }),
+      makeTrustOfferRow({
+        id: 'og-o2',
+        clusterId: OG_BUDS_ID,
+        merchantId: OG_MERCHANT_A,
+        merchantName: 'CellphoneS',
+        platform: 'cellphones',
+        priceCurrent: 5_500_000,
+        isOfficial: true,
+        dosafeRisk: 5,
+        reviewRisk: 5,
+      }),
+      makeTrustOfferRow({
+        id: 'og-o3',
+        clusterId: OG_PHONE_ID,
+        merchantId: OG_MERCHANT_B,
+        merchantName: 'Tiki Trading',
+        platform: 'tiki',
+        priceCurrent: 19_000_000,
+        isOfficial: true,
+        dosafeRisk: 5,
+        reviewRisk: 5,
+      }),
+    ];
+    syncDerivedProductAndMerchantRows([
+      {
+        id: OG_MERCHANT_A,
+        platform: 'cellphones',
+        name: 'CellphoneS',
+        isOfficial: true,
+        dosafeRisk: 5,
+        reviewRisk: 5,
+        reviewBreakdown: { total_reviews: 30 },
+        followerCount: 100_000,
+      },
+      {
+        id: OG_MERCHANT_B,
+        platform: 'tiki',
+        name: 'Tiki Trading',
+        isOfficial: true,
+        dosafeRisk: 5,
+        reviewRisk: 5,
+        reviewBreakdown: { total_reviews: 30 },
+        followerCount: 100_000,
+      },
+    ]);
+
+    const ogComboRes = await ogGet(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/og?type=combo&items=og-combo-phone-256gb,og-combo-buds-pro&officialOnly=0&minTrust=80&maxStores=3&shippingVnd=30000&locale=vi&format=social&download=1',
+        { headers: { 'x-forwarded-for': '203.0.113.88' } }
+      )
+    );
+    assert.equal(ogComboRes.status, 200);
+    assert.equal(ogComboRes.headers.get('content-type'), 'image/png');
+    assert.equal(
+      ogComboRes.headers.get('cache-control'),
+      OG_TRUTH_CARD_CACHE_CONTROL
+    );
+    const ogPngBytes = Buffer.from(await ogComboRes.arrayBuffer());
+    assert.ok(
+      ogPngBytes
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    );
+
+    const ogBadPresetRes = await ogGet(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/og?type=combo&items=og-combo-phone-256gb,og-combo-buds-pro&shippingVnd=12345',
+        { headers: { 'x-forwarded-for': '203.0.113.89' } }
+      )
+    );
+    assert.equal(ogBadPresetRes.status, 400);
+
+    const ogMissingRes = await ogGet(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/og?type=combo&items=og-combo-phone-256gb,does-not-exist',
+        { headers: { 'x-forwarded-for': '203.0.113.90' } }
+      )
+    );
+    assert.equal(ogMissingRes.status, 404);
 
     console.warn('All GET /api/v1/rate/combo-cart tests passed');
   } finally {

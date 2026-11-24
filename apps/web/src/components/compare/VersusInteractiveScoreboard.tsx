@@ -15,6 +15,7 @@ import type {
   UseCasePresetId,
 } from '@repo/shared-data/rules';
 import { Link } from '@/lib/navigation';
+import { buildWatchlistComboHref } from '@/lib/combo-cart-links';
 import {
   MAX_VALID_VND_PRICE,
   comparePositiveMinPrices,
@@ -1015,8 +1016,26 @@ export default function VersusInteractiveScoreboard({
     locale
   );
 
+  const comboCartHref = useMemo(
+    () =>
+      buildWatchlistComboHref([scoreA.slug, scoreB.slug], {
+        minItems: 2,
+      }),
+    [scoreA.slug, scoreB.slug]
+  );
+
   const actionButtons = (
     <>
+      {comboCartHref && (
+        <Link
+          href={comboCartHref}
+          prefetch={false}
+          data-testid="versus-combo-cart-link"
+          className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
+        >
+          {t('comboCartBtn', { count: 2 })}
+        </Link>
+      )}
       <button
         type="button"
         onClick={handleCopy1v1Markdown}

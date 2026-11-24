@@ -76,6 +76,30 @@ function main() {
       (k) => k.startsWith('tray') || k.startsWith('quickToggle')
     )
   );
+  assert.equal(
+    (detail.compare as Record<string, unknown>).trayComboCartBtn,
+    en.compare?.trayComboCartBtn
+  );
+  assert.equal(
+    (detail.compare as Record<string, unknown>).comboCartBtn,
+    undefined
+  );
+  assert.equal(
+    (pickClientMessages(en, 'compare').compare as Record<string, unknown>)
+      .comboCartBtn,
+    en.compare?.comboCartBtn
+  );
+  assert.equal(
+    (pickClientMessages(en, 'watchlist').watchlist as Record<string, unknown>)
+      .comboExportOgPngBtn,
+    en.watchlist?.comboExportOgPngBtn
+  );
+  const pdvSrc = readFileSync(
+    join(srcDir, 'app/[locale]/smartphones/[slug]/page.tsx'),
+    'utf8'
+  );
+  assert.equal(pdvSrc.includes('WatchlistComboOptimizer'), false);
+  assert.equal(/watchlist\.combo/.test(pdvSrc), false);
   assert.equal(detail.developers, undefined);
   assert.equal(pickClientMessages(en, 'home').homePage, undefined);
 

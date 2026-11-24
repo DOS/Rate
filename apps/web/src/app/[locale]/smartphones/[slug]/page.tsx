@@ -3,6 +3,7 @@ import { isReviewFormV2Enabled } from '@/lib/review-form-v2';
 import { Fragment } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
+import { buildWatchlistComboHref } from '@/lib/combo-cart-links';
 import { IntentLink } from '@/components/elementary/IntentLink';
 import { notFound, permanentRedirect } from 'next/navigation';
 import {
@@ -1014,6 +1015,17 @@ export async function ProductDetailView({
     [currentCompareRow, ...relatedCompetitors],
     4
   );
+  const topPeerForCombo = relatedCompetitors[0];
+  const topPeerComboSlug = topPeerForCombo
+    ? resolveCanonicalPeerSlug({
+        slug: topPeerForCombo.slug,
+        item_slug: catalogRowSlug(topPeerForCombo),
+      }) || topPeerForCombo.slug
+    : null;
+  const comboCartHref = buildWatchlistComboHref(
+    topPeerComboSlug ? [product.slug, topPeerComboSlug] : [product.slug],
+    { minItems: 1 }
+  );
 
   return (
     <ClientMessages scope="productDetail">
@@ -1469,6 +1481,16 @@ export async function ProductDetailView({
                   >
                     {t('headToHeadCompareBtn')}
                   </Link>
+                  {relatedCompetitors.length === 0 && comboCartHref && (
+                    <Link
+                      href={comboCartHref}
+                      prefetch={false}
+                      data-testid="pdv-combo-cart-link"
+                      className="btn btn-outline-light"
+                    >
+                      {t('comboCartBtn')}
+                    </Link>
+                  )}
                   <CompareQuickToggle
                     compact
                     className="ms-lg-auto"
@@ -1728,6 +1750,16 @@ export async function ProductDetailView({
                   >
                     {t('dealHub10PlatformsBtn')}
                   </Link>
+                  {comboCartHref && (
+                    <Link
+                      href={comboCartHref}
+                      prefetch={false}
+                      data-testid="pdv-combo-cart-link"
+                      className="btn btn-sm btn-outline-success rounded-pill fw-semibold px-3"
+                    >
+                      {t('comboCartBtn')}
+                    </Link>
+                  )}
                   {currentCompareCount > 0 && compareAllCount >= 2 && (
                     <Link
                       href={compareAllHref}
