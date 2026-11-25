@@ -7,7 +7,7 @@
  *   An unscoped run updates masters only: a seed with no master row is skipped with a
  *   warning, never inserted. A new seed goes in through the scoped insert below
  *   (DOS/Rate#1739).
- *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts --audit-only (Read-only 10-Field-Group audit)
+ *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts --audit-only (Read-only Field Group audit)
  *
  * Scoped run (DOS/Rate#1464), for an approved fix of named masters only:
  *   ... backfill-specs.ts --only <model_key,...>                  (Dry-run: per-row field diff + planned count)
@@ -27,8 +27,9 @@
  *   --apply before any write (a dry run warns). Any unknown argument, `--flag=value` or a
  *   repeated flag fails. None of --apply, --only, --expect, --expect-inserts or
  *   --insert-missing combines with --audit-only. The read-only catalog
- *   audit still runs at the end, so a scoped --apply can exit 1 after its writes when an
- *   unrelated master fails the audit: read the log, not only the exit code.
+ *   audit still runs at the end over the whole catalog, but only a master the run names can
+ *   fail it: an unrelated master's failure is logged as a warning (DOS/Rate#1910). The
+ *   unscoped run and --audit-only still fail on any master.
  *
  * Scoped insert (DOS/Rate#1737), for an approved new seed (a model with no master yet):
  *   ... backfill-specs.ts --only <model_key,...> --insert-missing                (Dry-run)
@@ -51,7 +52,7 @@ import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, type ProductSpecifications } from '@repo/shared-data';
-import { getCategorySpecTemplate } from '@repo/shared-data/rules';
+import { getCategorySpecTemplate, RATING_DEVICE_CATEGORIES } from '@repo/shared-data/rules';
 import { AiSpecEnricher, mergeProductSpecifications } from '../ai-spec-enricher.js';
 import { fetchByKey, resolveBackfillSupabaseTarget } from '../paging.js';
 import {
@@ -97,6 +98,29 @@ export function requiredSpecGroups(
     typeof categorySlug === 'string' ? categorySlug : undefined
   );
   return REQUIRED_10_SPEC_GROUPS.filter(group => groups.includes(group));
+}
+
+const DEVICE_AUDIT_CATEGORIES: ReadonlySet<string> = new Set(RATING_DEVICE_CATEGORIES);
+
+/**
+ * The spec groups the catalog audit requires of a master (DOS/Rate#1910). A device category
+ * (`RATING_DEVICE_CATEGORIES`: phones, tablets, laptops, watches, earbuds) keeps
+ * `requiredSpecGroups`, and so does a master with no category or one the spec templates do
+ * not know (all 10, as before). A category with a template of its own that is not a device
+ * (TVs, home appliances, bank savings, internet plans, places, ...) requires none: its
+ * catalog is not built from device spec sheets, so its template lists the groups its page
+ * may show, not groups every master must carry. Such a master still goes through the schema
+ * and camera checks. A new device category must join `RATING_DEVICE_CATEGORIES`, or its
+ * masters are not held to any group: spec-audit-categories-1910.test.ts fails on a template
+ * category that is neither a device nor a known non-device.
+ */
+export function auditedSpecGroups(
+  categorySlug: unknown
+): ReadonlyArray<(typeof REQUIRED_10_SPEC_GROUPS)[number]> {
+  const slug = typeof categorySlug === 'string' ? categorySlug.trim().toLowerCase() : '';
+  if (DEVICE_AUDIT_CATEGORIES.has(slug)) return requiredSpecGroups(slug);
+  const hasOwnTemplate = getCategorySpecTemplate(slug) !== getCategorySpecTemplate(undefined);
+  return hasOwnTemplate ? [] : requiredSpecGroups(slug);
 }
 
 export interface BackfillSpecsOptions {
@@ -339,13 +363,27 @@ export function statesRearCamera(
 }
 
 /**
- * Spec-only audit: every master product must carry all 10 Field Groups, less the ones its
- * category does not have (`requiredSpecGroups`). A master whose
+ * Spec-only audit: every master product must carry the Field Groups its category requires
+ * (`auditedSpecGroups`: all 10 for a device, less the ones its category does not have; none
+ * for a non-device category). A master whose
  * camera group states a rear camera must carry the main camera, plus a second camera
  * unless `camera.rear_setup` declares a single rear camera.
  * Deliberately asserts nothing about offers, reviews or ratings.
+ *
+ * `scope` (a scoped `--only` run, DOS/Rate#1910): the whole catalog is still read and
+ * checked, but only a master whose model_key is in `scope` fails the audit; the others'
+ * failures are logged as a warning. A scoped run is the gate for the masters it names, and an
+ * unrelated master (often another line's catalog) must not fail an approved fix; the
+ * unscoped run and `--audit-only` still fail on any master.
  */
-export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<number> {
+export async function auditMasterSpecs(
+  supabase: RateSupabaseClient,
+  options: { readonly scope?: Iterable<string> } = {}
+): Promise<number> {
+  const scope =
+    options && options.scope !== undefined
+      ? new Set([...options.scope].map(k => (typeof k === 'string' ? k.trim() : '')))
+      : undefined;
   // Paged by keyset: an unpaged read stops at PostgREST's 1000-row cap, and OFFSET
   // would skip or duplicate rows under concurrent crawl writes.
   const rows = await fetchByKey<{
@@ -356,8 +394,12 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
   }>(supabase, 'master_products', 'id, name, model_key, specifications', 'id');
 
   const failures: string[] = [];
+  const outOfScopeFailures: string[] = [];
   for (const row of rows) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const inScope =
+      scope === undefined || (typeof row.model_key === 'string' && scope.has(row.model_key.trim()));
+    const rowFailures = inScope ? failures : outOfScopeFailures;
     const safeName =
       stripKeySpecControlChars(String(row.name ?? ''))
         .replace(/\s+/g, ' ')
@@ -371,24 +413,31 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
     const label = `${safeName} (${safeModelKey})`;
     const specCheck = ProductSpecificationsSchema.safeParse(row.specifications);
     if (!specCheck.success) {
-      failures.push(`${label} failed ProductSpecificationsSchema validation`);
+      rowFailures.push(`${label} failed ProductSpecificationsSchema validation`);
     }
-    for (const grp of requiredSpecGroups(row.specifications?.category_slug)) {
+    for (const grp of auditedSpecGroups(row.specifications?.category_slug)) {
       if (!row.specifications?.[grp]) {
-        failures.push(`${label} is missing specification group "${grp}"`);
+        rowFailures.push(`${label} is missing specification group "${grp}"`);
       }
     }
     const camera = row.specifications?.camera;
     if (statesRearCamera(camera)) {
       if (!camera?.main_camera?.trim()) {
-        failures.push(`${label} is missing camera.main_camera`);
+        rowFailures.push(`${label} is missing camera.main_camera`);
       }
       if (!hasSingleRearCamera(camera) && !camera?.second_camera?.trim()) {
-        failures.push(`${label} is missing camera.second_camera`);
+        rowFailures.push(`${label} is missing camera.second_camera`);
       }
     }
   }
 
+  if (outOfScopeFailures.length > 0) {
+    logger.warn(
+      'backfill.audit_out_of_scope',
+      `Spec audit: ${outOfScopeFailures.length} failure(s) on masters outside this scoped run (not failing it; the unscoped audit still does):\n  - ${outOfScopeFailures.join('\n  - ')}`,
+      { outOfScopeFailures: outOfScopeFailures.length }
+    );
+  }
   assert.equal(
     failures.length,
     0,
@@ -1225,10 +1274,11 @@ export async function runMasterSpecsBackfillWith(
     }
   }
 
-  const totalAudited = await auditMasterSpecs(supabase);
+  // A scoped run fails only on the masters it names (DOS/Rate#1910).
+  const totalAudited = await auditMasterSpecs(supabase, scoped ? { scope: options.only! } : {});
   logger.info(
     'backfill.completed',
-    `SPEC CATALOG SYNC COMPLETE [mode=${apply ? 'APPLY' : 'DRY-RUN'}]: ${catalogUpdated} updated, ${catalogInserted} inserted as draft, ${insertsSkippedKeys.length} seed insert(s) left out, ${skipped} skipped; ${totalAudited}/${totalAudited} master products verified with 10/10 Field Groups.`,
+    `SPEC CATALOG SYNC COMPLETE [mode=${apply ? 'APPLY' : 'DRY-RUN'}]: ${catalogUpdated} updated, ${catalogInserted} inserted as draft, ${insertsSkippedKeys.length} seed insert(s) left out, ${skipped} skipped; ${totalAudited} master products audited against their category's Field Groups${scoped ? ' (only the named masters can fail a scoped run)' : ''}.`,
     {
       apply,
       catalogUpdated,
@@ -1295,7 +1345,7 @@ export async function runQuickSpecSyncAndAudit(
   const total = await auditMasterSpecs(supabase);
   logger.info(
     'backfill.audit_passed',
-    `SPEC CLOUD AUDIT PASSED [mode=AUDIT-ONLY]: ${total}/${total} master products on Supabase Cloud verified with 10/10 Field Groups (main camera, and a second camera unless single-camera).`,
+    `SPEC CLOUD AUDIT PASSED [mode=AUDIT-ONLY]: ${total}/${total} master products on Supabase Cloud verified with their category's Field Groups (devices: up to 10; main camera, and a second camera unless single-camera).`,
     { apply: false, totalAudited: total }
   );
   return total;
