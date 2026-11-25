@@ -810,6 +810,24 @@ describe('ProductNormalizer Wave E3 retail SKU and Wave E4 places', () => {
         isMall: true,
         expected: 'SK-II',
       },
+      {
+        platform: 'tiki',
+        categorySlug: 'cosmetics',
+        title: 'Dầu chăm sóc da ngừa rạn 60ml',
+        brandHint: 'Bio-Oil,',
+        shopName: 'Tiki Trading',
+        isMall: true,
+        expected: 'Bio-Oil',
+      },
+      {
+        platform: 'tiki',
+        categorySlug: 'cosmetics',
+        title: 'Dầu chăm sóc da ngừa rạn 60ml',
+        brandHint: 'Bio-Oil -',
+        shopName: 'Tiki Trading',
+        isMall: true,
+        expected: 'Bio-Oil',
+      },
     ];
     for (const tc of curatedCases) {
       const normalized = normalizer.normalize(
@@ -823,6 +841,33 @@ describe('ProductNormalizer Wave E3 retail SKU and Wave E4 places', () => {
       );
       assert.equal(normalized.brand, tc.expected);
     }
+
+    // Preserve trailing period in abbreviations (e.g. "Dr.") when no suffix was stripped.
+    assert.equal(
+      sanitizeWaveE3StructuredBrand('Dr.', {
+        identityTitle: 'Kem dưỡng Dr. 50ml',
+        platform: 'tiki',
+        shopName: 'Tiki Trading',
+        isMall: true,
+      }),
+      'Dr.'
+    );
+
+    // Linear O(n) runtime on 50k adversarial inputs (CodeQL js/polynomial-redos guard).
+    const redosStart = performance.now();
+    assert.equal(
+      sanitizeWaveE3StructuredBrand('-'.repeat(50_000) + 'a official', {
+        identityTitle: 'Kem dưỡng da 50ml',
+        platform: 'tiki',
+        shopName: 'Tiki Trading',
+        isMall: true,
+      }),
+      null
+    );
+    assert.equal(detectWaveE3AllowlistBrand('rascal' + ' '.repeat(50_000) + 'x'), null);
+    assert.equal(detectWaveE3AllowlistBrand('Rascal and Friends'), 'Rascal + Friends');
+    const redosElapsedMs = performance.now() - redosStart;
+    assert.ok(redosElapsedMs < 50, `Expected linear runtime < 50ms, got ${redosElapsedMs}ms`);
 
     // 5. Grounding gate: non-Mall shopee requires word-bounded title grounding and rejects spam.
     const ungroundedShopee = normalizer.normalize(

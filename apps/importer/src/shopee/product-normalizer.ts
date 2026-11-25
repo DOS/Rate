@@ -2296,7 +2296,7 @@ const WAVE_E3_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bbeauty\s*of\s*joseon\b/i, 'Beauty of Joseon'],
   [/(?<![\p{L}\d])l['’]?or[eé]al(?![\p{L}\d])/iu, "L'Oréal"],
   [/\bphilips\s*avent\b|\bavent\b/i, 'Philips Avent'],
-  [/\brascal\s*(?:\+|and)?\s*friends\b/i, 'Rascal + Friends'],
+  [/\brascal\s*(?:(?:\+|and)\s*)?friends\b/i, 'Rascal + Friends'],
   [/(?<![\p{L}\d])moaz\s*b[eé]b[eé](?![\p{L}\d])/iu, 'Moaz BéBé'],
   [/\boptimum\s*nutrition\b/i, 'Optimum Nutrition'],
   [/\bkirkland(?:\s*signature)?\b/i, 'Kirkland Signature'],
@@ -2482,14 +2482,30 @@ function containsWordBoundedSubstring(haystack: string, needle: string): boolean
   return false;
 }
 
+function trimTrailingChars(text: string, chars: string): string {
+  let end = text.length;
+  while (end > 0 && chars.includes(text[end - 1]!)) {
+    end -= 1;
+  }
+  return text.slice(0, end);
+}
+
+function isSeparatorOnlyToken(token: string): boolean {
+  if (!token) return false;
+  for (let i = 0; i < token.length; i += 1) {
+    if (!'-,:;|'.includes(token[i]!)) return false;
+  }
+  return true;
+}
+
 function stripTrailingRetailShopSuffixes(text: string): string {
   const tokens = text.split(' ').filter(Boolean);
   let strippedAny = false;
   while (tokens.length > 0) {
     const lastIdx = tokens.length - 1;
-    const lastFolded = foldAccentsLower(tokens[lastIdx]!).replace(/[,.:;-]+$/g, '');
+    const lastFolded = trimTrailingChars(foldAccentsLower(tokens[lastIdx]!), ',.:;-');
     if (tokens.length >= 2) {
-      const prevFolded = foldAccentsLower(tokens[lastIdx - 1]!).replace(/[,.:;-]+$/g, '');
+      const prevFolded = trimTrailingChars(foldAccentsLower(tokens[lastIdx - 1]!), ',.:;-');
       const pair = `${prevFolded} ${lastFolded}`;
       if (pair === 'chinh hang' || pair === 'viet nam') {
         tokens.pop();
@@ -2503,20 +2519,14 @@ function stripTrailingRetailShopSuffixes(text: string): string {
       strippedAny = true;
       continue;
     }
-    if (strippedAny && /^[-,:;|]+$/.test(tokens[lastIdx]!)) {
+    if (strippedAny && isSeparatorOnlyToken(tokens[lastIdx]!)) {
       tokens.pop();
       continue;
     }
     break;
   }
   if (tokens.length === 0) return '';
-  const joined = tokens.join(' ');
-  if (!strippedAny) return joined;
-  let end = joined.length;
-  while (end > 0 && ' ,:;-'.includes(joined[end - 1]!)) {
-    end -= 1;
-  }
-  return joined.slice(0, end);
+  return trimTrailingChars(tokens.join(' '), ' ,:;-');
 }
 
 function titleCaseWaveE3Segment(segment: string): string {
@@ -2645,7 +2655,11 @@ function extractWaveE3StructuredBrandHints(
   const hints: string[] = [];
   const pushHint = (val: unknown): void => {
     if (typeof val !== 'string') return;
-    const cleaned = stripControlChars(val).normalize('NFC').replace(/\s+/g, ' ').trim();
+    const cleaned = stripControlChars(val.trim().slice(0, 500))
+      .normalize('NFC')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
     if (cleaned && !hints.includes(cleaned)) {
       hints.push(cleaned);
     }
@@ -2657,7 +2671,10 @@ function extractWaveE3StructuredBrandHints(
     for (const attr of safeRaw.attributes) {
       if (!attr || typeof attr !== 'object') continue;
       if (typeof attr.name !== 'string' || typeof attr.value !== 'string') continue;
-      const attrName = stripControlChars(attr.name).normalize('NFC').replace(/\s+/g, ' ').trim();
+      const attrName = stripControlChars(attr.name.trim().slice(0, 120))
+        .normalize('NFC')
+        .replace(/\s+/g, ' ')
+        .trim();
       if (WAVE_E3_BRAND_ATTR_NAME_RE.test(attrName)) {
         pushHint(attr.value);
       }
