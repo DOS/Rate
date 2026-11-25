@@ -535,11 +535,15 @@ export interface CrawledPublishOptions {
   readonly expect?: number;
 }
 
+export type CrawledWave = 'wave_e1' | 'wave_e2' | 'wave_e3' | 'wave_e4';
+
 export interface CrawledEligibleMaster {
   readonly id: string;
   readonly model_key: string;
   readonly slug: string;
   readonly categorySlug: string;
+  readonly wave: CrawledWave;
+  readonly thumbnail: string | null;
 }
 
 export interface CrawledBlockedMaster {
@@ -735,10 +739,19 @@ function listingMatchesExpectedCurrency(
   return listing.currency === expectedCurrency;
 }
 
+function resolveWaveForCategory(categorySlug: string): CrawledWave | null {
+  if (WAVE_E1_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e1';
+  if (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e2';
+  if (WAVE_E3_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e3';
+  if (WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e4';
+  return null;
+}
+
 function checkActiveCrawledListing(
   context: CrawledPublishContext,
   expectedCurrency: 'PCT' | 'VND',
-  problems: string[]
+  problems: string[],
+  options: { readonly requireListingsArray?: boolean } = {}
 ): void {
   if (Array.isArray(context.listings)) {
     const pricedListings = context.listings.filter(isActivePricedListing);
@@ -759,6 +772,12 @@ function checkActiveCrawledListing(
     }
     problems.push(
       `requires at least 1 active crawled (origin="crawl") rate.products listing with price_current > 0 and currency ${expectedCurrency}`
+    );
+    return;
+  }
+  if (options.requireListingsArray) {
+    problems.push(
+      `requires explicit rate.products listings array to verify currency ${expectedCurrency} and origin="crawl"`
     );
     return;
   }
@@ -804,7 +823,9 @@ function collectWaveCrawledBlockers(
         `entity_type ${JSON.stringify(row.entity_type)} must be "service" for ${categorySlug}`
       );
     }
-    checkActiveCrawledListing(context, WAVE_E2_EXPECTED_CURRENCY[categorySlug] ?? 'VND', problems);
+    checkActiveCrawledListing(context, WAVE_E2_EXPECTED_CURRENCY[categorySlug] ?? 'VND', problems, {
+      requireListingsArray: true,
+    });
     return;
   }
 
@@ -1142,11 +1163,16 @@ export async function runCrawledPublish(
       continue;
     }
     const slug = typeof candidate.row.slug === 'string' ? candidate.row.slug : '';
+    const categorySlug = candidate.categorySlug!;
+    const wave = resolveWaveForCategory(categorySlug)!;
+    const thumbnail = typeof candidate.row.thumbnail === 'string' ? candidate.row.thumbnail : null;
     passingDrafts.push({
       id: candidate.id,
       model_key: candidate.modelKey,
       slug,
-      categorySlug: candidate.categorySlug!,
+      categorySlug,
+      wave,
+      thumbnail,
     });
   }
 
@@ -1211,19 +1237,22 @@ export async function runCrawledPublish(
   let published = 0;
   for (const item of eligible) {
     const nowIso = new Date().toISOString();
-    const { data, error } = await supabase
+    let updateQuery = supabase
       .from('master_products')
       .update({ status: 'published', updated_at: nowIso })
       .eq('id', item.id)
       .eq('status', 'draft')
-      .eq('slug', item.slug)
-      .select('id');
+      .eq('slug', item.slug);
+    if ((item.wave === 'wave_e1' || item.wave === 'wave_e3') && item.thumbnail !== null) {
+      updateQuery = updateQuery.eq('thumbnail', item.thumbnail);
+    }
+    const { data, error } = await updateQuery.select('id');
     if (error) {
       throw new Error(`Failed to publish ${item.model_key}: ${error.message}`);
     }
     if (!Array.isArray(data) || data.length !== 1) {
       throw new Error(
-        `Publishing ${item.model_key} touched ${Array.isArray(data) ? data.length : 0} rows, not 1: its status or slug changed after the plan (${published} published before it)`
+        `Publishing ${item.model_key} touched ${Array.isArray(data) ? data.length : 0} rows, not 1: its status, slug or thumbnail changed after the plan (${published} published before it)`
       );
     }
     published++;

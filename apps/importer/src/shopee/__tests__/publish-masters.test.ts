@@ -378,7 +378,11 @@ function crawledMockDb(
   const placeDetails: Array<Record<string, unknown>> = (seed.placeDetails ?? []).map(pd =>
     structuredClone(pd)
   );
-  const writes: Array<{ id: unknown; payload: Record<string, unknown> }> = [];
+  const writes: Array<{
+    id: unknown;
+    filters: Array<[string, unknown]>;
+    payload: Record<string, unknown>;
+  }> = [];
   const inBatchSizes: Array<{ table: string; column: string; size: number }> = [];
 
   function tableRows(table: string): Array<Record<string, unknown>> {
@@ -430,7 +434,11 @@ function crawledMockDb(
             for (const row of matched) {
               Object.assign(row, structuredClone(updatePayload));
             }
-            writes.push({ id: targetId, payload: structuredClone(updatePayload) });
+            writes.push({
+              id: targetId,
+              filters: [...eqFilters],
+              payload: structuredClone(updatePayload),
+            });
             return Promise.resolve({
               data: matched.map(r => ({ id: r.id })),
               error: null,
@@ -777,6 +785,13 @@ test('crawledPublishBlockers validates Wave E2 services with PCT/VND and no imag
       listings: [],
     }).some(r => r.includes('currency PCT'))
   );
+  // Count-only Wave E2 context without explicit listings array cannot verify currency contract.
+  assert.ok(
+    crawledPublishBlockers(bankRow, {
+      categorySlug: 'bank-savings',
+      activeListingCount: 1,
+    }).some(r => r.includes('listings array') && r.includes('currency PCT'))
+  );
 
   const internetRow = makeCrawledMaster(
     {
@@ -833,6 +848,12 @@ test('crawledPublishBlockers validates Wave E2 services with PCT/VND and no imag
         listings: [{ price_current: 210_000, currency: 'VND', origin: 'crawl' }],
       }
     ).some(r => r.includes('must be "service"'))
+  );
+  assert.ok(
+    crawledPublishBlockers(internetRow, {
+      categorySlug: 'internet-telecom',
+      activeListingCount: 1,
+    }).some(r => r.includes('listings array') && r.includes('currency VND'))
   );
 });
 
@@ -1261,6 +1282,137 @@ test('runCrawledPublish deterministic --limit, --expect mismatch guard, and --ap
   );
   assert.equal(raceDb.masters.find(m => m.id === 'm-a')!.status, 'published');
   assert.equal(raceDb.masters.find(m => m.id === 'm-z')!.status, 'draft');
+});
+
+test('runCrawledPublish --apply guards thumbnail on Wave E1/E3 and omits thumbnail guard on Wave E2/E4', async () => {
+  const tvRow = makeCrawledMaster(
+    {
+      id: 'm-e1-guard',
+      model_key: 'lg:oled55c4:unknown',
+      slug: 'lg-oled55c4',
+      thumbnail: 'https://cdn.rate.vn/lg-c4.jpg',
+      images: ['https://cdn.rate.vn/lg-c4.jpg'],
+    },
+    'tvs'
+  );
+  const cosRow = makeCrawledMaster(
+    {
+      id: 'm-e3-guard',
+      model_key: 'cerave:cream-50ml:unknown',
+      slug: 'cerave-cream-50ml',
+      brand: 'CeraVe',
+      category_id: 'cat-cosmetics',
+      thumbnail: 'https://cdn.rate.vn/cerave.jpg',
+      images: ['https://cdn.rate.vn/cerave.jpg'],
+      specifications: { category_slug: 'cosmetics', availability: { status: 'Available' } },
+    },
+    'cosmetics'
+  );
+  const bankRow = makeCrawledMaster(
+    {
+      id: 'm-e2-guard',
+      model_key: 'acb:savings-12m:unknown',
+      slug: 'acb-savings-12m',
+      brand: 'ACB',
+      category_id: 'cat-bank-savings',
+      entity_type: 'service',
+      thumbnail: null,
+      images: [],
+      specifications: { category_slug: 'bank-savings', availability: { status: 'Available' } },
+    },
+    'bank-savings'
+  );
+  const cafeRow = makeCrawledMaster(
+    {
+      id: 'm-e4-guard',
+      model_key: 'phe-la:ly-tu-trong:unknown',
+      slug: 'phe-la-ly-tu-trong',
+      brand: 'Phe La',
+      category_id: 'cat-cafes',
+      entity_type: 'place',
+      thumbnail: null,
+      images: [],
+      specifications: { category_slug: 'cafes', availability: { status: 'Available' } },
+    },
+    'cafes'
+  );
+
+  const products = [
+    {
+      id: 'p-e1',
+      cluster_id: 'm-e1-guard',
+      price_current: 24_000_000,
+      currency: 'VND',
+      availability: 'in_stock',
+      origin: 'crawl',
+    },
+    {
+      id: 'p-e3',
+      cluster_id: 'm-e3-guard',
+      price_current: 190_000,
+      currency: 'VND',
+      availability: 'in_stock',
+      origin: 'crawl',
+    },
+    {
+      id: 'p-e2',
+      cluster_id: 'm-e2-guard',
+      price_current: 5.2,
+      currency: 'PCT',
+      availability: 'in_stock',
+      origin: 'crawl',
+    },
+  ];
+  const placeDetails = [
+    {
+      master_id: 'm-e4-guard',
+      place_key: 'phe-la:ho-chi-minh:ltt',
+      branch_group_key: 'phe-la',
+      province_code: 'ho-chi-minh',
+    },
+  ];
+
+  const guardDb = crawledMockDb({
+    masters: [tvRow, cosRow, bankRow, cafeRow],
+    products,
+    placeDetails,
+  });
+  const res = await runCrawledPublish(guardDb.client, { apply: true, expect: 4 });
+  assert.equal(res.published, 4);
+
+  const writeFor = (id: string) => guardDb.writes.find(w => w.id === id);
+  assert.ok(
+    writeFor('m-e1-guard')?.filters.some(
+      ([col, val]) => col === 'thumbnail' && val === 'https://cdn.rate.vn/lg-c4.jpg'
+    ),
+    'Wave E1 apply must guard thumbnail'
+  );
+  assert.ok(
+    writeFor('m-e3-guard')?.filters.some(
+      ([col, val]) => col === 'thumbnail' && val === 'https://cdn.rate.vn/cerave.jpg'
+    ),
+    'Wave E3 apply must guard thumbnail'
+  );
+  assert.equal(
+    writeFor('m-e2-guard')?.filters.some(([col]) => col === 'thumbnail'),
+    false,
+    'Wave E2 apply must not require thumbnail filter'
+  );
+  assert.equal(
+    writeFor('m-e4-guard')?.filters.some(([col]) => col === 'thumbnail'),
+    false,
+    'Wave E4 apply must not require thumbnail filter'
+  );
+
+  // Concurrent thumbnail replacement between plan and write aborts Wave E1/E3 update.
+  const thumbRaceDb = crawledMockDb({ masters: [tvRow], products }, ({ masters }) => {
+    masters[0]!.thumbnail = 'https://cdn.rate.vn/tampered.jpg';
+  });
+  await assert.rejects(
+    runCrawledPublish(thumbRaceDb.client, { apply: true, expect: 1 }),
+    /Publishing lg:oled55c4:unknown touched 0 rows, not 1: its status, slug or thumbnail changed/
+  );
+  assert.equal(thumbRaceDb.masters[0]!.status, 'draft');
 });
 
 test('runCrawledPublish batches .in() queries at <= 150 IDs and supports --only filtering', async () => {
