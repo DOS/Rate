@@ -507,3 +507,373 @@ test('P0 #2: ProductNormalizer and ingestProduct preserve both camelCase and sna
   assert.equal(insertedMasters[1]?.entity_type, 'service');
   assert.equal(upsertedProducts[1]?.category_id, 'cat-air-purifiers');
 });
+
+test('DOS/Rate#1911: detects VN/regional Wave E1 appliance brands and extracts SKUs past slash-joined specs', () => {
+  const normalizer = new ProductNormalizer();
+
+  const liveProdCases = [
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Livotec Inverter 1 HP DHV09J',
+      brand: 'Livotec',
+      model: 'DHV09J',
+      modelKey: 'livotec:dhv09j:unknown',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa LENSON 1 chiều LF-09CX1...',
+      brand: 'Lenson',
+      model: 'LF-09CX1',
+      modelKey: 'lenson:lf-09cx1:unknown',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Nagakawa Inverter 1 HP NIS-C09R2T62',
+      brand: 'Nagakawa',
+      model: 'NIS-C09R2T62',
+      modelKey: 'nagakawa:nis-c09r2t62:unknown',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Coex 1 chiều Inverter 9000Btu/1Hp CA-09IN35',
+      brand: 'Coex',
+      model: 'CA-09IN35',
+      modelKey: 'coex:ca-09in35:unknown',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Coex Inverter 430 Lít RS-4007MIB',
+      brand: 'Coex',
+      model: 'RS-4007MIB',
+      modelKey: 'coex:rs-4007mib:unknown',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Funiki Inverter 430 lít HR SS8430SDG',
+      brand: 'Funiki',
+      model: 'SS8430SDG',
+      modelKey: 'funiki:ss8430sdg:unknown',
+    },
+  ];
+
+  for (const tc of liveProdCases) {
+    const out = normalizer.normalize(
+      baseProduct({
+        categorySlug: tc.categorySlug,
+        title: tc.title,
+      })
+    );
+    assert.equal(out.brand, tc.brand, tc.title);
+    assert.equal(out.model, tc.model, tc.title);
+    assert.equal(out.model_key, tc.modelKey, tc.title);
+  }
+
+  const peerBrandCases = [
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Máy lạnh Comfee Inverter 1 HP CFS-10FWFF-V',
+      brand: 'Comfee',
+      model: 'CFS-10FWFF-V',
+      modelKey: 'comfee:cfs-10fwff-v:unknown',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa Reetech Inverter 1 HP RTV9-TC-BI',
+      brand: 'Reetech',
+      model: 'RTV9-TC-BI',
+      modelKey: 'reetech:rtv9-tc-bi:unknown',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa Sumikura APS/APO-092',
+      brand: 'Sumikura',
+      model: 'APS-APO-092',
+      modelKey: 'sumikura:aps-apo-092:unknown',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Tủ lạnh Sanaky Inverter VH-209HP',
+      brand: 'Sanaky',
+      model: 'VH-209HP',
+      modelKey: 'sanaky:vh-209hp:unknown',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Tủ lạnh Alaska Inverter BD-200',
+      brand: 'Alaska',
+      model: 'BD-200',
+      modelKey: 'alaska:bd-200:unknown',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Tủ lạnh Hoa Phat Inverter HRF-180',
+      brand: 'Hoa Phat',
+      model: 'HRF-180',
+      modelKey: 'hoa-phat:hrf-180:unknown',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa Hòa Phát Inverter 1 HP HPMC10',
+      brand: 'Hoa Phat',
+      model: 'HPMC10',
+      modelKey: 'hoa-phat:hpmc10:unknown',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Tủ lạnh Hoà Phát Side By Side 430 lít',
+      brand: 'Hoa Phat',
+      model: 'Side By Side 430 lít',
+      modelKey: 'hoa-phat:side-by-side-430-lit:unknown',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Levoit Core 300S',
+      brand: 'Levoit',
+      model: 'Core 300S',
+      modelKey: 'levoit:core-300s:unknown',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Winix Zero S AZSU330-HWE',
+      brand: 'Winix',
+      model: 'AZSU330-HWE',
+      modelKey: 'winix:azsu330-hwe:unknown',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Cuckoo CAC-G0910FW',
+      brand: 'Cuckoo',
+      model: 'CAC-G0910FW',
+      modelKey: 'cuckoo:cac-g0910fw:unknown',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Bluestone APB-9545',
+      brand: 'Bluestone',
+      model: 'APB-9545',
+      modelKey: 'bluestone:apb-9545:unknown',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Blue Stone APB-9545',
+      brand: 'Bluestone',
+      model: 'APB-9545',
+      modelKey: 'bluestone:apb-9545:unknown',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Elmich AP-3838',
+      brand: 'Elmich',
+      model: 'AP-3838',
+      modelKey: 'elmich:ap-3838:unknown',
+    },
+  ];
+
+  for (const tc of peerBrandCases) {
+    const out = normalizer.normalize(
+      baseProduct({
+        categorySlug: tc.categorySlug,
+        title: tc.title,
+      })
+    );
+    assert.equal(out.brand, tc.brand, tc.title);
+    assert.equal(out.model, tc.model, tc.title);
+    assert.equal(out.model_key, tc.modelKey, tc.title);
+  }
+});
+
+test('DOS/Rate#1911: ignores slash-joined spec tokens, preserves slash SKUs, and guards HP fallback across Wave E1', () => {
+  const normalizer = new ProductNormalizer();
+
+  const slashSpecCases = [
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa Casper Inverter 12.000BTU/1.5HP GC-12IS35',
+      brand: 'Casper',
+      model: 'GC-12IS35',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Tủ lạnh Toshiba Inverter 220V/50Hz GR-RT252WE',
+      brand: 'Toshiba',
+      model: 'GR-RT252WE',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa Daikin 9000Btu/h FTF25UV1V',
+      brand: 'Daikin',
+      model: 'FTF25UV1V',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Levoit 300m3/h LV-H133',
+      brand: 'Levoit',
+      model: 'LV-H133',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Winix 300m³/h AZBU330-HWK',
+      brand: 'Winix',
+      model: 'AZBU330-HWK',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Coway 65W/220V AP-1018F',
+      brand: 'Coway',
+      model: 'AP-1018F',
+    },
+    {
+      categorySlug: 'washing-machines' as const,
+      title: 'Máy giặt sấy LG Inverter 10kg/7kg 1400rpm FV1410D4M1',
+      brand: 'LG',
+      model: 'FV1410D4M1',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Tủ lạnh Aqua Inverter 1.2kWh/24h 50/60Hz AQR-T239FA',
+      brand: 'Aqua',
+      model: 'AQR-T239FA',
+    },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi Sony 4K/120Hz XR-55X90L',
+      brand: 'Sony',
+      model: 'XR-55X90L',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa Daikin Inverter 1 HP FTKB25YVMV/RKB25YVMV',
+      brand: 'Daikin',
+      model: 'FTKB25YVMV-RKB25YVMV',
+    },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi Sony HDMI2.1 XR-55X90L',
+      brand: 'Sony',
+      model: 'XR-55X90L',
+    },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi LG HDMI2.1a Wi-Fi7 OLED55C4PSA',
+      brand: 'LG',
+      model: 'OLED55C4PSA',
+    },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi TCL HDMI2.0 55P755',
+      brand: 'TCL',
+      model: '55P755',
+    },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi Xiaomi WiFi6E L55M8-A2SEA',
+      brand: 'Xiaomi',
+      model: 'L55M8-A2SEA',
+    },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi Samsung 55 inch UA55DU7700/XXV',
+      brand: 'Samsung',
+      model: 'UA55DU7700-XXV',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa Hòa Phát 1 chiều HIC09MFB',
+      brand: 'Hoa Phat',
+      model: 'HIC09MFB',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa phát ion Inverter 1 HP ABC-12345',
+      brand: 'Khác',
+      model: 'ABC-12345',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Dieu hoa phat ion Inverter 1 HP ABC-12345',
+      brand: 'Khác',
+      model: 'ABC-12345',
+    },
+  ];
+
+  for (const tc of slashSpecCases) {
+    const out = normalizer.normalize(
+      baseProduct({
+        categorySlug: tc.categorySlug,
+        title: tc.title,
+      })
+    );
+    assert.equal(out.brand, tc.brand, tc.title);
+    assert.equal(out.model, tc.model, tc.title);
+  }
+
+  // Secondary fallback path detects appliance brands outside Wave E1 while preserving tech precedence.
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Nồi cơm điện Cuckoo CR-1021' })).brand,
+    'Cuckoo'
+  );
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Bình đun siêu tốc Bluestone KTB-3426' })).brand,
+    'Bluestone'
+  );
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Nồi chiên không dầu Elmich AFE-3945' })).brand,
+    'Elmich'
+  );
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Laptop LG Gram 16 16Z90S 512GB' })).brand,
+    'LG'
+  );
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Laptop Asus Vivobook 15 tặng nồi Elmich' })).brand,
+    'Asus'
+  );
+
+  // Unknown appliance with horsepower ("1 HP" / "1.5 HP") across Wave E1 categories must not become HP.
+  for (const waveE1Slug of [
+    'air-conditioners',
+    'refrigerators',
+    'washing-machines',
+    'air-purifiers',
+    'tvs',
+  ] as const) {
+    const out = normalizer.normalize(
+      baseProduct({
+        categorySlug: waveE1Slug,
+        title: 'Unknown Brand Inverter 1 HP ABC-123',
+      })
+    );
+    assert.equal(out.brand, 'Khác', `${waveE1Slug} must not match HP`);
+  }
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Unknown Brand Inverter 1 HP' })).brand,
+    'Khác'
+  );
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Unknown Brand Inverter 1.5 HP XYZ-9000' })).brand,
+    'Khác'
+  );
+  assert.equal(
+    normalizer.normalize(
+      baseProduct({
+        categorySlug: 'air-conditioners',
+        title: 'Unknown Brand Inverter 1.5 HP XYZ-9000',
+      })
+    ).brand,
+    'Khác'
+  );
+
+  // Legitimate HP laptops and monitors remain intact.
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Laptop HP Pavilion 15 512GB' })).brand,
+    'HP'
+  );
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Folio 13 HP Core i5 8GB 256GB' })).brand,
+    'HP'
+  );
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Màn hình HP 24mh 24 inch' })).brand,
+    'HP'
+  );
+});
