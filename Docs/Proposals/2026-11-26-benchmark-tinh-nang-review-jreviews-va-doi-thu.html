@@ -1110,9 +1110,12 @@
                     <code>screen</code>; trả <code>['value']</code> cho 13 ngành
                     Wave E1-E4 và <code>['screen', 'value']</code> cho
                     <code>tvs</code>). Trên Prod: 16 master Tech Live, 210 draft
-                    (23 Tech cũ + 187 E1-E4), bảng <code>criteria_scores</code>
-                    hiện 0 dòng và form chấm sao theo từng tiêu chí
-                    <code>ReviewFormV2</code> (<code>#1544</code>) đang tắt cờ.
+                    (23 Tech cũ + 187 E1-E4), cột JSONB
+                    <code>rate.master_products.criteria_scores</code> hiện đang
+                    rỗng trên các master đã publish (và 0 dòng
+                    <code>rate.reviews</code> có <code>criteria_ratings</code>),
+                    còn form chấm sao theo từng tiêu chí <code>ReviewFormV2</code>
+                    (<code>#1544</code>) đang tắt cờ.
                   </div>
                 </td>
                 <td>
@@ -1478,8 +1481,8 @@
                     (<code>NEXT_PUBLIC_RATE_REVIEW_FORM_V2=1</code>,
                     <code>#1544</code>, mặc định TẮT) là <strong>form chấm sao
                     theo từng tiêu chí</strong> (bước <code>0.5</code> sao),
-                    chọn verdict (<code>recommended</code> / <code>mixed</code> /
-                    <code>not_recommended</code>), auto-save
+                    nhập verdict tóm tắt tự do (<code>20-300</code> ký tự qua
+                    <code>textarea</code>), auto-save
                     <code>localStorage</code> và nhập 1-5 Pros/Cons (chặn né
                     tránh). Trọng số danh mục cố định trong
                     <code>rating-criteria.ts</code> /
