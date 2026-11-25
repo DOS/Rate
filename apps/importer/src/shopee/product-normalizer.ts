@@ -2205,8 +2205,12 @@ const withoutLeadingPromoWords = (title: string, brand: string): string => {
   return rest !== title && brandHead(brand).test(rest) ? rest : title;
 };
 
-const HOA_PHAT_BRAND_RE = /(?<![\p{L}\d])h(?:òa|o[aà])\s*ph[aá]t(?![\p{L}\d])/iu;
+const HOA_PHAT_BRAND_RE =
+  /(?<![\p{L}\d])(?<!điều\s)(?<!dieu\s)h(?:òa|oà|oa)\s*ph[aá]t(?![\p{L}\d])/iu;
+const HOA_PHAT_BRAND_STRIP_RE =
+  /(?<![\p{L}\d])(?<!điều\s)(?<!dieu\s)h(?:òa|oà|oa)\s*ph[aá]t(?![\p{L}\d])/giu;
 const BLUESTONE_BRAND_RE = /\bblue\s*stone\b/i;
+const BLUESTONE_BRAND_STRIP_RE = /\bblue\s*stone\b/gi;
 
 const APPLIANCE_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\blg\b/i, 'LG'],
@@ -2262,17 +2266,48 @@ function detectApplianceBrand(identityTitle: string): string | null {
   return null;
 }
 
-const WAVE_E1_SPEC_NUM = String.raw`\d+(?:[.,]\d+)?(?:-\d+(?:[.,]\d+)?)?`;
-const WAVE_E1_SPEC_UNIT = String.raw`(?:gb|tb|mb|kb|btu|hp|kwh|kw|wh|mah|w|v|a|khz|mhz|ghz|hz|dba|db|l[ií]t|ml|l|kg|g|mm|cm|min|ms|m[23²³]?|inch|in|rpm|cfm)`;
-const WAVE_E1_SPEC_RATE_UNIT = String.raw`(?:hr|h|s|min|m[23²³]?|l[ií]t|l)`;
-const WAVE_E1_SPEC_ATOM = String.raw`${WAVE_E1_SPEC_NUM}${WAVE_E1_SPEC_UNIT}`;
-const WAVE_E1_SPEC_SLASH_RHS = String.raw`(?:${WAVE_E1_SPEC_NUM}(?:${WAVE_E1_SPEC_UNIT}|hr|h|s)|${WAVE_E1_SPEC_RATE_UNIT})`;
-// Anchored linear-time pattern for Wave E1 spec tokens (including slash-joined capacity,
-// electrical, and airflow specs like 9000Btu/1Hp, 220V/50Hz, 300m3/h) (DOS/Rate#1911).
-const WAVE_E1_SKU_IGNORE_RE = new RegExp(
-  String.raw`^(?:${WAVE_E1_SPEC_NUM}(?:${WAVE_E1_SPEC_UNIT}(?:/${WAVE_E1_SPEC_SLASH_RHS}(?:/${WAVE_E1_SPEC_SLASH_RHS})?)?|/${WAVE_E1_SPEC_ATOM}(?:/${WAVE_E1_SPEC_SLASH_RHS})?)|(?:[248]k|uhd|qhd|fhd|hd)(?:/${WAVE_E1_SPEC_ATOM})?|hdr10\+?|\d{3,4}p|[2-6]g|wi-?fi\d*|airplay\d*|bt\d.*|usb\d.*|hdmi\d*|lan\d*|rj\d+|sata\d*|pcie\d*|m\.?2|r32|r410a|r290|r600a|pm1\.?0|pm2\.?5|hepa\d*|h\d{2}|ip\d{1,2}[xk]?|e\d|(?:19|20)\d{2}|\d+%)$`,
-  'i'
-);
+// Static literal patterns for Wave E1 spec and feature tokens (O(n), ast-grep clean) (DOS/Rate#1911).
+const WAVE_E1_SPEC_ATOM_RE =
+  /^\d+(?:[.,]\d+)?(?:-\d+(?:[.,]\d+)?)?(?:gb|tb|mb|kb|btu|hp|kwh|kw|wh|mah|w|v|a|khz|mhz|ghz|hz|dba|db|l[ií]t|ml|l|kg|g|mm|cm|min|ms|m[23²³]?|inch|in|rpm|cfm)$/i;
+const WAVE_E1_SPEC_NUM_RE = /^\d+(?:[.,]\d+)?(?:-\d+(?:[.,]\d+)?)?$/;
+const WAVE_E1_SPEC_SLASH_RHS_RE =
+  /^(?:\d+(?:[.,]\d+)?(?:-\d+(?:[.,]\d+)?)?(?:hr|h|s)|hr|h|s|min|m[23²³]?|l[ií]t|l)$/i;
+const WAVE_E1_DISPLAY_RES_RE = /^(?:[248]k|uhd|qhd|fhd|hd)$/i;
+const WAVE_E1_FEATURE_TOKEN_RE =
+  /^(?:[248]k|uhd|qhd|fhd|hd|hdr10\+?|\d{3,4}p|[2-6]g|wi-?fi(?:\d+(?:\.\d+)?[a-z]?)?|airplay\d*|bt\d.*|usb\d.*|hdmi(?:\d+(?:\.\d+)?[a-z]?)?|lan\d*|rj\d+|sata\d*|pcie\d*|m\.?2|r32|r410a|r290|r600a|pm1\.?0|pm2\.?5|hepa\d*|h\d{2}|ip\d{1,2}[xk]?|e\d|(?:19|20)\d{2}|\d+%)$/i;
+
+/**
+ * Returns true when a Wave E1 title token is a spec, slash-joined spec (such as
+ * 9000Btu/1Hp, 220V/50Hz, 300m3/h), or tech feature tag rather than a model SKU.
+ */
+function isIgnoredWaveE1SkuToken(tok: string): boolean {
+  if (!tok.includes('/')) {
+    return WAVE_E1_SPEC_ATOM_RE.test(tok) || WAVE_E1_FEATURE_TOKEN_RE.test(tok);
+  }
+  const parts = tok.split('/');
+  if (parts.length < 2 || parts.length > 3) return false;
+  const [first, second, third] = parts;
+  if (!first || !second) return false;
+
+  const isRhsPart = (part: string): boolean =>
+    WAVE_E1_SPEC_ATOM_RE.test(part) || WAVE_E1_SPEC_SLASH_RHS_RE.test(part);
+
+  if (parts.length === 2) {
+    if (WAVE_E1_DISPLAY_RES_RE.test(first) && WAVE_E1_SPEC_ATOM_RE.test(second)) {
+      return true;
+    }
+    if (WAVE_E1_SPEC_NUM_RE.test(first) && WAVE_E1_SPEC_ATOM_RE.test(second)) {
+      return true;
+    }
+    return WAVE_E1_SPEC_ATOM_RE.test(first) && isRhsPart(second);
+  }
+
+  if (!third) return false;
+  if (WAVE_E1_SPEC_NUM_RE.test(first) && WAVE_E1_SPEC_ATOM_RE.test(second)) {
+    return isRhsPart(third);
+  }
+  return WAVE_E1_SPEC_ATOM_RE.test(first) && isRhsPart(second) && isRhsPart(third);
+}
 const OWN_PART_END = / (?:cho|for) | ?\+ (?!cellular|lte|(?:\d+ ?)?năm(?![\p{L}\d]))/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
@@ -3213,8 +3248,10 @@ export class ProductNormalizer {
       );
       let extractedSku: string | null = null;
       for (const rawTok of ownModelTitle.split(/\s+/)) {
-        const cleanTok = rawTok.replace(/^[,;()[\]【】]+|[,;()[\]【】.]+$/gu, '');
-        if (cleanTok.length < 5 || WAVE_E1_SKU_IGNORE_RE.test(cleanTok)) continue;
+        const cleanTok = rawTok
+          .replace(/^[,;()[\]【】]+/u, '')
+          .replace(/(?<![,;()[\]【】.])[,;()[\]【】.]+$/u, '');
+        if (cleanTok.length < 5 || isIgnoredWaveE1SkuToken(cleanTok)) continue;
         if (!/[a-z]/i.test(cleanTok) || !/\d/.test(cleanTok)) continue;
         const digitCount = (cleanTok.match(/\d/g) ?? []).length;
         if (/[a-z0-9]-[a-z0-9]/i.test(cleanTok) || digitCount >= 2 || cleanTok.length >= 6) {
@@ -3227,9 +3264,9 @@ export class ProductNormalizer {
       } else {
         const brandRe =
           brand === 'Hoa Phat'
-            ? new RegExp(HOA_PHAT_BRAND_RE.source, 'giu')
+            ? HOA_PHAT_BRAND_STRIP_RE
             : brand === 'Bluestone'
-              ? new RegExp(BLUESTONE_BRAND_RE.source, 'gi')
+              ? BLUESTONE_BRAND_STRIP_RE
               : brand !== 'Khác'
                 ? new RegExp(`\\b${escapeRegExp(brand)}\\b`, 'gi')
                 : null;

@@ -746,6 +746,54 @@ test('DOS/Rate#1911: ignores slash-joined spec tokens, preserves slash SKUs, and
       brand: 'Daikin',
       model: 'FTKB25YVMV-RKB25YVMV',
     },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi Sony HDMI2.1 XR-55X90L',
+      brand: 'Sony',
+      model: 'XR-55X90L',
+    },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi LG HDMI2.1a Wi-Fi7 OLED55C4PSA',
+      brand: 'LG',
+      model: 'OLED55C4PSA',
+    },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi TCL HDMI2.0 55P755',
+      brand: 'TCL',
+      model: '55P755',
+    },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi Xiaomi WiFi6E L55M8-A2SEA',
+      brand: 'Xiaomi',
+      model: 'L55M8-A2SEA',
+    },
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi Samsung 55 inch UA55DU7700/XXV',
+      brand: 'Samsung',
+      model: 'UA55DU7700-XXV',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa Hòa Phát 1 chiều HIC09MFB',
+      brand: 'Hoa Phat',
+      model: 'HIC09MFB',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa phát ion Inverter 1 HP ABC-12345',
+      brand: 'Khác',
+      model: 'ABC-12345',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Dieu hoa phat ion Inverter 1 HP ABC-12345',
+      brand: 'Khác',
+      model: 'ABC-12345',
+    },
   ];
 
   for (const tc of slashSpecCases) {
@@ -781,7 +829,7 @@ test('DOS/Rate#1911: ignores slash-joined spec tokens, preserves slash SKUs, and
     'Asus'
   );
 
-  // Unknown appliance with horsepower ("1 HP") across Wave E1 categories must not become HP.
+  // Unknown appliance with horsepower ("1 HP" / "1.5 HP") across Wave E1 categories must not become HP.
   for (const waveE1Slug of [
     'air-conditioners',
     'refrigerators',
@@ -799,6 +847,19 @@ test('DOS/Rate#1911: ignores slash-joined spec tokens, preserves slash SKUs, and
   }
   assert.equal(
     normalizer.normalize(baseProduct({ title: 'Unknown Brand Inverter 1 HP' })).brand,
+    'Khác'
+  );
+  assert.equal(
+    normalizer.normalize(baseProduct({ title: 'Unknown Brand Inverter 1.5 HP XYZ-9000' })).brand,
+    'Khác'
+  );
+  assert.equal(
+    normalizer.normalize(
+      baseProduct({
+        categorySlug: 'air-conditioners',
+        title: 'Unknown Brand Inverter 1.5 HP XYZ-9000',
+      })
+    ).brand,
     'Khác'
   );
 
