@@ -25,6 +25,9 @@ const APPROVED = [
   'samsung:galaxy-s26-ultra:256gb',
 ];
 
+// The final catalog audit's read (auditMasterSpecs).
+const AUDIT_COLUMNS = 'id, name, model_key, specifications';
+
 interface Op {
   table: string;
   op: 'select' | 'update' | 'insert';
@@ -36,13 +39,15 @@ interface Op {
 /**
  * A stand-in for the rate-scoped client: records every call, answers lookups from
  * `existing` (by model_key), and the full master list from `masters`. The final audit
- * query (no key_specs column) gets no rows.
+ * query (no key_specs column) gets `auditRows` (none by default).
  */
 function mockClient(
   existing: Record<string, Record<string, unknown>>,
   masters: Array<Record<string, unknown>> = [],
   /** model_keys whose lookup returns a database error. */
-  failKeys: readonly string[] = []
+  failKeys: readonly string[] = [],
+  /** The rows the final catalog audit reads (DOS/Rate#1910); none by default. */
+  auditRows: Array<Record<string, unknown>> = []
 ) {
   const ops: Op[] = [];
   const client = {
@@ -77,7 +82,13 @@ function mockClient(
         },
         limit(n: number) {
           let rows =
-            table === 'master_products' && op.columns?.includes('key_specs') ? [...masters] : [];
+            table !== 'master_products'
+              ? []
+              : op.columns?.includes('key_specs')
+                ? [...masters]
+                : op.columns === AUDIT_COLUMNS
+                  ? [...auditRows]
+                  : [];
           if (gtFilter) {
             const [col, val] = gtFilter;
             rows = rows.filter(r => String(r[col] ?? '') > val);
@@ -732,6 +743,76 @@ test('a scoped canonical dry run plans, diffs and checks --expect like a seed (#
     /--expect 2 does not match the plan of 3 master\(s\) \(apple:iphone-15:128gb, apple:iphone-16:128gb, apple:iphone-16-plus:256gb\): stopped before any write/
   );
   assert.deepEqual(live.writes(), []);
+});
+
+/** A device master with every Field Group the audit asks of a phone. */
+function auditPhone(modelKey: string): Record<string, unknown> {
+  return {
+    id: `audit-${modelKey}`,
+    name: `Audit ${modelKey}`,
+    model_key: modelKey,
+    specifications: {
+      category_slug: 'smartphones',
+      availability: { status: 'Available' },
+      design: { dimensions: '1 x 2 x 3 mm' },
+      display: { size: '6.1 inches' },
+      hardware: { chipset: 'Chip' },
+      battery: { capacity_mah: 3000 },
+      camera: { main_camera: '48 MP', second_camera: '12 MP' },
+      connectivity: { wifi: 'Wi-Fi 6' },
+      cellular: { network_technology: 'GSM / LTE / 5G' },
+      multimedia: { loudspeaker: 'Yes' },
+      regulatory: { certifications: 'CE' },
+    },
+  };
+}
+
+test('a scoped run is not failed by an out-of-scope master that fails the audit (#1910)', async () => {
+  const outOfScope = auditPhone('acme:phone:64gb');
+  delete (outOfScope.specifications as Record<string, unknown>).regulatory;
+  const auditRows = [
+    ...CANONICAL.map(auditPhone),
+    outOfScope,
+    // A Phase 8 non-device master: an availability group only, as on Production.
+    {
+      id: 'audit-vnpt',
+      name: 'VNPT HOMETV 3 (Mesh)',
+      model_key: 'vnpt:hometv-3-mesh:unknown',
+      specifications: { category_slug: 'internet-telecom', availability: { status: 'Available' } },
+    },
+  ];
+  const { client, ops, writes } = mockClient(canonicalExisting(), [], [], auditRows);
+  const { result, text } = await captureLogs(() =>
+    runMasterSpecsBackfillWith(client, deps(), { only: CANONICAL, expect: 3 })
+  );
+  assert.equal(result.planned, 3);
+  assert.equal(result.totalAudited, auditRows.length, 'the whole catalog is still audited');
+  assert.ok(
+    ops.some(o => o.columns === AUDIT_COLUMNS),
+    'the audit ran'
+  );
+  assert.deepEqual(writes(), [], 'a dry run never writes');
+  assert.match(text, /backfill\.audit_out_of_scope/);
+  assert.match(text, /1 failure\(s\) on masters outside this scoped run/);
+  assert.match(text, /acme:phone:64gb\) is missing specification group \\"regulatory\\"/);
+  assert.doesNotMatch(text, /vnpt:hometv-3-mesh/, 'a non-device master does not fail at all');
+
+  // The unscoped audit still fails on that master.
+  const unscoped = mockClient({}, [], [], auditRows);
+  await assert.rejects(
+    captureLogs(() => runMasterSpecsBackfillWith(unscoped.client, { ...deps(), seeds: [] }, {})),
+    /Spec audit failed \(1\):\n {2}- Audit acme:phone:64gb \(acme:phone:64gb\) is missing specification group "regulatory"/
+  );
+
+  // A named master that fails the audit still fails the scoped run.
+  const named = auditRows.map(r =>
+    r.model_key === CANONICAL[0] ? { ...r, specifications: { category_slug: 'smartphones' } } : r
+  );
+  const failing = mockClient(canonicalExisting(), [], [], named);
+  await assert.rejects(
+    captureLogs(() => runMasterSpecsBackfillWith(failing.client, deps(), { only: CANONICAL })),
+    new RegExp(`Spec audit failed \\(10\\):\\n {2}- Audit ${CANONICAL[0]} `)
+  );
 });
 
 test('a named canonical key with no master row is never inserted (#1804)', async () => {
