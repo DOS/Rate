@@ -807,9 +807,10 @@
             reviews)</span
           >
           <span
-            >Kho chờ xuất bản (Wave E1-E4): <strong>195</strong> master ở
-            trạng thái <code>draft</code> (74 sản phẩm, 101 dịch vụ, 20 địa
-            điểm)</span
+            >Kho chờ xuất bản: <strong>210</strong> bản ghi
+            <code>draft</code> (<strong>23</strong> Tech cũ +
+            <strong>187</strong> Wave E1-E4: 62 sản phẩm E1/E3, 101 dịch vụ E2,
+            24 địa điểm E4)</span
           >
           <span
             >Toán học xếp hạng: Bayesian <code>k=3, mu0=4.2</code> + Wilson
@@ -822,7 +823,7 @@
       <section aria-label="Tổng quan KPI">
         <div class="kpi-grid">
           <div class="kpi-card kpi-total">
-            <div class="kpi-num" id="kpi-total-count">48</div>
+            <div class="kpi-num" id="kpi-total-count">49</div>
             <div class="kpi-title">Tổng số hạng mục so sánh</div>
             <div class="kpi-desc">
               Trải rộng 7 nhóm năng lực cốt lõi của một nền tảng review &amp;
@@ -830,27 +831,27 @@
             </div>
           </div>
           <div class="kpi-card kpi-green">
-            <div class="kpi-num" id="kpi-adv-count">23</div>
+            <div class="kpi-num" id="kpi-adv-count">21</div>
             <div class="kpi-title">Tính năng Rate vượt trội / Độc quyền</div>
             <div class="kpi-desc">
-              Đang Live trên Prod (47.9%), gồm nhiều vũ khí chống seeding, giá
-              thật và AI-native mà JReviews không có.
+              Đang Live đầy đủ trên Prod (42.9%), nổi bật với chống seeding 6
+              trục, Omnibus 90d, Extension 22 sàn và MCP v1.1.
             </div>
           </div>
           <div class="kpi-card kpi-amber">
-            <div class="kpi-num" id="kpi-partial-count">11</div>
+            <div class="kpi-num" id="kpi-partial-count">14</div>
             <div class="kpi-title">Đã code xong nhưng tắt cờ / Dở dang</div>
             <div class="kpi-desc">
-              Chiếm 22.9%: chỉ cần bật cờ (<code>#1544</code>,
-              <code>RATE_ITEM_MODEL</code>, AI Points, Resend) hoặc hoàn thiện
-              UI phụ.
+              Chiếm 28.6%: gồm các tính năng sau cờ (<code>#1544</code>,
+              <code>RATE_ITEM_MODEL</code>, AI Points, Resend) hoặc mới phủ 5
+              ngành Tech.
             </div>
           </div>
           <div class="kpi-card kpi-rose">
             <div class="kpi-num" id="kpi-missing-count">14</div>
             <div class="kpi-title">Lỗ hổng lớn cần đóng theo JReviews.com</div>
             <div class="kpi-desc">
-              Chiếm 29.2%: tập trung vào Media Upload, Edit/Reply/Q&amp;A,
+              Chiếm 28.6%: tập trung vào Media Upload, Edit/Reply/Q&amp;A,
               GeoMaps Wave E4, Moderation UI và B2B/Widget.
             </div>
           </div>
@@ -860,31 +861,31 @@
           <div class="coverage-head">
             <strong>Bức tranh trưởng thành của Rate.vn trên Production</strong>
             <span class="muted"
-              >48 hạng mục đối chiếu | Cập nhật trạng thái cờ Feature Flags mới
+              >49 hạng mục đối chiếu | Cập nhật trạng thái cờ Feature Flags mới
               nhất</span
             >
           </div>
           <div
             class="stacked-bar"
             role="img"
-            aria-label="Phân bổ 23 tính năng lợi thế, 11 tính năng tắt cờ hoặc một phần, 14 tính năng chưa có"
+            aria-label="Phân bổ 21 tính năng lợi thế, 14 tính năng tắt cờ hoặc một phần, 14 tính năng chưa có"
           >
-            <div class="seg-green" style="width: 47.92%"></div>
-            <div class="seg-amber" style="width: 22.92%"></div>
-            <div class="seg-rose" style="width: 29.16%"></div>
+            <div class="seg-green" style="width: 42.86%"></div>
+            <div class="seg-amber" style="width: 28.57%"></div>
+            <div class="seg-rose" style="width: 28.57%"></div>
           </div>
           <div class="legend-inline">
             <span
               ><span class="legend-dot seg-green"></span>Lợi thế Rate / Live
-              Prod: <strong>23 (47.9%)</strong></span
+              Prod: <strong>21 (42.9%)</strong></span
             >
             <span
               ><span class="legend-dot seg-amber"></span>Tắt cờ / Một phần:
-              <strong>11 (22.9%)</strong></span
+              <strong>14 (28.6%)</strong></span
             >
             <span
               ><span class="legend-dot seg-rose"></span>Chưa có - Cần xây:
-              <strong>14 (29.2%)</strong></span
+              <strong>14 (28.6%)</strong></span
             >
           </div>
         </div>
@@ -898,9 +899,9 @@
           lại, Rate đang bị hụt rõ ở phần "tương tác cộng đồng &amp; công cụ chủ
           doanh nghiệp" (vòng đời review, upload ảnh/video, Owner Reply, Q&amp;A,
           Hồ sơ Reviewer, bản đồ lọc bán kính GeoMaps cho Wave E4, B2B Claim
-          &amp; Trust Widget). Đóng nhóm Quick Wins P0 (bật các cờ đã code sẵn)
-          sẽ lập tức đẩy tỷ lệ vượt trội từ 47.9% lên gần 60% chỉ trong vài
-          ngày.
+          &amp; Trust Widget). Đóng nhóm Quick Wins P0 (bật các cờ đã code sẵn
+          và nối hiển thị <code>reviews.images</code>) sẽ nâng tỷ lệ tính năng
+          hoàn chỉnh lên rõ rệt chỉ trong vài ngày.
         </div>
       </section>
 
@@ -909,7 +910,8 @@
         <h2>
           <span>Ma trận So sánh Chi tiết 7 Nhóm Tính năng (6 Nền tảng)</span>
           <span class="result-counter" id="result-counter" aria-live="polite"
-            >Đang hiển thị <strong>48</strong> / 48 hạng mục</span
+            >Đang hiển thị <strong id="visible-count">49</strong> /
+            <span id="total-count">49</span> hạng mục</span
           >
         </h2>
 
@@ -923,7 +925,7 @@
                 data-group-pill="all"
                 aria-pressed="true"
               >
-                Tất cả (48)
+                Tất cả (49)
               </button>
               <button
                 type="button"
@@ -955,7 +957,7 @@
                 data-group-pill="g4"
                 aria-pressed="false"
               >
-                4. Danh mục, Bản đồ &amp; So sánh (9)
+                4. Danh mục, Tìm kiếm &amp; Bản đồ (10)
               </button>
               <button
                 type="button"
@@ -1002,7 +1004,7 @@
                   data-status-pill="advantage"
                   aria-pressed="false"
                 >
-                  Lợi thế Rate (23)
+                  Lợi thế Rate (21)
                 </button>
                 <button
                   type="button"
@@ -1010,7 +1012,7 @@
                   data-status-pill="partial"
                   aria-pressed="false"
                 >
-                  Tắt cờ / Một phần (11)
+                  Tắt cờ / Một phần (14)
                 </button>
                 <button
                   type="button"
@@ -1044,7 +1046,7 @@
               <tr>
                 <th style="width: 19%">
                   Hạng mục Tính năng
-                  <span class="th-sub">48 tiêu chí thuộc 7 nhóm</span>
+                  <span class="th-sub">49 tiêu chí thuộc 7 nhóm</span>
                 </th>
                 <th class="col-rate" style="width: 23%">
                   Rate.vn (DOS/Rate)
@@ -1084,7 +1086,7 @@
                 </td>
               </tr>
 
-              <tr class="feature-row" data-group="g1" data-status="advantage">
+              <tr class="feature-row" data-group="g1" data-status="partial">
                 <td>
                   <span class="feat-name"
                     >Chấm điểm đa tiêu chí có trọng số (Weighted
@@ -1095,14 +1097,22 @@
                   >
                 </td>
                 <td class="cell-rate">
-                  <span class="badge badge-green">Live trên Prod</span>
+                  <span class="badge badge-amber"
+                    >Một phần (5 Tech + chờ cờ)</span
+                  >
                   <div class="cell-note">
-                    Tổng hợp <code>criteria_scores</code> theo trọng số độ hữu
-                    ích và <code>leaderboard-engine.ts</code> đã Live cho 19
-                    ngành (<code>v1=36</code>, <code>v2=38</code>,
-                    <code>v3=35</code>; 16 master Tech Live, 195 master E1-E4
-                    đang <code>Draft</code>). Form nhập trọng số v2 chờ cờ
-                    <code>#1544</code>.
+                    <code>JReviewsSection.tsx</code> và
+                    <code>use-case-weights.ts</code> hỗ trợ đủ 45 key tiêu chí
+                    (<code>v1=36</code>, <code>v2=38</code>, <code>v3=35</code>),
+                    nhưng <code>leaderboardCriteriaForCategory()</code>
+                    (<code>leaderboard-engine.ts:274-305</code>) hiện mới chấm
+                    đa tiêu chí cho 5 ngành Tech cũ (<code>earbuds</code> bỏ
+                    <code>screen</code>; trả <code>['value']</code> cho 13 ngành
+                    Wave E1-E4 và <code>['screen', 'value']</code> cho
+                    <code>tvs</code>). Trên Prod: 16 master Tech Live, 210 draft
+                    (23 Tech cũ + 187 E1-E4), bảng <code>criteria_scores</code>
+                    hiện 0 dòng và form chấm sao theo từng tiêu chí
+                    <code>ReviewFormV2</code> (<code>#1544</code>) đang tắt cờ.
                   </div>
                 </td>
                 <td>
@@ -1398,12 +1408,15 @@
                 <td class="cell-rate">
                   <span class="badge badge-amber">Tắt cờ / Một phần</span>
                   <div class="cell-note">
-                    <code>ProductPointsBlock.tsx</code> hiển thị
-                    <code>rate.product_points</code> đã Live trên Prod (click
-                    lọc review theo tiêu chí), nhưng pipeline AI
-                    <code>REVIEW_AI_POINTS_ENABLED</code> /
-                    <code>PRODUCT_POINTS_HIDE_AI</code> và nhập Pros/Cons thủ
-                    công đang chờ cờ.
+                    <code>ProductPointsBlock.tsx</code> đã Live (click lọc
+                    review theo tiêu chí), nhưng trên Prod bảng
+                    <code>rate.product_points</code> hiện có <code>0</code> dòng
+                    (các trang sản phẩm đang hiển thị Pros/Cons cũ từ
+                    <code>rate.review_analysis</code>); pipeline
+                    <code>REVIEW_AI_POINTS_ENABLED</code> đang tắt,
+                    <code>PRODUCT_POINTS_HIDE_AI</code> mặc định là
+                    <code>false</code> (công tắc opt-out), và nhập Pros/Cons thủ
+                    công nằm sau cờ <code>ReviewFormV2</code>.
                   </div>
                 </td>
                 <td>
@@ -1461,11 +1474,17 @@
                 <td class="cell-rate">
                   <span class="badge badge-amber">Tắt cờ</span>
                   <div class="cell-note">
-                    <code>ReviewFormV2.tsx</code> (<code>#1544</code>) đã sẵn
-                    sàng (0.5 sao, auto-save <code>localStorage</code>, bắt
-                    buộc 1-5 Pros/Cons + Verdict, từ chối nhược điểm né tránh),
-                    đang TẮT trên Prod (chờ DOS-Me v2 RPC; v1 thu 5 tiêu chí
-                    cố định).
+                    <code>ReviewFormV2.tsx</code>
+                    (<code>NEXT_PUBLIC_RATE_REVIEW_FORM_V2=1</code>,
+                    <code>#1544</code>, mặc định TẮT) là <strong>form chấm sao
+                    theo từng tiêu chí</strong> (bước <code>0.5</code> sao),
+                    chọn verdict (<code>recommended</code> / <code>mixed</code> /
+                    <code>not_recommended</code>), auto-save
+                    <code>localStorage</code> và nhập 1-5 Pros/Cons (chặn né
+                    tránh). Trọng số danh mục cố định trong
+                    <code>rating-criteria.ts</code> /
+                    <code>rate.rating_criteria</code>, còn chỉnh trọng số cá
+                    nhân nằm ở <code>UseCaseWeightBar.tsx</code>.
                   </div>
                 </td>
                 <td>
@@ -1567,10 +1586,14 @@
                   <span class="badge badge-rose">Chưa có</span>
                   <div class="cell-note">
                     Schema DB <code>rate.reviews</code> đã có cột
-                    <code>images: string[] | null</code> và importer đã lưu ảnh
-                    từ sàn, nhưng <code>toReviewItem</code> và
-                    <code>JReviewsSection.tsx</code> chưa hiển thị ảnh lên thẻ
-                    review và form chưa hỗ trợ upload ảnh/video.
+                    <code>images: string[] | null</code> (<code>85</code> review
+                    trên Prod đã lưu sẵn <code>images</code> trong DB), nhưng
+                    đường đọc <code>getMasterProductReviews()</code>
+                    (<code>apps/web/src/lib/rate-api.ts:1928-1955</code>) và
+                    kiểu <code>ReviewItem</code>
+                    (<code>apps/web/src/lib/rate-domain-core.ts:132-154</code>)
+                    hiện bỏ qua <code>r.images</code>; giao diện thẻ review chưa
+                    hiển thị ảnh và form gửi chưa hỗ trợ upload ảnh/video.
                   </div>
                 </td>
                 <td>
@@ -1719,10 +1742,14 @@
                 <td class="cell-rate">
                   <span class="badge badge-rose">Chưa có</span>
                   <div class="cell-note">
-                    Rate mới có logic tách review chỉ nói về shipper
-                    (<code>routedToMerchant</code>) sang rủi ro shop, chưa có
-                    tính năng để chủ thương hiệu hoặc gian hàng phản hồi công
-                    khai ngay dưới review.
+                    Scraper đã parse trường <code>ShopeeReview.sellerReply</code>
+                    (<code>apps/importer/src/shopee/types.ts:114</code>,
+                    <code>specs.schema.ts:383</code>) nhưng bị bỏ qua khi ghi DB
+                    tại <code>shopee-to-supabase.ts:1214-1226</code> do
+                    <code>rate.reviews</code> chưa có cột
+                    <code>seller_reply</code>. Hiện Rate mới tách review chỉ nói
+                    về shipper (<code>routedToMerchant</code>) sang rủi ro shop,
+                    chưa có UI phản hồi chính thức từ chủ shop/hãng.
                   </div>
                 </td>
                 <td>
@@ -1870,11 +1897,17 @@
                 <td class="cell-rate">
                   <span class="badge badge-amber">Một phần</span>
                   <div class="cell-note">
-                    <code>parseReviewsQueryParams</code> đặt
-                    <code>limit</code> mặc định <code>50</code> (tối đa
-                    <code>200</code>) và chưa có <code>offset</code>/cursor; UI
-                    hiện tải toàn bộ về client và gập sau 3 thẻ trên mobile bằng
-                    <code>PhoneCollapsible</code>.
+                    <code>getMasterProductReviews()</code>
+                    (<code>apps/web/src/lib/rate-api.ts:1881,1890</code>) khóa
+                    cứng cả truy vấn DB lẫn lát cắt trả về ở mức
+                    <strong>50 reviews mới nhất</strong>
+                    (<code>limit(50)</code> / <code>slice(0, 50)</code>), khiến
+                    cả SSR (<code>JReviewsSection</code>) lẫn
+                    <code>GET /api/v1/rate/reviews</code> (kể cả khi parser nhận
+                    <code>?limit=200</code>) đều bị cắt ở 50 reviews trên
+                    server và chưa có UI phân trang <code>offset</code>/cursor
+                    (trên mobile chỉ gập sau 3 thẻ bằng
+                    <code>PhoneCollapsible</code>).
                   </div>
                 </td>
                 <td>
@@ -2271,8 +2304,10 @@
                   <div class="cell-note">
                     <code>evaluateVoterEligibility</code> trong
                     <code>/api/reviews/[id]/vote/route.ts</code> kết hợp trigger
-                    <code>rate.review_votes_guard</code> chặn tài khoản ẩn danh,
-                    chưa xác thực email/SĐT hoặc tạo dưới 7 ngày.
+                    <code>trg_review_votes_guard</code> gọi hàm
+                    <code>rate.review_votes_guard()</code>
+                    (<code>20261014011054_review_votes.sql:142</code>) chặn tài
+                    khoản ẩn danh, chưa xác thực email/SĐT hoặc tạo dưới 7 ngày.
                   </div>
                 </td>
                 <td>
@@ -2358,7 +2393,7 @@
               <!-- ==================== NHÓM 4 ==================== -->
               <tr class="group-row" data-group-header="g4">
                 <td colspan="7">
-                  Nhóm 4: Danh mục, Tìm kiếm, Bản đồ &amp; So sánh (9 hạng mục)
+                  Nhóm 4: Danh mục, Tìm kiếm, Bản đồ &amp; So sánh (10 hạng mục)
                 </td>
               </tr>
 
@@ -2375,12 +2410,13 @@
                 <td class="cell-rate">
                   <span class="badge badge-amber">Một phần</span>
                   <div class="cell-note">
-                    Đã có đủ 19 route danh mục và 195 master E1-E4 đang
-                    <code>Draft</code>, nhưng <code>category-filters.ts</code>
-                    mới cấu hình <code>featureCheckboxes</code> cho 5 ngành
-                    Tech lõi; cả 14 ngành E1-E4 hiện có
-                    <code>featureCheckboxes: []</code> (mới lọc giá &amp;
-                    brand).
+                    Đã có đủ 19 route danh mục cùng 210 bản ghi
+                    <code>draft</code> (23 Tech cũ + 187 Wave E1-E4 gồm 62 sản
+                    phẩm E1/E3, 101 dịch vụ E2, 24 địa điểm E4), nhưng
+                    <code>category-filters.ts</code> mới cấu hình
+                    <code>featureCheckboxes</code> cho 5 ngành Tech lõi; cả 14
+                    ngành E1-E4 hiện có <code>featureCheckboxes: []</code> (mới
+                    lọc giá &amp; brand).
                   </div>
                 </td>
                 <td>
@@ -2413,6 +2449,66 @@
                   <span class="comp-pill comp-strong">Mạnh (Local)</span>
                   <span class="comp-text"
                     >Lọc tiện ích (Wi-Fi, chỗ đậu xe, giờ mở cửa, đặt bàn).</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Tìm kiếm Full-Text/Trigram, Brand Facets &amp; Autocomplete
+                    RPCs</span
+                  >
+                  <span class="feat-sub"
+                    ><code>get_category_brand_facets</code>,
+                    <code>search_master_products</code> &amp;
+                    <code>search_catalog_autocomplete</code></span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber"
+                    >Live Search / Chưa nối Autocomplete</span
+                  >
+                  <div class="cell-note">
+                    <code>rate.get_category_brand_facets</code> và
+                    <code>rate.search_master_products</code> (dùng index
+                    <code>pg_trgm</code> + fallback) đã Live tại
+                    <code>apps/web/src/lib/rate-api.ts:377,515</code>. Riêng RPC
+                    <code>rate.search_catalog_autocomplete</code> đã tồn tại
+                    trong migration <code>20261018120102</code> và
+                    <code>pg_proc</code> trên Prod nhưng
+                    <code>apps/web/src</code> chưa gọi tới.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Live Search</span>
+                  <span class="comp-text"
+                    >Gợi ý trực tiếp (autocomplete) theo tiêu đề, danh mục và
+                    Custom Fields.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Gợi ý tên công ty và domain ngay khi gõ.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Instant search phần mềm và danh mục B2B.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Tìm kiếm nhanh theo model và bài đánh giá lab.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Rất mạnh</span>
+                  <span class="comp-text"
+                    >Autocomplete tức thời theo tên quán, món ăn và khu vực.</span
                   >
                 </td>
               </tr>
@@ -2524,10 +2620,10 @@
                 </td>
               </tr>
 
-              <tr class="feature-row" data-group="g4" data-status="advantage">
+              <tr class="feature-row" data-group="g4" data-status="partial">
                 <td>
                   <span class="feat-name"
-                    >So sánh 1v1 &amp; Bộ trọng số Persona 19 ngành</span
+                    >So sánh 1v1 &amp; Bộ trọng số Persona (5 Tech + E1-E4)</span
                   >
                   <span class="feat-sub"
                     ><code>/compare/[versus]</code> &amp;
@@ -2535,12 +2631,19 @@
                   >
                 </td>
                 <td class="cell-rate">
-                  <span class="badge badge-green">Live trên Prod</span>
+                  <span class="badge badge-amber"
+                    >Live 5 Tech / Một phần E1-E4</span
+                  >
                   <div class="cell-note">
-                    <code>CompareWorkspace.tsx</code> &amp;
-                    <code>UseCaseWeightBar.tsx</code> hỗ trợ so sánh song song
-                    kèm preset trọng số theo từng nhu cầu sử dụng (Gaming,
-                    Chụp ảnh, Bền bỉ...) phủ trọn 19 ngành.
+                    <code>/compare/[versus]</code> và thanh trượt trọng số tùy
+                    chỉnh (<code>use-case-weights.ts</code>) đã Live; tuy nhiên
+                    bộ preset chọn lọc (<code>Gaming</code>, <code>Chụp ảnh</code>,
+                    <code>Bền bỉ</code>...) trong <code>UseCaseWeightBar.tsx</code>
+                    / <code>RATING_USE_CASE_PRESETS</code>
+                    (<code>rating-criteria.ts:964-1350</code>) mới phủ
+                    <strong>5 nhóm Tech cốt lõi</strong>, còn toàn bộ
+                    <strong>14 nhóm Wave E1-E4</strong> hiện mới chỉ có preset
+                    <code>'default'</code> ("Cân bằng mặc định").
                   </div>
                 </td>
                 <td>
@@ -3651,9 +3754,9 @@
         </h2>
         <p class="muted">
           Thứ tự triển khai ưu tiên khai thác toàn bộ mã nguồn đã xây sẵn (P0),
-          vá vòng đời tương tác review lõi (P1), mở khóa kho dữ liệu 195 master
-          Wave E1-E4 cùng bản đồ địa điểm GeoMaps (P2), trước khi đầu tư vào
-          cộng đồng &amp; kiếm tiền B2B (P3).
+          vá vòng đời tương tác review lõi (P1), mở khóa kho 210 bản ghi draft
+          (23 Tech cũ + 187 Wave E1-E4) cùng bản đồ địa điểm GeoMaps (P2), trước
+          khi đầu tư vào cộng đồng &amp; kiếm tiền B2B (P3).
         </p>
 
         <div class="roadmap-table-wrap">
@@ -3675,7 +3778,7 @@
                   <ul>
                     <li><code>NEXT_PUBLIC_RATE_REVIEW_FORM_V2=1</code> (<code>#1544</code>)</li>
                     <li><code>RATE_ITEM_MODEL</code> (gom biến thể &amp; <code>ProductGroup</code>)</li>
-                    <li><code>REVIEW_AI_POINTS_ENABLED=true</code> + gỡ <code>PRODUCT_POINTS_HIDE_AI</code></li>
+                    <li><code>REVIEW_AI_POINTS_ENABLED=true</code> + backfill <code>product_points</code> / <code>criteria_scores</code> (<code>PRODUCT_POINTS_HIDE_AI</code> mặc định <code>false</code>)</li>
                     <li>Credential Resend &amp; cron <code>--apply</code> cho <code>price-alerts-digest.ts</code></li>
                   </ul>
                 </td>
@@ -3683,22 +3786,27 @@
                 <td>
                   Hoàn tất v2 RPC &amp; Item migration bên
                   <code>DOS-Me/supabase/migrations/</code>; cấu hình
-                  <code>RESEND_API_KEY</code> trên Prod.
+                  <code>RESEND_API_KEY</code> trên Prod và chạy backfill AI
+                  points.
                 </td>
                 <td>
-                  Mở khóa tức thì chấm 0.5 sao có trọng số, N/A Skip (tối đa 2),
-                  Pros/Cons bắt buộc, AI tổng hợp ưu/nhược điểm và email cảnh
-                  báo giảm giá RFC 8058.
+                  Mở khóa tức thì form chấm sao từng tiêu chí bước 0.5 sao, N/A
+                  Skip (tối đa 2), Pros/Cons &amp; Verdict bắt buộc, lấp đầy
+                  <code>rate.product_points</code> (hiện 0 dòng trên Prod) và
+                  email cảnh báo giá RFC 8058.
                 </td>
               </tr>
 
               <tr>
                 <td><span class="prio-tag prio-p0">P0 Quick Win</span></td>
                 <td>
-                  <strong>Hiển thị <code>reviews.images</code> &amp; Modal Report Abuse</strong>
+                  <strong>Hiển thị <code>reviews.images</code>, Autocomplete &amp; Modal Report Abuse</strong>
                   <p class="muted" style="margin-top: 4px">
-                    Đưa cột ảnh <code>reviews.images</code> sẵn có lên
-                    <code>toReviewItem</code> / <code>JReviewsSection.tsx</code>
+                    Nối cột ảnh <code>reviews.images</code> (<code>85</code>
+                    review Prod đã có sẵn trong DB) vào
+                    <code>getMasterProductReviews()</code> /
+                    <code>ReviewItem</code> / <code>JReviewsSection.tsx</code>,
+                    kích hoạt <code>search_catalog_autocomplete</code> trên web,
                     và thay nút cờ hardcode <code>'spam'</code> bằng modal chọn
                     lý do khớp <code>vote/route.ts</code>.
                   </p>
@@ -3706,12 +3814,14 @@
                 <td><strong>1-2 ngày</strong></td>
                 <td>
                   Không cần migration DB; dùng thẳng cột
-                  <code>rate.reviews.images</code> và API
-                  <code>/api/reviews/[id]/vote</code>.
+                  <code>rate.reviews.images</code>, RPC
+                  <code>rate.search_catalog_autocomplete</code> đã có trên Prod
+                  và API <code>/api/reviews/[id]/vote</code>.
                 </td>
                 <td>
-                  Tăng mạnh độ tin cậy thị giác từ ảnh người mua thật đã crawl
-                  và phân loại chính xác báo cáo vi phạm từ cộng đồng.
+                  Tăng mạnh độ tin cậy thị giác từ ảnh người mua thật đã crawl,
+                  nâng tốc độ tìm kiếm gợi ý và phân loại chính xác báo cáo vi
+                  phạm từ cộng đồng.
                 </td>
               </tr>
 
@@ -3722,15 +3832,15 @@
                   <ul>
                     <li>Biểu đồ Histogram 5★-1★ + Phân trang server-side (&gt; 50 reviews)</li>
                     <li>Upload Ảnh/Video cho user + <code>PATCH/DELETE</code> sửa/xóa bài viết của mình</li>
-                    <li><code>Owner Official Reply</code> + <code>Nested Comments</code> / <code>Community Q&amp;A</code></li>
+                    <li><code>Owner Official Reply</code> (nối cột <code>seller_reply</code> từ <code>ShopeeReview.sellerReply</code>) + <code>Nested Comments</code> / <code>Community Q&amp;A</code></li>
                     <li><code>Moderation Queue &amp; Admin Dashboard UI</code> + xác thực hóa đơn <code>Verified Buyer</code></li>
                   </ul>
                 </td>
                 <td><strong>1-2 tuần</strong></td>
                 <td>
-                  Migration bảng reply/Q&amp;A &amp; author ownership qua
-                  <code>DOS-Me</code>; bucket Supabase Storage cho media upload
-                  kèm kiểm duyệt MIME/size.
+                  Migration bảng reply/Q&amp;A, cột <code>seller_reply</code>
+                  &amp; author ownership qua <code>DOS-Me</code>; bucket
+                  Supabase Storage cho media upload kèm kiểm duyệt MIME/size.
                 </td>
                 <td>
                   San bằng toàn bộ lợi thế cốt lõi của JReviews Core, Trustpilot
@@ -3742,24 +3852,27 @@
               <tr>
                 <td><span class="prio-tag prio-p2">P2 GeoMaps &amp; E4</span></td>
                 <td>
-                  <strong>Xuất bản 195 Draft Masters &amp; GeoMaps Wave E4:</strong>
+                  <strong>Xuất bản 210 Draft Masters &amp; GeoMaps Wave E4:</strong>
                   <ul>
-                    <li>Publish 195 master E1-E4 (74 sản phẩm, 101 dịch vụ, 20 địa điểm)</li>
-                    <li>Bổ sung <code>featureCheckboxes</code> đặc thù cho 14 ngành E1-E4</li>
+                    <li>Publish 23 draft Tech cũ + 187 draft Wave E1-E4 (62 sản phẩm E1/E3, 101 dịch vụ E2, 24 địa điểm E4)</li>
+                    <li>Mở rộng <code>leaderboardCriteriaForCategory()</code>, <code>UseCaseWeightBar</code> presets và <code>featureCheckboxes</code> cho 14 ngành E1-E4</li>
                     <li>Lọc Tỉnh/Thành - Quận/Huyện (<code>province_code</code>, <code>district_code</code>) &amp; <code>price_tier</code></li>
                     <li>Bản đồ tương tác + tìm kiếm bán kính từ <code>geo_lat/lng</code> sẵn có</li>
                   </ul>
                 </td>
                 <td><strong>1-2 tuần</strong></td>
                 <td>
-                  Kiểm định dữ liệu 195 draft masters; nâng cấp
-                  <code>CATEGORY_FILTER_SCHEMAS</code> và
-                  <code>list-sidebar-one.tsx</code>; tích hợp bản đồ OSM/Leaflet.
+                  Kiểm định dữ liệu 210 draft masters; nâng cấp
+                  <code>CATEGORY_FILTER_SCHEMAS</code>,
+                  <code>leaderboard-engine.ts</code> và
+                  <code>list-sidebar-one.tsx</code>; tích hợp bản đồ
+                  OSM/Leaflet.
                 </td>
                 <td>
-                  Mở rộng quy mô hiển thị công khai gấp ~13 lần (từ 16 lên 211
-                  masters) và biến Rate.vn thành đối thủ ngang ngửa JReviews
-                  GeoMaps / Yelp ở mảng nhà hàng, cà phê, lưu trú Việt Nam.
+                  Mở rộng quy mô hiển thị công khai từ 16 lên đến 226 master
+                  (gấp ~14 lần nếu xuất bản toàn bộ) và biến Rate.vn thành đối
+                  thủ ngang ngửa JReviews GeoMaps / Yelp ở mảng nhà hàng, cà
+                  phê, lưu trú Việt Nam.
                 </td>
               </tr>
 
@@ -3813,7 +3926,8 @@
         );
         var searchInput = document.getElementById('matrix-search');
         var resetBtn = document.getElementById('reset-filters-btn');
-        var counterEl = document.getElementById('result-counter');
+        var visibleCountEl = document.getElementById('visible-count');
+        var totalCountEl = document.getElementById('total-count');
         var emptyStateEl = document.getElementById('empty-state');
 
         var featureRows = Array.prototype.slice.call(
@@ -3883,13 +3997,11 @@
             }
           });
 
-          if (counterEl) {
-            counterEl.innerHTML =
-              'Đang hiển thị <strong>' +
-              visibleCount +
-              '</strong> / ' +
-              rowSearchCache.length +
-              ' hạng mục';
+          if (visibleCountEl) {
+            visibleCountEl.textContent = String(visibleCount);
+          }
+          if (totalCountEl) {
+            totalCountEl.textContent = String(rowSearchCache.length);
           }
 
           if (emptyStateEl) {
