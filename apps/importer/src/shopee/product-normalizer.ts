@@ -2204,6 +2204,75 @@ const withoutLeadingPromoWords = (title: string, brand: string): string => {
   }
   return rest !== title && brandHead(brand).test(rest) ? rest : title;
 };
+
+const HOA_PHAT_BRAND_RE = /(?<![\p{L}\d])h(?:òa|o[aà])\s*ph[aá]t(?![\p{L}\d])/iu;
+const BLUESTONE_BRAND_RE = /\bblue\s*stone\b/i;
+
+const APPLIANCE_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\blg\b/i, 'LG'],
+  [/daikin/i, 'Daikin'],
+  [/panasonic/i, 'Panasonic'],
+  [/electrolux/i, 'Electrolux'],
+  [/toshiba/i, 'Toshiba'],
+  [/\bsharp\b/i, 'Sharp'],
+  [/mitsubishi/i, 'Mitsubishi'],
+  [/\btcl\b/i, 'TCL'],
+  [/hisense/i, 'Hisense'],
+  [/\bcasper\b/i, 'Casper'],
+  [/\baqua\b/i, 'Aqua'],
+  [/philips/i, 'Philips'],
+  [/dyson/i, 'Dyson'],
+  [/coway/i, 'Coway'],
+  [/kangaroo/i, 'Kangaroo'],
+  [/sunhouse/i, 'Sunhouse'],
+  [/karofi/i, 'Karofi'],
+  [/midea/i, 'Midea'],
+  [/\bgree\b/i, 'Gree'],
+  [/hitachi/i, 'Hitachi'],
+  [/\bbosch\b/i, 'Bosch'],
+  [/\bbeko\b/i, 'Beko'],
+  [/coocaa/i, 'Coocaa'],
+  [/\bfuniki\b/i, 'Funiki'],
+  [/\bnagakawa\b/i, 'Nagakawa'],
+  [/\bcoex\b/i, 'Coex'],
+  [/\blivotec\b/i, 'Livotec'],
+  [/\blenson\b/i, 'Lenson'],
+  [/\bcomfee\b/i, 'Comfee'],
+  [/\breetech\b/i, 'Reetech'],
+  [/\bsumikura\b/i, 'Sumikura'],
+  [/\bsanaky\b/i, 'Sanaky'],
+  [/\balaska\b/i, 'Alaska'],
+  [HOA_PHAT_BRAND_RE, 'Hoa Phat'],
+  [/\blevoit\b/i, 'Levoit'],
+  [/\bwinix\b/i, 'Winix'],
+  [/\bcuckoo\b/i, 'Cuckoo'],
+  [BLUESTONE_BRAND_RE, 'Bluestone'],
+  [/\belmich\b/i, 'Elmich'],
+];
+
+/**
+ * Shared appliance brand detector used for Wave E1 categories and as the appliance fallback
+ * after tech/phone/laptop brands (DOS/Rate#1911).
+ */
+function detectApplianceBrand(identityTitle: string): string | null {
+  const normalized = identityTitle.normalize('NFC');
+  for (const [pattern, name] of APPLIANCE_BRAND_PATTERNS) {
+    if (pattern.test(normalized)) return name;
+  }
+  return null;
+}
+
+const WAVE_E1_SPEC_NUM = String.raw`\d+(?:[.,]\d+)?(?:-\d+(?:[.,]\d+)?)?`;
+const WAVE_E1_SPEC_UNIT = String.raw`(?:gb|tb|mb|kb|btu|hp|kwh|kw|wh|mah|w|v|a|khz|mhz|ghz|hz|dba|db|l[ií]t|ml|l|kg|g|mm|cm|min|ms|m[23²³]?|inch|in|rpm|cfm)`;
+const WAVE_E1_SPEC_RATE_UNIT = String.raw`(?:hr|h|s|min|m[23²³]?|l[ií]t|l)`;
+const WAVE_E1_SPEC_ATOM = String.raw`${WAVE_E1_SPEC_NUM}${WAVE_E1_SPEC_UNIT}`;
+const WAVE_E1_SPEC_SLASH_RHS = String.raw`(?:${WAVE_E1_SPEC_NUM}(?:${WAVE_E1_SPEC_UNIT}|hr|h|s)|${WAVE_E1_SPEC_RATE_UNIT})`;
+// Anchored linear-time pattern for Wave E1 spec tokens (including slash-joined capacity,
+// electrical, and airflow specs like 9000Btu/1Hp, 220V/50Hz, 300m3/h) (DOS/Rate#1911).
+const WAVE_E1_SKU_IGNORE_RE = new RegExp(
+  String.raw`^(?:${WAVE_E1_SPEC_NUM}(?:${WAVE_E1_SPEC_UNIT}(?:/${WAVE_E1_SPEC_SLASH_RHS}(?:/${WAVE_E1_SPEC_SLASH_RHS})?)?|/${WAVE_E1_SPEC_ATOM}(?:/${WAVE_E1_SPEC_SLASH_RHS})?)|(?:[248]k|uhd|qhd|fhd|hd)(?:/${WAVE_E1_SPEC_ATOM})?|hdr10\+?|\d{3,4}p|[2-6]g|wi-?fi\d*|airplay\d*|bt\d.*|usb\d.*|hdmi\d*|lan\d*|rj\d+|sata\d*|pcie\d*|m\.?2|r32|r410a|r290|r600a|pm1\.?0|pm2\.?5|hepa\d*|h\d{2}|ip\d{1,2}[xk]?|e\d|(?:19|20)\d{2}|\d+%)$`,
+  'i'
+);
 const OWN_PART_END = / (?:cho|for) | ?\+ (?!cellular|lte|(?:\d+ ?)?năm(?![\p{L}\d]))/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
@@ -2585,31 +2654,9 @@ export class ProductNormalizer {
       else if (safeRaw.platform === 'fpttelecom') brand = 'FPT Telecom';
     } else if (WAVE_E1_CATEGORY_SLUGS.has(categorySlug)) {
       if (/\bsamsung\b/i.test(identityTitle)) brand = 'Samsung';
-      else if (/\blg\b/i.test(identityTitle)) brand = 'LG';
       else if (/\bsony\b/i.test(identityTitle)) brand = 'Sony';
       else if (/\bxiaomi\b|\bredmi\b/i.test(identityTitle)) brand = 'Xiaomi';
-      else if (/daikin/i.test(identityTitle)) brand = 'Daikin';
-      else if (/panasonic/i.test(identityTitle)) brand = 'Panasonic';
-      else if (/electrolux/i.test(identityTitle)) brand = 'Electrolux';
-      else if (/toshiba/i.test(identityTitle)) brand = 'Toshiba';
-      else if (/\bsharp\b/i.test(identityTitle)) brand = 'Sharp';
-      else if (/mitsubishi/i.test(identityTitle)) brand = 'Mitsubishi';
-      else if (/\btcl\b/i.test(identityTitle)) brand = 'TCL';
-      else if (/hisense/i.test(identityTitle)) brand = 'Hisense';
-      else if (/\bcasper\b/i.test(identityTitle)) brand = 'Casper';
-      else if (/\baqua\b/i.test(identityTitle)) brand = 'Aqua';
-      else if (/philips/i.test(identityTitle)) brand = 'Philips';
-      else if (/dyson/i.test(identityTitle)) brand = 'Dyson';
-      else if (/coway/i.test(identityTitle)) brand = 'Coway';
-      else if (/kangaroo/i.test(identityTitle)) brand = 'Kangaroo';
-      else if (/sunhouse/i.test(identityTitle)) brand = 'Sunhouse';
-      else if (/karofi/i.test(identityTitle)) brand = 'Karofi';
-      else if (/midea/i.test(identityTitle)) brand = 'Midea';
-      else if (/\bgree\b/i.test(identityTitle)) brand = 'Gree';
-      else if (/hitachi/i.test(identityTitle)) brand = 'Hitachi';
-      else if (/\bbosch\b/i.test(identityTitle)) brand = 'Bosch';
-      else if (/\bbeko\b/i.test(identityTitle)) brand = 'Beko';
-      else if (/coocaa/i.test(identityTitle)) brand = 'Coocaa';
+      else brand = detectApplianceBrand(identityTitle) ?? 'Khác';
     } else if (WAVE_E3_CATEGORY_SLUGS.has(categorySlug)) {
       if (/\bla\s*roche[-\s]*posay\b/i.test(identityTitle)) brand = 'La Roche-Posay';
       else if (/(?<![\p{L}\d])paula['’]?s\s*choice(?![\p{L}\d])/iu.test(identityTitle))
@@ -2781,9 +2828,13 @@ export class ProductNormalizer {
       else if (/\basus\b|\brog\b|zenbook|vivo\s*book|tuf\s*gaming/i.test(identityTitle))
         brand = 'Asus';
       else if (/\bdell\b|inspiron|\bxps\b|alienware|latitude/i.test(identityTitle)) brand = 'Dell';
-      // "Omen" as a word: Sennheiser "Momentum" is not HP; skip horsepower like "1 HP".
+      // "Omen" as a word: Sennheiser "Momentum" is not HP; skip horsepower like "1 HP"
+      // and all Wave E1 appliance categories.
       else if (
-        (categorySlug !== 'air-conditioners' && /\bhp\b/i.test(identityTitle)) ||
+        (!WAVE_E1_CATEGORY_SLUGS.has(categorySlug) &&
+          /\bhp\b/i.test(
+            identityTitle.replace(/\b(?:0?[.,]\d+|[1-9](?:[.,]\d+)?)\s*hp\b/gi, ' ')
+          )) ||
         /pavilion|victus|\bomen\b|elitebook|envy/i.test(identityTitle)
       )
         brand = 'HP';
@@ -2800,36 +2851,19 @@ export class ProductNormalizer {
       // the Honor (DOS/Rate#1446).
       else if (NOTHING_BRAND.test(ownProductPart(identityTitle))) brand = 'Nothing';
       else if (/\bhonor\b|magicbook/i.test(identityTitle)) brand = 'Honor';
-      else if (/\blg\b/i.test(identityTitle)) brand = 'LG';
-      else if (/daikin/i.test(identityTitle)) brand = 'Daikin';
-      else if (/panasonic/i.test(identityTitle)) brand = 'Panasonic';
-      else if (/electrolux/i.test(identityTitle)) brand = 'Electrolux';
-      else if (/toshiba/i.test(identityTitle)) brand = 'Toshiba';
-      else if (/\bsharp\b/i.test(identityTitle)) brand = 'Sharp';
-      else if (/mitsubishi/i.test(identityTitle)) brand = 'Mitsubishi';
-      else if (/\btcl\b/i.test(identityTitle)) brand = 'TCL';
-      else if (/hisense/i.test(identityTitle)) brand = 'Hisense';
-      else if (/\bcasper\b/i.test(identityTitle)) brand = 'Casper';
-      else if (/\baqua\b/i.test(identityTitle)) brand = 'Aqua';
-      else if (/philips/i.test(identityTitle)) brand = 'Philips';
-      else if (/dyson/i.test(identityTitle)) brand = 'Dyson';
-      else if (/coway/i.test(identityTitle)) brand = 'Coway';
-      else if (/kangaroo/i.test(identityTitle)) brand = 'Kangaroo';
-      else if (/sunhouse/i.test(identityTitle)) brand = 'Sunhouse';
-      else if (/karofi/i.test(identityTitle)) brand = 'Karofi';
-      else if (/midea/i.test(identityTitle)) brand = 'Midea';
-      else if (/\bgree\b/i.test(identityTitle)) brand = 'Gree';
-      else if (/hitachi/i.test(identityTitle)) brand = 'Hitachi';
-      else if (/\bbosch\b/i.test(identityTitle)) brand = 'Bosch';
-      else if (/\bbeko\b/i.test(identityTitle)) brand = 'Beko';
-      else if (/coocaa/i.test(identityTitle)) brand = 'Coocaa';
-      // Apple's desktops and speakers, last so another brand wins, and not when the title
-      // only names what it fits or looks like ("Bàn phím cho Mac mini") (DOS/Rate#819).
-      else if (
-        /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod|\bvision\s*pro\b/i.test(identityTitle) &&
-        !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod|vision)/i.test(identityTitle)
-      )
-        brand = 'Apple';
+      else {
+        const applianceBrand = detectApplianceBrand(identityTitle);
+        if (applianceBrand) {
+          brand = applianceBrand;
+        } else if (
+          /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod|\bvision\s*pro\b/i.test(identityTitle) &&
+          !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod|vision)/i.test(identityTitle)
+        ) {
+          // Apple's desktops and speakers, last so another brand wins, and not when the title
+          // only names what it fits or looks like ("Bàn phím cho Mac mini") (DOS/Rate#819).
+          brand = 'Apple';
+        }
+      }
     }
 
     // 2. Extract Model
@@ -3177,12 +3211,10 @@ export class ProductNormalizer {
       const ownModelTitle = ownProductPart(
         withoutLeadingPromoWords(modelTitle.replace(LEADING_PROMO_GROUPS, '').trim(), brand)
       );
-      const skuIgnoreRe =
-        /^(?:\d+(?:[.,]\d+)?(?:gb|tb|mb|kb|btu|hp|w|kw|v|a|hz|khz|mhz|ghz|db|dba|l|lit|kg|g|ml|mm|cm|m|m2|m3|inch|in|mah|wh|min|ms)|[248]k|uhd|qhd|fhd|hd|hdr10\+?|\d{3,4}p|[2-6]g|wifi\d*|wi-?fi\d*|airplay\d*|bt\d.*|usb\d.*|hdmi\d*|lan\d*|rj\d+|sata\d*|pcie\d*|m\.?2|r32|r410a|r290|r600a|pm1\.?0|pm2\.?5|hepa\d*|h\d{2}|ip\d{1,2}[xk]?|e\d|(?:19|20)\d{2}|\d+%)$/i;
       let extractedSku: string | null = null;
       for (const rawTok of ownModelTitle.split(/\s+/)) {
-        const cleanTok = rawTok.replace(/^[,;()[\]【】]+|[,;()[\]【】]+$/gu, '');
-        if (cleanTok.length < 5 || skuIgnoreRe.test(cleanTok)) continue;
+        const cleanTok = rawTok.replace(/^[,;()[\]【】]+|[,;()[\]【】.]+$/gu, '');
+        if (cleanTok.length < 5 || WAVE_E1_SKU_IGNORE_RE.test(cleanTok)) continue;
         if (!/[a-z]/i.test(cleanTok) || !/\d/.test(cleanTok)) continue;
         const digitCount = (cleanTok.match(/\d/g) ?? []).length;
         if (/[a-z0-9]-[a-z0-9]/i.test(cleanTok) || digitCount >= 2 || cleanTok.length >= 6) {
@@ -3193,7 +3225,14 @@ export class ProductNormalizer {
       if (extractedSku) {
         model = extractedSku;
       } else {
-        const brandRe = brand !== 'Khác' ? new RegExp(`\\b${escapeRegExp(brand)}\\b`, 'gi') : null;
+        const brandRe =
+          brand === 'Hoa Phat'
+            ? new RegExp(HOA_PHAT_BRAND_RE.source, 'giu')
+            : brand === 'Bluestone'
+              ? new RegExp(BLUESTONE_BRAND_RE.source, 'gi')
+              : brand !== 'Khác'
+                ? new RegExp(`\\b${escapeRegExp(brand)}\\b`, 'gi')
+                : null;
         let cleanedAppliance = (brandRe ? ownModelTitle.replace(brandRe, ' ') : ownModelTitle)
           .replace(/ {2,}/g, ' ')
           .trim();
