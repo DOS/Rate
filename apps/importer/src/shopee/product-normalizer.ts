@@ -2188,13 +2188,37 @@ const BRAND_LINES: Readonly<Record<string, readonly string[]>> = {
   Xiaomi: ['redmi', 'poco'],
   Nothing: ['cmf'],
 };
-const BRAND_HEAD_PREFIX = String.raw`^(?:(?:điện thoại(?: thông minh| di động)?|smartphone|máy tính bảng|tablet|laptop|đồng hồ(?: thông minh)?|tai nghe) )?(?:(?:hàng )?chính hãng )?`;
+const BRAND_HEAD_PREFIX_RE =
+  /^(?:(?:điện thoại(?: thông minh| di động)?|smartphone|máy tính bảng|tablet|laptop|đồng hồ(?: thông minh)?|tai nghe) )?(?:(?:hàng )?chính hãng )?/iu;
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const brandHead = (brand: string): RegExp =>
-  new RegExp(
-    `${BRAND_HEAD_PREFIX}(?:${[brand, ...(BRAND_LINES[brand] ?? [])].map(escapeRegExp).join('|')})(?![\\p{L}\\d])`,
-    'iu'
-  );
+const foldAccentsPreservingCase = (text: string): string =>
+  String(text ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .replace(/[\u2018\u2019]/g, "'");
+const foldAccentsLower = (text: string): string =>
+  foldAccentsPreservingCase(text).toLowerCase().replace(/\s+/g, ' ').trim();
+const isWordBoundaryChar = (ch: string | undefined): boolean =>
+  ch !== undefined && /[\p{L}\d]/u.test(ch);
+const startsWithWordBoundedAlias = (text: string, aliases: readonly string[]): boolean => {
+  const foldedText = foldAccentsLower(text);
+  for (const alias of aliases) {
+    const foldedAlias = foldAccentsLower(alias);
+    if (!foldedAlias) continue;
+    if (foldedText.startsWith(foldedAlias) && !isWordBoundaryChar(foldedText[foldedAlias.length])) {
+      return true;
+    }
+  }
+  return false;
+};
+const brandHeadMatches = (rest: string, brand: string): boolean => {
+  const nfcRest = rest.normalize('NFC');
+  const prefixMatch = nfcRest.match(BRAND_HEAD_PREFIX_RE);
+  const afterPrefix = prefixMatch ? nfcRest.slice(prefixMatch[0].length) : nfcRest;
+  return startsWithWordBoundedAlias(afterPrefix, [brand, ...(BRAND_LINES[brand] ?? [])]);
+};
 const withoutLeadingPromoWords = (title: string, brand: string): string => {
   let rest = title;
   for (let i = 0; i < MAX_LEADING_PROMO_WORDS; i++) {
@@ -2202,7 +2226,7 @@ const withoutLeadingPromoWords = (title: string, brand: string): string => {
     if (!promo) break;
     rest = rest.slice(promo[0].length);
   }
-  return rest !== title && brandHead(brand).test(rest) ? rest : title;
+  return rest !== title && brandHeadMatches(rest, brand) ? rest : title;
 };
 
 const HOA_PHAT_BRAND_RE =
@@ -2264,6 +2288,484 @@ function detectApplianceBrand(identityTitle: string): string | null {
     if (pattern.test(normalized)) return name;
   }
   return null;
+}
+
+const WAVE_E3_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\bla\s*roche[-\s]*posay\b/i, 'La Roche-Posay'],
+  [/(?<![\p{L}\d])paula['’]?s\s*choice(?![\p{L}\d])/iu, "Paula's Choice"],
+  [/\bbeauty\s*of\s*joseon\b/i, 'Beauty of Joseon'],
+  [/(?<![\p{L}\d])l['’]?or[eé]al(?![\p{L}\d])/iu, "L'Oréal"],
+  [/\bphilips\s*avent\b|\bavent\b/i, 'Philips Avent'],
+  [/\brascal\s*(?:(?:\+|and)\s*)?friends\b/i, 'Rascal + Friends'],
+  [/(?<![\p{L}\d])moaz\s*b[eé]b[eé](?![\p{L}\d])/iu, 'Moaz BéBé'],
+  [/\boptimum\s*nutrition\b/i, 'Optimum Nutrition'],
+  [/\bkirkland(?:\s*signature)?\b/i, 'Kirkland Signature'],
+  [/(?<![\p{L}\d])nature['’]?s\s*way(?![\p{L}\d])/iu, "Nature's Way"],
+  [/\bnature\s*made\b/i, 'Nature Made'],
+  [/\bhealthy\s*care\b/i, 'Healthy Care'],
+  [/\bbio\s*island\b/i, 'Bio Island'],
+  [/(?<![\p{L}\d])puritan['’]?s\s*pride(?![\p{L}\d])/iu, "Puritan's Pride"],
+  [/\bhada\s*labo\b/i, 'Hada Labo'],
+  [/\bround\s*lab\b/i, 'Round Lab'],
+  [/\bblack\s*rouge\b/i, 'Black Rouge'],
+  [/\bshu\s*uemura\b/i, 'Shu Uemura'],
+  [/(?<![\p{L}\d])est[eé]e\s*lauder(?![\p{L}\d])/iu, 'Estée Lauder'],
+  [/\bthe\s*ordinary\b|\bordinary\b/i, 'The Ordinary'],
+  [/(?<![\p{L}\d])kiehl['’]?s(?![\p{L}\d])/iu, "Kiehl's"],
+  [/\bskin\s*aqua\b/i, 'Skin Aqua'],
+  [/\bblackmores\b/i, 'Blackmores'],
+  [/\bdhc\b/i, 'DHC'],
+  [/\bswisse\b/i, 'Swisse'],
+  [/\bsolgar\b/i, 'Solgar'],
+  [/\bostelin\b/i, 'Ostelin'],
+  [/\belevit\b/i, 'Elevit'],
+  [/\bpregnacare\b/i, 'Pregnacare'],
+  [/\bbiogaia\b/i, 'BioGaia'],
+  [/\blineabon\b/i, 'LineaBon'],
+  [/\bensure\b/i, 'Ensure'],
+  [/\banlene\b/i, 'Anlene'],
+  [/\bpediasure\b/i, 'PediaSure'],
+  [/\bglucerna\b/i, 'Glucerna'],
+  [/\bcentrum\b/i, 'Centrum'],
+  [/\borihiro\b/i, 'Orihiro'],
+  [/\bshiseido\b/i, 'Shiseido'],
+  [/\bcerave\b/i, 'CeraVe'],
+  [/\bbioderma\b/i, 'Bioderma'],
+  [/\bcetaphil\b/i, 'Cetaphil'],
+  [/\bsimple\b/i, 'Simple'],
+  [/\bgarnier\b/i, 'Garnier'],
+  [/\bnivea\b/i, 'Nivea'],
+  [/\beucerin\b/i, 'Eucerin'],
+  [/\bvichy\b/i, 'Vichy'],
+  [/(?<![\p{L}\d])av[eè]ne(?![\p{L}\d])/iu, 'Avène'],
+  [/\bsvr\b/i, 'SVR'],
+  [/\bcocoon\b/i, 'Cocoon'],
+  [/\binnisfree\b/i, 'Innisfree'],
+  [/\blaneige\b/i, 'Laneige'],
+  [/\bskin1004\b/i, 'Skin1004'],
+  [/\btorriden\b/i, 'Torriden'],
+  [/\bklairs\b/i, 'Klairs'],
+  [/\bcosrx\b/i, 'COSRX'],
+  [/\banua\b/i, 'Anua'],
+  [/\bclinique\b/i, 'Clinique'],
+  [/\bmaybelline\b/i, 'Maybelline'],
+  [/\brom(?:&|and)?nd\b/i, 'Romand'],
+  [/\b3ce\b/i, '3CE'],
+  [/\bsenka\b/i, 'Senka'],
+  [/\banessa\b/i, 'Anessa'],
+  [/(?<![\p{L}\d])bior[eé](?![\p{L}\d])/iu, 'Bioré'],
+  [/\bvaseline\b/i, 'Vaseline'],
+  [/\bobagi\b/i, 'Obagi'],
+  [/\bmartiderm\b/i, 'MartiDerm'],
+  [/\bhuggies\b/i, 'Huggies'],
+  [/\bpampers\b/i, 'Pampers'],
+  [/\bmerries\b/i, 'Merries'],
+  [/\bmoony\b/i, 'Moony'],
+  [/\bbobby\b/i, 'Bobby'],
+  [/\bgoo\.?n\b/i, 'Goo.N'],
+  [/\bjoie\b/i, 'Joie'],
+  [/\bchicco\b/i, 'Chicco'],
+  [/\bcombi\b/i, 'Combi'],
+  [/\baprica\b/i, 'Aprica'],
+  [/\bpigeon\b/i, 'Pigeon'],
+  [/\bmoyuum\b/i, 'Moyuum'],
+  [/\bhegen\b/i, 'Hegen'],
+  [/\bmedela\b/i, 'Medela'],
+  [/\bfatzbaby\b/i, 'Fatzbaby'],
+  [/\benfa(?:mil|grow)?\b/i, 'Enfamil'],
+  [/\baptamil\b/i, 'Aptamil'],
+  [/\bsimilac\b/i, 'Similac'],
+  [/\bfriso\b/i, 'Friso'],
+  [/\bmeiji\b/i, 'Meiji'],
+  [/\bmorinaga\b/i, 'Morinaga'],
+  [/\bnan\b/i, 'Nestlé NAN'],
+  [/\bhikid\b/i, 'Hikid'],
+  [/\bcolosbaby\b/i, 'ColosBaby'],
+  [/\bvinamilk\b/i, 'Vinamilk'],
+  [/\bmustela\b/i, 'Mustela'],
+  [/\bbepanthen\b/i, 'Bepanthen'],
+  [/\bsudocrem\b/i, 'Sudocrem'],
+  [/(?<![\p{L}\d])dr\.?\s*brown['’]?s(?![\p{L}\d])/iu, "Dr. Brown's"],
+  [/\bdoppelherz\b/i, 'Doppelherz'],
+];
+
+/**
+ * Shared Wave E3 allowlist brand detector used on both titles and structured brand hints
+ * so spelling and casing variants map to the canonical Wave E3 brand name.
+ */
+export function detectWaveE3AllowlistBrand(text: string): string | null {
+  if (typeof text !== 'string') return null;
+  const normalized = stripControlChars(text).normalize('NFC').replace(/\s+/g, ' ').trim();
+  if (!normalized) return null;
+  for (const [pattern, canonical] of WAVE_E3_BRAND_PATTERNS) {
+    if (pattern.test(normalized)) return canonical;
+  }
+  return null;
+}
+
+const WAVE_E3_BRAND_ATTR_NAME_RE = /^(?:thương\s*hiệu|nhãn\s*hiệu|brand|hãng(?:\s*sản\s*xuất)?)$/iu;
+const WAVE_E3_BRAND_URL_OR_DOMAIN_RE =
+  /(?:https?:\/\/|www\.|\.(?:com|vn|net|org|co)(?![\p{L}\d]))/iu;
+const WAVE_E3_BRAND_JUNK_CHARS_RE = /[%!₫[\]|/\\*=@#]/;
+const WAVE_E3_SINGLE_TRAILING_SUFFIXES = new Set([
+  'official',
+  'store',
+  'shop',
+  'mall',
+  'vietnam',
+  'vn',
+]);
+const WAVE_E3_GENERIC_BRAND_SLUGS = new Set([
+  'khac',
+  'other',
+  'others',
+  'oem',
+  'odm',
+  'no-brand',
+  'nobrand',
+  'unbranded',
+  'khong-co',
+  'khong-ro',
+  'khong-thuong-hieu',
+  'chinh-hang',
+  'hang-chinh-hang',
+  'viet-nam',
+  'vietnam',
+  'noi-dia',
+  'han-quoc',
+  'nhat-ban',
+  'trung-quoc',
+  'uc',
+  'my',
+  'phap',
+  'duc',
+  'combo',
+  'gia-si',
+  'tiki',
+  'shopee',
+  'lazada',
+  'tiktok',
+  'avakids',
+  'hasaki',
+  'watsons',
+  'guardian',
+  'null',
+  'undefined',
+  'n-a',
+  'na',
+  'none',
+  'unknown',
+]);
+const WAVE_E3_RETAIL_SHOP_PREFIX_RE =
+  /^(?:shop|cua hang|nha thuoc|sieu thi|tong kho|dai ly|tiem)(?:\s|$)/;
+
+export interface WaveE3BrandSanitizeContext {
+  identityTitle: string;
+  platform?: string;
+  shopName?: string;
+  isMall?: boolean;
+}
+
+function containsWordBoundedSubstring(haystack: string, needle: string): boolean {
+  if (!haystack || !needle) return false;
+  let fromIndex = 0;
+  while (fromIndex <= haystack.length - needle.length) {
+    const idx = haystack.indexOf(needle, fromIndex);
+    if (idx === -1) return false;
+    const before = idx > 0 ? haystack[idx - 1] : undefined;
+    const after = idx + needle.length < haystack.length ? haystack[idx + needle.length] : undefined;
+    if (!isWordBoundaryChar(before) && !isWordBoundaryChar(after)) {
+      return true;
+    }
+    fromIndex = idx + 1;
+  }
+  return false;
+}
+
+function trimTrailingChars(text: string, chars: string): string {
+  let end = text.length;
+  while (end > 0 && chars.includes(text[end - 1]!)) {
+    end -= 1;
+  }
+  return text.slice(0, end);
+}
+
+function isSeparatorOnlyToken(token: string): boolean {
+  if (!token) return false;
+  for (let i = 0; i < token.length; i += 1) {
+    if (!'-,:;|'.includes(token[i]!)) return false;
+  }
+  return true;
+}
+
+function stripTrailingRetailShopSuffixes(text: string): string {
+  const tokens = text.split(' ').filter(Boolean);
+  let strippedAny = false;
+  while (tokens.length > 0) {
+    const lastIdx = tokens.length - 1;
+    const lastFolded = trimTrailingChars(foldAccentsLower(tokens[lastIdx]!), ',.:;-');
+    if (tokens.length >= 2) {
+      const prevFolded = trimTrailingChars(foldAccentsLower(tokens[lastIdx - 1]!), ',.:;-');
+      const pair = `${prevFolded} ${lastFolded}`;
+      if (pair === 'chinh hang' || pair === 'viet nam') {
+        tokens.pop();
+        tokens.pop();
+        strippedAny = true;
+        continue;
+      }
+    }
+    if (WAVE_E3_SINGLE_TRAILING_SUFFIXES.has(lastFolded)) {
+      tokens.pop();
+      strippedAny = true;
+      continue;
+    }
+    if (strippedAny && isSeparatorOnlyToken(tokens[lastIdx]!)) {
+      tokens.pop();
+      continue;
+    }
+    break;
+  }
+  if (tokens.length === 0) return '';
+  return trimTrailingChars(tokens.join(' '), ' ,:;-');
+}
+
+function titleCaseWaveE3Segment(segment: string): string {
+  if (!segment) return segment;
+  const chars = Array.from(segment);
+  const firstIdx = chars.findIndex(ch => /\p{L}/u.test(ch));
+  if (firstIdx === -1) return segment;
+  return chars
+    .map((ch, idx) =>
+      idx === firstIdx ? ch.toLocaleUpperCase('vi-VN') : ch.toLocaleLowerCase('vi-VN')
+    )
+    .join('');
+}
+
+function titleCaseWaveE3Word(word: string): string {
+  return word
+    .split('-')
+    .map(part => part.split('.').map(titleCaseWaveE3Segment).join('.'))
+    .join('-');
+}
+
+function normalizeWaveE3BrandCasing(candidate: string): string {
+  const hasLower = /\p{Ll}/u.test(candidate);
+  const hasUpper = /\p{Lu}/u.test(candidate);
+  if (!hasLower && hasUpper && candidate.length >= 2 && candidate.length <= 5) {
+    return candidate;
+  }
+  if (!hasLower || !hasUpper) {
+    return candidate.split(' ').map(titleCaseWaveE3Word).join(' ');
+  }
+  return candidate
+    .split(' ')
+    .map(word => {
+      const wLower = /\p{Ll}/u.test(word);
+      const wUpper = /\p{Lu}/u.test(word);
+      if (!wLower && wUpper) {
+        if (word.length >= 2 && word.length <= 5) return word;
+        return titleCaseWaveE3Word(word);
+      }
+      if (wLower && !wUpper) {
+        return titleCaseWaveE3Word(word);
+      }
+      return word;
+    })
+    .join(' ');
+}
+
+function isDisallowedWaveE3HintNoise(cleaned: string): boolean {
+  if (WAVE_E3_BRAND_URL_OR_DOMAIN_RE.test(cleaned) || WAVE_E3_BRAND_JUNK_CHARS_RE.test(cleaned)) {
+    return true;
+  }
+  const folded = foldAccentsLower(cleaned);
+  return (
+    WAVE_E3_RETAIL_SHOP_PREFIX_RE.test(folded) || WAVE_E3_GENERIC_BRAND_SLUGS.has(slugify(cleaned))
+  );
+}
+
+/**
+ * Strict anti-spam sanitizer for structured Wave E3 brand hints outside the canonical
+ * allowlist. Rejects placeholders, shop names, URLs, promo junk, and ungrounded hints.
+ */
+export function sanitizeWaveE3StructuredBrand(
+  rawBrand: string,
+  context: WaveE3BrandSanitizeContext
+): string | null {
+  if (typeof rawBrand !== 'string') return null;
+  const cleaned = stripControlChars(rawBrand).normalize('NFC').replace(/\s+/g, ' ').trim();
+  if (!cleaned || isDisallowedWaveE3HintNoise(cleaned)) return null;
+
+  const candidate = stripTrailingRetailShopSuffixes(cleaned);
+  if (candidate.length < 2 || candidate.length > 48) return null;
+
+  const words = candidate.split(' ').filter(Boolean);
+  if (words.length < 1 || words.length > 5) return null;
+  if (!/\p{L}/u.test(candidate) || /^\d+$/.test(candidate)) return null;
+  if (
+    WAVE_E3_BRAND_URL_OR_DOMAIN_RE.test(candidate) ||
+    WAVE_E3_BRAND_JUNK_CHARS_RE.test(candidate)
+  ) {
+    return null;
+  }
+
+  const candidateSlug = slugify(candidate);
+  if (
+    candidateSlug.length < 2 ||
+    candidateSlug === 'khac' ||
+    WAVE_E3_GENERIC_BRAND_SLUGS.has(candidateSlug)
+  ) {
+    return null;
+  }
+
+  const foldedCandidate = foldAccentsLower(candidate);
+  if (
+    WAVE_E3_RETAIL_SHOP_PREFIX_RE.test(foldedCandidate) ||
+    foldedCandidate === 'trading' ||
+    foldedCandidate.endsWith(' trading')
+  ) {
+    return null;
+  }
+
+  const foldedTitle = foldAccentsLower(context.identityTitle ?? '');
+  const groundedInTitle = containsWordBoundedSubstring(foldedTitle, foldedCandidate);
+  if (!groundedInTitle) {
+    const isCuratedCatalog =
+      context.platform === 'tiki' || context.platform === 'avakids' || context.isMall === true;
+    if (!isCuratedCatalog) return null;
+    const foldedShopName = foldAccentsLower(
+      stripControlChars(context.shopName ?? '').normalize('NFC')
+    );
+    const foldedCleaned = foldAccentsLower(cleaned);
+    if (
+      foldedShopName &&
+      (foldedCandidate === foldedShopName || foldedCleaned === foldedShopName)
+    ) {
+      return null;
+    }
+  }
+
+  return normalizeWaveE3BrandCasing(candidate);
+}
+
+function extractWaveE3StructuredBrandHints(
+  safeRaw: ShopeeProduct,
+  safeRawRecord: Record<string, unknown>
+): string[] {
+  const hints: string[] = [];
+  const pushHint = (val: unknown): void => {
+    if (typeof val !== 'string') return;
+    const cleaned = stripControlChars(val.trim().slice(0, 500))
+      .normalize('NFC')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
+    if (cleaned && !hints.includes(cleaned)) {
+      hints.push(cleaned);
+    }
+  };
+
+  pushHint(safeRaw.brand);
+
+  if (Array.isArray(safeRaw.attributes)) {
+    for (const attr of safeRaw.attributes) {
+      if (!attr || typeof attr !== 'object') continue;
+      if (typeof attr.name !== 'string' || typeof attr.value !== 'string') continue;
+      const attrName = stripControlChars(attr.name.trim().slice(0, 120))
+        .normalize('NFC')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (WAVE_E3_BRAND_ATTR_NAME_RE.test(attrName)) {
+        pushHint(attr.value);
+      }
+    }
+  }
+
+  pushHint(safeRawRecord.brand_name);
+  if (
+    safeRaw.metadata &&
+    typeof safeRaw.metadata === 'object' &&
+    !Array.isArray(safeRaw.metadata)
+  ) {
+    pushHint((safeRaw.metadata as Record<string, unknown>).brand);
+  }
+
+  return hints;
+}
+
+function stripWordBoundedAliases(text: string, aliases: readonly string[]): string {
+  const nfcText = text.normalize('NFC');
+  const foldedTargets = Array.from(
+    new Set(aliases.map(alias => foldAccentsLower(alias)).filter(Boolean))
+  ).sort((a, b) => b.length - a.length);
+  if (foldedTargets.length === 0) return nfcText;
+
+  const foldedChars: string[] = [];
+  const origStarts: number[] = [];
+  const origEnds: number[] = [];
+  let i = 0;
+  while (i < nfcText.length) {
+    const cp = nfcText.codePointAt(i)!;
+    const chLen = cp > 0xffff ? 2 : 1;
+    const ch = nfcText.slice(i, i + chLen);
+    const folded = foldAccentsPreservingCase(ch).toLowerCase();
+    if (folded.length === 0) {
+      if (origEnds.length > 0) {
+        origEnds[origEnds.length - 1] = i + chLen;
+      }
+    } else {
+      for (let j = 0; j < folded.length; j += 1) {
+        foldedChars.push(folded[j]!);
+        origStarts.push(i);
+        origEnds.push(i + chLen);
+      }
+    }
+    i += chLen;
+  }
+
+  const foldedText = foldedChars.join('');
+  const claimed = new Uint8Array(foldedText.length);
+  const removals: Array<{ start: number; end: number }> = [];
+
+  for (const target of foldedTargets) {
+    let from = 0;
+    while (from <= foldedText.length - target.length) {
+      const idx = foldedText.indexOf(target, from);
+      if (idx === -1) break;
+      const endIdx = idx + target.length;
+      const before = idx > 0 ? foldedText[idx - 1] : undefined;
+      const after = endIdx < foldedText.length ? foldedText[endIdx] : undefined;
+      let overlaps = false;
+      for (let k = idx; k < endIdx; k += 1) {
+        if (claimed[k]) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (!overlaps && !isWordBoundaryChar(before) && !isWordBoundaryChar(after)) {
+        for (let k = idx; k < endIdx; k += 1) claimed[k] = 1;
+        removals.push({
+          start: origStarts[idx]!,
+          end: origEnds[endIdx - 1]!,
+        });
+        from = endIdx;
+      } else {
+        from = idx + 1;
+      }
+    }
+  }
+
+  if (removals.length === 0) return nfcText;
+  removals.sort((a, b) => a.start - b.start);
+  let out = '';
+  let cursor = 0;
+  for (const r of removals) {
+    if (r.start < cursor) continue;
+    out += nfcText.slice(cursor, r.start) + ' ';
+    cursor = r.end;
+  }
+  out += nfcText.slice(cursor);
+  return out;
 }
 
 // Static literal patterns for Wave E1 spec and feature tokens (O(n), ast-grep clean) (DOS/Rate#1911).
@@ -2693,109 +3195,29 @@ export class ProductNormalizer {
       else if (/\bxiaomi\b|\bredmi\b/i.test(identityTitle)) brand = 'Xiaomi';
       else brand = detectApplianceBrand(identityTitle) ?? 'Khác';
     } else if (WAVE_E3_CATEGORY_SLUGS.has(categorySlug)) {
-      if (/\bla\s*roche[-\s]*posay\b/i.test(identityTitle)) brand = 'La Roche-Posay';
-      else if (/(?<![\p{L}\d])paula['’]?s\s*choice(?![\p{L}\d])/iu.test(identityTitle))
-        brand = "Paula's Choice";
-      else if (/\bbeauty\s*of\s*joseon\b/i.test(identityTitle)) brand = 'Beauty of Joseon';
-      else if (/(?<![\p{L}\d])l['’]?or[eé]al(?![\p{L}\d])/iu.test(identityTitle)) brand = "L'Oréal";
-      else if (/\bphilips\s*avent\b|\bavent\b/i.test(identityTitle)) brand = 'Philips Avent';
-      else if (/\brascal\s*(?:\+|and)?\s*friends\b/i.test(identityTitle))
-        brand = 'Rascal + Friends';
-      else if (/(?<![\p{L}\d])moaz\s*b[eé]b[eé](?![\p{L}\d])/iu.test(identityTitle))
-        brand = 'Moaz BéBé';
-      else if (/\boptimum\s*nutrition\b/i.test(identityTitle)) brand = 'Optimum Nutrition';
-      else if (/\bkirkland(?:\s*signature)?\b/i.test(identityTitle)) brand = 'Kirkland Signature';
-      else if (/(?<![\p{L}\d])nature['’]?s\s*way(?![\p{L}\d])/iu.test(identityTitle))
-        brand = "Nature's Way";
-      else if (/\bnature\s*made\b/i.test(identityTitle)) brand = 'Nature Made';
-      else if (/\bhealthy\s*care\b/i.test(identityTitle)) brand = 'Healthy Care';
-      else if (/\bbio\s*island\b/i.test(identityTitle)) brand = 'Bio Island';
-      else if (/(?<![\p{L}\d])puritan['’]?s\s*pride(?![\p{L}\d])/iu.test(identityTitle))
-        brand = "Puritan's Pride";
-      else if (/\bhada\s*labo\b/i.test(identityTitle)) brand = 'Hada Labo';
-      else if (/\bround\s*lab\b/i.test(identityTitle)) brand = 'Round Lab';
-      else if (/\bblack\s*rouge\b/i.test(identityTitle)) brand = 'Black Rouge';
-      else if (/\bshu\s*uemura\b/i.test(identityTitle)) brand = 'Shu Uemura';
-      else if (/(?<![\p{L}\d])est[eé]e\s*lauder(?![\p{L}\d])/iu.test(identityTitle))
-        brand = 'Estée Lauder';
-      else if (/\bthe\s*ordinary\b|\bordinary\b/i.test(identityTitle)) brand = 'The Ordinary';
-      else if (/(?<![\p{L}\d])kiehl['’]?s(?![\p{L}\d])/iu.test(identityTitle)) brand = "Kiehl's";
-      else if (/\bskin\s*aqua\b/i.test(identityTitle)) brand = 'Skin Aqua';
-      else if (/\bblackmores\b/i.test(identityTitle)) brand = 'Blackmores';
-      else if (/\bdhc\b/i.test(identityTitle)) brand = 'DHC';
-      else if (/\bswisse\b/i.test(identityTitle)) brand = 'Swisse';
-      else if (/\bsolgar\b/i.test(identityTitle)) brand = 'Solgar';
-      else if (/\bostelin\b/i.test(identityTitle)) brand = 'Ostelin';
-      else if (/\belevit\b/i.test(identityTitle)) brand = 'Elevit';
-      else if (/\bpregnacare\b/i.test(identityTitle)) brand = 'Pregnacare';
-      else if (/\bbiogaia\b/i.test(identityTitle)) brand = 'BioGaia';
-      else if (/\blineabon\b/i.test(identityTitle)) brand = 'LineaBon';
-      else if (/\bensure\b/i.test(identityTitle)) brand = 'Ensure';
-      else if (/\banlene\b/i.test(identityTitle)) brand = 'Anlene';
-      else if (/\bpediasure\b/i.test(identityTitle)) brand = 'PediaSure';
-      else if (/\bglucerna\b/i.test(identityTitle)) brand = 'Glucerna';
-      else if (/\bcentrum\b/i.test(identityTitle)) brand = 'Centrum';
-      else if (/\borihiro\b/i.test(identityTitle)) brand = 'Orihiro';
-      else if (/\bshiseido\b/i.test(identityTitle)) brand = 'Shiseido';
-      else if (/\bcerave\b/i.test(identityTitle)) brand = 'CeraVe';
-      else if (/\bbioderma\b/i.test(identityTitle)) brand = 'Bioderma';
-      else if (/\bcetaphil\b/i.test(identityTitle)) brand = 'Cetaphil';
-      else if (/\bsimple\b/i.test(identityTitle)) brand = 'Simple';
-      else if (/\bgarnier\b/i.test(identityTitle)) brand = 'Garnier';
-      else if (/\bnivea\b/i.test(identityTitle)) brand = 'Nivea';
-      else if (/\beucerin\b/i.test(identityTitle)) brand = 'Eucerin';
-      else if (/\bvichy\b/i.test(identityTitle)) brand = 'Vichy';
-      else if (/(?<![\p{L}\d])av[eè]ne(?![\p{L}\d])/iu.test(identityTitle)) brand = 'Avène';
-      else if (/\bsvr\b/i.test(identityTitle)) brand = 'SVR';
-      else if (/\bcocoon\b/i.test(identityTitle)) brand = 'Cocoon';
-      else if (/\binnisfree\b/i.test(identityTitle)) brand = 'Innisfree';
-      else if (/\blaneige\b/i.test(identityTitle)) brand = 'Laneige';
-      else if (/\bskin1004\b/i.test(identityTitle)) brand = 'Skin1004';
-      else if (/\btorriden\b/i.test(identityTitle)) brand = 'Torriden';
-      else if (/\bklairs\b/i.test(identityTitle)) brand = 'Klairs';
-      else if (/\bcosrx\b/i.test(identityTitle)) brand = 'COSRX';
-      else if (/\banua\b/i.test(identityTitle)) brand = 'Anua';
-      else if (/\bclinique\b/i.test(identityTitle)) brand = 'Clinique';
-      else if (/\bmaybelline\b/i.test(identityTitle)) brand = 'Maybelline';
-      else if (/\brom(?:&|and)?nd\b/i.test(identityTitle)) brand = 'Romand';
-      else if (/\b3ce\b/i.test(identityTitle)) brand = '3CE';
-      else if (/\bsenka\b/i.test(identityTitle)) brand = 'Senka';
-      else if (/\banessa\b/i.test(identityTitle)) brand = 'Anessa';
-      else if (/(?<![\p{L}\d])bior[eé](?![\p{L}\d])/iu.test(identityTitle)) brand = 'Bioré';
-      else if (/\bvaseline\b/i.test(identityTitle)) brand = 'Vaseline';
-      else if (/\bobagi\b/i.test(identityTitle)) brand = 'Obagi';
-      else if (/\bmartiderm\b/i.test(identityTitle)) brand = 'MartiDerm';
-      else if (/\bhuggies\b/i.test(identityTitle)) brand = 'Huggies';
-      else if (/\bpampers\b/i.test(identityTitle)) brand = 'Pampers';
-      else if (/\bmerries\b/i.test(identityTitle)) brand = 'Merries';
-      else if (/\bmoony\b/i.test(identityTitle)) brand = 'Moony';
-      else if (/\bbobby\b/i.test(identityTitle)) brand = 'Bobby';
-      else if (/\bgoo\.?n\b/i.test(identityTitle)) brand = 'Goo.N';
-      else if (/\bjoie\b/i.test(identityTitle)) brand = 'Joie';
-      else if (/\bchicco\b/i.test(identityTitle)) brand = 'Chicco';
-      else if (/\bcombi\b/i.test(identityTitle)) brand = 'Combi';
-      else if (/\baprica\b/i.test(identityTitle)) brand = 'Aprica';
-      else if (/\bpigeon\b/i.test(identityTitle)) brand = 'Pigeon';
-      else if (/\bmoyuum\b/i.test(identityTitle)) brand = 'Moyuum';
-      else if (/\bhegen\b/i.test(identityTitle)) brand = 'Hegen';
-      else if (/\bmedela\b/i.test(identityTitle)) brand = 'Medela';
-      else if (/\bfatzbaby\b/i.test(identityTitle)) brand = 'Fatzbaby';
-      else if (/\benfa(?:mil|grow)?\b/i.test(identityTitle)) brand = 'Enfamil';
-      else if (/\baptamil\b/i.test(identityTitle)) brand = 'Aptamil';
-      else if (/\bsimilac\b/i.test(identityTitle)) brand = 'Similac';
-      else if (/\bfriso\b/i.test(identityTitle)) brand = 'Friso';
-      else if (/\bmeiji\b/i.test(identityTitle)) brand = 'Meiji';
-      else if (/\bmorinaga\b/i.test(identityTitle)) brand = 'Morinaga';
-      else if (/\bnan\b/i.test(identityTitle)) brand = 'Nestlé NAN';
-      else if (/\bhikid\b/i.test(identityTitle)) brand = 'Hikid';
-      else if (/\bcolosbaby\b/i.test(identityTitle)) brand = 'ColosBaby';
-      else if (/\bvinamilk\b/i.test(identityTitle)) brand = 'Vinamilk';
-      else if (/\bmustela\b/i.test(identityTitle)) brand = 'Mustela';
-      else if (/\bbepanthen\b/i.test(identityTitle)) brand = 'Bepanthen';
-      else if (/\bsudocrem\b/i.test(identityTitle)) brand = 'Sudocrem';
-      else if (/(?<![\p{L}\d])dr\.?\s*brown['’]?s(?![\p{L}\d])/iu.test(identityTitle))
-        brand = "Dr. Brown's";
-      else if (/\bdoppelherz\b/i.test(identityTitle)) brand = 'Doppelherz';
+      brand = detectWaveE3AllowlistBrand(identityTitle) ?? 'Khác';
+      if (brand === 'Khác') {
+        const structuredHints = extractWaveE3StructuredBrandHints(safeRaw, safeRawRecord);
+        const brandContext: WaveE3BrandSanitizeContext = {
+          identityTitle,
+          platform: safeRaw.platform,
+          shopName: safeRaw.shop?.name,
+          isMall: safeRaw.shop?.isMall,
+        };
+        for (const hint of structuredHints) {
+          if (isDisallowedWaveE3HintNoise(hint)) continue;
+          const canonical = detectWaveE3AllowlistBrand(hint);
+          if (canonical) {
+            brand = canonical;
+            break;
+          }
+          const sanitized = sanitizeWaveE3StructuredBrand(hint, brandContext);
+          if (sanitized) {
+            brand = sanitized;
+            break;
+          }
+        }
+      }
     } else if (WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug)) {
       if (/\bhighlands\s*coffee\b/i.test(identityTitle)) brand = 'Highlands Coffee';
       else if (/\bthe\s*coffee\s*house\b/i.test(identityTitle)) brand = 'The Coffee House';
@@ -3326,24 +3748,26 @@ export class ProductNormalizer {
         modelTitle.replace(LEADING_PROMO_GROUPS, '').trim(),
         brand
       );
-      const brandAliases: string[] = [brand];
-      if (brand === "L'Oréal") brandAliases.push("L'Oreal", 'Loreal');
-      if (brand === 'Avène') brandAliases.push('Avene');
-      if (brand === 'Bioré') brandAliases.push('Biore');
-      if (brand === 'Moaz BéBé') brandAliases.push('Moaz Bebe');
-      if (brand === 'Estée Lauder') brandAliases.push('Estee Lauder');
-      if (brand === 'Nestlé NAN') brandAliases.push('NAN', 'Nestle NAN');
-      if (brand === 'Philips Avent') brandAliases.push('Avent');
-      const brandRe =
-        brand !== 'Khác'
-          ? new RegExp(
-              `(?<![\\p{L}\\d])(?:${brandAliases.map(escapeRegExp).join('|')})(?![\\p{L}\\d])`,
-              'giu'
-            )
-          : null;
+      const brandAliases: string[] = [];
+      if (brand !== 'Khác') {
+        brandAliases.push(brand);
+        const foldedBrand = foldAccentsPreservingCase(brand);
+        if (foldedBrand && foldedBrand !== brand) brandAliases.push(foldedBrand);
+        if (brand.includes('-')) brandAliases.push(brand.replace(/-/g, ' '));
+        if (brand === "L'Oréal") brandAliases.push('Loreal');
+        if (brand === 'Nestlé NAN') brandAliases.push('NAN');
+        if (brand === 'Philips Avent') brandAliases.push('Avent');
+        if (brand === 'Rascal + Friends') brandAliases.push('Rascal and Friends');
+        if (brand === 'Romand') brandAliases.push('Rom&nd', 'Romnd');
+        if (brand === "Dr. Brown's") {
+          brandAliases.push('Dr. Browns', "Dr Brown's", 'Dr Browns', "Dr.Brown's", 'Dr.Browns');
+        }
+      }
       const packSizeRe =
         /\d+(?:[.,]\d+)?\s*(?:ml|l|g|kg|mg|mcg|iu|viên|gói|miếng|chai|tuýp|hộp|lon|túi|ống|lốc|thùng|vỉ)(?![\p{L}\d])|\bcombo\s*\d+\b/giu;
-      const cleanedE3 = (brandRe ? baseE3Title.replace(brandRe, ' ') : baseE3Title)
+      const cleanedE3 = (
+        brandAliases.length > 0 ? stripWordBoundedAliases(baseE3Title, brandAliases) : baseE3Title
+      )
         .replace(/\[[^[\]]*\]/g, ' ')
         .replace(/\(\s*(?:tặng|kèm|quà|km|khuyến\s*mãi|free)[^()]*\)/giu, ' ')
         .replace(/\(([^()]*)\)/g, (_, inner: string) =>

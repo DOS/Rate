@@ -373,7 +373,69 @@ function testMasterProductAndScrapedProductSchemas(): void {
   });
   assert.equal(scraped.currency, 'VND');
   assert.equal(scraped.historicalSold, 0);
+  assert.equal(scraped.brand, undefined);
   assert.deepEqual(scraped.reviews, []);
+
+  assert.equal(
+    ScrapedProductSchema.parse({
+      platform: 'tiki',
+      itemId: '123457',
+      shopId: '654322',
+      url: 'https://tiki.vn/product-p123457.html',
+      title: 'Dau cham soc da Bio-Oil 60ml',
+      brand: 'Bio-Oil',
+      priceMin: 215000,
+      priceMax: 215000,
+      shop: { shopId: '654322', name: 'Tiki Trading', isMall: true },
+    }).brand,
+    'Bio-Oil',
+    'ScrapedProductSchema must preserve optional brand within max length'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123458',
+      shopId: '654323',
+      url: 'https://shopee.vn/product/654323/123458',
+      title: 'Serum duong da 50ml',
+      brand: 'B'.repeat(120),
+      priceMin: 150000,
+      priceMax: 150000,
+      shop: { shopId: '654323', name: 'Official Store', isMall: true },
+    }).success,
+    true,
+    'ScrapedProductSchema must allow brand at exact 120-char bound'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123459',
+      shopId: '654323',
+      url: 'https://shopee.vn/product/654323/123459',
+      title: 'Serum duong da 50ml',
+      brand: 'B'.repeat(121),
+      priceMin: 150000,
+      priceMax: 150000,
+      shop: { shopId: '654323', name: 'Official Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject brand exceeding 120 characters'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123460',
+      shopId: '654323',
+      url: 'https://shopee.vn/product/654323/123460',
+      title: 'Serum duong da 50ml',
+      brand: null,
+      priceMin: 150000,
+      priceMax: 150000,
+      shop: { shopId: '654323', name: 'Official Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-string brand'
+  );
 
   assert.equal(
     ScrapedProductSchema.parse({

@@ -134,6 +134,8 @@ export interface ShopeeProduct {
   shopId: string;
   url: string;
   title: string;
+  /** Optional brand hint from upstream crawler/feed. */
+  brand?: string;
   description?: string;
   priceMin: number;
   priceMax: number;

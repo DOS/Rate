@@ -228,13 +228,30 @@ export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
  *  - strips `priceBeforeDiscount` when `<= 0`, `< priceMin`, non-finite, or `> MAX_VALID_VND_PRICE`;
  *  - filters out variant `models` whose `price` is `<= 0`, non-finite, or `> MAX_VALID_VND_PRICE`.
  */
+function cleanOptionalBrand(rawBrand: unknown): string | undefined {
+  if (typeof rawBrand !== 'string') return undefined;
+  const cleaned = rawBrand
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
 function prepareRawScrapedProduct(rawProduct: unknown): unknown {
   if (!rawProduct || typeof rawProduct !== 'object' || Array.isArray(rawProduct)) {
     return rawProduct;
   }
   const rawObj = rawProduct as Record<string, unknown>;
+  const { brand: rawBrand, ...rest } = rawObj;
+  const cleanedBrand = cleanOptionalBrand(rawBrand);
+  const preserveNonStringBrand = rawBrand !== undefined && typeof rawBrand !== 'string';
   return {
-    ...rawObj,
+    ...rest,
+    ...(cleanedBrand !== undefined
+      ? { brand: cleanedBrand }
+      : preserveNonStringBrand
+        ? { brand: rawBrand }
+        : {}),
     ...(rawObj.category_slug === undefined && rawObj.categorySlug !== undefined
       ? { category_slug: rawObj.categorySlug }
       : {}),
@@ -342,8 +359,11 @@ export function normalizeScrapedProductPrices(
     : [];
   const resolvedCategorySlug = product.category_slug ?? product.categorySlug;
   const resolvedEntityType = product.entity_type ?? product.entityType;
+  const { brand: rawBrand, ...productRest } = product;
+  const normalizedBrand = cleanOptionalBrand(rawBrand)?.slice(0, 120).trim();
   return {
-    ...product,
+    ...productRest,
+    ...(normalizedBrand ? { brand: normalizedBrand } : {}),
     ...(resolvedCategorySlug !== undefined ? { category_slug: resolvedCategorySlug } : {}),
     ...(resolvedEntityType !== undefined ? { entity_type: resolvedEntityType } : {}),
     currency: normalizedCurrency,
