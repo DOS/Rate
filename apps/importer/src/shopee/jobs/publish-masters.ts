@@ -66,8 +66,8 @@ const logger = createImporterLogger('PublishMastersJob');
 /** Chunk size <= 150 for `.in()` filters so PostgREST request URLs stay short. */
 const IN_CHUNK_SIZE = 150;
 const MAX_CRAWLED_LIMIT = 1000;
-const MAX_SLUG_LENGTH = 200;
-const SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/i;
+const MAX_SLUG_LENGTH = 120;
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 
 export const CORE_TECH_CATEGORY_SLUGS: ReadonlySet<string> = new Set(RATING_DEVICE_CATEGORIES);
 
@@ -137,7 +137,11 @@ function parseWholeNumber(raw: string, flagName: string): number {
   if (!/^\d+$/.test(trimmed)) {
     throw new Error(`${flagName} needs a whole number, got ${JSON.stringify(raw)}`);
   }
-  return Number(trimmed);
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`${flagName} needs a safe whole number, got ${JSON.stringify(raw)}`);
+  }
+  return parsed;
 }
 
 function validateWaveECategories(categories: readonly string[]): string[] {
@@ -504,6 +508,7 @@ export interface CrawledListingRow {
   readonly price_current: number | string | null;
   readonly currency?: string | null;
   readonly availability?: string | null;
+  readonly origin?: string | null;
 }
 
 export interface CrawledPlaceDetailRow {
@@ -581,6 +586,7 @@ function toFiniteNumber(value: unknown): number | null {
 }
 
 function isActivePricedListing(row: CrawledListingRow): boolean {
+  if (row.origin !== 'crawl') return false;
   const price = toFiniteNumber(row.price_current);
   if (price === null || price <= 0) return false;
   if (
@@ -607,8 +613,14 @@ function collectCommonCrawledBlockers(
     problems.push(`status ${JSON.stringify(row.status)} is not "draft"`);
   }
 
-  const slug = typeof row.slug === 'string' ? row.slug.trim() : '';
-  if (!slug || slug.length > MAX_SLUG_LENGTH || !SLUG_PATTERN.test(slug)) {
+  const rawSlug = row.slug;
+  if (
+    typeof rawSlug !== 'string' ||
+    rawSlug.length === 0 ||
+    rawSlug !== rawSlug.trim() ||
+    rawSlug.length > MAX_SLUG_LENGTH ||
+    !SLUG_PATTERN.test(rawSlug)
+  ) {
     problems.push('missing or invalid slug');
   }
 
@@ -699,15 +711,61 @@ function collectSpecCrawledBlockers(
     for (const group of auditedSpecGroups(categorySlug)) {
       if (!specs[group]) problems.push(`missing specification group "${group}"`);
     }
-    if (
-      typeof specs.category_slug === 'string' &&
-      specs.category_slug.trim() !== '' &&
-      specs.category_slug.trim().toLowerCase() !== categorySlug
-    ) {
+    const specCategorySlug =
+      typeof specs.category_slug === 'string' ? specs.category_slug.trim().toLowerCase() : '';
+    if (!specCategorySlug) {
+      problems.push('specifications missing category_slug');
+    } else if (specCategorySlug !== categorySlug) {
       problems.push(
         `specifications.category_slug ${JSON.stringify(specs.category_slug)} does not match ${JSON.stringify(categorySlug)}`
       );
     }
+  }
+}
+
+function listingMatchesExpectedCurrency(
+  listing: CrawledListingRow,
+  expectedCurrency: 'PCT' | 'VND'
+): boolean {
+  if (expectedCurrency === 'VND') {
+    return (
+      listing.currency === undefined || listing.currency === null || listing.currency === 'VND'
+    );
+  }
+  return listing.currency === expectedCurrency;
+}
+
+function checkActiveCrawledListing(
+  context: CrawledPublishContext,
+  expectedCurrency: 'PCT' | 'VND',
+  problems: string[]
+): void {
+  if (Array.isArray(context.listings)) {
+    const pricedListings = context.listings.filter(isActivePricedListing);
+    const matchingCurrency = pricedListings.filter(listing =>
+      listingMatchesExpectedCurrency(listing, expectedCurrency)
+    );
+    const effectiveCount =
+      typeof context.activeListingCount === 'number'
+        ? Math.min(matchingCurrency.length, Math.max(0, Math.floor(context.activeListingCount)))
+        : matchingCurrency.length;
+    if (effectiveCount >= 1) return;
+    if (pricedListings.length > 0) {
+      const found = [...new Set(pricedListings.map(l => String(l.currency ?? 'null')))];
+      problems.push(
+        `requires active crawled (origin="crawl") rate.products listing with currency ${expectedCurrency} (found ${found.join(', ')})`
+      );
+      return;
+    }
+    problems.push(
+      `requires at least 1 active crawled (origin="crawl") rate.products listing with price_current > 0 and currency ${expectedCurrency}`
+    );
+    return;
+  }
+  if ((context.activeListingCount ?? 0) < 1) {
+    problems.push(
+      `requires at least 1 active crawled (origin="crawl") rate.products listing with price_current > 0 and currency ${expectedCurrency}`
+    );
   }
 }
 
@@ -728,22 +786,7 @@ function collectWaveCrawledBlockers(
         `entity_type ${JSON.stringify(row.entity_type)} must be "product" for ${categorySlug}`
       );
     }
-    const activeListings = Array.isArray(context.listings)
-      ? context.listings.filter(
-          listing =>
-            isActivePricedListing(listing) &&
-            (listing.currency === undefined ||
-              listing.currency === null ||
-              listing.currency === 'VND')
-        ).length
-      : (context.activeListingCount ?? 0);
-    const effectiveActiveCount =
-      typeof context.activeListingCount === 'number' && Array.isArray(context.listings)
-        ? Math.min(activeListings, Math.max(0, Math.floor(context.activeListingCount)))
-        : activeListings;
-    if (effectiveActiveCount < 1) {
-      problems.push('requires at least 1 active rate.products listing with price_current > 0');
-    }
+    checkActiveCrawledListing(context, 'VND', problems);
     if (!isValidHttpUrl(row.thumbnail)) {
       problems.push('missing or invalid HTTP/HTTPS thumbnail');
     }
@@ -761,33 +804,7 @@ function collectWaveCrawledBlockers(
         `entity_type ${JSON.stringify(row.entity_type)} must be "service" for ${categorySlug}`
       );
     }
-    const expectedCurrency = WAVE_E2_EXPECTED_CURRENCY[categorySlug] ?? 'VND';
-    if (Array.isArray(context.listings)) {
-      const pricedListings = context.listings.filter(isActivePricedListing);
-      const matchingCurrency = pricedListings.filter(
-        listing => listing.currency === expectedCurrency
-      );
-      const effectiveCount =
-        typeof context.activeListingCount === 'number'
-          ? Math.min(matchingCurrency.length, Math.max(0, Math.floor(context.activeListingCount)))
-          : matchingCurrency.length;
-      if (effectiveCount < 1) {
-        if (pricedListings.length > 0) {
-          const found = [...new Set(pricedListings.map(l => String(l.currency ?? 'null')))];
-          problems.push(
-            `requires active rate.products listing with currency ${expectedCurrency} (found ${found.join(', ')})`
-          );
-        } else {
-          problems.push(
-            `requires at least 1 active rate.products listing with price_current > 0 and currency ${expectedCurrency}`
-          );
-        }
-      }
-    } else if ((context.activeListingCount ?? 0) < 1) {
-      problems.push(
-        `requires at least 1 active rate.products listing with price_current > 0 and currency ${expectedCurrency}`
-      );
-    }
+    checkActiveCrawledListing(context, WAVE_E2_EXPECTED_CURRENCY[categorySlug] ?? 'VND', problems);
     return;
   }
 
@@ -1078,7 +1095,7 @@ export async function runCrawledPublish(
     selectInByKey<CrawledListingRow>(
       supabase,
       'products',
-      'id, cluster_id, price_current, currency, availability',
+      'id, cluster_id, price_current, currency, availability, origin',
       'cluster_id',
       listingMasterIds
     ),
@@ -1124,7 +1141,7 @@ export async function runCrawledPublish(
       });
       continue;
     }
-    const slug = typeof candidate.row.slug === 'string' ? candidate.row.slug.trim() : '';
+    const slug = typeof candidate.row.slug === 'string' ? candidate.row.slug : '';
     passingDrafts.push({
       id: candidate.id,
       model_key: candidate.modelKey,

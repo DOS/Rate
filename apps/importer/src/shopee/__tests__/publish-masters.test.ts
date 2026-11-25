@@ -564,6 +564,18 @@ test('parsePublishMastersArgs handles --crawled flags and guards core tech categ
     /--limit needs a whole number/
   );
   assert.throws(
+    () => parsePublishMastersArgs(['--crawled', '--limit', '99999999999999999999']),
+    /safe whole number/
+  );
+  assert.throws(
+    () => parsePublishMastersArgs(['--crawled', '--expect', '99999999999999999999']),
+    /safe whole number/
+  );
+  assert.throws(
+    () => parsePublishMastersArgs(['--only', KEYS[0], '--expect', '99999999999999999999']),
+    /safe whole number/
+  );
+  assert.throws(
     () => parsePublishMastersArgs(['--crawled', '--reject-unknown-brand', '--allow-unknown-brand']),
     /cannot combine/
   );
@@ -588,7 +600,9 @@ test('crawledPublishBlockers validates Wave E1 and Wave E3 products cleanly', ()
   assert.deepEqual(
     crawledPublishBlockers(e1Row, {
       categorySlug: 'tvs',
-      listings: [{ price_current: 11_990_000, currency: 'VND', availability: 'in_stock' }],
+      listings: [
+        { price_current: 11_990_000, currency: 'VND', availability: 'in_stock', origin: 'crawl' },
+      ],
     }),
     []
   );
@@ -607,7 +621,9 @@ test('crawledPublishBlockers validates Wave E1 and Wave E3 products cleanly', ()
   assert.deepEqual(
     crawledPublishBlockers(e3Row, {
       categorySlug: 'cosmetics',
-      listings: [{ price_current: 420_000, currency: 'VND', availability: 'in_stock' }],
+      listings: [
+        { price_current: 420_000, currency: 'VND', availability: 'in_stock', origin: 'crawl' },
+      ],
     }),
     []
   );
@@ -632,15 +648,51 @@ test('crawledPublishBlockers validates Wave E1 and Wave E3 products cleanly', ()
     }).some(r => r.includes('HTTP/HTTPS URLs'))
   );
 
-  // Out-of-stock or zero-price listings do not satisfy active listing requirement.
+  // Out-of-stock, zero-price, or non-crawl origin listings do not satisfy active listing check.
   assert.ok(
     crawledPublishBlockers(e1Row, {
       categorySlug: 'tvs',
       listings: [
-        { price_current: 0, currency: 'VND', availability: 'in_stock' },
-        { price_current: 10_000_000, currency: 'VND', availability: 'out_of_stock' },
+        { price_current: 0, currency: 'VND', availability: 'in_stock', origin: 'crawl' },
+        {
+          price_current: 10_000_000,
+          currency: 'VND',
+          availability: 'out_of_stock',
+          origin: 'crawl',
+        },
       ],
     }).some(r => r.includes('rate.products'))
+  );
+  for (const nonCrawlOrigin of ['synthetic', 'backfill', 'fixture', 'seed', null, undefined]) {
+    assert.ok(
+      crawledPublishBlockers(e1Row, {
+        categorySlug: 'tvs',
+        listings: [
+          {
+            price_current: 11_990_000,
+            currency: 'VND',
+            availability: 'in_stock',
+            origin: nonCrawlOrigin,
+          },
+        ],
+      }).some(r => r.includes('origin="crawl"')),
+      `Expected origin ${String(nonCrawlOrigin)} to be blocked`
+    );
+  }
+  assert.deepEqual(
+    crawledPublishBlockers(e1Row, {
+      categorySlug: 'tvs',
+      listings: [
+        {
+          price_current: 9_990_000,
+          currency: 'VND',
+          availability: 'in_stock',
+          origin: 'synthetic',
+        },
+        { price_current: 11_990_000, currency: 'VND', availability: 'in_stock', origin: 'crawl' },
+      ],
+    }),
+    []
   );
 
   // Wrong entity_type blocked.
@@ -697,16 +749,26 @@ test('crawledPublishBlockers validates Wave E2 services with PCT/VND and no imag
   assert.deepEqual(
     crawledPublishBlockers(bankRow, {
       categorySlug: 'bank-savings',
-      listings: [{ price_current: 5.4, currency: 'PCT', availability: 'in_stock' }],
+      listings: [
+        { price_current: 5.4, currency: 'PCT', availability: 'in_stock', origin: 'crawl' },
+      ],
     }),
     []
   );
 
-  // Wrong currency (VND instead of PCT) or 0 listings blocked.
+  // Wrong currency (VND or null instead of PCT) or 0 listings blocked.
   assert.ok(
     crawledPublishBlockers(bankRow, {
       categorySlug: 'bank-savings',
-      listings: [{ price_current: 5.4, currency: 'VND', availability: 'in_stock' }],
+      listings: [
+        { price_current: 5.4, currency: 'VND', availability: 'in_stock', origin: 'crawl' },
+      ],
+    }).some(r => r.includes('currency PCT'))
+  );
+  assert.ok(
+    crawledPublishBlockers(bankRow, {
+      categorySlug: 'bank-savings',
+      listings: [{ price_current: 5.4, currency: null, availability: 'in_stock', origin: 'crawl' }],
     }).some(r => r.includes('currency PCT'))
   );
   assert.ok(
@@ -733,14 +795,34 @@ test('crawledPublishBlockers validates Wave E2 services with PCT/VND and no imag
   assert.deepEqual(
     crawledPublishBlockers(internetRow, {
       categorySlug: 'internet-telecom',
-      listings: [{ price_current: 210_000, currency: 'VND', availability: 'in_stock' }],
+      listings: [
+        { price_current: 210_000, currency: 'VND', availability: 'in_stock', origin: 'crawl' },
+      ],
+    }),
+    []
+  );
+  // DB column currency defaults to 'VND', so null/undefined passes for internet-telecom.
+  assert.deepEqual(
+    crawledPublishBlockers(internetRow, {
+      categorySlug: 'internet-telecom',
+      listings: [
+        { price_current: 210_000, currency: null, availability: 'in_stock', origin: 'crawl' },
+      ],
     }),
     []
   );
   assert.ok(
     crawledPublishBlockers(internetRow, {
       categorySlug: 'internet-telecom',
-      listings: [{ price_current: 4.5, currency: 'PCT', availability: 'in_stock' }],
+      listings: [
+        { price_current: 4.5, currency: 'PCT', availability: 'in_stock', origin: 'crawl' },
+      ],
+    }).some(r => r.includes('currency VND'))
+  );
+  assert.ok(
+    crawledPublishBlockers(internetRow, {
+      categorySlug: 'internet-telecom',
+      listings: [{ price_current: 10, currency: 'USD', availability: 'in_stock', origin: 'crawl' }],
     }).some(r => r.includes('currency VND'))
   );
   assert.ok(
@@ -748,7 +830,7 @@ test('crawledPublishBlockers validates Wave E2 services with PCT/VND and no imag
       { ...internetRow, entity_type: 'product' },
       {
         categorySlug: 'internet-telecom',
-        listings: [{ price_current: 210_000, currency: 'VND' }],
+        listings: [{ price_current: 210_000, currency: 'VND', origin: 'crawl' }],
       }
     ).some(r => r.includes('must be "service"'))
   );
@@ -824,12 +906,27 @@ test('crawledPublishBlockers validates Wave E4 places with place_details and zer
       }
     ).some(r => r.includes('must be "place"'))
   );
+  assert.ok(
+    crawledPublishBlockers(
+      { ...placeRow, specifications: { availability: { status: 'Available' } } },
+      {
+        categorySlug: 'cafes',
+        placeDetail: {
+          place_key: 'phuc-long:ho-chi-minh:ntmk-1',
+          branch_group_key: 'phuc-long',
+          province_code: 'ho-chi-minh',
+        },
+      }
+    ).some(r => r.includes('specifications missing category_slug'))
+  );
 });
 
-test('crawledPublishBlockers enforces common status, model_key, schema, availability and non-tech guards', () => {
+test('crawledPublishBlockers enforces common status, model_key, slug, category_slug, schema, availability and non-tech guards', () => {
   const baseCtx = {
     categorySlug: 'tvs',
-    listings: [{ price_current: 9_000_000, currency: 'VND', availability: 'in_stock' }],
+    listings: [
+      { price_current: 9_000_000, currency: 'VND', availability: 'in_stock', origin: 'crawl' },
+    ],
   };
 
   assert.ok(
@@ -853,10 +950,22 @@ test('crawledPublishBlockers enforces common status, model_key, schema, availabi
       r.includes('3 non-empty parts')
     )
   );
-  assert.ok(
-    crawledPublishBlockers(makeCrawledMaster({ slug: 'bad slug!' }), baseCtx).some(r =>
-      r.includes('slug')
-    )
+  for (const badSlug of [
+    'bad slug!',
+    'Samsung-UA55DU7000',
+    ' samsung-ua55du7000 ',
+    'a'.repeat(121),
+  ]) {
+    assert.ok(
+      crawledPublishBlockers(makeCrawledMaster({ slug: badSlug }), baseCtx).some(r =>
+        r.includes('slug')
+      ),
+      `Expected slug ${JSON.stringify(badSlug)} to be blocked`
+    );
+  }
+  assert.deepEqual(
+    crawledPublishBlockers(makeCrawledMaster({ slug: 'a'.repeat(120) }), baseCtx),
+    []
   );
   assert.ok(
     crawledPublishBlockers(makeCrawledMaster({ name: '   ', brand: '' }), baseCtx).length >= 2
@@ -871,6 +980,31 @@ test('crawledPublishBlockers enforces common status, model_key, schema, availabi
       makeCrawledMaster({ specifications: { availability: {} } }),
       baseCtx
     ).some(r => r.includes('availability'))
+  );
+  assert.ok(
+    crawledPublishBlockers(
+      makeCrawledMaster({ specifications: { availability: { status: 'Available' } } }),
+      baseCtx
+    ).some(r => r.includes('specifications missing category_slug'))
+  );
+  assert.ok(
+    crawledPublishBlockers(
+      makeCrawledMaster({
+        specifications: { category_slug: '   ', availability: { status: 'Available' } },
+      }),
+      baseCtx
+    ).some(r => r.includes('specifications missing category_slug'))
+  );
+  assert.ok(
+    crawledPublishBlockers(
+      makeCrawledMaster({
+        specifications: {
+          category_slug: 'air-conditioners',
+          availability: { status: 'Available' },
+        },
+      }),
+      baseCtx
+    ).some(r => r.includes('does not match'))
   );
   assert.ok(
     crawledPublishBlockers(makeCrawledMaster({ specifications: null }), baseCtx).some(r =>
@@ -941,6 +1075,15 @@ test('runCrawledPublish dry-run audits Wave E1-E4 cleanly with zero mutations', 
     },
     'cosmetics'
   );
+  const syntheticOnly = makeCrawledMaster(
+    {
+      id: 'm-syn',
+      model_key: 'tcl:p755-synthetic:unknown',
+      slug: 'tcl-p755-synthetic',
+      brand: 'TCL',
+    },
+    'tvs'
+  );
   const coreTechDraft = makeCrawledMaster(
     {
       id: 'm-core',
@@ -955,7 +1098,15 @@ test('runCrawledPublish dry-run audits Wave E1-E4 cleanly with zero mutations', 
   );
 
   const { client, masters, writes } = crawledMockDb({
-    masters: [tvDraft, bankDraft, placeDraft, publishedTv, blockedKhac, coreTechDraft],
+    masters: [
+      tvDraft,
+      bankDraft,
+      placeDraft,
+      publishedTv,
+      blockedKhac,
+      syntheticOnly,
+      coreTechDraft,
+    ],
     products: [
       {
         id: 'p-1',
@@ -963,6 +1114,7 @@ test('runCrawledPublish dry-run audits Wave E1-E4 cleanly with zero mutations', 
         price_current: 24_900_000,
         currency: 'VND',
         availability: 'in_stock',
+        origin: 'crawl',
       },
       {
         id: 'p-2',
@@ -970,6 +1122,7 @@ test('runCrawledPublish dry-run audits Wave E1-E4 cleanly with zero mutations', 
         price_current: 4.8,
         currency: 'PCT',
         availability: 'in_stock',
+        origin: 'crawl',
       },
       {
         id: 'p-3',
@@ -977,6 +1130,15 @@ test('runCrawledPublish dry-run audits Wave E1-E4 cleanly with zero mutations', 
         price_current: 150_000,
         currency: 'VND',
         availability: 'in_stock',
+        origin: 'crawl',
+      },
+      {
+        id: 'p-4',
+        cluster_id: 'm-syn',
+        price_current: 8_990_000,
+        currency: 'VND',
+        availability: 'in_stock',
+        origin: 'synthetic',
       },
     ],
     placeDetails: [
@@ -994,18 +1156,20 @@ test('runCrawledPublish dry-run audits Wave E1-E4 cleanly with zero mutations', 
   assert.equal(result.dryRun, true);
   assert.equal(result.apply, false);
   assert.equal(result.published, 0);
-  assert.equal(result.scanned, 5, 'core tech smartphones row must never be selected');
+  assert.equal(result.scanned, 6, 'core tech smartphones row must never be selected');
   assert.deepEqual(result.alreadyPublished, ['sony:xr-55x90l:unknown']);
   assert.deepEqual(
     result.eligible.map(e => e.model_key),
     ['acb:tiet-kiem-6-thang:unknown', 'cong-ca-phe:hang-dieu:unknown', 'lg:oled55c4psa:unknown']
   );
-  assert.equal(result.blocked.length, 1);
-  assert.equal(result.blocked[0]!.model_key, 'khac:serum-vitamin-c:unknown');
-  assert.ok(result.blocked[0]!.reasons.some(r => r.includes('unknown brand')));
+  assert.equal(result.blocked.length, 2);
+  const blockedKhacEntry = result.blocked.find(b => b.model_key === 'khac:serum-vitamin-c:unknown');
+  const blockedSynEntry = result.blocked.find(b => b.model_key === 'tcl:p755-synthetic:unknown');
+  assert.ok(blockedKhacEntry?.reasons.some(r => r.includes('unknown brand')));
+  assert.ok(blockedSynEntry?.reasons.some(r => r.includes('origin="crawl"')));
   assert.deepEqual(result.skipped, []);
   assert.deepEqual(writes, []);
-  assert.ok(masters.filter(m => m.status === 'draft').length === 5);
+  assert.ok(masters.filter(m => m.status === 'draft').length === 6);
 });
 
 test('runCrawledPublish deterministic --limit, --expect mismatch guard, and --apply optimistic lock', async () => {
@@ -1025,6 +1189,7 @@ test('runCrawledPublish deterministic --limit, --expect mismatch guard, and --ap
       price_current: 3_000_000,
       currency: 'VND',
       availability: 'in_stock',
+      origin: 'crawl',
     },
     {
       id: 'p-a',
@@ -1032,6 +1197,7 @@ test('runCrawledPublish deterministic --limit, --expect mismatch guard, and --ap
       price_current: 9_000_000,
       currency: 'VND',
       availability: 'in_stock',
+      origin: 'crawl',
     },
     {
       id: 'p-b',
@@ -1039,6 +1205,7 @@ test('runCrawledPublish deterministic --limit, --expect mismatch guard, and --ap
       price_current: 12_000_000,
       currency: 'VND',
       availability: 'in_stock',
+      origin: 'crawl',
     },
   ];
 
@@ -1118,6 +1285,7 @@ test('runCrawledPublish batches .in() queries at <= 150 IDs and supports --only 
       price_current: 10_000_000,
       currency: 'VND',
       availability: 'in_stock',
+      origin: 'crawl',
     });
   }
 
