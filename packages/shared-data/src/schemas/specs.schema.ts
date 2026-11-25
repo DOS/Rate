@@ -391,6 +391,7 @@ export const ScrapedProductSchema = z.object({
   shopId: z.string().min(1).max(128),
   url: HttpUrlSchema,
   title: z.string().min(1).max(1000),
+  brand: z.string().max(120).optional(),
   description: z.string().max(50_000).optional(),
   entity_type: EntityTypeSchema.optional(),
   category_slug: z.string().max(64).optional(),
