@@ -1,0 +1,4058 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>
+      Benchmark Tính năng Review: Rate.vn vs JReviews.com &amp; Đối thủ Toàn cầu
+      | 2026-11-26
+    </title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f1113;
+        --card: #16191d;
+        --elevated: #1c2128;
+        --elevated-hover: #222830;
+        --border: #272c35;
+        --border-strong: #374151;
+        --ink: #e6edf3;
+        --muted: #9da7b3;
+        --accent: #ff2e29;
+        --accent-ink: #ff7b77;
+        --accent-soft: rgba(255, 46, 41, 0.14);
+        --green: #34d399;
+        --green-soft: rgba(16, 185, 129, 0.14);
+        --green-border: rgba(52, 211, 153, 0.36);
+        --amber: #fbbf24;
+        --amber-soft: rgba(245, 158, 11, 0.14);
+        --amber-border: rgba(251, 191, 36, 0.38);
+        --rose: #fb7185;
+        --rose-soft: rgba(244, 63, 94, 0.14);
+        --rose-border: rgba(251, 113, 133, 0.38);
+        --blue: #60a5fa;
+        --blue-soft: rgba(59, 130, 246, 0.14);
+        --blue-border: rgba(96, 165, 250, 0.35);
+        --code-bg: #0b0d0f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        padding: 32px 18px 80px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter,
+          Helvetica, Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      .container {
+        max-width: 1320px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 14px 0 10px;
+        font-size: clamp(24px, 3vw, 34px);
+        line-height: 1.24;
+        letter-spacing: -0.02em;
+        color: #ffffff;
+      }
+
+      h2 {
+        margin: 46px 0 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--border);
+        font-size: 21px;
+        line-height: 1.3;
+        letter-spacing: -0.01em;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      h3 {
+        margin: 0 0 8px;
+        font-size: 17px;
+        line-height: 1.35;
+        color: #ffffff;
+      }
+
+      p {
+        margin: 0 0 12px;
+        color: var(--ink);
+      }
+
+      ul,
+      ol {
+        margin: 6px 0 12px;
+        padding-left: 20px;
+      }
+
+      li {
+        margin-bottom: 6px;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      code {
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 6px;
+        font-size: 12.5px;
+        color: #f1f5f9;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        overflow-wrap: anywhere;
+      }
+
+      .hero-card {
+        background:
+          radial-gradient(
+            circle at top right,
+            rgba(255, 46, 41, 0.13),
+            transparent 42%
+          ),
+          var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 26px 26px 22px;
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        line-height: 1.4;
+        white-space: nowrap;
+      }
+
+      .badge-accent {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        border: 1px solid rgba(255, 46, 41, 0.42);
+      }
+
+      .badge-green {
+        background: var(--green-soft);
+        color: var(--green);
+        border: 1px solid var(--green-border);
+      }
+
+      .badge-amber {
+        background: var(--amber-soft);
+        color: var(--amber);
+        border: 1px solid var(--amber-border);
+      }
+
+      .badge-rose {
+        background: var(--rose-soft);
+        color: var(--rose);
+        border: 1px solid var(--rose-border);
+      }
+
+      .badge-blue {
+        background: var(--blue-soft);
+        color: var(--blue);
+        border: 1px solid var(--blue-border);
+      }
+
+      .badge-neutral {
+        background: var(--elevated);
+        color: var(--muted);
+        border: 1px solid var(--border-strong);
+      }
+
+      .lead {
+        font-size: 15.5px;
+        color: var(--ink);
+        max-width: 1020px;
+        margin-top: 8px;
+      }
+
+      .fact-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 18px;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .fact-bar strong {
+        color: #ffffff;
+      }
+
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+        margin: 20px 0 18px;
+      }
+
+      .kpi-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: var(--border-strong);
+      }
+
+      .kpi-card.kpi-total::before {
+        background: var(--accent);
+      }
+
+      .kpi-card.kpi-green::before {
+        background: var(--green);
+      }
+
+      .kpi-card.kpi-amber::before {
+        background: var(--amber);
+      }
+
+      .kpi-card.kpi-rose::before {
+        background: var(--rose);
+      }
+
+      .kpi-num {
+        font-size: 30px;
+        font-weight: 800;
+        line-height: 1.15;
+        color: #ffffff;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .kpi-title {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: var(--ink);
+        margin-top: 6px;
+      }
+
+      .kpi-desc {
+        font-size: 12.5px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+
+      .coverage-bar-wrap {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin-bottom: 18px;
+      }
+
+      .coverage-head {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        font-size: 13px;
+        margin-bottom: 9px;
+      }
+
+      .stacked-bar {
+        display: flex;
+        height: 12px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: var(--elevated);
+        border: 1px solid var(--border);
+      }
+
+      .seg-green {
+        background: var(--green);
+      }
+
+      .seg-amber {
+        background: var(--amber);
+      }
+
+      .seg-rose {
+        background: var(--rose);
+      }
+
+      .legend-inline {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        font-size: 12.5px;
+        color: var(--muted);
+        margin-top: 9px;
+      }
+
+      .legend-dot {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+
+      .callout {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--accent);
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin: 16px 0;
+        font-size: 14px;
+      }
+
+      .callout strong {
+        color: #ffffff;
+      }
+
+      .controls-panel {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+        margin: 16px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .controls-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .filter-label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        margin-bottom: 6px;
+        display: block;
+      }
+
+      .pill-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .filter-pill {
+        background: var(--elevated);
+        color: var(--ink);
+        border: 1px solid var(--border-strong);
+        border-radius: 999px;
+        padding: 5px 12px;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        transition:
+          border-color 0.15s ease,
+          background-color 0.15s ease,
+          color 0.15s ease;
+      }
+
+      .filter-pill:hover {
+        border-color: var(--accent-ink);
+        background: var(--elevated-hover);
+      }
+
+      .filter-pill[aria-pressed='true'] {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: #ffffff;
+      }
+
+      .filter-pill[data-status-pill='advantage'][aria-pressed='true'] {
+        background: var(--green-soft);
+        border-color: var(--green);
+        color: var(--green);
+      }
+
+      .filter-pill[data-status-pill='partial'][aria-pressed='true'] {
+        background: var(--amber-soft);
+        border-color: var(--amber);
+        color: var(--amber);
+      }
+
+      .filter-pill[data-status-pill='missing'][aria-pressed='true'] {
+        background: var(--rose-soft);
+        border-color: var(--rose);
+        color: var(--rose);
+      }
+
+      .search-box-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1 1 280px;
+        max-width: 420px;
+      }
+
+      .search-input {
+        width: 100%;
+        background: var(--code-bg);
+        color: var(--ink);
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 13.5px;
+        font-family: inherit;
+        outline: none;
+      }
+
+      .search-input:focus {
+        border-color: var(--accent);
+      }
+
+      .reset-btn {
+        background: transparent;
+        color: var(--muted);
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        padding: 7px 12px;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+      }
+
+      .reset-btn:hover {
+        color: #ffffff;
+        border-color: var(--ink);
+      }
+
+      .result-counter {
+        font-size: 13px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .result-counter strong {
+        color: #ffffff;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--card);
+        max-height: 78vh;
+        overflow-y: auto;
+      }
+
+      table.matrix-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        min-width: 1100px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      table.matrix-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: var(--elevated);
+        color: #ffffff;
+        font-weight: 700;
+        text-align: left;
+        padding: 12px 12px;
+        border-bottom: 1px solid var(--border-strong);
+        border-right: 1px solid var(--border);
+        vertical-align: bottom;
+      }
+
+      table.matrix-table thead th:last-child {
+        border-right: none;
+      }
+
+      table.matrix-table thead th.col-rate {
+        background: #211618;
+        border-bottom-color: var(--accent);
+      }
+
+      .th-sub {
+        display: block;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      table.matrix-table tbody tr.group-row td {
+        background: #13171c;
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 13.5px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border-strong);
+        border-top: 1px solid var(--border-strong);
+        letter-spacing: 0.01em;
+      }
+
+      table.matrix-table tbody tr.feature-row td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+        vertical-align: top;
+        background: var(--card);
+      }
+
+      table.matrix-table tbody tr.feature-row:hover td {
+        background: #191d23;
+      }
+
+      table.matrix-table tbody tr.feature-row td:last-child {
+        border-right: none;
+      }
+
+      table.matrix-table tbody tr.feature-row td.cell-rate {
+        background: rgba(255, 46, 41, 0.03);
+      }
+
+      table.matrix-table tbody tr.feature-row:hover td.cell-rate {
+        background: rgba(255, 46, 41, 0.06);
+      }
+
+      .feat-name {
+        font-weight: 700;
+        color: #ffffff;
+        display: block;
+        margin-bottom: 3px;
+      }
+
+      .feat-sub {
+        font-size: 12px;
+        color: var(--muted);
+        display: block;
+      }
+
+      .cell-note {
+        margin-top: 6px;
+        font-size: 12.2px;
+        color: var(--ink);
+      }
+
+      .comp-pill {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 5px;
+        margin-bottom: 4px;
+      }
+
+      .comp-yes {
+        background: rgba(96, 165, 250, 0.14);
+        color: #93c5fd;
+        border: 1px solid rgba(96, 165, 250, 0.3);
+      }
+
+      .comp-strong {
+        background: rgba(52, 211, 153, 0.12);
+        color: #6ee7b7;
+        border: 1px solid rgba(52, 211, 153, 0.3);
+      }
+
+      .comp-part {
+        background: rgba(251, 191, 36, 0.12);
+        color: #fcd34d;
+        border: 1px solid rgba(251, 191, 36, 0.3);
+      }
+
+      .comp-no {
+        background: rgba(157, 167, 179, 0.1);
+        color: #9da7b3;
+        border: 1px solid rgba(157, 167, 179, 0.24);
+      }
+
+      .comp-text {
+        font-size: 12px;
+        color: var(--muted);
+        display: block;
+      }
+
+      .is-hidden {
+        display: none !important;
+      }
+
+      .empty-state {
+        padding: 36px 18px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      .weapons-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 14px;
+        margin: 16px 0;
+      }
+
+      .weapon-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .weapon-card:hover {
+        border-color: rgba(255, 46, 41, 0.45);
+      }
+
+      .weapon-num {
+        font-size: 11.5px;
+        font-weight: 800;
+        color: var(--accent-ink);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .weapon-meta {
+        font-size: 12.2px;
+        color: var(--muted);
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+      }
+
+      .roadmap-table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--card);
+        margin-top: 14px;
+      }
+
+      table.roadmap-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 900px;
+        font-size: 13.5px;
+      }
+
+      table.roadmap-table th,
+      table.roadmap-table td {
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      table.roadmap-table th {
+        background: var(--elevated);
+        color: #ffffff;
+        font-weight: 700;
+      }
+
+      table.roadmap-table th:last-child,
+      table.roadmap-table td:last-child {
+        border-right: none;
+      }
+
+      table.roadmap-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .prio-tag {
+        display: inline-block;
+        padding: 3px 9px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .prio-p0 {
+        background: var(--green-soft);
+        color: var(--green);
+        border: 1px solid var(--green-border);
+      }
+
+      .prio-p1 {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        border: 1px solid rgba(255, 46, 41, 0.42);
+      }
+
+      .prio-p2 {
+        background: var(--amber-soft);
+        color: var(--amber);
+        border: 1px solid var(--amber-border);
+      }
+
+      .prio-p3 {
+        background: var(--blue-soft);
+        color: var(--blue);
+        border: 1px solid var(--blue-border);
+      }
+
+      footer {
+        margin-top: 44px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        font-size: 12.5px;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      @media (max-width: 768px) {
+        body {
+          padding: 16px 10px 48px;
+        }
+        .hero-card {
+          padding: 18px 16px;
+        }
+        .weapons-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- 1. HEADER & EXECUTIVE SUMMARY -->
+      <header class="hero-card">
+        <div class="meta-row">
+          <span class="badge badge-accent">Rate.vn Benchmark Report</span>
+          <span class="badge badge-neutral">Issue DOS/Rate#1916</span>
+          <span class="badge badge-neutral">Ngày lập: 26/11/2026</span>
+          <span class="badge badge-green">Đối chiếu 100% từ Codebase</span>
+        </div>
+        <h1>
+          Benchmark Tính năng Review: Rate.vn vs JReviews.com &amp; Các Nền tảng
+          Chuyên nghiệp (Trustpilot, G2, RTINGS, Yelp)
+        </h1>
+        <p class="lead">
+          Báo cáo đánh giá toàn diện năng lực sản phẩm hiện tại của
+          <strong>Rate.vn</strong> (<code>DOS/Rate</code>) trước
+          <strong>JReviews.com</strong> (hệ thống thư mục &amp; đánh giá đa
+          tiêu chí hàng đầu trên WordPress/Joomla) cùng 4 chuẩn mực ngành
+          (<strong>Trustpilot</strong>, <strong>G2</strong>,
+          <strong>RTINGS</strong>, <strong>Yelp / Maps</strong>). Mọi trạng thái
+          đều đối chiếu trực tiếp từ mã nguồn thực tế (<code>apps/web</code>,
+          <code>apps/importer</code>, <code>apps/extension</code>,
+          <code>packages/shared-data</code>) và snapshot dữ liệu Prod.
+        </p>
+        <div class="fact-bar">
+          <span
+            >Danh mục chuẩn: <strong>19 ngành</strong> (5 Tech + 5 Wave E1 + 2
+            Wave E2 + 3 Wave E3 + 4 Wave E4)</span
+          >
+          <span
+            >Tiêu chí chấm điểm: <strong>45 key duy nhất</strong> /
+            <strong>109 dòng cấu hình</strong> (<code>v1=36</code>,
+            <code>v2=38</code>, <code>v3=35</code>)</span
+          >
+          <span
+            >Đang Live trên Prod: <strong>16</strong> master Tech (<strong
+              >405</strong
+            >
+            listings, <strong>47</strong> merchants, <strong>747</strong>
+            reviews)</span
+          >
+          <span
+            >Kho chờ xuất bản: <strong>210</strong> bản ghi
+            <code>draft</code> (<strong>23</strong> Tech cũ +
+            <strong>187</strong> Wave E1-E4: 62 sản phẩm E1/E3, 101 dịch vụ E2,
+            24 địa điểm E4)</span
+          >
+          <span
+            >Toán học xếp hạng: Bayesian <code>k=3, mu0=4.2</code> + Wilson
+            Lower Bound 95% CI (<code>z=1.96</code>)</span
+          >
+        </div>
+      </header>
+
+      <!-- 4 KPI CARDS -->
+      <section aria-label="Tổng quan KPI">
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-total">
+            <div class="kpi-num" id="kpi-total-count">49</div>
+            <div class="kpi-title">Tổng số hạng mục so sánh</div>
+            <div class="kpi-desc">
+              Trải rộng 7 nhóm năng lực cốt lõi của một nền tảng review &amp;
+              directory thế hệ mới.
+            </div>
+          </div>
+          <div class="kpi-card kpi-green">
+            <div class="kpi-num" id="kpi-adv-count">21</div>
+            <div class="kpi-title">Tính năng Rate vượt trội / Độc quyền</div>
+            <div class="kpi-desc">
+              Đang Live đầy đủ trên Prod (42.9%), nổi bật với chống seeding 6
+              trục, Omnibus 90d, Extension 22 sàn và MCP v1.1.
+            </div>
+          </div>
+          <div class="kpi-card kpi-amber">
+            <div class="kpi-num" id="kpi-partial-count">14</div>
+            <div class="kpi-title">Đã code xong nhưng tắt cờ / Dở dang</div>
+            <div class="kpi-desc">
+              Chiếm 28.6%: gồm các tính năng sau cờ (<code>#1544</code>,
+              <code>RATE_ITEM_MODEL</code>, AI Points, Resend) hoặc mới phủ 5
+              ngành Tech.
+            </div>
+          </div>
+          <div class="kpi-card kpi-rose">
+            <div class="kpi-num" id="kpi-missing-count">14</div>
+            <div class="kpi-title">Lỗ hổng lớn cần đóng theo JReviews.com</div>
+            <div class="kpi-desc">
+              Chiếm 28.6%: tập trung vào Media Upload, Edit/Reply/Q&amp;A,
+              GeoMaps Wave E4, Moderation UI và B2B/Widget.
+            </div>
+          </div>
+        </div>
+
+        <div class="coverage-bar-wrap">
+          <div class="coverage-head">
+            <strong>Bức tranh trưởng thành của Rate.vn trên Production</strong>
+            <span class="muted"
+              >49 hạng mục đối chiếu | Cập nhật trạng thái cờ Feature Flags mới
+              nhất</span
+            >
+          </div>
+          <div
+            class="stacked-bar"
+            role="img"
+            aria-label="Phân bổ 21 tính năng lợi thế, 14 tính năng tắt cờ hoặc một phần, 14 tính năng chưa có"
+          >
+            <div class="seg-green" style="width: 42.86%"></div>
+            <div class="seg-amber" style="width: 28.57%"></div>
+            <div class="seg-rose" style="width: 28.57%"></div>
+          </div>
+          <div class="legend-inline">
+            <span
+              ><span class="legend-dot seg-green"></span>Lợi thế Rate / Live
+              Prod: <strong>21 (42.9%)</strong></span
+            >
+            <span
+              ><span class="legend-dot seg-amber"></span>Tắt cờ / Một phần:
+              <strong>14 (28.6%)</strong></span
+            >
+            <span
+              ><span class="legend-dot seg-rose"></span>Chưa có - Cần xây:
+              <strong>14 (28.6%)</strong></span
+            >
+          </div>
+        </div>
+
+        <div class="callout">
+          <strong>Nhận định điều hành (Executive Takeaway):</strong>
+          Rate.vn đang sở hữu phần "não bộ" (Anti-Seeding 6 trục, Bayesian
+          <code>k=3, mu0=4.2</code>, Wilson CI, Deal Radar Omnibus 90 ngày,
+          Extension MV3 22 sàn, Combo Cart Optimizer, MCP v1.1) vượt xa JReviews
+          và cả Trustpilot/G2/Yelp về chiều sâu dữ liệu và độ tin cậy. Ngược
+          lại, Rate đang bị hụt rõ ở phần "tương tác cộng đồng &amp; công cụ chủ
+          doanh nghiệp" (vòng đời review, upload ảnh/video, Owner Reply, Q&amp;A,
+          Hồ sơ Reviewer, bản đồ lọc bán kính GeoMaps cho Wave E4, B2B Claim
+          &amp; Trust Widget). Đóng nhóm Quick Wins P0 (bật các cờ đã code sẵn
+          và nối hiển thị <code>reviews.images</code>) sẽ nâng tỷ lệ tính năng
+          hoàn chỉnh lên rõ rệt chỉ trong vài ngày.
+        </div>
+      </section>
+
+      <!-- 2. INTERACTIVE CONTROLS + 3. FULL COMPARISON MATRIX -->
+      <section aria-label="Bảng ma trận so sánh chi tiết">
+        <h2>
+          <span>Ma trận So sánh Chi tiết 7 Nhóm Tính năng (6 Nền tảng)</span>
+          <span class="result-counter" id="result-counter" aria-live="polite"
+            >Đang hiển thị <strong id="visible-count">49</strong> /
+            <span id="total-count">49</span> hạng mục</span
+          >
+        </h2>
+
+        <div class="controls-panel" aria-label="Bộ lọc bảng so sánh">
+          <div>
+            <span class="filter-label">Lọc theo Nhóm chức năng</span>
+            <div class="pill-group" id="group-filters">
+              <button
+                type="button"
+                class="filter-pill"
+                data-group-pill="all"
+                aria-pressed="true"
+              >
+                Tất cả (49)
+              </button>
+              <button
+                type="button"
+                class="filter-pill"
+                data-group-pill="g1"
+                aria-pressed="false"
+              >
+                1. Chấm điểm &amp; Tổng hợp (7)
+              </button>
+              <button
+                type="button"
+                class="filter-pill"
+                data-group-pill="g2"
+                aria-pressed="false"
+              >
+                2. Viết, Sửa &amp; Tương tác (10)
+              </button>
+              <button
+                type="button"
+                class="filter-pill"
+                data-group-pill="g3"
+                aria-pressed="false"
+              >
+                3. Tin cậy &amp; Chống Seeding (8)
+              </button>
+              <button
+                type="button"
+                class="filter-pill"
+                data-group-pill="g4"
+                aria-pressed="false"
+              >
+                4. Danh mục, Tìm kiếm &amp; Bản đồ (10)
+              </button>
+              <button
+                type="button"
+                class="filter-pill"
+                data-group-pill="g5"
+                aria-pressed="false"
+              >
+                5. Hồ sơ Reviewer &amp; EngageUsers (5)
+              </button>
+              <button
+                type="button"
+                class="filter-pill"
+                data-group-pill="g6"
+                aria-pressed="false"
+              >
+                6. B2B, Kiếm tiền &amp; Nhúng (4)
+              </button>
+              <button
+                type="button"
+                class="filter-pill"
+                data-group-pill="g7"
+                aria-pressed="false"
+              >
+                7. AI, SEO &amp; WCAG (5)
+              </button>
+            </div>
+          </div>
+
+          <div class="controls-row">
+            <div>
+              <span class="filter-label">Lọc theo Trạng thái Rate.vn</span>
+              <div class="pill-group" id="status-filters">
+                <button
+                  type="button"
+                  class="filter-pill"
+                  data-status-pill="all"
+                  aria-pressed="true"
+                >
+                  Tất cả trạng thái
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill"
+                  data-status-pill="advantage"
+                  aria-pressed="false"
+                >
+                  Lợi thế Rate (21)
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill"
+                  data-status-pill="partial"
+                  aria-pressed="false"
+                >
+                  Tắt cờ / Một phần (14)
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill"
+                  data-status-pill="missing"
+                  aria-pressed="false"
+                >
+                  Chưa có - Cần xây (14)
+                </button>
+              </div>
+            </div>
+
+            <div class="search-box-wrap">
+              <input
+                type="search"
+                id="matrix-search"
+                class="search-input"
+                placeholder="Tìm nhanh theo từ khóa (vd: GeoMaps, Bayesian, Widget, MCP)..."
+                aria-label="Tìm kiếm trong ma trận so sánh"
+              />
+              <button type="button" id="reset-filters-btn" class="reset-btn">
+                Đặt lại
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="matrix-table" id="benchmark-matrix">
+            <thead>
+              <tr>
+                <th style="width: 19%">
+                  Hạng mục Tính năng
+                  <span class="th-sub">49 tiêu chí thuộc 7 nhóm</span>
+                </th>
+                <th class="col-rate" style="width: 23%">
+                  Rate.vn (DOS/Rate)
+                  <span class="th-sub"
+                    >Trạng thái thực tế &amp; bằng chứng code</span
+                  >
+                </th>
+                <th style="width: 17%">
+                  JReviews.com
+                  <span class="th-sub"
+                    >WP/Joomla CCK + Add-ons chính thức</span
+                  >
+                </th>
+                <th style="width: 10%">
+                  Trustpilot
+                  <span class="th-sub">Open Review &amp; TrustBox</span>
+                </th>
+                <th style="width: 10%">
+                  G2
+                  <span class="th-sub">B2B SaaS Verified</span>
+                </th>
+                <th style="width: 10%">
+                  RTINGS
+                  <span class="th-sub">In-House Lab Bench</span>
+                </th>
+                <th style="width: 11%">
+                  Yelp / Maps
+                  <span class="th-sub">Local Directory</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="matrix-tbody">
+              <!-- ==================== NHÓM 1 ==================== -->
+              <tr class="group-row" data-group-header="g1">
+                <td colspan="7">
+                  Nhóm 1: Chấm điểm đa tiêu chí &amp; Tổng hợp (7 hạng mục)
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g1" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Chấm điểm đa tiêu chí có trọng số (Weighted
+                    Multi-Criteria)</span
+                  >
+                  <span class="feat-sub"
+                    >19 ngành chuẩn, 45 tiêu chí qua 109 dòng cấu hình</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber"
+                    >Một phần (5 Tech + chờ cờ)</span
+                  >
+                  <div class="cell-note">
+                    <code>JReviewsSection.tsx</code> và
+                    <code>use-case-weights.ts</code> hỗ trợ đủ 45 key tiêu chí
+                    (<code>v1=36</code>, <code>v2=38</code>, <code>v3=35</code>),
+                    nhưng <code>leaderboardCriteriaForCategory()</code>
+                    (<code>leaderboard-engine.ts:274-305</code>) hiện mới chấm
+                    đa tiêu chí cho 5 ngành Tech cũ (<code>earbuds</code> bỏ
+                    <code>screen</code>; trả <code>['value']</code> cho 13 ngành
+                    Wave E1-E4 và <code>['screen', 'value']</code> cho
+                    <code>tvs</code>). Trên Prod: 16 master Tech Live, 210 draft
+                    (23 Tech cũ + 187 E1-E4), cột JSONB
+                    <code>rate.master_products.criteria_scores</code> hiện đang
+                    rỗng trên các master đã publish (và 0 dòng
+                    <code>rate.reviews</code> có <code>criteria_ratings</code>),
+                    còn form chấm sao theo từng tiêu chí <code>ReviewFormV2</code>
+                    (<code>#1544</code>) đang tắt cờ.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Rất mạnh</span>
+                  <span class="comp-text"
+                    >Tùy biến bộ Rating Criteria &amp; trọng số riêng cho từng
+                    Listing Type ngay trong admin.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Chỉ có 1 điểm sao tổng 1-5 cho toàn bộ trải nghiệm.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Điểm sao tổng cộng thêm 3-7 tiêu chí B2B (Ease of Use,
+                    Support...).</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Mạnh (Lab)</span>
+                  <span class="comp-text"
+                    >Chấm hàng chục chỉ số đo lường từ phòng lab với trọng số
+                    từng nhu cầu.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Chỉ 1 thang điểm 1-5 sao tổng quát cho địa điểm.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g1" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Bayesian Shrinkage chống lệch ít review</span
+                  >
+                  <span class="feat-sub"
+                    >Công thức <code>k=3</code>, <code>mu0=4.2</code></span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live trên Prod</span>
+                  <div class="cell-note">
+                    <code>rate-domain-core.ts</code> cài đặt chuẩn
+                    <code>BAYESIAN_PRIOR_MEAN = 4.2</code>, <code>k = 3</code>,
+                    hiển thị kèm % độ tin cậy Bayesian trên
+                    <code>JReviewsSection.tsx</code>.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Cơ bản</span>
+                  <span class="comp-text"
+                    >Hỗ trợ xếp hạng Bayesian Ranking cho Listings nhưng không
+                    hiển thị minh bạch độ tin cậy.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Ẩn công thức</span>
+                  <span class="comp-text"
+                    >TrustScore dùng trung bình Bayesian cộng 7 review giả định
+                    nhưng không công khai chi tiết.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">G2 Score</span>
+                  <span class="comp-text"
+                    >Dùng thuật toán G2 Score theo recency và mật độ review
+                    nhưng đóng mã.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không áp dụng</span>
+                  <span class="comp-text"
+                    >100% sản phẩm được test cùng quy trình đo lab nội bộ.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Trung bình cộng các review vượt qua bộ lọc spam.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g1" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Wilson Lower Bound 95% CI (<code>z=1.96</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Sắp xếp review hữu ích chống thao túng 1/1 vote</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Độc quyền Rate</span>
+                  <div class="cell-note">
+                    <code>computeWilsonLowerBound(upvotes, downvotes)</code> với
+                    <code>z = 1.96</code> cân bằng giữa tỷ lệ upvote và số lượng
+                    phiếu thực tế.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Sắp xếp theo hiệu số hoặc tỷ lệ Helpful thuần túy.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Sắp xếp mặc định theo thời gian hoặc ngôn ngữ, đếm Useful
+                    đơn giản.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Ưu tiên theo độ dài, người dùng xác thực và upvote.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không xếp hạng review người dùng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Sắp xếp mặc định theo thuật toán Yelp Sort ẩn.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g1" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Biểu đồ phân phối sao 5★ - 1★ (Rating Histogram)</span
+                  >
+                  <span class="feat-sub"
+                    >Thanh tỷ lệ % từng mức sao từ 5 đến 1 sao</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Một phần</span>
+                  <div class="cell-note">
+                    <code>JReviewsSection.tsx</code> hiện chỉ có 4 nút chip lọc
+                    (<code>Tất cả</code>, <code>5★</code>, <code>4★</code>,
+                    <code>&lt;=3★</code>) và cảnh báo bất thường
+                    <code>&gt;=90%</code> 5 sao, chưa có thanh bar trực quan 5
+                    mức sao.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Hiển thị Breakdown histogram sao chi tiết và lọc click
+                    từng mức.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Chuẩn mực</span>
+                  <span class="comp-text"
+                    >Histogram 5-1 sao kèm bộ lọc checkbox trực tiếp ngay đầu
+                    trang.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Biểu đồ phân phối 5-1 sao cùng số lượng cụ thể mỗi mức.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không dùng sao cộng đồng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Thanh phân bổ 5-1 sao và biểu đồ xu hướng điểm theo
+                    tháng.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g1" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Song hành điểm Lab/Chuyên gia &amp; Cộng đồng</span
+                  >
+                  <span class="feat-sub"
+                    >Dual Scoreboard + CMS chuyên gia độc lập</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live trên Prod</span>
+                  <div class="cell-note">
+                    Tách 3 thẻ rõ ràng: Điểm Tổng hợp, Điểm Cộng đồng (Bayesian)
+                    và Điểm Chuyên gia (<code>/10</code>,
+                    <code>expert_criteria_scores</code>), cam kết không pha loãng
+                    bởi quảng cáo.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Mạnh</span>
+                  <span class="comp-text"
+                    >Tách riêng Editor Reviews (chủ site viết) và User Reviews
+                    trên cùng trang.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">100% đánh giá từ người dùng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Chỉ tổng hợp đánh giá từ người dùng doanh nghiệp.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Chỉ Lab</span>
+                  <span class="comp-text"
+                    >100% điểm phòng lab nội bộ, không tổng hợp sao người
+                    dùng.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">100% đánh giá cộng đồng địa phương.</span>
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g1" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Bỏ qua tiêu chí không áp dụng (<code>N/A Criteria Skip</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Không ép chấm mục người dùng không trải nghiệm</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Tắt cờ</span>
+                  <div class="cell-note">
+                    Đã cài hoàn chỉnh trong <code>ReviewFormV2.tsx</code> sau cờ
+                    <code>NEXT_PUBLIC_RATE_REVIEW_FORM_V2</code>: cho phép đánh
+                    dấu N/A tối đa <code>2</code> tiêu chí, bắt buộc chấm
+                    <code>value</code>/<code>price</code>.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Cho phép bật tùy chọn N/A cho từng rating criterion trong
+                    form.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ có 1 điểm sao duy nhất.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Cho phép chọn N/A ở nhiều câu hỏi phụ không sử dụng.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không áp dụng</span>
+                  <span class="comp-text">Lab đo đầy đủ mọi hạng mục.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có chấm điểm đa tiêu chí.</span>
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g1" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Ưu/Nhược điểm có cấu trúc &amp; AI Points</span
+                  >
+                  <span class="feat-sub"
+                    ><code>Pros/Cons</code> theo tiêu chí &amp; tổng hợp AI</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Tắt cờ / Một phần</span>
+                  <div class="cell-note">
+                    <code>ProductPointsBlock.tsx</code> đã Live (click lọc
+                    review theo tiêu chí), nhưng trên Prod bảng
+                    <code>rate.product_points</code> hiện có <code>0</code> dòng
+                    (các trang sản phẩm đang hiển thị Pros/Cons cũ từ
+                    <code>rate.review_analysis</code>); pipeline
+                    <code>REVIEW_AI_POINTS_ENABLED</code> đang tắt,
+                    <code>PRODUCT_POINTS_HIDE_AI</code> mặc định là
+                    <code>false</code> (công tắc opt-out), và nhập Pros/Cons thủ
+                    công nằm sau cờ <code>ReviewFormV2</code>.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Tích hợp trường Pros &amp; Cons trong form review và lọc
+                    field.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Trả phí</span>
+                  <span class="comp-text"
+                    >AI Review Summary chủ yếu mở cho gói doanh nghiệp trả
+                    phí.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Bắt buộc</span>
+                  <span class="comp-text"
+                    >Mọi review G2 đều bắt buộc có mục Like Best và Dislike.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có (Lab)</span>
+                  <span class="comp-text"
+                    >Tổng hợp Pros/Cons rõ ràng theo từng sản phẩm test.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">AI Highlights</span>
+                  <span class="comp-text"
+                    >Trích xuất cụm từ nổi bật từ review cộng đồng.</span
+                  >
+                </td>
+              </tr>
+
+              <!-- ==================== NHÓM 2 ==================== -->
+              <tr class="group-row" data-group-header="g2">
+                <td colspan="7">
+                  Nhóm 2: Quy trình viết, chỉnh sửa &amp; Tương tác Review (10
+                  hạng mục)
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g2" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Review Form v2 (Half-star, Verdict, Chặn nhược điểm né
+                    tránh)</span
+                  >
+                  <span class="feat-sub"
+                    >Auto-save Draft &amp; kiểm tra chất lượng đầu vào</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Tắt cờ</span>
+                  <div class="cell-note">
+                    <code>ReviewFormV2.tsx</code>
+                    (<code>NEXT_PUBLIC_RATE_REVIEW_FORM_V2=1</code>,
+                    <code>#1544</code>, mặc định TẮT) là <strong>form chấm sao
+                    theo từng tiêu chí</strong> (bước <code>0.5</code> sao),
+                    nhập verdict tóm tắt tự do (<code>20-300</code> ký tự qua
+                    <code>textarea</code>), auto-save
+                    <code>localStorage</code> và nhập 1-5 Pros/Cons (chặn né
+                    tránh). Trọng số danh mục cố định trong
+                    <code>rating-criteria.ts</code> /
+                    <code>rate.rating_criteria</code>, còn chỉnh trọng số cá
+                    nhân nằm ở <code>UseCaseWeightBar.tsx</code>.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Hỗ trợ half-star, custom fields theo ngành, validation cấu
+                    hình.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Cơ bản</span>
+                  <span class="comp-text"
+                    >Form đơn giản: chọn sao + tiêu đề + nội dung + ngày trải
+                    nghiệm.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Khảo sát sâu</span>
+                  <span class="comp-text"
+                    >Wizard nhiều bước bắt buộc độ dài, vai trò và Pros/Cons.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Người dùng phổ thông không gửi được bài review.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Cơ bản</span>
+                  <span class="comp-text"
+                    >Chọn sao + nội dung + gợi ý tag nhanh.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g2" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Chỉnh sửa &amp; Xóa Review của chính mình</span
+                  >
+                  <span class="feat-sub"
+                    ><code>Edit / Delete Own Review</code> cho tác giả</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Endpoint <code>/api/v1/rate/reviews/route.ts</code> hiện chỉ
+                    có <code>GET</code> và <code>POST</code>. Chưa có nút sửa
+                    hoặc xóa đánh giá của chính tài khoản đã đăng trên giao
+                    diện.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Phân quyền chi tiết cho phép user sửa/xóa trong khoảng thời
+                    gian cấu hình.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Cho phép tác giả chỉnh sửa nội dung hoặc xóa bất kỳ lúc
+                    nào.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Hạn chế</span>
+                  <span class="comp-text"
+                    >Cập nhật/chỉnh sửa qua cổng tài khoản và qua kiểm duyệt
+                    lại.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ biên tập viên nội bộ cập nhật.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Cho phép viết Update nối tiếp hoặc Edit/Remove review.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g2" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Upload Ảnh/Video trong Review &amp; Hiển thị
+                    <code>reviews.images</code></span
+                  >
+                  <span class="feat-sub"
+                    >Bằng chứng trực quan từ người mua thực tế</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Schema DB <code>rate.reviews</code> đã có cột
+                    <code>images: string[] | null</code> (<code>85</code> review
+                    trên Prod đã lưu sẵn <code>images</code> trong DB), nhưng
+                    đường đọc <code>getMasterProductReviews()</code>
+                    (<code>apps/web/src/lib/rate-api.ts:1928-1955</code>) và
+                    kiểu <code>ReviewItem</code>
+                    (<code>apps/web/src/lib/rate-domain-core.ts:132-154</code>)
+                    hiện bỏ qua <code>r.images</code>; giao diện thẻ review chưa
+                    hiển thị ảnh và form gửi chưa hỗ trợ upload ảnh/video.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Cực mạnh</span>
+                  <span class="comp-text"
+                    >Hỗ trợ Ảnh, Audio, Video, Tài liệu đính kèm; tích hợp S3,
+                    Spaces, YouTube, Vimeo, FFmpeg.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Review Trustpilot thuần văn bản để giữ tính đồng nhất.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Khi xác minh</span>
+                  <span class="comp-text"
+                    >Upload screenshot phần mềm khi xác thực danh tính.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Ảnh Lab</span>
+                  <span class="comp-text"
+                    >Thư viện ảnh lab độ phân giải cao do kỹ thuật viên chụp.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Rất mạnh</span>
+                  <span class="comp-text"
+                    >Thư viện ảnh món ăn, không gian, menu và video ngắn.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g2" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Vote Hữu ích (<code>Helpful Up / Down</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Phản hồi chất lượng gắn trực tiếp vào trọng số</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live trên Prod</span>
+                  <div class="cell-note">
+                    <code>/api/reviews/[id]/vote/route.ts</code> hỗ trợ
+                    <code>up</code>, <code>down</code>, <code>clear</code>; cập
+                    nhật ngay Axis F và Wilson Lower Bound trong
+                    <code>JReviewsSection.tsx</code>.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Nút Helpful Yes/No dưới từng bài review.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Chỉ Up</span>
+                  <span class="comp-text"
+                    >Chỉ có nút Useful, không có downvote.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Chỉ Up</span>
+                  <span class="comp-text"
+                    >Chỉ có nút Upvote hữu ích cho review B2B.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ vote cho mục Q&amp;A.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có (3 loại)</span>
+                  <span class="comp-text"
+                    >Nút Useful, Funny, Cool nhưng không có downvote.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g2" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Modal Báo cáo vi phạm chọn lý do (<code>Report Abuse Modal + Reason</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Phân loại seeding, quảng cáo, sai sự thật, xúc phạm</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Một phần</span>
+                  <div class="cell-note">
+                    Backend <code>vote/route.ts</code> đã nhận
+                    <code>reportReason</code> chi tiết, nhưng giao diện
+                    <code>JReviewsSection.tsx</code> đang hardcode
+                    <code>reportReason: 'spam'</code>, chưa mở modal cho người
+                    dùng chọn lý do cụ thể.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Modal báo cáo vi phạm cho phép nhập lý do chi tiết gửi về
+                    Moderation Queue.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Chi tiết</span>
+                  <span class="comp-text"
+                    >Luồng Flag review chuẩn hóa nhiều danh mục cho cả user và
+                    doanh nghiệp.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Báo cáo review vi phạm với ghi chú gửi moderator.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ có form báo lỗi bài viết lab.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Modal chọn nhóm vi phạm (xung đột lợi ích, spam, nội dung
+                    xấu).</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g2" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Phản hồi chính thức từ Chủ doanh nghiệp / Shop</span
+                  >
+                  <span class="feat-sub"
+                    ><code>Owner / Merchant Official Reply</code> có huy hiệu xác
+                    minh</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Scraper đã parse trường <code>ShopeeReview.sellerReply</code>
+                    (<code>apps/importer/src/shopee/types.ts:114</code>,
+                    <code>specs.schema.ts:383</code>) nhưng bị bỏ qua khi ghi DB
+                    tại <code>shopee-to-supabase.ts:1214-1226</code> do
+                    <code>rate.reviews</code> chưa có cột
+                    <code>seller_reply</code>. Hiện Rate mới tách review chỉ nói
+                    về shipper (<code>routedToMerchant</code>) sang rủi ro shop,
+                    chưa có UI phản hồi chính thức từ chủ shop/hãng.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Có sẵn</span>
+                  <span class="comp-text"
+                    >Hỗ trợ Owner Reply gắn nhãn chính chủ kèm email thông báo
+                    cho người viết.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Cốt lõi</span>
+                  <span class="comp-text"
+                    >Doanh nghiệp trả lời miễn phí dưới mọi review, tăng đối
+                    thoại minh bạch.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Vendor Response công khai ngay dưới bài đánh giá.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Không nhận phản hồi trực tiếp của hãng trong phần điểm.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Cốt lõi</span>
+                  <span class="comp-text"
+                    >Business Owner có thể phản hồi công khai hoặc nhắn tin
+                    riêng.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g2" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Bình luận lồng nhau dưới Review (<code>Nested Comments</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Thảo luận đa chiều giữa người dùng dưới một review</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Hiện mỗi thẻ review là một khối khép kín, chưa có thread
+                    bình luận lồng nhau hay phản hồi qua lại giữa các thành viên
+                    cộng đồng.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Mạnh</span>
+                  <span class="comp-text"
+                    >Hệ thống Review Discussions / Nested Comments hoàn chỉnh
+                    nhiều cấp.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Chỉ có 1 phản hồi của Brand, không mở thảo luận cộng đồng.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ Vendor phản hồi 1 lần.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Comment thảo luận lồng nhau dưới từng bài đánh giá lab.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Không có comment công khai dưới review.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g2" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Hỏi - Đáp Cộng đồng (<code>Community Q&amp;A</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Hỏi đáp trực tiếp trên trang sản phẩm / địa điểm</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Chưa có khu vực đặt câu hỏi về sản phẩm/quán (vd: "Quán có
+                    chỗ đậu xe hơi không?", "Máy bản VN hay xách tay?") để người
+                    đã mua hoặc chuyên gia trả lời.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Hỗ trợ Q&amp;A / Discussions gắn theo từng listing.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có tính năng Q&amp;A.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Product Discussions cho phép hỏi đáp với cộng đồng user
+                    thật.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Rất mạnh</span>
+                  <span class="comp-text"
+                    >Kỹ thuật viên phòng lab trả lời trực tiếp câu hỏi người
+                    đọc.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Mục Ask the Community hoạt động rất sôi nổi cho địa điểm.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g2" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Phân trang Review khi &gt; 50 đánh giá</span
+                  >
+                  <span class="feat-sub"
+                    ><code>Pagination / Load-more</code> phía server cho sản
+                    phẩm đông review</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Một phần</span>
+                  <div class="cell-note">
+                    <code>getMasterProductReviews()</code>
+                    (<code>apps/web/src/lib/rate-api.ts:1881,1890</code>) khóa
+                    cứng cả truy vấn DB lẫn lát cắt trả về ở mức
+                    <strong>50 reviews mới nhất</strong>
+                    (<code>limit(50)</code> / <code>slice(0, 50)</code>), khiến
+                    cả SSR (<code>JReviewsSection</code>) lẫn
+                    <code>GET /api/v1/rate/reviews</code> (kể cả khi parser nhận
+                    <code>?limit=200</code>) đều bị cắt ở 50 reviews trên
+                    server và chưa có UI phân trang <code>offset</code>/cursor
+                    (trên mobile chỉ gập sau 3 thẻ bằng
+                    <code>PhoneCollapsible</code>).
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Phân trang server-side chuẩn AJAX + tải nhanh hàng nghìn
+                    review.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text">Phân trang chuẩn 20 review/trang.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Phân trang server-side kết hợp bộ lọc ngành.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ có comment discussion ngắn.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text">Phân trang 10 review/trang.</span>
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g2" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Lọc, Sắp xếp, Tìm kiếm &amp; Export Review</span
+                  >
+                  <span class="feat-sub"
+                    >Sort 4 chiều, lọc tab seeding, Export Markdown / CSV /
+                    JSON</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live trên Prod</span>
+                  <div class="cell-note">
+                    <code>JReviewsSection.tsx</code> cho phép sort theo hữu ích
+                    nhất, mới nhất, cao/thấp, tìm từ khóa, lọc sao, lọc tab
+                    Chuyên gia / Seeding bị chặn, lọc theo tiêu chí, VÀ độc
+                    quyền xuất <code>Markdown / CSV / JSON</code> kèm tín hiệu
+                    Deal Radar.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Filter/Sort</span>
+                  <span class="comp-text"
+                    >Lọc/sắp xếp đa chiều tốt nhưng không có nút export công
+                    khai cho người đọc.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Filter/Sort</span>
+                  <span class="comp-text"
+                    >Lọc sao, từ khóa, ngôn ngữ; không hỗ trợ export.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Lọc sâu</span>
+                  <span class="comp-text"
+                    >Lọc theo quy mô công ty, vai trò người dùng; export chỉ cho
+                    gói vendor.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ filter comments theo mới nhất.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Filter/Sort</span>
+                  <span class="comp-text"
+                    >Tìm từ khóa trong review và sắp xếp theo hữu ích/mới
+                    nhất.</span
+                  >
+                </td>
+              </tr>
+
+              <!-- ==================== NHÓM 3 ==================== -->
+              <tr class="group-row" data-group-header="g3">
+                <td colspan="7">
+                  Nhóm 3: Tin cậy, Chống Seeding &amp; Kiểm duyệt (8 hạng mục)
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g3" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Mô hình Tin cậy 6 trục minh bạch (<code>6-Axis Trust Model v2</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Trục A-F chấm trọng số công khai trên từng thẻ review</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Độc quyền Rate</span>
+                  <div class="cell-note">
+                    <code>evaluateReviewTrustAssessment</code> đánh giá 6 trục:
+                    A (Authenticity), B (Independence/Tài trợ), C (Độ sâu +
+                    dùng dài hạn), D (Uy tín người viết), E (Routing sản phẩm vs
+                    merchant), F (Community vote). Giải thích rõ ngay trên UI.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Trọng số review bằng nhau nếu cùng thuộc nhóm user.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Hộp đen</span>
+                  <span class="comp-text"
+                    >Không chấm và không công khai 6 trục minh bạch cho từng
+                    review.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Tín hiệu ẩn</span>
+                  <span class="comp-text"
+                    >Có trọng số nội bộ nhưng không công khai công thức trên từng
+                    thẻ.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không cần</span>
+                  <span class="comp-text">100% chuyên gia nội bộ chấm.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Hộp đen</span>
+                  <span class="comp-text"
+                    >Thuật toán Recommendation Software ẩn lý do cụ thể.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g3" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Xác thực Người mua thật (<code>Verified Buyer</code> bằng
+                    hóa đơn/đơn hàng)</span
+                  >
+                  <span class="feat-sub"
+                    >Đối chiếu chứng từ mua hàng cho review cộng đồng</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Một phần</span>
+                  <div class="cell-note">
+                    Review crawl từ sàn giữ cờ <code>is_verified_buyer</code> từ
+                    nguồn sàn (<code>review-values.ts</code>), nhưng review cộng
+                    đồng tự viết trên Rate mới chỉ xác thực email/SĐT, CHƯA hỗ
+                    trợ upload hóa đơn hoặc đối chiếu đơn hàng thật.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Qua tích hợp</span>
+                  <span class="comp-text"
+                    >Cấp badge tự động nếu tích hợp WooCommerce/J2Store hoặc gắn
+                    nhãn thủ công.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Mạnh</span>
+                  <span class="comp-text"
+                    >Gửi lời mời tự động sau đơn hàng (API/AFS) để gắn nhãn
+                    Verified.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Rất mạnh</span>
+                  <span class="comp-text"
+                    >Xác thực bắt buộc bằng LinkedIn, email công ty và ảnh chụp
+                    màn hình sử dụng.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">100% Tự mua</span>
+                  <span class="comp-text"
+                    >RTINGS tự bỏ tiền mua sản phẩm ẩn danh như người tiêu dùng.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không bắt buộc</span>
+                  <span class="comp-text"
+                    >Dựa vào lịch sử check-in, ảnh và hành vi tài khoản.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g3" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >AI Chống Seeding, Spam xu &amp; Review Bombing</span
+                  >
+                  <span class="feat-sub"
+                    >Tách rõ <code>authentic / suspicious / fake</code> + phát
+                    hiện 90% 5 sao</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Độc quyền Rate</span>
+                  <div class="cell-note">
+                    Tự động gắn nhãn <code>seeding_fake</code>,
+                    <code>competitor_sabotage</code>,
+                    <code>review_bombing</code>, trừ điểm bài nhận xu/voucher
+                    (<code>WEB_INCENTIVIZED_RE</code>), cảnh báo dị thường
+                    <code>&gt;=90%</code> 5 sao và in lý do AI rõ ràng.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Cơ bản</span>
+                  <span class="comp-text"
+                    >Chỉ chống spam bot qua reCAPTCHA, Akismet và giới hạn IP.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có (AI đóng)</span>
+                  <span class="comp-text"
+                    >Mô hình fraud detection tự động gỡ hàng triệu review giả
+                    mỗi năm.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Lọc trùng IP, domain email và kiểm duyệt thủ công.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không cần</span>
+                  <span class="comp-text">Không mở user review.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có (Ẩn)</span>
+                  <span class="comp-text"
+                    >Đưa review nghi vấn vào mục "Not Recommended" nhưng không
+                    giải thích.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g3" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Tách bạch Rủi ro Gian hàng (<code>Dual Merchant Risk</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Phân tách <code>DOSafe Risk</code> vs
+                    <code>Review Risk</code> &amp; điều hướng shipper</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Độc quyền Rate</span>
+                  <div class="cell-note">
+                    <code>rate-domain-core.ts</code> tách riêng
+                    <code>dosafe_risk_score</code> (lịch sử lừa đảo DOSafe) và
+                    <code>review_risk_score</code> (rủi ro review ảo); review
+                    chỉ khen/chê đóng gói-shipper tự động route về gian hàng,
+                    không làm méo điểm sản phẩm.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Gộp chung điểm vào listing.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ đánh giá theo từng công ty.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không tách tầng seller và product.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ đánh giá phần cứng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ đánh giá một địa điểm.</span>
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g3" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Chrome Extension MV3 Deal Radar 22 sàn &amp; Checkout
+                    Guard</span
+                  >
+                  <span class="feat-sub"
+                    >Side Panel + cảnh báo bẫy giá ngay tại giỏ hàng</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Độc quyền Rate</span>
+                  <div class="cell-note">
+                    <code>apps/extension/</code> hỗ trợ 22 sàn TMĐT Việt Nam với
+                    Side Panel đối chiếu giá và Shadow-DOM Checkout Guard cảnh
+                    báo khi có nơi bán chính hãng rẻ hơn hoặc dấu hiệu tăng giá
+                    ảo.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có browser extension.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Tối giản</span>
+                  <span class="comp-text"
+                    >Chỉ có tiện ích xem TrustScore của website, không so giá 22
+                    sàn.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có extension cho người mua.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có browser extension.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ có ứng dụng mobile bản đồ.</span>
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g3" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Tiếp nhận &amp; Cách ly Cộng đồng (<code>Zero-Trust Crowd Quarantine</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Đóng góp link sản phẩm qua hàng đợi cách ly kiểm định</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live trên Prod</span>
+                  <div class="cell-note">
+                    <code>CommunityQuarantineSubmitForm.tsx</code> tại
+                    <code>/contact-us</code> và pipeline Extension observation
+                    đưa link cộng đồng gửi vào vùng cách ly an toàn trước khi
+                    nhập kho chính.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >User submit listing mới vào trạng thái Pending
+                    Moderation.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Cơ bản</span>
+                  <span class="comp-text"
+                    >Ai cũng có thể tìm và tạo profile domain mới.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Form đề xuất phần mềm mới qua đội Research kiểm tra.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Vote đề xuất</span>
+                  <span class="comp-text"
+                    >Người dùng bình chọn sản phẩm muốn phòng lab mua test.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Add a Business chờ moderator xác minh địa chỉ.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g3" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Cổng Tuổi tài khoản 7 ngày khi Vote/Report</span
+                  >
+                  <span class="feat-sub"
+                    >Enforce song song API và Postgres Trigger chống clone</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live trên Prod</span>
+                  <div class="cell-note">
+                    <code>evaluateVoterEligibility</code> trong
+                    <code>/api/reviews/[id]/vote/route.ts</code> kết hợp trigger
+                    <code>trg_review_votes_guard</code> gọi hàm
+                    <code>rate.review_votes_guard()</code>
+                    (<code>20261014011054_review_votes.sql:142</code>) chặn tài
+                    khoản ẩn danh, chưa xác thực email/SĐT hoặc tạo dưới 7 ngày.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Tùy cấu hình</span>
+                  <span class="comp-text"
+                    >Chặn guest và phân theo nhóm thành viên, không có luật 7
+                    ngày mặc định ở tầng DB.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Login</span>
+                  <span class="comp-text"
+                    >Yêu cầu tài khoản xác thực email nhưng không áp cổng 7 ngày
+                    cho nút Useful.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Login</span>
+                  <span class="comp-text">Yêu cầu đăng nhập để upvote.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có cổng vote theo tuổi nick.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Ẩn</span>
+                  <span class="comp-text"
+                    >Kiểm soát bằng ngưỡng hoạt động lịch sử ẩn.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g3" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Hàng đợi Kiểm duyệt &amp; Bảng điều khiển Quản trị
+                    (<code>Moderation Queue &amp; Admin UI</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Giao diện Web duyệt report, gỡ cách ly và xử lý kháng
+                    nghị</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Việc kiểm duyệt hiện chạy tự động qua job
+                    <code>apps/importer</code> và chính sách Postgres RLS, chưa
+                    có màn hình Web Admin để Moderator duyệt nhanh review bị
+                    report, xử lý kháng nghị hay sửa thông số trực quan.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Rất mạnh</span>
+                  <span class="comp-text"
+                    >Moderation Dashboard tập trung: duyệt listing, review,
+                    comment, ảnh/video, claim và báo cáo vi phạm.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Chuyên nghiệp</span>
+                  <span class="comp-text"
+                    >Content Integrity Dashboard xử lý dispute &amp; flag.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Nội bộ</span>
+                  <span class="comp-text"
+                    >Hệ thống kiểm duyệt viên chuyên trách + portal giải quyết
+                    khiếu nại.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">CMS Nội bộ</span>
+                  <span class="comp-text">Quản trị bài test &amp; bình luận.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text">Công cụ kiểm duyệt cộng đồng.</span>
+                </td>
+              </tr>
+
+              <!-- ==================== NHÓM 4 ==================== -->
+              <tr class="group-row" data-group-header="g4">
+                <td colspan="7">
+                  Nhóm 4: Danh mục, Tìm kiếm, Bản đồ &amp; So sánh (10 hạng mục)
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >19 Ngành hàng &amp; Bộ lọc chuyên sâu (<code>Wave E1-E4 Facets</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Bộ lọc thông số đặc thù cho Gia dụng, Dịch vụ, Bán lẻ, Địa
+                    điểm</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Một phần</span>
+                  <div class="cell-note">
+                    Đã có đủ 19 route danh mục cùng 210 bản ghi
+                    <code>draft</code> (23 Tech cũ + 187 Wave E1-E4 gồm 62 sản
+                    phẩm E1/E3, 101 dịch vụ E2, 24 địa điểm E4), nhưng
+                    <code>category-filters.ts</code> mới cấu hình
+                    <code>featureCheckboxes</code> cho 5 ngành Tech lõi; cả 14
+                    ngành E1-E4 hiện có <code>featureCheckboxes: []</code> (mới
+                    lọc giá &amp; brand).
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Cực mạnh</span>
+                  <span class="comp-text"
+                    >Mọi ngành tự sinh Faceted Search nâng cao từ chính Custom
+                    Fields của ngành đó.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Tối giản</span>
+                  <span class="comp-text"
+                    >Chỉ lọc theo danh mục, thành phố và số sao tối thiểu.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Mạnh (B2B)</span>
+                  <span class="comp-text"
+                    >Lọc theo quy mô công ty, mô hình triển khai, tính năng đặc
+                    thù.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Table Tool</span>
+                  <span class="comp-text"
+                    >Bảng lọc hàng trăm chỉ số đo lab theo từng ngành phần cứng.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Mạnh (Local)</span>
+                  <span class="comp-text"
+                    >Lọc tiện ích (Wi-Fi, chỗ đậu xe, giờ mở cửa, đặt bàn).</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Tìm kiếm Full-Text/Trigram, Brand Facets &amp; Autocomplete
+                    RPCs</span
+                  >
+                  <span class="feat-sub"
+                    ><code>get_category_brand_facets</code>,
+                    <code>search_master_products</code> &amp;
+                    <code>search_catalog_autocomplete</code></span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber"
+                    >Live Search / Chưa nối Autocomplete</span
+                  >
+                  <div class="cell-note">
+                    <code>rate.get_category_brand_facets</code> và
+                    <code>rate.search_master_products</code> (dùng index
+                    <code>pg_trgm</code> + fallback) đã Live tại
+                    <code>apps/web/src/lib/rate-api.ts:377,515</code>. Riêng RPC
+                    <code>rate.search_catalog_autocomplete</code> đã tồn tại
+                    trong migration <code>20261018120102</code> và
+                    <code>pg_proc</code> trên Prod nhưng
+                    <code>apps/web/src</code> chưa gọi tới.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Live Search</span>
+                  <span class="comp-text"
+                    >Gợi ý trực tiếp (autocomplete) theo tiêu đề, danh mục và
+                    Custom Fields.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Gợi ý tên công ty và domain ngay khi gõ.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Instant search phần mềm và danh mục B2B.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Tìm kiếm nhanh theo model và bài đánh giá lab.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Rất mạnh</span>
+                  <span class="comp-text"
+                    >Autocomplete tức thời theo tên quán, món ăn và khu vực.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Schema Thông số linh hoạt phi phần cứng (<code>Custom Spec Schemas</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Kiến trúc Field Groups mở rộng đa ngành không cần sửa cột
+                    cứng</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Một phần</span>
+                  <div class="cell-note">
+                    <code>spec-template.ts</code> đã phân tách template cho từng
+                    ngành (<code>NON_HARDWARE_TEMPLATE</code>, gia dụng, dịch
+                    vụ...) và <code>PlaceDetailsSection.tsx</code> hiển thị
+                    thông tin địa điểm, nhưng chưa có trình dựng field động qua
+                    giao diện như JReviews Field Groups.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Vô đối CCK</span>
+                  <span class="comp-text"
+                    >Không giới hạn Custom Fields &amp; Field Groups (text,
+                    select, checkbox, relation, banner...) điều khiển cả form
+                    nhập lẫn bộ lọc.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Mỗi trang công ty chỉ có mô tả ngắn và liên hệ.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Feature matrix theo từng danh mục phần mềm.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Theo ngành</span>
+                  <span class="comp-text"
+                    >Cấu trúc bảng thông số chuẩn hóa riêng cho từng loại thiết
+                    bị.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Attributes</span>
+                  <span class="comp-text"
+                    >Danh sách thuộc tính cố định cho nhà hàng/dịch vụ.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Bản đồ tương tác, Tìm bán kính &amp; Lọc Tỉnh/Quận +
+                    <code>price_tier</code></span
+                  >
+                  <span class="feat-sub"
+                    ><code>GeoMaps</code> &amp; lọc địa lý cho Wave E4
+                    Places</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Bảng <code>rate.place_details</code> ĐÃ CÓ
+                    <code>geo_lat</code>, <code>geo_lng</code>,
+                    <code>geohash7</code>, <code>province_code</code>,
+                    <code>district_code</code>, <code>price_tier</code> và trang
+                    chi tiết có nút mở link bản đồ ngoài; nhưng trang danh mục
+                    Wave E4 chưa có bản đồ tương tác, tìm bán kính hay lọc
+                    Tỉnh/Quận &amp; mức giá.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">GeoMaps / MapsPro</span>
+                  <span class="comp-text"
+                    >Bản đồ tương tác Google Maps/Mapbox/OSM, gom cụm marker,
+                    tìm theo bán kính, autocomplete địa chỉ và lọc theo vùng bản
+                    đồ.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có bản đồ địa điểm.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không phải sản phẩm địa lý.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không áp dụng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Cốt lõi</span>
+                  <span class="comp-text"
+                    >Bản đồ split-view + lọc vùng kéo bản đồ + mức giá
+                    <code>$ - $$$$</code>.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >So sánh 1v1 &amp; Bộ trọng số Persona (5 Tech + E1-E4)</span
+                  >
+                  <span class="feat-sub"
+                    ><code>/compare/[versus]</code> &amp;
+                    <code>UseCaseWeightBar</code> đổi trọng số trực tiếp</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber"
+                    >Live 5 Tech / Một phần E1-E4</span
+                  >
+                  <div class="cell-note">
+                    <code>/compare/[versus]</code> và thanh trượt trọng số tùy
+                    chỉnh (<code>use-case-weights.ts</code>) đã Live; tuy nhiên
+                    bộ preset chọn lọc (<code>Gaming</code>, <code>Chụp ảnh</code>,
+                    <code>Bền bỉ</code>...) trong <code>UseCaseWeightBar.tsx</code>
+                    / <code>RATING_USE_CASE_PRESETS</code>
+                    (<code>rating-criteria.ts:964-1350</code>) mới phủ
+                    <strong>5 nhóm Tech cốt lõi</strong>, còn toàn bộ
+                    <strong>14 nhóm Wave E1-E4</strong> hiện mới chỉ có preset
+                    <code>'default'</code> ("Cân bằng mặc định").
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">So sánh tĩnh</span>
+                  <span class="comp-text"
+                    >So sánh cạnh nhau nhiều listing theo Custom Fields nhưng
+                    không có preset trọng số động theo persona.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không hỗ trợ so sánh trực diện.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có (tối đa 4)</span>
+                  <span class="comp-text"
+                    >Bảng so sánh đến 4 phần mềm + G2 Grid.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Rất mạnh</span>
+                  <span class="comp-text"
+                    >Side-by-side compare kèm thanh trượt usage profile.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có bảng so sánh 1v1.</span>
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Tối ưu giỏ hàng đa món (<code>Combo Cart Optimizer</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Gom ít gian hàng nhất vẫn đạt ngưỡng Trust tối thiểu</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Độc quyền Rate</span>
+                  <div class="cell-note">
+                    <code>WatchlistComboOptimizer.tsx</code> và
+                    <code>/api/v1/rate/combo-cart</code> tính tổ hợp shop tối
+                    ưu tổng tiền + phí ship cho nhiều sản phẩm trong Watchlist
+                    mà vẫn lọc shop rủi ro cao.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có dữ liệu giá đa sàn.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không hỗ trợ giỏ hàng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không áp dụng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ gắn link affiliate từng món.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không áp dụng.</span>
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Sản phẩm liên quan &amp; Hệ thống Chi nhánh</span
+                  >
+                  <span class="feat-sub"
+                    ><code>Related Competitors</code> &amp; liên kết chéo chi
+                    nhánh địa điểm</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live trên Prod</span>
+                  <div class="cell-note">
+                    Trang chi tiết sản phẩm gợi ý
+                    <code>relatedCompetitors</code> cùng phân khúc và mở link
+                    so sánh 1v1; <code>PlaceDetailsSection.tsx</code> hiển thị
+                    cụm các chi nhánh khác (<code>branches</code>) của cùng chuỗi.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Related Listings</span>
+                  <span class="comp-text"
+                    >Add-on Related Listings + Widget rất mạnh liên kết sản phẩm
+                    cùng hãng/phân khúc.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Tối giản</span>
+                  <span class="comp-text">Gợi ý công ty cùng danh mục.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Alternatives</span>
+                  <span class="comp-text"
+                    >Trang riêng cho Top Alternatives &amp; Competitors.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text">Gợi ý các mẫu đối thủ cùng tầm giá.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Chi nhánh</span>
+                  <span class="comp-text"
+                    >Gom chuỗi chi nhánh và địa điểm tương tự gần đó.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Danh sách theo dõi &amp; Cảnh báo giá (<code>Watchlist + Price Alerts</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Lưu sản phẩm, đặt giá mục tiêu và theo dõi biến động</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live trên Prod</span>
+                  <div class="cell-note">
+                    <code>/watchlist</code>, <code>PriceWatchButton.tsx</code>
+                    và <code>/api/v1/rate/watchlist</code> đã Live (chú ý: chế
+                    độ theo dõi theo biến thể Item nằm sau cờ
+                    <code>RATE_ITEM_MODEL</code>).
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Favorites</span>
+                  <span class="comp-text"
+                    >Cho phép lưu Favorites/Lists, nhưng không theo dõi biến
+                    động giá đa sàn.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Bookmark</span>
+                  <span class="comp-text">Lưu công ty yêu thích.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">My Lists</span>
+                  <span class="comp-text">Lưu danh sách phần mềm để so sánh.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Save</span>
+                  <span class="comp-text">Lưu danh sách sản phẩm quan tâm.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Collections</span>
+                  <span class="comp-text">Tạo bộ sưu tập quán ăn chia sẻ.</span>
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Deal Radar &amp; Kiểm định giá Omnibus 90 ngày</span
+                  >
+                  <span class="feat-sub"
+                    >Chuẩn EU Omnibus 30d + phân vị chu kỳ 90d (<code>P15</code>
+                    Mua ngay vs Chờ)</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Độc quyền Rate</span>
+                  <div class="cell-note">
+                    <code>omnibus-price-audit.ts</code> và trang
+                    <code>/deals</code> xác thực giảm giá thật so với đáy 30
+                    ngày và phân vị 90 ngày trên 22 sàn, lật tẩy chiêu nâng giá
+                    gốc trước ngày sale.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không theo dõi lịch sử giá.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không phân tích giá sản phẩm.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ niêm yết bảng giá tham khảo.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ ghi giá niêm yết lúc test.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ có khoảng giá ước lượng.</span>
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g4" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Kiểm tra nhanh URL / SKU đa sàn (<code>Deep URL Inspector</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Dán link bất kỳ tại trang chủ hoặc <code>/inspect</code></span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Độc quyền Rate</span>
+                  <div class="cell-note">
+                    <code>HeroSearchInspector.tsx</code>,
+                    <code>DeepInspectWorkspace.tsx</code> và
+                    <code>/api/v1/rate/inspect</code> chuẩn hóa link từ 22 sàn,
+                    trả ngay phán quyết giá đắt/rẻ và mức độ tin cậy review.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ tìm trong dữ liệu nội bộ.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Domain Lookup</span>
+                  <span class="comp-text"
+                    >Chỉ tra cứu theo tên miền website chứ không đọc URL SKU sàn
+                    TMĐT.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ tìm theo tên phần mềm.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ tìm bài lab có sẵn.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ tìm địa điểm theo tên/khu vực.</span>
+                </td>
+              </tr>
+
+              <!-- ==================== NHÓM 5 ==================== -->
+              <tr class="group-row" data-group-header="g5">
+                <td colspan="7">
+                  Nhóm 5: Hồ sơ Reviewer, Gamification &amp; EngageUsers (5 hạng
+                  mục)
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g5" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Trang Hồ sơ công khai của Reviewer (<code>Public Reviewer Profile</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Trang cá nhân hiển thị lịch sử đánh giá &amp; độ uy tín</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    <code>JReviewsSection.tsx</code> hiện chỉ hiển thị
+                    <code>author_name</code> dạng chữ thuần; chưa có trang
+                    <code>/reviewers/[id]</code> tổng hợp số bài viết, tỷ lệ
+                    review chất lượng và tiểu sử của tác giả.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Hiển thị profile cộng tác viên qua WordPress/Joomla hoặc
+                    JomSocial/BuddyPress.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Trang hồ sơ công khai chứa mọi đánh giá đã viết &amp; số
+                    lượt Useful nhận được.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Hồ sơ gắn chức danh, công ty và lịch sử xác thực LinkedIn.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Tác giả Lab</span>
+                  <span class="comp-text"
+                    >Chỉ có trang tiểu sử cho kỹ thuật viên/biên tập viên
+                    RTINGS.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Rất mạnh</span>
+                  <span class="comp-text"
+                    >Hồ sơ cá nhân phong phú: ảnh, check-in, bạn bè, thống kê
+                    review.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g5" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Xếp hạng, Huy hiệu Reviewer &amp; Bảng vàng</span
+                  >
+                  <span class="feat-sub"
+                    ><code>Reviewer Ranks / Badges / Top Reviewers Leaderboard</code></span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Một phần</span>
+                  <div class="cell-note">
+                    Đã có <code>value_tier</code> (<code>Xuất sắc</code> /
+                    <code>Hữu ích</code>) cho <em>từng bài review</em> và Bảng
+                    vàng <em>sản phẩm</em>, nhưng CHƯA có cấp bậc, huy hiệu tích
+                    lũy cho <em>con người</em> hay Top Reviewers Leaderboard toàn
+                    sàn.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Reviewer Ranks</span>
+                  <span class="comp-text"
+                    >Hệ thống cấp bậc &amp; huy hiệu Reviewer Ranks dựa trên số
+                    review và helpful votes.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Cơ bản</span>
+                  <span class="comp-text"
+                    >Gắn nhãn Verified Reviewer nhưng gamification tối giản.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >Huy hiệu Top Contributor và phần thưởng viết review.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có gamification cộng đồng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Yelp Elite</span>
+                  <span class="comp-text"
+                    >Chương trình Yelp Elite Squad cực mạnh về danh hiệu &amp;
+                    cộng đồng.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g5" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Theo dõi Địa điểm, Danh mục &amp; Reviewer (<code>Follow</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Cơ chế Social Graph tương đương <code>EngageUsers</code></span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Rate mới hỗ trợ Watchlist theo dõi giá sản phẩm; chưa hỗ trợ
+                    Follow một Reviewer uy tín, Follow một Cửa hàng/Địa điểm hay
+                    Follow một Danh mục để nhận cập nhật.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">EngageUsers</span>
+                  <span class="comp-text"
+                    >Cho phép follow listings, danh mục, người viết và lưu bộ
+                    lọc tìm kiếm (Saved Search Alerts).</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không có tính năng Follow.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Follow Sản phẩm</span>
+                  <span class="comp-text"
+                    >Theo dõi sản phẩm hoặc danh mục phần mềm để nhận tin.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ lưu sản phẩm quan tâm.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Follow User</span>
+                  <span class="comp-text"
+                    >Kết bạn và theo dõi các reviewer có cùng gu.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g5" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Dòng hoạt động Cộng đồng (<code>Activity Stream</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Feed cập nhật review mới, trả lời mới &amp; kiểm định</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Chưa có luồng hoạt động cộng đồng (Activity Feed) hiển thị
+                    review mới nhất hoặc hoạt động của các đối tượng người dùng
+                    đang quan tâm.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">EngageUsers</span>
+                  <span class="comp-text"
+                    >Activity Stream ghi nhận bài mới, review mới, bình luận,
+                    vote theo thời gian thực.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Recent Feed</span>
+                  <span class="comp-text"
+                    >Luồng Recent Reviews hiển thị trực tiếp trên trang chủ.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Theo danh mục</span>
+                  <span class="comp-text">Feed review mới trong từng ngành.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Test Feed</span>
+                  <span class="comp-text">Dòng cập nhật bài lab mới nhất.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Activity Feed</span>
+                  <span class="comp-text"
+                    >Feed hoạt động của bạn bè và địa điểm quanh khu vực.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g5" data-status="partial">
+                <td>
+                  <span class="feat-name"
+                    >Thông báo Email Digest &amp; Web Push / In-app</span
+                  >
+                  <span class="feat-sub"
+                    >Tái tương tác người dùng khi có giảm giá hoặc phản hồi</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-amber">Tắt cờ / Một phần</span>
+                  <div class="cell-note">
+                    Pipeline <code>price-alerts-digest.ts</code> (Resend email +
+                    RFC 8058 one-click unsubscribe) đã code hoàn chỉnh nhưng
+                    đang chờ credential Prod &amp; lịch cron <code>--apply</code>;
+                    chưa có chuông In-app Notification hay Web Push.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Đa kênh</span>
+                  <span class="comp-text"
+                    >EngageUsers gửi thông báo qua Email, Web Push trong trình
+                    duyệt và Slack.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Email</span>
+                  <span class="comp-text"
+                    >Email thông báo khi Brand trả lời hoặc review đạt mốc
+                    lượt xem.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Email / In-app</span>
+                  <span class="comp-text"
+                    >Thông báo cập nhật trạng thái duyệt review &amp; quà tặng.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Email</span>
+                  <span class="comp-text"
+                    >Email khi bài test mới được xuất bản.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Push + Email</span>
+                  <span class="comp-text"
+                    >Push notification di động và in-app khi có phản hồi.</span
+                  >
+                </td>
+              </tr>
+
+              <!-- ==================== NHÓM 6 ==================== -->
+              <tr class="group-row" data-group-header="g6">
+                <td colspan="7">
+                  Nhóm 6: Doanh nghiệp B2B, Kiếm tiền &amp; Nhúng ngoài (4 hạng
+                  mục)
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g6" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Chủ doanh nghiệp nhận quyền quản lý (<code>Claim Listing</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Xác minh chủ sở hữu shop / địa điểm trên Rate.vn</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Trang <code>/merchants/[id]</code> mới hiển thị thống kê rủi
+                    ro và danh mục sản phẩm tự động; chưa có luồng cho chủ shop
+                    hoặc chủ quán xác minh GPKD/domain/OTP để nhận quyền quản
+                    trị trang.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Cốt lõi</span>
+                  <span class="comp-text"
+                    >Quy trình Claim Listing tự động kèm xét duyệt và gắn liền
+                    gói PaidListings.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Cốt lõi</span>
+                  <span class="comp-text"
+                    >Claim miễn phí hồ sơ doanh nghiệp qua xác thực domain DNS
+                    hoặc email công ty.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Cốt lõi</span>
+                  <span class="comp-text"
+                    >Claim Vendor Profile để quản trị thông tin và phản hồi
+                    review.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Độc lập hoàn toàn, hãng không được sửa trang.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Cốt lõi</span>
+                  <span class="comp-text"
+                    >Claim your Business Page qua xác minh SĐT/thư bưu
+                    chính.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g6" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Gói trả phí, Tin nổi bật &amp; Tài trợ (<code>PaidListings</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Featured / Sponsored minh bạch tách rời điểm đánh giá</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Chưa có hệ thống gói dịch vụ doanh nghiệp, vị trí nổi bật
+                    gắn nhãn tài trợ minh bạch hay cổng thanh toán/subscription
+                    tự phục vụ cho B2B.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">PaidListings</span>
+                  <span class="comp-text"
+                    >Add-on kiếm tiền toàn diện: gói định kỳ, listing nổi bật,
+                    upsell tính năng và billing tự động.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">SaaS B2B</span>
+                  <span class="comp-text"
+                    >Các gói Plus/Premium/Enterprise thu phí định kỳ rất cao.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Sponsored &amp; Intent</span>
+                  <span class="comp-text"
+                    >Bán vị trí tài trợ minh bạch và dữ liệu Buyer Intent.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không bán Ads B2B</span>
+                  <span class="comp-text"
+                    >Thu từ affiliate link và gói thành viên Insider.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Yelp Ads</span>
+                  <span class="comp-text"
+                    >Gói quảng cáo hiển thị + Enhanced Business Profile.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g6" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Form nhận Báo giá / Tư vấn (<code>Lead / Inquiry / Quote Form</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Chuyển đổi trực tiếp cho Wave E2 Tài chính &amp; Wave E4
+                    Địa điểm</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Hiện chỉ có link dẫn ra sàn TMĐT; chưa có form gửi yêu cầu
+                    báo giá, đặt lịch tư vấn hay đặt bàn tới nhà cung cấp dịch
+                    vụ/địa điểm.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Listing Inquiries</span>
+                  <span class="comp-text"
+                    >Form hỏi giá/liên hệ gắn trực tiếp từng listing, gửi thẳng
+                    tới chủ listing và lưu lịch sử lead.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ dẫn link ra website đối tác.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Lead Gen</span>
+                  <span class="comp-text"
+                    >Nút Request a Demo / Get a Quote mang lại doanh thu chính.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ dẫn link mua hàng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Request a Quote</span>
+                  <span class="comp-text"
+                    >Form nhận báo giá cho nhà thầu, dịch vụ, đặt bàn.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g6" data-status="missing">
+                <td>
+                  <span class="feat-name"
+                    >Widget Nhúng ngoài Website đối tác (<code>Trust Widget</code>)</span
+                  >
+                  <span class="feat-sub"
+                    ><code>&lt;iframe&gt;</code> / JS Trust Badge hiển thị điểm
+                    Rate.vn trên web shop</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-rose">Chưa có</span>
+                  <div class="cell-note">
+                    Chưa có endpoint widget nhúng gọn nhẹ để các merchant/chuỗi
+                    cửa hàng gắn huy hiệu điểm tin cậy Rate.vn lên website
+                    riêng nhằm tăng tỷ lệ chuyển đổi và backlink tự nhiên.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Everywhere Add-on</span>
+                  <span class="comp-text"
+                    >Nhúng review &amp; chấm điểm JReviews vào bất kỳ trang hoặc
+                    hệ thống bên ngoài nào.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">TrustBox (Vũ khí số 1)</span>
+                  <span class="comp-text"
+                    >Hàng chục mẫu widget nhúng giúp tăng chuyển đổi và phủ sóng
+                    thương hiệu toàn cầu.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">G2 Badges</span>
+                  <span class="comp-text"
+                    >Huy hiệu Leader/High Performer theo quý + review widget.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Chỉ cấp phép quote trích dẫn.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Yelp Badges</span>
+                  <span class="comp-text"
+                    >Huy hiệu nhúng "People Love Us on Yelp" cho website quán.</span
+                  >
+                </td>
+              </tr>
+
+              <!-- ==================== NHÓM 7 ==================== -->
+              <tr class="group-row" data-group-header="g7">
+                <td colspan="7">
+                  Nhóm 7: Hạ tầng AI, SEO &amp; Tiếp cận (5 hạng mục)
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g7" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >AI-Native API: <code>OpenAPI 3.1</code> +
+                    <code>MCP v1.1</code> + <code>llms.txt</code></span
+                  >
+                  <span class="feat-sub"
+                    ><code>7</code> MCP Tools chuẩn hóa cho AI Shopping Agents</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Độc quyền Rate</span>
+                  <div class="cell-note">
+                    Live trên Prod với <code>/api/v1/rate/openapi.json</code>,
+                    <code>/api/mcp</code> + <code>/.well-known/mcp.json</code>
+                    (<code>rate-vn-shopping-mcp</code> cung cấp 7 tool tra giá
+                    22 sàn, kiểm định link, tối ưu giỏ hàng) và
+                    <code>/llms.txt</code>.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text"
+                    >Chỉ có REST API cơ bản; chưa có MCP Server hay
+                    <code>llms.txt</code>.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">B2B API</span>
+                  <span class="comp-text"
+                    >API thương mại trả phí, chưa mở MCP công khai.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">B2B API</span>
+                  <span class="comp-text"
+                    >API trả phí cho đối tác doanh nghiệp.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Không</span>
+                  <span class="comp-text">Không mở API/MCP công khai.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Fusion API</span>
+                  <span class="comp-text"
+                    >REST/GraphQL API trả phí giới hạn quota.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g7" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Đa ngôn ngữ bản địa (<code>vi / en / cs</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Kiểm tra đồng bộ khóa dịch thuật &amp; định dạng số/tiền
+                    trong CI</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live trên Prod</span>
+                  <div class="cell-note">
+                    Kiến trúc <code>next-intl</code> đầy đủ 3 ngôn ngữ
+                    <code>vi</code>, <code>en</code>, <code>cs</code>; đồng bộ
+                    khóa dịch bắt buộc qua <code>rate-i18n.ts</code>, định dạng
+                    dấu phẩy thập phân kiểu Séc và tiền tệ chuẩn xác.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Qua plugin</span>
+                  <span class="comp-text"
+                    >Cần cài WPML/Polylang hoặc hệ thống đa ngữ của Joomla.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Đa quốc gia</span>
+                  <span class="comp-text"
+                    >Phân tách theo subdomain quốc gia (không hỗ trợ tiếng Việt
+                    sâu).</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Tiếng Anh chính</span>
+                  <span class="comp-text"
+                    >Giao diện và nội dung chủ yếu bằng Tiếng Anh.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Chỉ Tiếng Anh</span>
+                  <span class="comp-text">Chưa bản địa hóa đa ngôn ngữ.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Đa quốc gia</span>
+                  <span class="comp-text"
+                    >Bản địa hóa tại các thị trường Yelp có mặt.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g7" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Giao diện <code>Dark / Light / System Theme</code></span
+                  >
+                  <span class="feat-sub"
+                    >Chuyển theme mượt + test tương phản cho cả Dark và Light</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live trên Prod</span>
+                  <div class="cell-note">
+                    <code>ThemeToggle.tsx</code> kết hợp E2E test kiểm tra độ
+                    tương phản trên cả Dark hero lẫn Light controls
+                    (<code>dark-hero-contrast.spec.ts</code>,
+                    <code>light-theme-controls.spec.ts</code>).
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Tùy Theme</span>
+                  <span class="comp-text"
+                    >Phụ thuộc vào template WordPress/Joomla của chủ site.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Light cố định</span>
+                  <span class="comp-text">Chỉ có giao diện nền sáng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Light cố định</span>
+                  <span class="comp-text">Chỉ có giao diện nền sáng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-no">Light cố định</span>
+                  <span class="comp-text">Chỉ có giao diện nền sáng.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">App Mobile</span>
+                  <span class="comp-text"
+                    >Web nền sáng; app di động theo giao diện hệ thống.</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g7" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Dữ liệu có cấu trúc <code>JSON-LD</code> (<code>Product</code>,
+                    <code>ProductGroup</code>, <code>Place</code>,
+                    <code>Offer</code>)</span
+                  >
+                  <span class="feat-sub"
+                    >Chuẩn Schema.org tối ưu Google Rich Results &amp; AI Search</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Live + Tắt cờ</span>
+                  <div class="cell-note">
+                    <code>Product</code>, <code>AggregateOffer</code>,
+                    <code>AggregateRating</code> và
+                    <code>buildPlaceStructuredData</code> (<code>Restaurant</code>,
+                    <code>Hotel</code>, <code>CafeOrCoffeeShop</code>...) đã sẵn
+                    sàng; <code>ProductGroup</code> + <code>hasVariant</code>
+                    (<code>buildItemProductGroupNode</code>) chờ bật cờ
+                    <code>RATE_ITEM_MODEL</code>.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-strong">Rất mạnh</span>
+                  <span class="comp-text"
+                    >Map trường tùy biến sang Schema.org JSON-LD đa dạng cho
+                    Google Rich Snippets.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text"
+                    >AggregateRating &amp; Organization schema.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text">SoftwareApplication schema.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text">Product &amp; Review schema.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-yes">Có</span>
+                  <span class="comp-text">LocalBusiness &amp; Restaurant schema.</span>
+                </td>
+              </tr>
+
+              <tr class="feature-row" data-group="g7" data-status="advantage">
+                <td>
+                  <span class="feat-name"
+                    >Chuẩn tiếp cận <code>WCAG 2.1 / 2.2 AA</code> kiểm định
+                    trong CI</span
+                  >
+                  <span class="feat-sub"
+                    >Cổng Playwright + <code>@axe-core/playwright</code> chặn
+                    lỗi trước khi merge</span
+                  >
+                </td>
+                <td class="cell-rate">
+                  <span class="badge badge-green">Độc quyền Rate</span>
+                  <div class="cell-note">
+                    Bộ test tự động <code>a11y.spec.ts</code>,
+                    <code>landmarks.spec.ts</code>,
+                    <code>reflow-contrast.spec.ts</code>,
+                    <code>phone-menu-focus-trap.spec.ts</code> ép tuân thủ
+                    <code>wcag2a/2aa/21aa/22aa</code> ở mọi PR.
+                  </div>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Tùy Theme</span>
+                  <span class="comp-text"
+                    >Không có cổng CI tự động ép chuẩn WCAG 2.2 AA toàn trang.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Nội bộ</span>
+                  <span class="comp-text"
+                    >Hỗ trợ tiếp cận tốt nhưng không công khai quy trình CI.</span
+                  >
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Nội bộ</span>
+                  <span class="comp-text">Tuân thủ mức cơ bản.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Nội bộ</span>
+                  <span class="comp-text">Tốt cho desktop nhưng bảng dày đặc.</span>
+                </td>
+                <td>
+                  <span class="comp-pill comp-part">Nội bộ</span>
+                  <span class="comp-text">Có báo cáo tiếp cận chuẩn Mỹ ADA.</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div id="empty-state" class="empty-state is-hidden">
+            Không tìm thấy hạng mục nào khớp với bộ lọc hiện tại. Hãy thử xóa từ
+            khóa hoặc bấm <strong>Đặt lại</strong>.
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. HIGHLIGHT GRID: 6 WEAPONS -->
+      <section aria-label="6 Vũ khí độc quyền của Rate.vn">
+        <h2>
+          <span
+            >6 Vũ khí Độc quyền của Rate.vn mà JReviews &amp; Đối thủ Không
+            Có</span
+          >
+          <span class="badge badge-green">Lợi thế Cạnh tranh Cốt lõi</span>
+        </h2>
+
+        <div class="weapons-grid">
+          <article class="weapon-card">
+            <div>
+              <div class="weapon-num">Vũ khí 01 - Chống Seeding Toán học</div>
+              <h3>
+                Anti-Seeding 6 Trục (<code>6-Axis Trust Model</code>) + Bayesian
+                <code>k=3, mu0=4.2</code>
+              </h3>
+              <p class="muted">
+                Không giấu thuật toán như hộp đen Yelp hay Trustpilot: Rate.vn
+                tính minh bạch 6 trục (Authenticity, Independence/Sponsorship,
+                Depth, Credibility, Context Routing, Community Signal), kết hợp
+                Bayesian Shrinkage và Wilson Lower Bound 95% CI
+                (<code>z=1.96</code>) ngay trên từng thẻ đánh giá.
+              </p>
+            </div>
+            <div class="weapon-meta">
+              Nguồn chứng thực: <code>rate-domain-core.ts</code>,
+              <code>JReviewsSection.tsx</code>
+            </div>
+          </article>
+
+          <article class="weapon-card">
+            <div>
+              <div class="weapon-num">Vũ khí 02 - Minh bạch Giá thật</div>
+              <h3>
+                Deal Radar Omnibus 30d &amp; Chu kỳ giá 90 ngày trên 22 sàn
+              </h3>
+              <p class="muted">
+                Áp dụng tiêu chuẩn EU Omnibus kiểm định giá đáy 30 ngày trước
+                khuyến mãi, đồng thời đánh giá phân vị 90 ngày (mức
+                <code>P15</code> "Mua ngay" vs "Chờ") để vạch trần các chiêu
+                tăng giá gốc trước ngày sale lớn. Đây là năng lực JReviews hay
+                Trustpilot hoàn toàn không có.
+              </p>
+            </div>
+            <div class="weapon-meta">
+              Nguồn chứng thực: <code>omnibus-price-audit.ts</code>,
+              <code>/deals</code>
+            </div>
+          </article>
+
+          <article class="weapon-card">
+            <div>
+              <div class="weapon-num">Vũ khí 03 - Bảo vệ Ngay lúc Mua</div>
+              <h3>
+                Chrome Extension MV3 Side Panel &amp; Checkout Guard 22 sàn
+              </h3>
+              <p class="muted">
+                Thay vì chờ người mua tự tìm sang website khác để đọc review,
+                tiện ích MV3 của Rate chạy ngay bên cạnh trang sàn TMĐT và kích
+                hoạt <code>Checkout Guard</code> (Shadow-DOM cô lập) cảnh báo
+                khi phát hiện nơi bán chính hãng rẻ hơn hoặc bẫy giá ngay trước
+                bước bấm thanh toán.
+              </p>
+            </div>
+            <div class="weapon-meta">
+              Nguồn chứng thực: <code>apps/extension/src/content/content-script.ts</code>,
+              <code>service-worker.ts</code>
+            </div>
+          </article>
+
+          <article class="weapon-card">
+            <div>
+              <div class="weapon-num">Vũ khí 04 - Tối ưu Hóa đơn Đa món</div>
+              <h3>Combo Cart Optimizer cân bằng Phí ship &amp; Độ tin cậy</h3>
+              <p class="muted">
+                Khi người dùng mua 2 đến nhiều sản phẩm cùng lúc từ Watchlist,
+                thuật toán tìm tổ hợp gian hàng giảm thiểu số lượng shop (tiết
+                kiệm phí vận chuyển) mà vẫn bảo đảm mọi shop được chọn đạt
+                ngưỡng <code>Trust Score</code> an toàn tối thiểu.
+              </p>
+            </div>
+            <div class="weapon-meta">
+              Nguồn chứng thực: <code>combo-cart-optimizer.ts</code>,
+              <code>WatchlistComboOptimizer.tsx</code>
+            </div>
+          </article>
+
+          <article class="weapon-card">
+            <div>
+              <div class="weapon-num">Vũ khí 05 - Sẵn sàng cho Kỷ nguyên AI</div>
+              <h3>
+                Hạ tầng AI-Native: <code>MCP Server v1.1</code> +
+                <code>OpenAPI 3.1</code> + <code>llms.txt</code>
+              </h3>
+              <p class="muted">
+                Rate.vn không chỉ phục vụ trình duyệt web mà còn cung cấp trực
+                tiếp <code>7</code> công cụ MCP chuẩn hóa cho các AI Assistant
+                (Claude, ChatGPT, Gemini...) tra cứu giá thật 22 sàn, kiểm tra
+                link lừa đảo, so sánh theo nhu cầu và tối ưu giỏ hàng theo thời
+                gian thực.
+              </p>
+            </div>
+            <div class="weapon-meta">
+              Nguồn chứng thực: <code>apps/web/src/server/rate/mcp.ts</code>,
+              <code>openapi.ts</code>, <code>/llms.txt</code>
+            </div>
+          </article>
+
+          <article class="weapon-card">
+            <div>
+              <div class="weapon-num">Vũ khí 06 - Bảo toàn Công bằng Điểm</div>
+              <h3>
+                Dual Merchant Risk (<code>DOSafe Risk</code> vs
+                <code>Review Risk</code>)
+              </h3>
+              <p class="muted">
+                Review than phiền giao hàng chậm hoặc đóng gói cẩu thả thường làm
+                oan điểm chất lượng của bản thân sản phẩm. Rate tách bạch hoàn
+                toàn trục rủi ro lừa đảo <code>DOSafe</code>, trục rủi ro đánh
+                giá của shop và tự động điều hướng review shipper-only về đúng
+                Merchant.
+              </p>
+            </div>
+            <div class="weapon-meta">
+              Nguồn chứng thực: <code>rate-domain-core.ts</code>,
+              <code>MerchantDirectoryExplorer.tsx</code>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- 5. ACTIONABLE GAP ROADMAP -->
+      <section aria-label="Lộ trình đóng lỗ hổng ưu tiên">
+        <h2>
+          <span>Lộ trình Đóng Lỗ hổng Ưu tiên (<code>P0 -&gt; P1 -&gt; P2 -&gt; P3</code>)</span>
+          <span class="badge badge-accent">Đề xuất Thực thi theo Tác động</span>
+        </h2>
+        <p class="muted">
+          Thứ tự triển khai ưu tiên khai thác toàn bộ mã nguồn đã xây sẵn (P0),
+          vá vòng đời tương tác review lõi (P1), mở khóa kho 210 bản ghi draft
+          (23 Tech cũ + 187 Wave E1-E4) cùng bản đồ địa điểm GeoMaps (P2), trước
+          khi đầu tư vào cộng đồng &amp; kiếm tiền B2B (P3).
+        </p>
+
+        <div class="roadmap-table-wrap">
+          <table class="roadmap-table">
+            <thead>
+              <tr>
+                <th style="width: 11%">Ưu tiên</th>
+                <th style="width: 28%">Hạng mục Hành động</th>
+                <th style="width: 12%">Effort dự kiến</th>
+                <th style="width: 22%">Phụ thuộc Kỹ thuật</th>
+                <th style="width: 27%">Tác động trực tiếp lên Rate.vn</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="prio-tag prio-p0">P0 Quick Win</span></td>
+                <td>
+                  <strong>Bật bộ 4 Feature Flags đã code sẵn:</strong>
+                  <ul>
+                    <li><code>NEXT_PUBLIC_RATE_REVIEW_FORM_V2=1</code> (<code>#1544</code>)</li>
+                    <li><code>RATE_ITEM_MODEL</code> (gom biến thể &amp; <code>ProductGroup</code>)</li>
+                    <li><code>REVIEW_AI_POINTS_ENABLED=true</code> + backfill <code>product_points</code> / <code>criteria_scores</code> (<code>PRODUCT_POINTS_HIDE_AI</code> mặc định <code>false</code>)</li>
+                    <li>Credential Resend &amp; cron <code>--apply</code> cho <code>price-alerts-digest.ts</code></li>
+                  </ul>
+                </td>
+                <td><strong>1-3 ngày</strong></td>
+                <td>
+                  Hoàn tất v2 RPC &amp; Item migration bên
+                  <code>DOS-Me/supabase/migrations/</code>; cấu hình
+                  <code>RESEND_API_KEY</code> trên Prod và chạy backfill AI
+                  points.
+                </td>
+                <td>
+                  Mở khóa tức thì form chấm sao từng tiêu chí bước 0.5 sao, N/A
+                  Skip (tối đa 2), Pros/Cons &amp; Verdict bắt buộc, lấp đầy
+                  <code>rate.product_points</code> (hiện 0 dòng trên Prod) và
+                  email cảnh báo giá RFC 8058.
+                </td>
+              </tr>
+
+              <tr>
+                <td><span class="prio-tag prio-p0">P0 Quick Win</span></td>
+                <td>
+                  <strong>Hiển thị <code>reviews.images</code>, Autocomplete &amp; Modal Report Abuse</strong>
+                  <p class="muted" style="margin-top: 4px">
+                    Nối cột ảnh <code>reviews.images</code> (<code>85</code>
+                    review Prod đã có sẵn trong DB) vào
+                    <code>getMasterProductReviews()</code> /
+                    <code>ReviewItem</code> / <code>JReviewsSection.tsx</code>,
+                    kích hoạt <code>search_catalog_autocomplete</code> trên web,
+                    và thay nút cờ hardcode <code>'spam'</code> bằng modal chọn
+                    lý do khớp <code>vote/route.ts</code>.
+                  </p>
+                </td>
+                <td><strong>1-2 ngày</strong></td>
+                <td>
+                  Không cần migration DB; dùng thẳng cột
+                  <code>rate.reviews.images</code>, RPC
+                  <code>rate.search_catalog_autocomplete</code> đã có trên Prod
+                  và API <code>/api/reviews/[id]/vote</code>.
+                </td>
+                <td>
+                  Tăng mạnh độ tin cậy thị giác từ ảnh người mua thật đã crawl,
+                  nâng tốc độ tìm kiếm gợi ý và phân loại chính xác báo cáo vi
+                  phạm từ cộng đồng.
+                </td>
+              </tr>
+
+              <tr>
+                <td><span class="prio-tag prio-p1">P1 Review Core</span></td>
+                <td>
+                  <strong>Vòng đời Review đầy đủ &amp; Tương tác Cộng đồng:</strong>
+                  <ul>
+                    <li>Biểu đồ Histogram 5★-1★ + Phân trang server-side (&gt; 50 reviews)</li>
+                    <li>Upload Ảnh/Video cho user + <code>PATCH/DELETE</code> sửa/xóa bài viết của mình</li>
+                    <li><code>Owner Official Reply</code> (nối cột <code>seller_reply</code> từ <code>ShopeeReview.sellerReply</code>) + <code>Nested Comments</code> / <code>Community Q&amp;A</code></li>
+                    <li><code>Moderation Queue &amp; Admin Dashboard UI</code> + xác thực hóa đơn <code>Verified Buyer</code></li>
+                  </ul>
+                </td>
+                <td><strong>1-2 tuần</strong></td>
+                <td>
+                  Migration bảng reply/Q&amp;A, cột <code>seller_reply</code>
+                  &amp; author ownership qua <code>DOS-Me</code>; bucket
+                  Supabase Storage cho media upload kèm kiểm duyệt MIME/size.
+                </td>
+                <td>
+                  San bằng toàn bộ lợi thế cốt lõi của JReviews Core, Trustpilot
+                  và G2 ở khía cạnh tương tác hai chiều, giữ chân người đọc và
+                  tăng nội dung tự nhiên (UGC) cho SEO.
+                </td>
+              </tr>
+
+              <tr>
+                <td><span class="prio-tag prio-p2">P2 GeoMaps &amp; E4</span></td>
+                <td>
+                  <strong>Xuất bản 210 Draft Masters &amp; GeoMaps Wave E4:</strong>
+                  <ul>
+                    <li>Publish 23 draft Tech cũ + 187 draft Wave E1-E4 (62 sản phẩm E1/E3, 101 dịch vụ E2, 24 địa điểm E4)</li>
+                    <li>Mở rộng <code>leaderboardCriteriaForCategory()</code>, <code>UseCaseWeightBar</code> presets và <code>featureCheckboxes</code> cho 14 ngành E1-E4</li>
+                    <li>Lọc Tỉnh/Thành - Quận/Huyện (<code>province_code</code>, <code>district_code</code>) &amp; <code>price_tier</code></li>
+                    <li>Bản đồ tương tác + tìm kiếm bán kính từ <code>geo_lat/lng</code> sẵn có</li>
+                  </ul>
+                </td>
+                <td><strong>1-2 tuần</strong></td>
+                <td>
+                  Kiểm định dữ liệu 210 draft masters; nâng cấp
+                  <code>CATEGORY_FILTER_SCHEMAS</code>,
+                  <code>leaderboard-engine.ts</code> và
+                  <code>list-sidebar-one.tsx</code>; tích hợp bản đồ
+                  OSM/Leaflet.
+                </td>
+                <td>
+                  Mở rộng quy mô hiển thị công khai từ 16 lên đến 226 master
+                  (gấp ~14 lần nếu xuất bản toàn bộ) và biến Rate.vn thành đối
+                  thủ ngang ngửa JReviews GeoMaps / Yelp ở mảng nhà hàng, cà
+                  phê, lưu trú Việt Nam.
+                </td>
+              </tr>
+
+              <tr>
+                <td><span class="prio-tag prio-p3">P3 Engage &amp; B2B</span></td>
+                <td>
+                  <strong>Gamification, EngageUsers &amp; Thương mại hóa B2B:</strong>
+                  <ul>
+                    <li>Trang Profile công khai <code>/reviewers/[id]</code>, Reviewer Ranks &amp; Top Reviewers</li>
+                    <li>Follow Reviewer / Shop / Danh mục, Activity Stream, In-app Notification &amp; Web Push</li>
+                    <li><code>Claim Listing Workflow</code> (xác minh chủ shop/địa điểm)</li>
+                    <li><code>Embeddable Trust Widget</code> (<code>&lt;iframe&gt;</code>/JS) + <code>Inquiry/Quote Form</code> + <code>PaidListings</code></li>
+                  </ul>
+                </td>
+                <td><strong>2-3 tuần</strong></td>
+                <td>
+                  Migration <code>DOS-Me</code> cho bảng hồ sơ reviewer, follow
+                  graph, business claims và gói B2B; tách biệt tuyệt đối
+                  Sponsored khỏi Bayesian score.
+                </td>
+                <td>
+                  Tạo vòng lặp tăng trưởng tự nhiên nhờ cộng đồng Reviewer Elite
+                  và mở khóa 2 dòng doanh thu B2B bền vững (TrustBox widget phủ
+                  sóng ngoài site &amp; Lead/Featured cho Wave E2/E4).
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>
+        <span
+          >Tài liệu nội bộ phục vụ quyết định sản phẩm - Issue
+          <code>DOS/Rate#1916</code></span
+        >
+        <span
+          >Xác minh trực tiếp trên nhánh cơ sở <code>origin/dev</code>
+          (<code>c4385f14</code>) | Zero external CDN dependencies</span
+        >
+      </footer>
+    </div>
+
+    <script>
+      (function () {
+        var groupPills = Array.prototype.slice.call(
+          document.querySelectorAll('[data-group-pill]')
+        );
+        var statusPills = Array.prototype.slice.call(
+          document.querySelectorAll('[data-status-pill]')
+        );
+        var searchInput = document.getElementById('matrix-search');
+        var resetBtn = document.getElementById('reset-filters-btn');
+        var visibleCountEl = document.getElementById('visible-count');
+        var totalCountEl = document.getElementById('total-count');
+        var emptyStateEl = document.getElementById('empty-state');
+
+        var featureRows = Array.prototype.slice.call(
+          document.querySelectorAll('tr.feature-row')
+        );
+        var groupHeaderRows = Array.prototype.slice.call(
+          document.querySelectorAll('tr.group-row')
+        );
+
+        var activeGroup = 'all';
+        var activeStatus = 'all';
+        var searchQuery = '';
+
+        function normalizeText(str) {
+          return String(str || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd')
+            .trim();
+        }
+
+        var rowSearchCache = featureRows.map(function (row) {
+          return {
+            el: row,
+            group: row.getAttribute('data-group') || '',
+            status: row.getAttribute('data-status') || '',
+            text: normalizeText(row.textContent),
+          };
+        });
+
+        function updatePressed(pills, attrName, activeValue) {
+          pills.forEach(function (pill) {
+            var val = pill.getAttribute(attrName);
+            pill.setAttribute('aria-pressed', val === activeValue ? 'true' : 'false');
+          });
+        }
+
+        function applyFilters() {
+          var q = normalizeText(searchQuery);
+          var visibleCount = 0;
+          var visiblePerGroup = {};
+
+          rowSearchCache.forEach(function (item) {
+            var matchGroup = activeGroup === 'all' || item.group === activeGroup;
+            var matchStatus =
+              activeStatus === 'all' || item.status === activeStatus;
+            var matchQuery = q === '' || item.text.indexOf(q) !== -1;
+
+            var show = matchGroup && matchStatus && matchQuery;
+            if (show) {
+              item.el.classList.remove('is-hidden');
+              visibleCount += 1;
+              visiblePerGroup[item.group] =
+                (visiblePerGroup[item.group] || 0) + 1;
+            } else {
+              item.el.classList.add('is-hidden');
+            }
+          });
+
+          groupHeaderRows.forEach(function (headerRow) {
+            var grp = headerRow.getAttribute('data-group-header') || '';
+            if (visiblePerGroup[grp] > 0) {
+              headerRow.classList.remove('is-hidden');
+            } else {
+              headerRow.classList.add('is-hidden');
+            }
+          });
+
+          if (visibleCountEl) {
+            visibleCountEl.textContent = String(visibleCount);
+          }
+          if (totalCountEl) {
+            totalCountEl.textContent = String(rowSearchCache.length);
+          }
+
+          if (emptyStateEl) {
+            if (visibleCount === 0) {
+              emptyStateEl.classList.remove('is-hidden');
+            } else {
+              emptyStateEl.classList.add('is-hidden');
+            }
+          }
+        }
+
+        groupPills.forEach(function (pill) {
+          pill.addEventListener('click', function () {
+            activeGroup = pill.getAttribute('data-group-pill') || 'all';
+            updatePressed(groupPills, 'data-group-pill', activeGroup);
+            applyFilters();
+          });
+        });
+
+        statusPills.forEach(function (pill) {
+          pill.addEventListener('click', function () {
+            activeStatus = pill.getAttribute('data-status-pill') || 'all';
+            updatePressed(statusPills, 'data-status-pill', activeStatus);
+            applyFilters();
+          });
+        });
+
+        if (searchInput) {
+          searchInput.addEventListener('input', function (e) {
+            searchQuery = e.target.value || '';
+            applyFilters();
+          });
+        }
+
+        if (resetBtn) {
+          resetBtn.addEventListener('click', function () {
+            activeGroup = 'all';
+            activeStatus = 'all';
+            searchQuery = '';
+            if (searchInput) searchInput.value = '';
+            updatePressed(groupPills, 'data-group-pill', 'all');
+            updatePressed(statusPills, 'data-status-pill', 'all');
+            applyFilters();
+          });
+        }
+
+        applyFilters();
+      })();
+    </script>
+  </body>
+</html>
