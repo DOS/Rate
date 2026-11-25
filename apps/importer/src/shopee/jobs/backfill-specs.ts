@@ -110,7 +110,9 @@ const DEVICE_AUDIT_CATEGORIES: ReadonlySet<string> = new Set(RATING_DEVICE_CATEG
  * (TVs, home appliances, bank savings, internet plans, places, ...) requires none: its
  * catalog is not built from device spec sheets, so its template lists the groups its page
  * may show, not groups every master must carry. Such a master still goes through the schema
- * and camera checks.
+ * and camera checks. A new device category must join `RATING_DEVICE_CATEGORIES`, or its
+ * masters are not held to any group: spec-audit-categories-1910.test.ts fails on a template
+ * category that is neither a device nor a known non-device.
  */
 export function auditedSpecGroups(
   categorySlug: unknown

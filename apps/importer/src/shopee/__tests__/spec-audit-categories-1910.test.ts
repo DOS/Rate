@@ -5,6 +5,7 @@
  * on the masters it names.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { RATING_DEVICE_CATEGORIES } from '@repo/shared-data/rules';
 import {
@@ -22,6 +23,21 @@ const NON_DEVICE_CATEGORIES = [
   'tvs',
   'air-conditioners',
   'refrigerators',
+];
+
+/**
+ * Every category with a template that is not a device: the audit requires none of its
+ * groups. A new template must be added here or to RATING_DEVICE_CATEGORIES on purpose.
+ */
+const KNOWN_NON_DEVICE_TEMPLATES = [
+  ...NON_DEVICE_CATEGORIES,
+  'supplements',
+  'cosmetics',
+  'mother-baby',
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
 ];
 
 /** A keyset-paged stand-in for the audit's master_products read. */
@@ -105,6 +121,30 @@ test('auditedSpecGroups keeps device checks and requires no group of a non-devic
   }
   for (const category of NON_DEVICE_CATEGORIES) {
     assert.deepEqual(auditedSpecGroups(category), [], category);
+  }
+});
+
+test('every spec template category is classed as a device or a known non-device (#1910)', () => {
+  // The audit requires no group of a category with its own template that is not a device,
+  // so a new device template (monitors, handhelds, ...) must not slip in unaudited.
+  const source = readFileSync(
+    new URL('../../../../../packages/shared-data/src/rules/spec-template.ts', import.meta.url),
+    'utf8'
+  );
+  const start = source.indexOf('const SPEC_TEMPLATES');
+  assert.ok(start >= 0, 'SPEC_TEMPLATES is found');
+  const block = source.slice(start, source.indexOf('\n};', start));
+  const keys = [...block.matchAll(/^ {2}'?([a-z0-9-]+)'?:/gm)].map(m => m[1]!);
+  assert.ok(keys.includes('smartphones') && keys.includes('bank-savings'), keys.join(','));
+  const devices = new Set<string>(RATING_DEVICE_CATEGORIES);
+  const unclassed = keys.filter(k => !devices.has(k) && !KNOWN_NON_DEVICE_TEMPLATES.includes(k));
+  assert.deepEqual(
+    unclassed,
+    [],
+    'a new spec template must be classed: a device in RATING_DEVICE_CATEGORIES, or a non-device here'
+  );
+  for (const key of KNOWN_NON_DEVICE_TEMPLATES) {
+    assert.deepEqual(auditedSpecGroups(key), [], key);
   }
 });
 
