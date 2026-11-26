@@ -1285,7 +1285,7 @@ export default function WatchlistComboOptimizer({
                               lang={
                                 locale !== 'vi' &&
                                 VIETNAMESE_PLATFORMS.has(
-                                  group.platform.toLowerCase()
+                                  group.platform.trim().toLowerCase()
                                 )
                                   ? 'vi'
                                   : undefined

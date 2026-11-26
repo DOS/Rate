@@ -91,7 +91,9 @@ function sanitizeCustomFieldValue(
   if (typeof value === 'number') {
     return Number.isFinite(value) &&
       Math.abs(value) <= MAX_CUSTOM_FIELD_ABS_NUMBER
-      ? value
+      ? value === 0
+        ? 0
+        : value
       : undefined;
   }
   if (typeof value === 'string') {

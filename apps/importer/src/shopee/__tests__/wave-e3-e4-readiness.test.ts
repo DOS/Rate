@@ -32,6 +32,7 @@ import {
 } from '@repo/shared-data/rules';
 import {
   AiSpecEnricher,
+  getAiSpecEnrichmentJsonSchema,
   mergeProductSpecifications,
   sanitizeSpecifications,
 } from '../ai-spec-enricher.js';
@@ -1786,7 +1787,16 @@ describe('DOS/Rate#1923 retail platforms, typed custom_fields, and Wave E3 brand
     );
     assert.equal('hardware' in (storageScoped.specifications as Record<string, unknown>), false);
 
-    // 4. AiSpecEnricher preserves crawler custom_fields and strips LLM-supplied custom_fields.
+    // 4. AiSpecEnricher omits custom_fields from its JSON schema, preserves crawler facts, and strips LLM custom_fields.
+    const enrichmentJsonSchema = getAiSpecEnrichmentJsonSchema() as {
+      properties?: {
+        specifications?: { properties?: Record<string, unknown> };
+      };
+    };
+    const jsonSchemaSpecsProps = enrichmentJsonSchema.properties?.specifications?.properties;
+    assert.ok(jsonSchemaSpecsProps && 'availability' in jsonSchemaSpecsProps);
+    assert.equal('custom_fields' in jsonSchemaSpecsProps, false);
+
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
       new Response(

@@ -305,6 +305,19 @@ const VIETNAMESE_NAMED_PLATFORMS = new Set([
   'concung',
 ]);
 
+function resolveWatchlistPlatformDisplay(platform: string): {
+  label: string;
+  isVietnamese: boolean;
+} {
+  const normalized = platform.trim().toLowerCase();
+  return {
+    label: Object.hasOwn(PLATFORM_DISPLAY_LABELS, normalized)
+      ? PLATFORM_DISPLAY_LABELS[normalized]!
+      : platform.trim().toUpperCase(),
+    isVietnamese: VIETNAMESE_NAMED_PLATFORMS.has(normalized),
+  };
+}
+
 export function sanitizeWatchlistBestOfferUrl(rawUrl: unknown): string | null {
   if (typeof rawUrl !== 'string') return null;
   const cleaned = rawUrl.replace(/\p{Cc}+/gu, '').trim();
@@ -2088,23 +2101,24 @@ export default function WatchlistWorkspace({
                           {t('bestOfferPrefix', { count: platformCount })}
                         </span>{' '}
                         <span className="badge bg-dark rounded-pill me-1 text-white">
-                          <ContentText
-                            text={
-                              Object.hasOwn(
-                                PLATFORM_DISPLAY_LABELS,
+                          {(() => {
+                            const bestOfferPlatform =
+                              resolveWatchlistPlatformDisplay(
                                 bestOffer.platform
-                              )
-                                ? PLATFORM_DISPLAY_LABELS[bestOffer.platform]!
-                                : bestOffer.platform.toUpperCase()
-                            }
-                            locale={locale || 'vi'}
-                            lang={
-                              (locale || 'vi') !== 'vi' &&
-                              VIETNAMESE_NAMED_PLATFORMS.has(bestOffer.platform)
-                                ? 'vi'
-                                : undefined
-                            }
-                          />
+                              );
+                            return (
+                              <ContentText
+                                text={bestOfferPlatform.label}
+                                locale={locale || 'vi'}
+                                lang={
+                                  (locale || 'vi') !== 'vi' &&
+                                  bestOfferPlatform.isVietnamese
+                                    ? 'vi'
+                                    : undefined
+                                }
+                              />
+                            );
+                          })()}
                         </span>
                         <span className="fw-medium">
                           <ContentText

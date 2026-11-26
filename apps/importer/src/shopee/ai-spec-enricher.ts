@@ -51,7 +51,8 @@ export const AiSpecEnrichmentPayloadSchema = z.object({
   screen_size_inch: z.number().positive().max(120).nullable().optional(),
   battery_mah: z.number().int().positive().max(500000).nullable().optional(),
   has_5g: z.boolean().optional(),
-  specifications: ProductSpecificationsSchema,
+  // Crawlers supply `custom_fields`; keep them out of the model's output schema (DOS/Rate#1923).
+  specifications: ProductSpecificationsSchema.omit({ custom_fields: true }),
   key_specs: KeySpecsSchema.optional(),
 });
 

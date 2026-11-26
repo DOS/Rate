@@ -4355,6 +4355,10 @@ function testRetailPlatformsAndCustomFields1923(): void {
     rules.sanitizeCustomFields({ '---': 'x', empty: '' }),
     undefined
   );
+  const negZeroSanitized = rules.sanitizeCustomFields({ neg_zero: -0 });
+  assert.equal(Object.is(negZeroSanitized?.neg_zero, 0), true);
+  const negZeroMerged = rules.mergeCustomFields(undefined, { neg_zero: -0 });
+  assert.equal(Object.is(negZeroMerged?.neg_zero, 0), true);
   const bounded = rules.sanitizeCustomFields(
     Object.fromEntries(Array.from({ length: 80 }, (_, i) => [`k_${i}`, i]))
   );

@@ -18,7 +18,9 @@ import { pickClientMessages } from '../client-messages';
 import { NBSP, formatPriceVnd } from '../locale-format';
 import { evaluateMerchantTrustBadge } from '../merchant-trust-badge';
 import type { CrossPlatformDealRadarResponse } from '../../server/rate/deals';
-import WatchlistWorkspace from '../../components/watchlist/WatchlistWorkspace';
+import WatchlistWorkspace, {
+  type LiveWatchlistDeal,
+} from '../../components/watchlist/WatchlistWorkspace';
 import WatchlistComboOptimizer, {
   buildComboCartApiUrl,
   doesComboResultMatchQueryState,
@@ -1889,14 +1891,16 @@ async function main() {
   }
 
   // 7.5 Retail ingestion platform display labels & Vietnamese lang="vi" tag (#1923)
-  const retailPlatformCases: Array<readonly [string, string, boolean]> = [
-    ['avakids', 'AVAKids', false],
-    ['pharmacity', 'Pharmacity', false],
-    ['kidsplaza', 'Kids Plaza', false],
-    ['concung', 'Con Cưng', true],
-  ];
+  const retailPlatformCases: Array<readonly [string, string, string, boolean]> =
+    [
+      ['avakids', '  AVAKids ', 'AVAKids', false],
+      ['pharmacity', ' Pharmacity', 'Pharmacity', false],
+      ['kidsplaza', 'KidsPlaza ', 'Kids Plaza', false],
+      ['concung', ' CONCUNG ', 'Con Cưng', true],
+    ];
   for (const [
     platformKey,
+    rawPlatformVariant,
     displayLabel,
     isVietnameseName,
   ] of retailPlatformCases) {
@@ -1911,21 +1915,54 @@ async function main() {
             storeKey: `store-${platformKey}`,
             merchantId: `store-${platformKey}`,
             merchantName: `${displayLabel} Official`,
-            platform: platformKey,
+            platform: rawPlatformVariant,
             items: templateGroup.items.map((item) => ({
               ...item,
-              platform: platformKey,
+              platform: rawPlatformVariant,
               offerUrl: `https://${platformKey}.vn/item`,
             })),
             trustBadge: {
               ...templateGroup.trustBadge,
-              platform: platformKey,
+              platform: rawPlatformVariant,
             },
           },
         ],
       },
       multiStoreOptimal: null,
     };
+    const retailLiveDeals: Record<string, LiveWatchlistDeal> = {
+      'apple-iphone-16': {
+        slug: 'apple-iphone-16',
+        product_href: '/smartphones/apple-iphone-16',
+        current_min_price: 18_500_000,
+        current_max_price: 20_500_000,
+        merchant_count: 1,
+        platform_count: 1,
+        offer_platforms: [rawPlatformVariant],
+        best_offer: {
+          id: `best-${platformKey}`,
+          title: 'iPhone 16',
+          price: 18_500_000,
+          original_price: 20_500_000,
+          url: `https://${platformKey}.vn/item`,
+          platform: rawPlatformVariant,
+          merchant_name: `${displayLabel} Official`,
+          is_official_mall: true,
+        },
+      },
+    };
+    const watchedSample = [
+      {
+        slug: 'apple-iphone-16',
+        name: 'Apple iPhone 16',
+        brand: 'Apple',
+        categoryPath: '/smartphones',
+        thumbnail: null,
+        priceWhenAdded: 19_000_000,
+        targetPrice: 18_000_000,
+        addedAt: '2026-11-26T00:00:00.000Z',
+      },
+    ];
     for (const loc of ['vi', 'en', 'cs'] as const) {
       const messages = pickClientMessages(localeCatalogs[loc], 'watchlist');
       const comboHtml = renderToStaticMarkup(
@@ -1954,21 +1991,42 @@ async function main() {
           )
         )
       );
-      if (loc !== 'vi' && isVietnameseName) {
-        assert.ok(
-          comboHtml.includes(`lang="vi">${displayLabel}<`),
-          `${loc}: expected lang="vi" on ${displayLabel} badge`
-        );
-      } else {
-        assert.ok(
-          comboHtml.includes(`>${displayLabel}<`),
-          `${loc}: expected ${displayLabel} badge`
-        );
-        assert.equal(
-          comboHtml.includes(`lang="vi">${displayLabel}<`),
-          false,
-          `${loc}: ${displayLabel} must not set lang="vi"`
-        );
+      const workspaceHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: mockRouter as never },
+          React.createElement(
+            IntlProvider,
+            { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+            React.createElement(WatchlistWorkspace, {
+              catalogProducts: catalogSample,
+              locale: loc,
+              initialItems: watchedSample,
+              initialLiveDeals: retailLiveDeals,
+            })
+          )
+        )
+      );
+      for (const [surface, html] of [
+        ['WatchlistComboOptimizer', comboHtml],
+        ['WatchlistWorkspace', workspaceHtml],
+      ] as const) {
+        if (loc !== 'vi' && isVietnameseName) {
+          assert.ok(
+            html.includes(`lang="vi">${displayLabel}<`),
+            `${loc} ${surface}: expected lang="vi" on ${displayLabel} badge`
+          );
+        } else {
+          assert.ok(
+            html.includes(`>${displayLabel}<`),
+            `${loc} ${surface}: expected ${displayLabel} badge`
+          );
+          assert.equal(
+            html.includes(`lang="vi">${displayLabel}<`),
+            false,
+            `${loc} ${surface}: ${displayLabel} must not set lang="vi"`
+          );
+        }
       }
     }
   }
