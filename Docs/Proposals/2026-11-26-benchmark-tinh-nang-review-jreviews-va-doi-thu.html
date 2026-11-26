@@ -770,9 +770,9 @@
       <header class="hero-card">
         <div class="meta-row">
           <span class="badge badge-accent">Rate.vn Benchmark Report</span>
-          <span class="badge badge-neutral">Issue DOS/Rate#1916</span>
-          <span class="badge badge-neutral">Ngày lập: 26/11/2026</span>
-          <span class="badge badge-green">Đối chiếu 100% từ Codebase</span>
+          <span class="badge badge-neutral">Issue DOS/Rate#1916 (Đính chính tại #1928)</span>
+          <span class="badge badge-neutral">Ngày lập &amp; đối chiếu: 26/11/2026</span>
+          <span class="badge badge-green">Đối chiếu Codebase &amp; Live Prod</span>
         </div>
         <h1>
           Benchmark Tính năng Review: Rate.vn vs JReviews.com &amp; Các Nền tảng
@@ -801,13 +801,13 @@
           >
           <span
             >Đang Live trên Prod: <strong>16</strong> master Tech (<strong
-              >405</strong
+              >456</strong
             >
-            listings, <strong>47</strong> merchants, <strong>747</strong>
-            reviews)</span
+            listings, <strong>53</strong> merchants, <strong>747</strong>
+            reviews theo <code>/api/v1/rate/stats</code> ngày 26/11/2026)</span
           >
           <span
-            >Kho chờ xuất bản: <strong>210</strong> bản ghi
+            >Kho chờ xuất bản (snapshot DB #1916): <strong>210</strong> bản ghi
             <code>draft</code> (<strong>23</strong> Tech cũ +
             <strong>187</strong> Wave E1-E4: 62 sản phẩm E1/E3, 101 dịch vụ E2,
             24 địa điểm E4)</span
@@ -831,20 +831,23 @@
             </div>
           </div>
           <div class="kpi-card kpi-green">
-            <div class="kpi-num" id="kpi-adv-count">21</div>
+            <div class="kpi-num" id="kpi-adv-count">23</div>
             <div class="kpi-title">Tính năng Rate vượt trội / Độc quyền</div>
             <div class="kpi-desc">
-              Đang Live đầy đủ trên Prod (42.9%), nổi bật với chống seeding 6
-              trục, Omnibus 90d, Extension 22 sàn và MCP v1.1.
+              Đang Live đầy đủ trên Prod (46.9%), gồm Review Form v2
+              (<code>#1544</code>: sao tiêu chí, N/A, Pros/Cons), chống seeding
+              6 trục, Omnibus 90d, Extension 22 sàn và MCP v1.1.
             </div>
           </div>
           <div class="kpi-card kpi-amber">
-            <div class="kpi-num" id="kpi-partial-count">14</div>
+            <div class="kpi-num" id="kpi-partial-count">12</div>
             <div class="kpi-title">Đã code xong nhưng tắt cờ / Dở dang</div>
             <div class="kpi-desc">
-              Chiếm 28.6%: gồm các tính năng sau cờ (<code>#1544</code>,
-              <code>RATE_ITEM_MODEL</code>, AI Points, Resend) hoặc mới phủ 5
-              ngành Tech.
+              Chiếm 24.5%: gồm các tính năng còn tắt cờ/chưa cấu hình
+              (<code>RATE_ITEM_MODEL</code>, AI Points /
+              <code>product_points</code>, Resend) hoặc mới phủ 5 ngành Tech
+              (Form v2 đã Live nhưng Prod hiện có <code>0</code> review mang
+              <code>criteria_ratings</code>).
             </div>
           </div>
           <div class="kpi-card kpi-rose">
@@ -861,27 +864,27 @@
           <div class="coverage-head">
             <strong>Bức tranh trưởng thành của Rate.vn trên Production</strong>
             <span class="muted"
-              >49 hạng mục đối chiếu | Cập nhật trạng thái cờ Feature Flags mới
-              nhất</span
+              >49 hạng mục đối chiếu | Đã kiểm chứng Live Prod &amp; Feature
+              Flags ngày 26/11/2026</span
             >
           </div>
           <div
             class="stacked-bar"
             role="img"
-            aria-label="Phân bổ 21 tính năng lợi thế, 14 tính năng tắt cờ hoặc một phần, 14 tính năng chưa có"
+            aria-label="Phân bổ 23 tính năng lợi thế, 12 tính năng tắt cờ hoặc một phần, 14 tính năng chưa có"
           >
-            <div class="seg-green" style="width: 42.86%"></div>
-            <div class="seg-amber" style="width: 28.57%"></div>
+            <div class="seg-green" style="width: 46.94%"></div>
+            <div class="seg-amber" style="width: 24.49%"></div>
             <div class="seg-rose" style="width: 28.57%"></div>
           </div>
           <div class="legend-inline">
             <span
               ><span class="legend-dot seg-green"></span>Lợi thế Rate / Live
-              Prod: <strong>21 (42.9%)</strong></span
+              Prod: <strong>23 (46.9%)</strong></span
             >
             <span
               ><span class="legend-dot seg-amber"></span>Tắt cờ / Một phần:
-              <strong>14 (28.6%)</strong></span
+              <strong>12 (24.5%)</strong></span
             >
             <span
               ><span class="legend-dot seg-rose"></span>Chưa có - Cần xây:
@@ -895,13 +898,18 @@
           Rate.vn đang sở hữu phần "não bộ" (Anti-Seeding 6 trục, Bayesian
           <code>k=3, mu0=4.2</code>, Wilson CI, Deal Radar Omnibus 90 ngày,
           Extension MV3 22 sàn, Combo Cart Optimizer, MCP v1.1) vượt xa JReviews
-          và cả Trustpilot/G2/Yelp về chiều sâu dữ liệu và độ tin cậy. Ngược
-          lại, Rate đang bị hụt rõ ở phần "tương tác cộng đồng &amp; công cụ chủ
-          doanh nghiệp" (vòng đời review, upload ảnh/video, Owner Reply, Q&amp;A,
-          Hồ sơ Reviewer, bản đồ lọc bán kính GeoMaps cho Wave E4, B2B Claim
-          &amp; Trust Widget). Đóng nhóm Quick Wins P0 (bật các cờ đã code sẵn
-          và nối hiển thị <code>reviews.images</code>) sẽ nâng tỷ lệ tính năng
-          hoàn chỉnh lên rõ rệt chỉ trong vài ngày.
+          và cả Trustpilot/G2/Yelp về chiều sâu dữ liệu và độ tin cậy. Kiểm tra
+          Live Prod ngày 26/11/2026 xác nhận <code>ReviewFormV2</code>
+          (<code>#1544</code>) đã bật sẵn cho người dùng (chấm sao tiêu chí
+          bước 0.5, N/A Skip, Verdict + Pros/Cons), nhưng Prod hiện vẫn có
+          <code>0</code> review cộng đồng mang <code>criteria_ratings</code> và
+          <code>criteria_scores</code> trên các master đã publish vẫn rỗng.
+          Ngược lại, Rate vẫn hụt ở "tương tác cộng đồng &amp; công cụ doanh
+          nghiệp" (upload ảnh/video, Edit/Delete, Owner Reply, Q&amp;A, Hồ sơ
+          Reviewer, GeoMaps Wave E4, B2B Claim &amp; Widget). Ở nhóm Quick Wins
+          P0, trọng tâm là thúc đẩy lượt gửi bài Review v2, bật 3 cấu hình còn
+          tắt (<code>RATE_ITEM_MODEL</code>, AI Points, Resend) và nối hiển thị
+          <code>reviews.images</code>.
         </div>
       </section>
 
@@ -1004,7 +1012,7 @@
                   data-status-pill="advantage"
                   aria-pressed="false"
                 >
-                  Lợi thế Rate (21)
+                  Lợi thế Rate (23)
                 </button>
                 <button
                   type="button"
@@ -1012,7 +1020,7 @@
                   data-status-pill="partial"
                   aria-pressed="false"
                 >
-                  Tắt cờ / Một phần (14)
+                  Tắt cờ / Một phần (12)
                 </button>
                 <button
                   type="button"
@@ -1098,7 +1106,7 @@
                 </td>
                 <td class="cell-rate">
                   <span class="badge badge-amber"
-                    >Một phần (5 Tech + chờ cờ)</span
+                    >Một phần (Form v2 Live / 5 Tech)</span
                   >
                   <div class="cell-note">
                     <code>JReviewsSection.tsx</code> và
@@ -1109,13 +1117,17 @@
                     đa tiêu chí cho 5 ngành Tech cũ (<code>earbuds</code> bỏ
                     <code>screen</code>; trả <code>['value']</code> cho 13 ngành
                     Wave E1-E4 và <code>['screen', 'value']</code> cho
-                    <code>tvs</code>). Trên Prod: 16 master Tech Live, 210 draft
-                    (23 Tech cũ + 187 E1-E4), cột JSONB
-                    <code>rate.master_products.criteria_scores</code> hiện đang
-                    rỗng trên các master đã publish (và 0 dòng
-                    <code>rate.reviews</code> có <code>criteria_ratings</code>),
-                    còn form chấm sao theo từng tiêu chí <code>ReviewFormV2</code>
-                    (<code>#1544</code>) đang tắt cờ.
+                    <code>tvs</code>). Form chấm sao từng tiêu chí
+                    <code>ReviewFormV2</code> (<code>#1544</code>) ĐÃ BẬT LIVE
+                    trên Prod (xác minh ngày 26/11/2026 qua
+                    <code>"reviewCategorySlug":"smartphones"</code> trong RSC
+                    payload và chunk client), nên luồng gửi sao đa tiêu chí đã
+                    mở; tuy vậy trên Prod cột JSONB
+                    <code>rate.master_products.criteria_scores</code> hiện vẫn
+                    rỗng (<code>{}</code> trên
+                    <code>/api/v1/rate/products/apple-iphone-16-128gb</code>)
+                    vì <code>0</code> review cộng đồng hiện tại có
+                    <code>criteria_ratings</code> (chưa có lượt gửi v2 mới).
                   </div>
                 </td>
                 <td>
@@ -1354,7 +1366,7 @@
                 </td>
               </tr>
 
-              <tr class="feature-row" data-group="g1" data-status="partial">
+              <tr class="feature-row" data-group="g1" data-status="advantage">
                 <td>
                   <span class="feat-name"
                     >Bỏ qua tiêu chí không áp dụng (<code>N/A Criteria Skip</code>)</span
@@ -1364,12 +1376,16 @@
                   >
                 </td>
                 <td class="cell-rate">
-                  <span class="badge badge-amber">Tắt cờ</span>
+                  <span class="badge badge-green">Live trên Prod</span>
                   <div class="cell-note">
-                    Đã cài hoàn chỉnh trong <code>ReviewFormV2.tsx</code> sau cờ
-                    <code>NEXT_PUBLIC_RATE_REVIEW_FORM_V2</code>: cho phép đánh
-                    dấu N/A tối đa <code>2</code> tiêu chí, bắt buộc chấm
-                    <code>value</code>/<code>price</code>.
+                    Đã Live trên Prod trong <code>ReviewFormV2.tsx</code> với cờ
+                    <code>NEXT_PUBLIC_RATE_REVIEW_FORM_V2=1</code>
+                    (<code>#1544</code>, xác minh live ngày 26/11/2026 qua
+                    <code>"reviewCategorySlug":"smartphones"</code> trong RSC
+                    payload và chunk client <code>ReviewFormV2</code>, khớp
+                    kiểm tra live trên <code>#1544</code> ngày 02/11/2026): cho
+                    phép đánh dấu N/A ("Chưa dùng tới") tối đa <code>2</code>
+                    tiêu chí, bắt buộc chấm <code>value</code>/Đáng tiền.
                   </div>
                 </td>
                 <td>
@@ -1409,17 +1425,23 @@
                   >
                 </td>
                 <td class="cell-rate">
-                  <span class="badge badge-amber">Tắt cờ / Một phần</span>
+                  <span class="badge badge-amber">Một phần (Form v2 Live / 0 AI Points)</span>
                   <div class="cell-note">
                     <code>ProductPointsBlock.tsx</code> đã Live (click lọc
-                    review theo tiêu chí), nhưng trên Prod bảng
-                    <code>rate.product_points</code> hiện có <code>0</code> dòng
-                    (các trang sản phẩm đang hiển thị Pros/Cons cũ từ
-                    <code>rate.review_analysis</code>); pipeline
-                    <code>REVIEW_AI_POINTS_ENABLED</code> đang tắt,
-                    <code>PRODUCT_POINTS_HIDE_AI</code> mặc định là
-                    <code>false</code> (công tắc opt-out), và nhập Pros/Cons thủ
-                    công nằm sau cờ <code>ReviewFormV2</code>.
+                    review theo tiêu chí) và phần nhập 1-5 Pros/Cons thủ công
+                    (kèm Pros/Cons theo tiêu chí) trong
+                    <code>ReviewFormV2</code> (<code>#1544</code>) ĐÃ LIVE trên
+                    Prod (xác minh 26/11/2026). Tuy nhiên trên Prod trang
+                    <code>/smartphones/apple-iphone-16-128gb</code> hiện vẫn
+                    trả <code>productPoints: []</code> và
+                    <code>productPointsReviewCount: 0</code> (nên đang hiển thị
+                    Pros/Cons cũ từ <code>rate.review_analysis</code>) vì chưa
+                    có review v2 mới được gửi và pipeline batch
+                    <code>REVIEW_AI_POINTS_ENABLED</code> (cờ backend trong
+                    <code>apps/importer</code>, không lộ qua web) chưa backfill
+                    <code>rate.product_points</code>
+                    (<code>PRODUCT_POINTS_HIDE_AI</code> mặc định là
+                    <code>false</code>).
                   </div>
                 </td>
                 <td>
@@ -1464,7 +1486,7 @@
                 </td>
               </tr>
 
-              <tr class="feature-row" data-group="g2" data-status="partial">
+              <tr class="feature-row" data-group="g2" data-status="advantage">
                 <td>
                   <span class="feat-name"
                     >Review Form v2 (Half-star, Verdict, Chặn nhược điểm né
@@ -1475,19 +1497,31 @@
                   >
                 </td>
                 <td class="cell-rate">
-                  <span class="badge badge-amber">Tắt cờ</span>
+                  <span class="badge badge-green">Live trên Prod</span>
                   <div class="cell-note">
                     <code>ReviewFormV2.tsx</code>
                     (<code>NEXT_PUBLIC_RATE_REVIEW_FORM_V2=1</code>,
-                    <code>#1544</code>, mặc định TẮT) là <strong>form chấm sao
-                    theo từng tiêu chí</strong> (bước <code>0.5</code> sao),
-                    nhập verdict tóm tắt tự do (<code>20-300</code> ký tự qua
-                    <code>textarea</code>), auto-save
+                    <code>#1544</code>) <strong>ĐÃ LIVE trên Production</strong>
+                    (xác minh đọc-only ngày 26/11/2026: RSC payload
+                    <code>/smartphones/apple-iphone-16-128gb</code> trả
+                    <code>"reviewCategorySlug":"smartphones"</code> do
+                    <code>page.tsx:650</code> chỉ gán khi
+                    <code>isReviewFormV2Enabled() === true</code>; chunk client
+                    <code>2x4w902ze0yog.js</code> đóng gói sẵn
+                    <code>ReviewFormV2</code> với
+                    <code>data-testid="review-form-v2"</code>, khớp xác minh
+                    live trên <code>#1544</code> ngày 02/11/2026 và form v1 đã
+                    gỡ). Hỗ trợ chấm sao bước <code>0.5</code> theo từng tiêu
+                    chí (server tự tính sao tổng trọng số), nhập verdict tóm tắt
+                    (<code>20-300</code> ký tự), auto-save
                     <code>localStorage</code> và nhập 1-5 Pros/Cons (chặn né
                     tránh). Trọng số danh mục cố định trong
                     <code>rating-criteria.ts</code> /
                     <code>rate.rating_criteria</code>, còn chỉnh trọng số cá
-                    nhân nằm ở <code>UseCaseWeightBar.tsx</code>.
+                    nhân nằm ở <code>UseCaseWeightBar.tsx</code>. Lưu ý: Prod
+                    hiện có <code>0</code> review mang
+                    <code>criteria_ratings</code> nên đòn bẩy lúc này là thúc
+                    đẩy lượt gửi bài v2 mới.
                   </div>
                 </td>
                 <td>
@@ -2781,7 +2815,10 @@
                     <code>/watchlist</code>, <code>PriceWatchButton.tsx</code>
                     và <code>/api/v1/rate/watchlist</code> đã Live (chú ý: chế
                     độ theo dõi theo biến thể Item nằm sau cờ
-                    <code>RATE_ITEM_MODEL</code>).
+                    <code>RATE_ITEM_MODEL</code> - xác minh live ngày 26/11/2026
+                    vẫn đang TẮT trên Prod qua <code>/smartphones/apple-iphone-16</code>
+                    trả <code>404</code> và OpenAPI chưa có schema
+                    <code>RateItem</code>).
                   </div>
                 </td>
                 <td>
@@ -3112,7 +3149,10 @@
                   <div class="cell-note">
                     Pipeline <code>price-alerts-digest.ts</code> (Resend email +
                     RFC 8058 one-click unsubscribe) đã code hoàn chỉnh nhưng
-                    đang chờ credential Prod &amp; lịch cron <code>--apply</code>;
+                    đang chờ credential Prod &amp; lịch cron
+                    <code>--apply</code> (xác minh live ngày 26/11/2026:
+                    <code>GET /api/v1/rate/watchlist/unsubscribe?token=probe</code>
+                    trả HTTP <code>503 UNSUBSCRIBE_BACKEND_UNCONFIGURED</code>);
                     chưa có chuông In-app Notification hay Web Push.
                   </div>
                 </td>
@@ -3531,7 +3571,12 @@
                     <code>Hotel</code>, <code>CafeOrCoffeeShop</code>...) đã sẵn
                     sàng; <code>ProductGroup</code> + <code>hasVariant</code>
                     (<code>buildItemProductGroupNode</code>) chờ bật cờ
-                    <code>RATE_ITEM_MODEL</code>.
+                    <code>RATE_ITEM_MODEL</code> (xác minh live ngày 26/11/2026:
+                    <code>/smartphones/apple-iphone-16-128gb</code> hiện xuất
+                    <code>BreadcrumbList</code> + <code>Product</code> +
+                    <code>AggregateRating</code>, chưa có
+                    <code>ProductGroup</code>; <code>/smartphones/apple-iphone-16</code>
+                    trả <code>404</code> và OpenAPI chưa có <code>RateItem</code>).
                   </div>
                 </td>
                 <td>
@@ -3632,19 +3677,23 @@
               <div class="weapon-num">Vũ khí 01 - Chống Seeding Toán học</div>
               <h3>
                 Anti-Seeding 6 Trục (<code>6-Axis Trust Model</code>) + Bayesian
-                <code>k=3, mu0=4.2</code>
+                <code>k=3, mu0=4.2</code> + Form v2 Live
               </h3>
               <p class="muted">
                 Không giấu thuật toán như hộp đen Yelp hay Trustpilot: Rate.vn
                 tính minh bạch 6 trục (Authenticity, Independence/Sponsorship,
                 Depth, Credibility, Context Routing, Community Signal), kết hợp
                 Bayesian Shrinkage và Wilson Lower Bound 95% CI
-                (<code>z=1.96</code>) ngay trên từng thẻ đánh giá.
+                (<code>z=1.96</code>) ngay trên từng thẻ đánh giá. Song hành
+                trên Prod là <code>ReviewFormV2</code> (<code>#1544</code> đã
+                Live) thu thập sao đa tiêu chí, N/A skip và Pros/Cons chống né
+                tránh; đòn bẩy kế tiếp là thu hút lượt gửi bài v2 thật (Prod
+                hiện có <code>0</code> review mang <code>criteria_ratings</code>).
               </p>
             </div>
             <div class="weapon-meta">
               Nguồn chứng thực: <code>rate-domain-core.ts</code>,
-              <code>JReviewsSection.tsx</code>
+              <code>JReviewsSection.tsx</code>, <code>ReviewFormV2.tsx</code>
             </div>
           </article>
 
@@ -3777,26 +3826,29 @@
               <tr>
                 <td><span class="prio-tag prio-p0">P0 Quick Win</span></td>
                 <td>
-                  <strong>Bật bộ 4 Feature Flags đã code sẵn:</strong>
+                  <strong>Thu hút lượt gửi Review v2 (đã Live) &amp; Bật 3 cấu hình còn tắt:</strong>
                   <ul>
-                    <li><code>NEXT_PUBLIC_RATE_REVIEW_FORM_V2=1</code> (<code>#1544</code>)</li>
-                    <li><code>RATE_ITEM_MODEL</code> (gom biến thể &amp; <code>ProductGroup</code>)</li>
-                    <li><code>REVIEW_AI_POINTS_ENABLED=true</code> + backfill <code>product_points</code> / <code>criteria_scores</code> (<code>PRODUCT_POINTS_HIDE_AI</code> mặc định <code>false</code>)</li>
-                    <li>Credential Resend &amp; cron <code>--apply</code> cho <code>price-alerts-digest.ts</code></li>
+                    <li><strong>Thúc đẩy submission cho <code>ReviewFormV2</code> (<code>#1544</code> ĐÃ LIVE):</strong> Form chấm sao tiêu chí, N/A skip, verdict và Pros/Cons đã bật sẵn trên Prod; Prod hiện có <code>0</code> review mang <code>criteria_ratings</code> và <code>criteria_scores</code> trên master vẫn rỗng (<code>{}</code>), nên đòn bẩy P0 là kích hoạt lượt gửi đánh giá v2 từ người dùng thật.</li>
+                    <li><code>RATE_ITEM_MODEL</code> (gom biến thể &amp; <code>ProductGroup</code>; xác minh live 26/11/2026 vẫn TẮT)</li>
+                    <li><code>REVIEW_AI_POINTS_ENABLED=true</code> + backfill <code>product_points</code> / <code>criteria_scores</code> (<code>PRODUCT_POINTS_HIDE_AI</code> mặc định <code>false</code>; Prod hiện trả <code>productPoints: []</code>)</li>
+                    <li>Credential Resend, <code>RATE_ALERT_UNSUBSCRIBE_SECRET</code> &amp; cron <code>--apply</code> cho <code>price-alerts-digest.ts</code> (xác minh live 26/11/2026: <code>/api/v1/rate/watchlist/unsubscribe</code> trả <code>503</code>)</li>
                   </ul>
                 </td>
                 <td><strong>1-3 ngày</strong></td>
                 <td>
-                  Hoàn tất v2 RPC &amp; Item migration bên
-                  <code>DOS-Me/supabase/migrations/</code>; cấu hình
-                  <code>RESEND_API_KEY</code> trên Prod và chạy backfill AI
-                  points.
+                  <code>ReviewFormV2</code> (<code>#1544</code>) không cần bật
+                  cờ nữa; hoàn tất Item migration bên
+                  <code>DOS-Me/supabase/migrations/</code>, cấu hình
+                  <code>RESEND_API_KEY</code> / <code>RATE_ALERT_UNSUBSCRIBE_SECRET</code>
+                  trên Prod và chạy backfill AI points.
                 </td>
                 <td>
-                  Mở khóa tức thì form chấm sao từng tiêu chí bước 0.5 sao, N/A
-                  Skip (tối đa 2), Pros/Cons &amp; Verdict bắt buộc, lấp đầy
-                  <code>rate.product_points</code> (hiện 0 dòng trên Prod) và
-                  email cảnh báo giá RFC 8058.
+                  Biến <code>ReviewFormV2</code> đã Live thành dữ liệu thật
+                  (lấp đầy <code>criteria_ratings</code> và
+                  <code>rate.master_products.criteria_scores</code> đang rỗng),
+                  lấp đầy <code>rate.product_points</code> (hiện 0 dòng trên
+                  Prod), bật <code>ProductGroup</code> JSON-LD và email cảnh
+                  báo giá RFC 8058.
                 </td>
               </tr>
 
@@ -3910,11 +3962,13 @@
       <footer>
         <span
           >Tài liệu nội bộ phục vụ quyết định sản phẩm - Issue
-          <code>DOS/Rate#1916</code></span
+          <code>DOS/Rate#1916</code> (Đính chính Live Prod tại
+          <code>DOS/Rate#1928</code>)</span
         >
         <span
-          >Xác minh trực tiếp trên nhánh cơ sở <code>origin/dev</code>
-          (<code>c4385f14</code>) | Zero external CDN dependencies</span
+          >Xác minh trên nhánh <code>origin/dev</code>
+          (<code>0ac25dc6</code>) &amp; Live Prod <code>rate.vn</code>
+          (26/11/2026) | Zero external CDN dependencies</span
         >
       </footer>
     </div>
