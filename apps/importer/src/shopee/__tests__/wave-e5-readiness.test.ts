@@ -249,12 +249,36 @@ describe('Wave E5 importer normalization', () => {
     );
     assert.equal(citi.brand, 'CitiGym');
     assert.equal(citi.model, 'Tân Bình');
+
+    // No-hint normalization for Wave E5 chains and clinic prefixes (DOS/Rate#1943).
+    const heThongKim = normalizer.normalize(
+      createPlace({ title: 'Hệ thống Nha khoa Kim - Chi nhánh Quận 3' })
+    );
+    assert.equal(heThongKim.category_slug, 'dental-clinics');
+    assert.equal(heThongKim.entity_type, 'place');
+    assert.equal(heThongKim.brand, 'Nha khoa Kim');
+
+    const getfit = normalizer.normalize(createPlace({ title: 'Getfit Gym Hoàng Diệu' }));
+    assert.equal(getfit.category_slug, 'gyms-fitness');
+    assert.equal(getfit.entity_type, 'place');
+    assert.equal(getfit.brand, 'Getfit Gym');
+    assert.equal(getfit.model, 'Hoàng Diệu');
+
+    const swequity = normalizer.normalize(createPlace({ title: 'Swequity Ultimate Fitness' }));
+    assert.equal(swequity.category_slug, 'gyms-fitness');
+    assert.equal(swequity.entity_type, 'place');
+    assert.equal(swequity.brand, 'Swequity');
+    assert.equal(swequity.model, 'Ultimate Fitness');
   });
 
   it('detects clinic and gym titles without a category hint and leaves retail alone', () => {
     const genuinePlaces: Array<[string, string]> = [
       ['Nha khoa Kim', 'dental-clinics'],
       ['Nha khoa Kim Bình Thạnh', 'dental-clinics'],
+      ['Hệ thống Nha khoa Kim', 'dental-clinics'],
+      ['Hệ thống nha khoa Paris - Chi nhánh Quận 1', 'dental-clinics'],
+      ['He thong nha khoa Kim', 'dental-clinics'],
+      ['[TP.HCM] Hệ thống Nha khoa Kim', 'dental-clinics'],
       ['Phòng khám nha khoa Paris', 'dental-clinics'],
       ['Phòng khám nha khoa Sài Gòn Smile', 'dental-clinics'],
       ['Nha khoa Paris - Hà Nội', 'dental-clinics'],
@@ -262,38 +286,81 @@ describe('Wave E5 importer normalization', () => {
       ['California Fitness & Yoga', 'gyms-fitness'],
       ['CitiGym', 'gyms-fitness'],
       ['CitiGym Tân Bình', 'gyms-fitness'],
+      ['CitiGym - khong gian tap luyen hien dai', 'gyms-fitness'],
+      ['CitiGym - Không gian tập luyện hiện đại', 'gyms-fitness'],
+      ['Getfit Gym', 'gyms-fitness'],
+      ['Getfit Gym Hoàng Diệu', 'gyms-fitness'],
+      ['Getfit Gym - thoi gian tap linh hoat', 'gyms-fitness'],
+      ['Getfit Gym - Thời gian tập linh hoạt', 'gyms-fitness'],
+      ['Get Fit Gym Quận 4', 'gyms-fitness'],
+      ['GetFit Gym', 'gyms-fitness'],
+      ['Swequity', 'gyms-fitness'],
+      ['Swequity Ultimate Fitness', 'gyms-fitness'],
+      ['Swequity Lương Yên', 'gyms-fitness'],
+      ['The New Gym', 'gyms-fitness'],
+      ['Phòng tập gym ABC', 'gyms-fitness'],
+      ['Phòng tập gym ABC - máy móc hiện đại', 'gyms-fitness'],
       ['Phòng tập gym Elite Fitness', 'gyms-fitness'],
       ['Phòng tập gym Hùng Fitness Quận 7', 'gyms-fitness'],
       ['Trung tâm thể hình Elite Fitness', 'gyms-fitness'],
     ];
     for (const [title, expected] of genuinePlaces) {
       assert.equal(detectCategorySlug(title), expected, title);
+      assert.equal(detectCategorySlug(title.normalize('NFD')), expected, `${title} (NFD)`);
     }
 
     // Retail products that mention clinic/gym vocabulary must stay in E3 or default, never Wave E5.
     const retailExpectations: Array<[string, string]> = [
       ['Whey Protein Rule 1 5lbs dùng cho phòng gym', 'supplements'],
+      ['Whey Protein Swequity', 'supplements'],
       ['Creatine Monohydrate phòng gym', 'supplements'],
       ['Whey protein tập gym 2kg', 'supplements'],
       ['Miếng dán trắng răng chuẩn nha khoa thẩm mỹ', 'cosmetics'],
+      ['Miếng dán trắng răng Hệ thống nha khoa', 'cosmetics'],
       ['Bình lắc whey phòng tập gym', 'smartphones'],
+      ['Bình lắc Swequity', 'smartphones'],
       ['Túi đựng đồ đi phòng gym', 'smartphones'],
+      ['Túi đựng đồ tập Getfit Gym', 'smartphones'],
       ['Thảm tập yoga cho phòng gym', 'smartphones'],
       ['Găng tay tập gym fitness club', 'smartphones'],
       ['Dây kháng lực fitness center tại nhà', 'smartphones'],
+      ['Dây kháng lực get fit tại nhà', 'smartphones'],
+      ['Máy tập đa năng cho phòng gym', 'smartphones'],
+      ['May tap da nang cho phong gym', 'smartphones'],
+      ['May tap da nang cho Getfit Gym', 'smartphones'],
+      ['Giàn tạ đa năng cho phòng gym', 'smartphones'],
+      ['Gian ta da nang Swequity', 'smartphones'],
+      ['Gian tap ta da nang Swequity', 'smartphones'],
+      ['Máy chạy bộ điện phòng gym', 'smartphones'],
+      ['May chay bo dien California Fitness', 'smartphones'],
+      ['Xe đạp tập thể dục phòng gym', 'smartphones'],
+      ['Xe dap tap Elite Fitness', 'smartphones'],
+      ['Ghế tập tạ đa năng cho phòng gym', 'smartphones'],
+      ['Ghe tap ta Getfit Gym', 'smartphones'],
       ['Máy tăm nước Panasonic phòng khám nha khoa', 'smartphones'],
+      ['Máy tăm nước Panasonic Hệ thống nha khoa khuyên dùng', 'smartphones'],
       ['Bàn chải điện Oral-B Dental Center khuyên dùng', 'smartphones'],
+      ['Bàn chải điện Oral-B Hệ thống Nha khoa Kim khuyên dùng', 'smartphones'],
       ['Kem đánh răng chuẩn nha khoa thẩm mỹ', 'smartphones'],
+      ['Kem đánh răng Hệ thống nha khoa', 'smartphones'],
       ['Gel tẩy trắng răng phòng khám nha khoa', 'smartphones'],
+      ['Gel tẩy trắng răng Hệ thống nha khoa', 'smartphones'],
       ['Nước súc miệng chuẩn nha khoa quốc tế', 'smartphones'],
+      ['Nước súc miệng chuẩn Hệ thống nha khoa', 'smartphones'],
       ['Chỉ nha khoa Oral-B 50m', 'smartphones'],
       ['Tăm chỉ nha khoa thẩm mỹ 50 cây', 'smartphones'],
       ['Găng tay tập gym chống chai', 'smartphones'],
     ];
     for (const [title, expected] of retailExpectations) {
-      assert.equal(detectCategorySlug(title), expected, title);
-      assert.notEqual(detectCategorySlug(title), 'dental-clinics', title);
-      assert.notEqual(detectCategorySlug(title), 'gyms-fitness', title);
+      for (const [label, candidate] of [
+        [title, title],
+        [`${title} (NFD)`, title.normalize('NFD')],
+      ] as const) {
+        const actual = detectCategorySlug(candidate);
+        assert.equal(actual, expected, label);
+        assert.notEqual(actual, 'dental-clinics', label);
+        assert.notEqual(actual, 'gyms-fitness', label);
+      }
     }
   });
 });
