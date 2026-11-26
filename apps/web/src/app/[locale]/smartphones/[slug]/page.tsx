@@ -436,11 +436,10 @@ export async function ProductDetailView({
   const productSlug =
     renderedSize?.variant.slug ??
     (itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug);
-  const [t, tNav, tSale, tPlace, storedProduct] = await Promise.all([
+  const [t, tNav, tSale, storedProduct] = await Promise.all([
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
     getTranslations({ locale, namespace: 'saleState' }),
-    getTranslations({ locale, namespace: 'placeDetail' }),
     timing.time('product', getCachedMasterProductBySlug(productSlug)),
   ]);
 
@@ -1180,24 +1179,6 @@ export async function ProductDetailView({
       />
     );
 
-  const colorsBlock = (visibility: string) =>
-    product.colors && product.colors.length > 0 ? (
-      <div className={`border-top mt-3 pt-3 text-start ${visibility}`}>
-        <div className="small text-muted mb-2">{t('availableColors')}</div>
-        <div className="rate-pdv-colors d-flex flex-wrap gap-2">
-          {product.colors.map((c, i) => (
-            <span
-              key={i}
-              className="badge text-dark rounded-pill small border bg-white px-3 py-2"
-              lang={contentLang(c, locale)}
-            >
-              {c}
-            </span>
-          ))}
-        </div>
-      </div>
-    ) : null;
-
   const peerItemSlugMap = buildPeerItemSlugMap(
     { slug: product.slug, itemSlug: currentItemSlug },
     relatedCompetitors
@@ -1213,12 +1194,11 @@ export async function ProductDetailView({
       ? { variant_key: defaultVariantKey }
       : {}),
   };
-  const { href: rawSingleCompareHref, count: currentCompareCount } =
-    buildPeerCompareLink(categorySlug, [currentCompareRow], 1);
-  const singleCompareHref =
-    currentCompareCount > 0
-      ? rawSingleCompareHref
-      : `/compare?cat=${encodeURIComponent(categorySlug)}`;
+  const { count: currentCompareCount } = buildPeerCompareLink(
+    categorySlug,
+    [currentCompareRow],
+    1
+  );
   const { href: compareAllHref, count: compareAllCount } = buildPeerCompareLink(
     categorySlug,
     [currentCompareRow, ...relatedCompetitors],
@@ -1235,6 +1215,130 @@ export async function ProductDetailView({
     topPeerComboSlug ? [product.slug, topPeerComboSlug] : [product.slug],
     { minItems: 1 }
   );
+
+  const validCriteriaReviews = reviews.filter(
+    (r) => r.include_in_rating && r.helpfulness_weight > 0 && r.criteria_ratings
+  );
+  const effectiveCriteriaSlug = isCanonicalCategorySlug(reviewCategory)
+    ? reviewCategory
+    : categorySlug;
+  const expertCrit = product.expert_criteria_scores || {};
+  const avgCrit = (key: string): number | null => {
+    const legacyKey =
+      key === 'display'
+        ? 'screen'
+        : key === 'anc'
+          ? 'camera'
+          : effectiveCriteriaSlug === 'earbuds' && key === 'sound'
+            ? 'screen'
+            : null;
+    const vals = validCriteriaReviews
+      .map((r) =>
+        Number(
+          r.criteria_ratings?.[key] ??
+            (legacyKey ? r.criteria_ratings?.[legacyKey] : undefined) ??
+            0
+        )
+      )
+      .filter((v) => v >= 1 && v <= 5);
+    if (vals.length > 0) {
+      return vals.reduce((a, b) => a + b, 0) / vals.length;
+    }
+    const expVal = Number(
+      (expertCrit as Record<string, unknown>)[key] ??
+        (legacyKey
+          ? (expertCrit as Record<string, unknown>)[legacyKey]
+          : undefined) ??
+        0
+    );
+    if (expVal > 0) {
+      return expVal > 5 ? expVal / 2 : expVal;
+    }
+    return null;
+  };
+  const criteria = getRatingCriteria(effectiveCriteriaSlug).map((crit) => ({
+    label: getRatingCriterionLabel(crit, locale),
+    score: avgCrit(crit.key),
+  }));
+  const hasCriteriaScores = criteria.some((crit) => crit.score != null);
+  const heroSellerCount =
+    heroStats.sellerCount > 0 ? heroStats.sellerCount : offers.length;
+  const singleVariantLabel =
+    !isItemGroup && !variantLinks ? product.variant_name?.trim() || null : null;
+  const productColors = Array.isArray(product.colors)
+    ? product.colors.map((c) => c.trim()).filter(Boolean)
+    : [];
+  const hasVariantStrip = Boolean(
+    variantLinks ||
+    isItemGroup ||
+    singleVariantLabel ||
+    productColors.length > 0
+  );
+  const userScoreBox = (
+    <div className={`rate-pdv-score${hasCriteriaScores ? '' : ' is-compact'}`}>
+      <div className="rate-pdv-score-label is-user">
+        {t('userWeightedScoreLabel')}
+        <InfoTip
+          label={t('scoreFilterInfoLabel')}
+          text={t('scoreFilterInfo')}
+          testId="pdv-score-filter-info"
+        />
+      </div>
+      <div className="rate-pdv-score-row">
+        <StarRating
+          value={displayUserRating}
+          count={
+            displayUserRating > 0 && authenticCount > 0 ? authenticCount : null
+          }
+          size="lg"
+          title={t('userScoreHint')}
+          testId="pdv-user-score"
+        />
+      </div>
+      <div
+        className="rate-pdv-confidence"
+        data-testid="pdv-bayesian-confidence"
+      >
+        <span
+          className={`rate-pdv-tag is-${bayesianSummary.confidenceTier}`}
+          title={
+            bayesianSummary.effectiveWeightSum > 0
+              ? `Σw=${formatDecimal(bayesianSummary.effectiveWeightSum, locale, 2)} · c=${formatPercent(Math.round(bayesianSummary.confidenceRatio * 100), locale)}`
+              : undefined
+          }
+        >
+          {t(bayesianTierKey(bayesianSummary))}
+          {bayesianSummary.effectiveWeightSum > 0 && (
+            <span className="visually-hidden">
+              {' '}
+              (Σw=
+              {formatDecimal(bayesianSummary.effectiveWeightSum, locale, 2)}, c=
+              {Math.round(bayesianSummary.confidenceRatio * 100)}%)
+            </span>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+  const expertScoreBox =
+    expertRating10 != null ? (
+      <div
+        className={`rate-pdv-score is-expert${
+          hasCriteriaScores ? '' : ' h-100'
+        }`}
+      >
+        <div className="rate-pdv-score-label is-expert">
+          {t('expertScoreLabel')}
+        </div>
+        <div className="rate-pdv-score-row" title={t('expertScoreHint')}>
+          <span className="rate-pdv-score-value is-small">
+            {formatDecimal(expertRating10, locale, 1)}
+          </span>
+          <span className="rate-pdv-score-sub">/10</span>
+          <span className="visually-hidden">{t('expertScoreHint')}</span>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <ClientMessages scope="productDetail">
@@ -1275,8 +1379,12 @@ export async function ProductDetailView({
           <div className="row g-4 mb-5">
             {/* Left: Images */}
             <div className="col-lg-5 col-12">
-              <div className="card rounded-4 bg-light p-md-4 border-0 p-3 text-center shadow-sm">
-                <div className="rate-pdv-media d-flex align-items-center justify-content-center">
+              <div className="card rate-pdv-media-card rounded-4 p-md-4 p-3 text-center">
+                <div
+                  className={`rate-pdv-media d-flex align-items-center justify-content-center${
+                    mainImage ? ' is-studio' : ''
+                  }`}
+                >
                   {mainImage ? (
                     // The main product image is the page's largest paint: fetch it
                     // ahead of the below-the-fold peer and offer thumbnails.
@@ -1292,7 +1400,9 @@ export async function ProductDetailView({
                       className="img-fluid rounded-3"
                     />
                   ) : (
-                    <div className="text-muted">{t('noProductImage')}</div>
+                    <div className="rate-pdv-noimage">
+                      {t('noProductImage')}
+                    </div>
                   )}
                 </div>
                 {heroCredit && (
@@ -1324,10 +1434,6 @@ export async function ProductDetailView({
                     })}
                   </p>
                 )}
-
-                {/* Colors: under the photo on desktop; on a phone they move below the
-                scoreboard, so the jump row fits the first screen (DOS/Rate#1517). */}
-                {colorsBlock('d-none d-lg-block')}
               </div>
             </div>
 
@@ -1349,7 +1455,11 @@ export async function ProductDetailView({
               {/* Price in the first screen on phones, ahead of the scoreboard
             (DOS/Rate#605); the full price strip stays further down. */}
               {heroStats.minPrice > 0 && heroStats.sellerCount > 0 ? (
-                <p className="rate-pdv-price-line mb-3">
+                <p
+                  className={`rate-pdv-price-line ${
+                    hasVariantStrip ? 'mb-2' : 'mb-3'
+                  }`}
+                >
                   {t.rich(
                     effectiveHasUnitSuffix
                       ? 'heroPriceLineCurrency'
@@ -1366,66 +1476,109 @@ export async function ProductDetailView({
               ) : (
                 isPlace &&
                 heroPlacePriceFormatted && (
-                  <p className="rate-pdv-price-line mb-3">
+                  <p
+                    className={`rate-pdv-price-line ${
+                      hasVariantStrip ? 'mb-2' : 'mb-3'
+                    }`}
+                  >
                     <strong className="rate-tabular">
                       {heroPlacePriceFormatted}
                     </strong>
                   </p>
                 )
               )}
-              {/* The other variants of this model, not the quick-spec cards
-              the specs section already has (DOS/Rate#1436). */}
-              {variantLinks && (
-                <ProductVariantLinks
-                  links={variantLinks}
-                  basePath={categoryBasePath}
-                  label={t('variantLinksLabel')}
-                  unknownSizeLabel={t('variantLinksUnknownSize')}
-                  priceLabel={(minPrice) =>
-                    minPrice > 0
-                      ? effectiveHasUnitSuffix
-                        ? t('itemVariantPriceCurrency', {
-                            price: formatListingPrice(
-                              minPrice,
-                              effectiveCurrency,
-                              locale,
-                              { categorySlug }
-                            ),
-                          })
-                        : t('itemVariantPrice', {
-                            price: formatNumber(minPrice, locale),
-                          })
-                      : t('itemVariantNoPrice')
-                  }
-                />
-              )}
-              {isItemGroup && (
-                <ItemVariantPicker
-                  label={t('itemVariantLabel')}
-                  defaultKey={defaultVariantKey}
-                  options={itemVariants.map((v) => {
-                    const stats = productMarketStats(v.product);
-                    return {
-                      key: v.variant.variant_key,
-                      label: itemVariantLabel(v.variant),
-                      priceLabel:
-                        stats.minPrice > 0
+              {/* Variants & available colors surfaced compactly directly under price (DOS/Rate#1945). */}
+              {hasVariantStrip && (
+                <div
+                  className="rate-pdv-variant-strip"
+                  data-testid="pdv-variant-strip"
+                >
+                  {variantLinks && (
+                    <ProductVariantLinks
+                      links={variantLinks}
+                      basePath={categoryBasePath}
+                      label={t('variantLinksLabel')}
+                      unknownSizeLabel={t('variantLinksUnknownSize')}
+                      priceLabel={(minPrice) =>
+                        minPrice > 0
                           ? effectiveHasUnitSuffix
                             ? t('itemVariantPriceCurrency', {
                                 price: formatListingPrice(
-                                  stats.minPrice,
+                                  minPrice,
                                   effectiveCurrency,
                                   locale,
                                   { categorySlug }
                                 ),
                               })
                             : t('itemVariantPrice', {
-                                price: formatNumber(stats.minPrice, locale),
+                                price: formatNumber(minPrice, locale),
                               })
-                          : t('itemVariantNoPrice'),
-                    };
-                  })}
-                />
+                          : t('itemVariantNoPrice')
+                      }
+                    />
+                  )}
+                  {isItemGroup && (
+                    <ItemVariantPicker
+                      label={t('itemVariantLabel')}
+                      defaultKey={defaultVariantKey}
+                      options={itemVariants.map((v) => {
+                        const stats = productMarketStats(v.product);
+                        return {
+                          key: v.variant.variant_key,
+                          label: itemVariantLabel(v.variant),
+                          priceLabel:
+                            stats.minPrice > 0
+                              ? effectiveHasUnitSuffix
+                                ? t('itemVariantPriceCurrency', {
+                                    price: formatListingPrice(
+                                      stats.minPrice,
+                                      effectiveCurrency,
+                                      locale,
+                                      { categorySlug }
+                                    ),
+                                  })
+                                : t('itemVariantPrice', {
+                                    price: formatNumber(stats.minPrice, locale),
+                                  })
+                              : t('itemVariantNoPrice'),
+                        };
+                      })}
+                    />
+                  )}
+                  {singleVariantLabel && (
+                    <div className="rate-pdv-variant-row">
+                      <span
+                        className="rate-pdv-variant-chip is-current"
+                        data-testid="pdv-single-variant-chip"
+                      >
+                        <ContentText
+                          text={singleVariantLabel}
+                          locale={locale}
+                        />
+                      </span>
+                    </div>
+                  )}
+                  {productColors.length > 0 && (
+                    <div
+                      className="rate-pdv-colors"
+                      aria-label={t('availableColors')}
+                    >
+                      <span className="rate-pdv-colors-label">
+                        {t('availableColors')}
+                      </span>
+                      {productColors.map((c, i) => (
+                        <a
+                          key={`${c}-${i}`}
+                          href="#offers-table"
+                          className="rate-pdv-color-chip"
+                          lang={contentLang(c, locale)}
+                        >
+                          {c}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
               {/* Below lg the scoreboard starts past the first phone screen, so
             the buyer score is repeated next to the price (DOS/Rate#630). */}
@@ -1439,7 +1592,7 @@ export async function ProductDetailView({
                   </span>
                   <StarRating
                     value={displayUserRating}
-                    count={authenticCount}
+                    count={authenticCount > 0 ? authenticCount : null}
                     title={t('userScoreHint')}
                   />
                 </p>
@@ -1469,12 +1622,16 @@ export async function ProductDetailView({
                 )}
                 {!isPlace && (
                   <a href="#offers-table">
-                    {t('jumpNavOffers', { count: offers.length })}
+                    {t('jumpNavOffers', { count: heroSellerCount })}
                   </a>
                 )}
               </nav>
               {/* #1 Core Focus Above the Fold: JReviews Dual-Rating & 5-Criteria Scoreboard (DESIGN.md v3.0) */}
-              <div className="rate-scoreboard-dark rate-surface-dark rate-pdv-board mb-4">
+              <div
+                className={`rate-scoreboard-dark rate-surface-dark rate-pdv-board${
+                  hasCriteriaScores ? '' : ' is-compact'
+                } mb-4`}
+              >
                 {/* No eyebrow above the board (DOS/Rate#1946): the
                     fake-review note is the InfoTip beside the buyer score. */}
                 <div className="rate-pdv-tags">
@@ -1516,161 +1673,18 @@ export async function ProductDetailView({
                   </p>
                 )}
 
-                <div className="row g-3 align-items-stretch">
-                  {/* Dual Score Boxes */}
-                  <div className="col-md-5 d-flex flex-column col-12 gap-3">
-                    <div className="rate-pdv-score">
-                      <div className="rate-pdv-score-label is-user">
-                        {t('userWeightedScoreLabel')}
-                        <InfoTip
-                          label={t('scoreFilterInfoLabel')}
-                          text={t('scoreFilterInfo')}
-                          testId="pdv-score-filter-info"
-                        />
-                      </div>
-                      <div className="rate-pdv-score-row">
-                        <StarRating
-                          value={displayUserRating}
-                          count={displayUserRating > 0 ? authenticCount : null}
-                          size="lg"
-                          title={t('userScoreHint')}
-                          testId="pdv-user-score"
-                        />
-                      </div>
-                      <div
-                        className="rate-pdv-confidence"
-                        data-testid="pdv-bayesian-confidence"
-                      >
-                        <span
-                          className={`rate-pdv-tag is-${bayesianSummary.confidenceTier}`}
-                          title={
-                            bayesianSummary.effectiveWeightSum > 0
-                              ? `Σw=${formatDecimal(bayesianSummary.effectiveWeightSum, locale, 2)} · c=${formatPercent(Math.round(bayesianSummary.confidenceRatio * 100), locale)}`
-                              : undefined
-                          }
-                        >
-                          {t(bayesianTierKey(bayesianSummary))}
-                          {bayesianSummary.effectiveWeightSum > 0 && (
-                            <span className="visually-hidden">
-                              {' '}
-                              (Σw=
-                              {formatDecimal(
-                                bayesianSummary.effectiveWeightSum,
-                                locale,
-                                2
-                              )}
-                              , c=
-                              {Math.round(
-                                bayesianSummary.confidenceRatio * 100
-                              )}
-                              %)
-                            </span>
-                          )}
-                        </span>
-                      </div>
+                {hasCriteriaScores ? (
+                  <div className="row g-3 align-items-stretch">
+                    {/* Dual Score Boxes */}
+                    <div className="col-md-5 d-flex flex-column col-12 gap-3">
+                      {userScoreBox}
+                      {expertScoreBox}
                     </div>
 
-                    <div className="rate-pdv-score is-expert">
-                      <div className="rate-pdv-score-label is-expert">
-                        {t('expertScoreLabel')}
-                      </div>
-                      {expertRating10 != null ? (
-                        <div
-                          className="rate-pdv-score-row"
-                          title={t('expertScoreHint')}
-                        >
-                          <span className="rate-pdv-score-value is-small">
-                            {formatDecimal(expertRating10, locale, 1)}
-                          </span>
-                          <span className="rate-pdv-score-sub">/10</span>
-                          <span className="visually-hidden">
-                            {t('expertScoreHint')}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="rate-pdv-score-empty">
-                          {t('notAvailableYet')}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 5-Criteria Breakdown Bars */}
-                  <div className="col-md-7 d-flex flex-column justify-content-center col-12">
-                    <div className="rate-pdv-crit h-100">
-                      {(() => {
-                        const validCriteriaReviews = reviews.filter(
-                          (r) =>
-                            r.include_in_rating &&
-                            r.helpfulness_weight > 0 &&
-                            r.criteria_ratings
-                        );
-                        const effectiveCriteriaSlug = isCanonicalCategorySlug(
-                          reviewCategory
-                        )
-                          ? reviewCategory
-                          : categorySlug;
-                        const expertCrit = product.expert_criteria_scores || {};
-                        const avgCrit = (key: string): number | null => {
-                          const legacyKey =
-                            key === 'display'
-                              ? 'screen'
-                              : key === 'anc'
-                                ? 'camera'
-                                : effectiveCriteriaSlug === 'earbuds' &&
-                                    key === 'sound'
-                                  ? 'screen'
-                                  : null;
-                          const vals = validCriteriaReviews
-                            .map((r) =>
-                              Number(
-                                r.criteria_ratings?.[key] ??
-                                  (legacyKey
-                                    ? r.criteria_ratings?.[legacyKey]
-                                    : undefined) ??
-                                  0
-                              )
-                            )
-                            .filter((v) => v >= 1 && v <= 5);
-                          if (vals.length > 0) {
-                            return (
-                              vals.reduce((a, b) => a + b, 0) / vals.length
-                            );
-                          }
-                          const expVal = Number(
-                            (expertCrit as Record<string, unknown>)[key] ??
-                              (legacyKey
-                                ? (expertCrit as Record<string, unknown>)[
-                                    legacyKey
-                                  ]
-                                : undefined) ??
-                              0
-                          );
-                          if (expVal > 0) {
-                            return expVal > 5 ? expVal / 2 : expVal;
-                          }
-                          return null;
-                        };
-
-                        const criteria = getRatingCriteria(
-                          effectiveCriteriaSlug
-                        ).map((crit) => ({
-                          label: getRatingCriterionLabel(crit, locale),
-                          score: avgCrit(crit.key),
-                        }));
-                        // No criterion scored yet: one line instead of five
-                        // empty bars (#719).
-                        if (criteria.every((crit) => crit.score == null)) {
-                          return (
-                            <p
-                              className="rate-pdv-crit-empty mb-0"
-                              data-testid="pdv-criteria-empty"
-                            >
-                              {t('critEmpty')}
-                            </p>
-                          );
-                        }
-                        return criteria.map((crit) => {
+                    {/* 5-Criteria Breakdown Bars */}
+                    <div className="col-md-7 d-flex flex-column justify-content-center col-12">
+                      <div className="rate-pdv-crit h-100">
+                        {criteria.map((crit) => {
                           const val =
                             crit.score != null
                               ? Math.min(5, Math.max(1, Number(crit.score)))
@@ -1712,11 +1726,38 @@ export async function ProductDetailView({
                               </div>
                             </div>
                           );
-                        });
-                      })()}
+                        })}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <div
+                      className={
+                        expertScoreBox
+                          ? 'row g-3 align-items-stretch'
+                          : 'rate-pdv-compact-scores'
+                      }
+                    >
+                      <div
+                        className={
+                          expertScoreBox ? 'col-sm-6 col-12' : undefined
+                        }
+                      >
+                        {userScoreBox}
+                      </div>
+                      {expertScoreBox && (
+                        <div className="col-sm-6 col-12">{expertScoreBox}</div>
+                      )}
+                    </div>
+                    <p
+                      className="rate-pdv-crit-empty mt-3 mb-0"
+                      data-testid="pdv-criteria-empty"
+                    >
+                      {t('critEmpty')}
+                    </p>
+                  </>
+                )}
 
                 {product.expert_review_summary && (
                   <div className="rate-pdv-verdict">
@@ -1734,36 +1775,29 @@ export async function ProductDetailView({
                     href="#jreviews-section"
                     className="btn btn-primary fw-semibold"
                   >
-                    {t('readAndSubmitReviewsBtn', { count: authenticCount })}
+                    {authenticCount > 0
+                      ? t('readAndSubmitReviewsBtn', { count: authenticCount })
+                      : t('writeOrReadReviewsBtn')}
                   </a>
-                  {(!isPlace || showPlaceDetails) && (
-                    <a
-                      href={
-                        isPlace ? '#place-details-section' : '#specs-section'
+                  {heroStats.minPrice > 0 && (
+                    <PriceWatchButton
+                      slug={product.slug}
+                      name={product.name}
+                      brand={product.brand}
+                      categoryPath={categoryBasePath}
+                      thumbnail={productImageUrl(product)}
+                      currentMinPrice={
+                        currentMinPrice > 0
+                          ? currentMinPrice
+                          : heroStats.minPrice
                       }
-                      className="btn btn-outline-light"
-                    >
-                      {isPlace ? tPlace('heading') : t('tenSpecGroupsBtn')}
-                    </a>
-                  )}
-                  <Link
-                    href={singleCompareHref}
-                    className="btn btn-outline-light"
-                  >
-                    {t('headToHeadCompareBtn')}
-                  </Link>
-                  {relatedCompetitors.length === 0 && comboCartHref && (
-                    <Link
-                      href={comboCartHref}
-                      prefetch={false}
-                      data-testid="pdv-combo-cart-link"
-                      className="btn btn-outline-light"
-                    >
-                      {t('comboCartBtn')}
-                    </Link>
+                      currency={effectiveCurrency}
+                      size="sm"
+                    />
                   )}
                   <CompareQuickToggle
                     compact
+                    includeWatchlist={false}
                     className="ms-lg-auto"
                     item={{
                       slug: product.slug,
@@ -1781,8 +1815,6 @@ export async function ProductDetailView({
                   locale={locale}
                 />
               </div>
-
-              {colorsBlock('d-lg-none mb-4')}
 
               {/* Neutral Market Price Reference Strip (De-commercialized per DESIGN.md v3.0) */}
               {isItemGroup
