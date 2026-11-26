@@ -22,7 +22,7 @@
     "@plaiceholder/next": "^3.0.0",
     "@repo/design-system": "workspace:*",
     "@repo/shared-data": "workspace:*",
-    "@sentry/nextjs": "^11.1.0",
+    "@sentry/nextjs": "^11.16.0",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "^2.119.0",
     "bootstrap": "^5.3.8",
