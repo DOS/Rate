@@ -77,6 +77,8 @@ import {
   BsForkKnife,
   BsHeartPulse,
   BsHouseHeart,
+  BsHospital,
+  BsPersonArmsUp,
   BsLaptop,
   BsPhone,
   BsShieldCheck,
@@ -2187,6 +2189,10 @@ export async function ProductDetailView({
                                     return <BsBuilding {...iconProps} />;
                                   case 'homestays':
                                     return <BsHouseHeart {...iconProps} />;
+                                  case 'dental-clinics':
+                                    return <BsHospital {...iconProps} />;
+                                  case 'gyms-fitness':
+                                    return <BsPersonArmsUp {...iconProps} />;
                                   default:
                                     return <BsPhone {...iconProps} />;
                                 }

@@ -958,6 +958,82 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     ],
     featureCheckboxes: [],
   },
+  'dental-clinics': {
+    categorySlug: 'dental-clinics',
+    directorySlug: 'places',
+    directoryName: 'Địa điểm & lưu trú',
+    categoryTitle: 'Nha khoa',
+    categorySubtitle:
+      'Đánh giá chất lượng điều trị, vô trùng, thái độ bác sĩ và chi phí tham khảo tại phòng khám nha khoa',
+    searchPlaceholder: 'Tìm nha khoa, dịch vụ niềng, implant, khu vực...',
+    defaultBrands: [],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 50,
+      step: 0.5,
+    },
+    pricePresets: [
+      {
+        id: 'under-500k',
+        label: 'Dưới 500K',
+        minVnd: 0,
+        maxVnd: 500_000,
+      },
+      {
+        id: '500k-5m',
+        label: '500K - 5 triệu',
+        minVnd: 500_000,
+        maxVnd: 5_000_000,
+      },
+      {
+        id: 'over-5m',
+        label: 'Trên 5 triệu',
+        minVnd: 5_000_000,
+        maxVnd: 50_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  'gyms-fitness': {
+    categorySlug: 'gyms-fitness',
+    directorySlug: 'places',
+    directoryName: 'Địa điểm & lưu trú',
+    categoryTitle: 'Phòng tập gym & fitness',
+    categorySubtitle:
+      'Đánh giá máy tập, lớp tập, vệ sinh, huấn luyện viên và giá gói tập tham khảo',
+    searchPlaceholder: 'Tìm phòng gym, yoga, fitness, khu vực...',
+    defaultBrands: [],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 30,
+      step: 0.25,
+    },
+    pricePresets: [
+      {
+        id: 'under-500k',
+        label: 'Dưới 500K',
+        minVnd: 0,
+        maxVnd: 500_000,
+      },
+      {
+        id: '500k-2m',
+        label: '500K - 2 triệu',
+        minVnd: 500_000,
+        maxVnd: 2_000_000,
+      },
+      {
+        id: 'over-2m',
+        label: 'Trên 2 triệu',
+        minVnd: 2_000_000,
+        maxVnd: 30_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
 };
 
 const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {

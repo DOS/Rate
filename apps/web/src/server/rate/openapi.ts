@@ -315,6 +315,8 @@ function buildBaseRateOpenApiSpec(
     'cafes',
     'hotels',
     'homestays',
+    'dental-clinics',
+    'gyms-fitness',
   ];
   const supportedPlatforms = Object.keys(EXTENSION_CAPABILITY_MATRIX);
 
@@ -2505,7 +2507,7 @@ function buildBaseRateOpenApiSpec(
           type: 'string',
           enum: categorySlugs,
           description:
-            '19 canonical product, service, and place categories on Rate.vn.',
+            '21 canonical product, service, and place categories on Rate.vn.',
         },
         PriceVerdictLevel: {
           type: 'string',

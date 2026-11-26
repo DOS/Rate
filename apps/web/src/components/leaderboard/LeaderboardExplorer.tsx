@@ -88,9 +88,11 @@ import {
   BsFunnel,
   BsGem,
   BsHeartPulse,
+  BsHospital,
   BsHouseHeart,
   BsLaptop,
   BsLightningCharge,
+  BsPersonArmsUp,
   BsPhone,
   BsSearch,
   BsShieldCheck,
@@ -803,6 +805,16 @@ function buildCategoryTabs(t: TranslateFn): ReadonlyArray<{
       slug: 'homestays',
       icon: BsHouseHeart,
       label: t('tabHomestays'),
+    },
+    {
+      slug: 'dental-clinics',
+      icon: BsHospital,
+      label: t('tabDentalClinics'),
+    },
+    {
+      slug: 'gyms-fitness',
+      icon: BsPersonArmsUp,
+      label: t('tabGymsFitness'),
     },
   ];
 }

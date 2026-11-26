@@ -42,6 +42,18 @@ const V3_RATING_CRITERIA_CATEGORIES_SET = new Set<string>([
 export const V3_RATING_CRITERIA_CATEGORIES: ReadonlySet<string> =
   V3_RATING_CRITERIA_CATEGORIES_SET;
 
+/** Schema version for Wave E5 dental clinic and gym place criteria. */
+export const RATING_CRITERIA_V4_VERSION = 4;
+
+const V4_RATING_CRITERIA_CATEGORIES_SET = new Set<string>([
+  'dental-clinics',
+  'gyms-fitness',
+]);
+
+// Exported as an identifier so the rules-isolation check does not read the strings as module imports.
+export const V4_RATING_CRITERIA_CATEGORIES: ReadonlySet<string> =
+  V4_RATING_CRITERIA_CATEGORIES_SET;
+
 const CRITERION_KEYS = [
   'performance',
   'camera',
@@ -659,20 +671,74 @@ const RATING_CRITERIA: Readonly<Record<string, readonly RatingCriterion[]>> = {
       true
     ),
   ],
+  'dental-clinics': [
+    c(
+      'service_quality',
+      'Chất lượng điều trị',
+      'Treatment quality',
+      'Kvalita ošetření',
+      30,
+      null
+    ),
+    c('hygiene', 'Vô trùng & vệ sinh', 'Hygiene', 'Hygiena', 25, null),
+    c(
+      'service_attitude',
+      'Thái độ bác sĩ & nhân viên',
+      'Staff attitude',
+      'Přístup personálu',
+      20,
+      null
+    ),
+    c('price', 'Chi phí', 'Price', 'Cena', 15, null, true),
+    c('location', 'Vị trí', 'Location', 'Lokalita', 10, null),
+  ],
+  'gyms-fitness': [
+    c(
+      'quality',
+      'Chất lượng thiết bị & lớp tập',
+      'Equipment and classes',
+      'Vybavení a lekce',
+      30,
+      null
+    ),
+    c('hygiene', 'Vệ sinh', 'Hygiene', 'Hygiena', 20, null),
+    c(
+      'service_attitude',
+      'Thái độ HLV & nhân viên',
+      'Trainers and staff',
+      'Trenéři a personál',
+      15,
+      null
+    ),
+    c('location', 'Vị trí', 'Location', 'Lokalita', 15, null),
+    c(
+      'value',
+      'Đáng tiền',
+      'Value for money',
+      'Poměr cena / výkon',
+      20,
+      null,
+      true
+    ),
+  ],
 };
 
 /**
  * Criteria schema version for a category slug.
- * Existing v1 categories stay pinned at 1 while Wave E1/E2 use v2 and Wave E3/E4 use v3.
+ * Existing v1 categories stay pinned at 1 while Wave E1/E2 use v2, Wave E3/E4 use v3
+ * and Wave E5 uses v4.
  */
 export function getRatingCriteriaVersion(
   categorySlug: string | null | undefined
-): 1 | 2 | 3 {
+): 1 | 2 | 3 | 4 {
   const raw = categorySlug;
   const normalized =
     typeof raw === 'string'
       ? raw.replace(LOCALE_CONTROL_CHARS_RE, '').trim().toLowerCase()
       : '';
+  if (V4_RATING_CRITERIA_CATEGORIES.has(normalized)) {
+    return RATING_CRITERIA_V4_VERSION;
+  }
   if (V3_RATING_CRITERIA_CATEGORIES.has(normalized)) {
     return RATING_CRITERIA_V3_VERSION;
   }
@@ -687,7 +753,7 @@ export const RATING_CRITERIA_CATEGORIES: readonly string[] = Object.keys(
   RATING_CRITERIA
 ).filter((slug) => getRatingCriteriaVersion(slug) === RATING_CRITERIA_VERSION);
 
-/** All categories (v1 + Wave E1/E2 v2 + Wave E3/E4 v3) with their own criteria list. */
+/** All categories (v1 + Wave E1/E2 v2 + Wave E3/E4 v3 + Wave E5 v4) with their own criteria list. */
 export const RATING_CRITERIA_ALL_CATEGORIES: readonly string[] =
   Object.keys(RATING_CRITERIA);
 
@@ -861,6 +927,8 @@ const LEGACY_MAP: Readonly<
   cafes: {},
   hotels: {},
   homestays: {},
+  'dental-clinics': {},
+  'gyms-fitness': {},
 };
 
 /**
@@ -1334,18 +1402,20 @@ const RATING_USE_CASE_PRESETS: Readonly<
     ),
   ],
   ...Object.fromEntries(
-    [...V3_RATING_CRITERIA_CATEGORIES].map((slug) => [
-      slug,
-      [
-        p(
-          'default',
-          'Cân bằng mặc định',
-          'Balanced default',
-          'Vyvážený výchozí',
-          defaultPresetWeights(slug)
-        ),
-      ],
-    ])
+    [...V3_RATING_CRITERIA_CATEGORIES, ...V4_RATING_CRITERIA_CATEGORIES].map(
+      (slug) => [
+        slug,
+        [
+          p(
+            'default',
+            'Cân bằng mặc định',
+            'Balanced default',
+            'Vyvážený výchozí',
+            defaultPresetWeights(slug)
+          ),
+        ],
+      ]
+    )
   ),
 };
 

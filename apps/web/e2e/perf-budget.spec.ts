@@ -26,7 +26,8 @@ const PAGES: Record<string, { path: string; budget: Budget; photo?: string }> =
   {
     home: {
       path: '/',
-      budget: { html: 44 * KB, js: 353 * KB, css: 48 * KB, prefetch: 4 * KB },
+      // Bumped from 44 * KB after adding #1937 Wave E5 categories (dental-clinics, gyms-fitness) nav/footer/home i18n strings (CI measured 44.0 KB / 45058 bytes).
+      budget: { html: 46 * KB, js: 353 * KB, css: 48 * KB, prefetch: 4 * KB },
     },
     category: {
       path: '/smartphones',

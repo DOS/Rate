@@ -25,6 +25,8 @@
       "cafes": "Cafes",
       "hotels": "Hotels",
       "homestays": "Homestays",
+      "dental-clinics": "Dental clinics",
+      "gyms-fitness": "Gyms & fitness",
       "leaderboard": "Leaderboard",
       "merchants": "Merchants",
       "inspect": "Check a link",
@@ -74,6 +76,8 @@
         "cafes": "Cafes",
         "hotels": "Hotels",
         "homestays": "Homestays",
+        "dental-clinics": "Dental clinics",
+        "gyms-fitness": "Gyms & fitness",
         "leaderboard": "Product rankings",
         "inspect": "Check a product link",
         "compare": "Compare specs",
@@ -266,6 +270,10 @@
     "catHotelsUnit": "hotels",
     "catHomestays": "Homestays",
     "catHomestaysUnit": "homestays",
+    "catDentalClinics": "Dental clinics",
+    "catDentalClinicsUnit": "dental clinics",
+    "catGymsFitness": "Gyms & fitness",
+    "catGymsFitnessUnit": "gyms",
     "boolYes": "Yes",
     "boolNo": "No",
     "group0Title": "Review scores and trust",
@@ -485,6 +493,8 @@
     "catCafes": "Cafes",
     "catHotels": "Hotels",
     "catHomestays": "Homestays",
+    "catDentalClinics": "Dental clinics",
+    "catGymsFitness": "Gyms & fitness",
     "badgeCombined": "Overall score",
     "badgeUser": "Verified users",
     "badgeExpert": "Lab experts",
@@ -512,6 +522,8 @@
     "tabCafes": "Cafes",
     "tabHotels": "Hotels",
     "tabHomestays": "Homestays",
+    "tabDentalClinics": "Dental clinics",
+    "tabGymsFitness": "Gyms & fitness",
     "dirLabel": "Tech & electronics",
     "chooseCategory": "1. Select category (same-category ranking lock):",
     "chooseCriterion": "2. Rank by criterion:",
@@ -1704,6 +1716,8 @@
     "catDescCafes": "Explore cafe ratings for drinks, workspace ambiance, service & average spend",
     "catDescHotels": "Check hotel and resort ratings on room quality, cleanliness, location & nightly rates",
     "catDescHomestays": "Compare homestays and villas by cleanliness, host service, location & nightly rate",
+    "catDescDentalClinics": "Explore dental clinic ratings for treatment quality, hygiene, staff attitude & costs",
+    "catDescGymsFitness": "Explore gym ratings for equipment, classes, hygiene, trainers & membership value",
     "popularBattlesBadge": "1v1 showdowns",
     "popularBattlesTitle": "Most compared flagships right now",
     "leaderboard5CatsBtn": "Leaderboard",
@@ -2182,6 +2196,16 @@
         "titleCount": "Homestay & villa ratings ({count, plural, one {# stay} other {# stays}}) | Rate.vn",
         "titleDefault": "Homestay & villa ratings and nightly rates | Rate.vn",
         "description": "Discover homestay and villa reviews on cleanliness, service, location and reference nightly spend on Rate.vn."
+      },
+      "dental-clinics": {
+        "titleCount": "Dental clinic ratings ({count, plural, one {# clinic} other {# clinics}}) | Rate.vn",
+        "titleDefault": "Dental clinic ratings, treatment quality & cost guide | Rate.vn",
+        "description": "Browse verified reviews on treatment quality, hygiene, staff attitude and reference costs at dental clinics on Rate.vn."
+      },
+      "gyms-fitness": {
+        "titleCount": "Gym & fitness ratings ({count, plural, one {# gym} other {# gyms}}) | Rate.vn",
+        "titleDefault": "Gym & fitness ratings, classes & membership price guide | Rate.vn",
+        "description": "Browse verified reviews on equipment, classes, hygiene, trainers and reference membership prices at gyms on Rate.vn."
       }
     },
     "sortOptions": {
@@ -2467,6 +2491,28 @@
           "under-800k": "Under 800K/night",
           "800k-2m": "800K - 2M/night",
           "over-2m": "Over 2M/night"
+        },
+        "features": {}
+      },
+      "dental-clinics": {
+        "title": "Dental clinics",
+        "subtitle": "Browse ratings for treatment quality, sterilisation, staff attitude and reference costs at dental clinics",
+        "searchPlaceholder": "Search dental clinic, braces, implant, area...",
+        "presets": {
+          "under-500k": "Under 500K",
+          "500k-5m": "500K - 5M",
+          "over-5m": "Over 5M"
+        },
+        "features": {}
+      },
+      "gyms-fitness": {
+        "title": "Gyms & fitness",
+        "subtitle": "Browse ratings for equipment, classes, hygiene, trainers and reference membership prices",
+        "searchPlaceholder": "Search gym, yoga, fitness, area...",
+        "presets": {
+          "under-500k": "Under 500K",
+          "500k-2m": "500K - 2M",
+          "over-2m": "Over 2M"
         },
         "features": {}
       }
