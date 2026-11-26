@@ -82,20 +82,36 @@ assert.equal(RATE_ROUTES.DENTAL_CLINICS, '/dental-clinics');
 assert.equal(RATE_ROUTES.GYMS_FITNESS, '/gyms-fitness');
 
 // 2. Keyword fallback, including a gym name containing "Yoga" and retail titles mentioning
-// clinic/gym terms that must stay in their E3 or default category.
+// clinic/gym terms that must stay in their E3 or default category (parity with normalizer).
 const keywordSamples: Array<[string, string]> = [
   ['Nha khoa Kim', 'dental-clinics'],
   ['Nha khoa Kim Quận 3', 'dental-clinics'],
   ['Nha khoa Kim Bình Thạnh', 'dental-clinics'],
+  ['Hệ thống Nha khoa Kim', 'dental-clinics'],
+  ['Hệ thống nha khoa Paris - Chi nhánh Quận 1', 'dental-clinics'],
+  ['He thong nha khoa Kim', 'dental-clinics'],
+  ['[TP.HCM] Hệ thống Nha khoa Kim', 'dental-clinics'],
   ['Phòng khám nha khoa Paris', 'dental-clinics'],
   ['Phòng khám nha khoa Sài Gòn Smile', 'dental-clinics'],
+  ['Nha khoa Paris - Hà Nội', 'dental-clinics'],
   ['Bệnh viện Răng Hàm Mặt Trung ương', 'dental-clinics'],
   ['California Fitness & Yoga', 'gyms-fitness'],
   ['California Fitness & Yoga Hai Bà Trưng', 'gyms-fitness'],
   ['Phòng tập gym Elite Fitness', 'gyms-fitness'],
   ['Phòng tập gym Hùng Fitness Quận 7', 'gyms-fitness'],
+  ['Phòng tập gym ABC', 'gyms-fitness'],
+  ['Phòng tập gym ABC - máy móc hiện đại', 'gyms-fitness'],
+  ['Trung tâm thể hình Elite Fitness', 'gyms-fitness'],
   ['CitiGym', 'gyms-fitness'],
   ['CitiGym Tân Bình', 'gyms-fitness'],
+  ['Getfit Gym', 'gyms-fitness'],
+  ['Getfit Gym Hoàng Diệu', 'gyms-fitness'],
+  ['Get Fit Gym Quận 4', 'gyms-fitness'],
+  ['GetFit Gym', 'gyms-fitness'],
+  ['Swequity', 'gyms-fitness'],
+  ['Swequity Ultimate Fitness', 'gyms-fitness'],
+  ['Swequity Lương Yên', 'gyms-fitness'],
+  ['The New Gym', 'gyms-fitness'],
   ['Lenovo Yoga Slim 7 14 inch', 'laptops'],
 ];
 for (const [name, expected] of keywordSamples) {
@@ -104,7 +120,23 @@ for (const [name, expected] of keywordSamples) {
     expected,
     `"${name}" must classify as ${expected}`
   );
+  assert.equal(
+    getMasterProductCategorySlug({
+      slug: 'sample-slug',
+      name: name.normalize('NFD'),
+    }),
+    expected,
+    `"${name}" (NFD) must classify as ${expected}`
+  );
 }
+assert.equal(
+  getMasterProductCategorySlug({
+    slug: 'kim-q3',
+    name: '',
+    model: 'Hệ thống Nha khoa Kim',
+  }),
+  'dental-clinics'
+);
 assert.equal(
   getMasterProductHref({
     slug: 'nha-khoa-kim-q3',
@@ -112,29 +144,88 @@ assert.equal(
   }),
   '/dental-clinics/nha-khoa-kim-q3'
 );
+assert.equal(
+  getMasterProductHref({
+    slug: 'he-thong-nha-khoa-kim',
+    name: 'Hệ thống Nha khoa Kim',
+  }),
+  '/dental-clinics/he-thong-nha-khoa-kim'
+);
+assert.equal(
+  getMasterProductHref({
+    slug: 'getfit-gym-hoang-dieu',
+    name: 'Getfit Gym Hoàng Diệu',
+  }),
+  '/gyms-fitness/getfit-gym-hoang-dieu'
+);
+assert.equal(
+  getMasterProductHref({
+    slug: 'swequity-ultimate-fitness',
+    name: 'Swequity Ultimate Fitness',
+  }),
+  '/gyms-fitness/swequity-ultimate-fitness'
+);
 const retailSamples: Array<[string, string]> = [
   ['Whey Protein Rule 1 5lbs dùng cho phòng gym', 'supplements'],
+  ['Whey Protein Swequity', 'supplements'],
   ['Creatine Monohydrate phòng gym', 'supplements'],
+  ['Whey protein tập gym 2kg', 'supplements'],
   ['Miếng dán trắng răng chuẩn nha khoa thẩm mỹ', 'cosmetics'],
+  ['Miếng dán trắng răng Hệ thống nha khoa', 'cosmetics'],
   ['Bình lắc whey phòng tập gym', 'smartphones'],
+  ['Bình lắc Swequity', 'smartphones'],
   ['Túi đựng đồ đi phòng gym', 'smartphones'],
+  ['Túi đựng đồ tập Getfit Gym', 'smartphones'],
   ['Thảm tập yoga cho phòng gym', 'smartphones'],
   ['Găng tay tập gym fitness club', 'smartphones'],
   ['Dây kháng lực fitness center tại nhà', 'smartphones'],
+  ['Dây kháng lực get fit tại nhà', 'smartphones'],
+  ['Máy tập đa năng cho phòng gym', 'smartphones'],
+  ['May tap da nang cho phong gym', 'smartphones'],
+  ['May tap da nang cho Getfit Gym', 'smartphones'],
+  ['Giàn tạ đa năng cho phòng gym', 'smartphones'],
+  ['Gian ta da nang Swequity', 'smartphones'],
+  ['Máy chạy bộ điện phòng gym', 'smartphones'],
+  ['May chay bo dien California Fitness', 'smartphones'],
+  ['Xe đạp tập thể dục phòng gym', 'smartphones'],
+  ['Xe dap tap Elite Fitness', 'smartphones'],
+  ['Ghế tập tạ đa năng cho phòng gym', 'smartphones'],
+  ['Ghe tap ta Getfit Gym', 'smartphones'],
   ['Máy tăm nước Panasonic phòng khám nha khoa', 'smartphones'],
+  ['Máy tăm nước Panasonic Hệ thống nha khoa khuyên dùng', 'smartphones'],
   ['Bàn chải điện Oral-B Dental Center khuyên dùng', 'smartphones'],
+  ['Bàn chải điện Oral-B Hệ thống Nha khoa Kim khuyên dùng', 'smartphones'],
   ['Kem đánh răng chuẩn nha khoa thẩm mỹ', 'smartphones'],
+  ['Kem đánh răng Hệ thống nha khoa', 'smartphones'],
   ['Gel tẩy trắng răng phòng khám nha khoa', 'smartphones'],
+  ['Gel tẩy trắng răng Hệ thống nha khoa', 'smartphones'],
   ['Nước súc miệng chuẩn nha khoa quốc tế', 'smartphones'],
+  ['Nước súc miệng chuẩn Hệ thống nha khoa', 'smartphones'],
   ['Chỉ nha khoa Oral-B 50m', 'smartphones'],
   ['Tăm chỉ nha khoa thẩm mỹ 50 cây', 'smartphones'],
+  ['Găng tay tập gym chống chai', 'smartphones'],
 ];
 for (const [name, expected] of retailSamples) {
   const actual = getMasterProductCategorySlug({ slug: 'sample-slug', name });
   assert.equal(actual, expected, `"${name}" must stay ${expected}`);
+  assert.equal(
+    getMasterProductCategorySlug({
+      slug: 'sample-slug',
+      name: name.normalize('NFD'),
+    }),
+    expected,
+    `"${name}" (NFD) must stay ${expected}`
+  );
   assert.notEqual(actual, 'dental-clinics', name);
   assert.notEqual(actual, 'gyms-fitness', name);
 }
+assert.equal(
+  getMasterProductHref({
+    slug: 'may-tap-da-nang-cho-phong-gym',
+    name: 'Máy tập đa năng cho phòng gym',
+  }),
+  '/smartphones/may-tap-da-nang-cho-phong-gym'
+);
 
 // 3. Price units keep NULL semantics: no per-person or per-night suffix by default.
 for (const slug of E5) {

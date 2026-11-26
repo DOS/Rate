@@ -1520,7 +1520,9 @@ export function getMasterProductCategorySlug(
   }
 
   const haystack =
-    `${product.name || ''} ${product.model || ''} ${product.slug}`.toLowerCase();
+    `${product.name || ''} ${product.model || ''} ${product.slug}`
+      .normalize('NFC')
+      .toLowerCase();
   if (
     /(?<![\p{L}\d])(?:gửi tiết kiệm|tiết kiệm trực tuyến|tiết kiệm online|lãi suất tiết kiệm|bank savings?|term deposit|vietcombank|acb)(?![\p{L}\d])/iu.test(
       haystack
@@ -1650,24 +1652,25 @@ export function getMasterProductCategorySlug(
     return 'restaurants';
   }
   // Wave E5 places run after Wave E3 retail checks and reject retail product nouns
-  // (e.g. gym bags/mats/gloves/shakers/supplements, oral-care devices/consumables)
-  // while keeping Vietnamese district names like Tan Binh / Binh Thanh unblocked (DOS/Rate#1937).
+  // (e.g. gym bags/mats/gloves/shakers/supplements, oral-care devices/consumables,
+  // exercise machines) while keeping Vietnamese district names like Tan Binh / Binh Thanh
+  // unblocked (DOS/Rate#1937, DOS/Rate#1943).
   const isWaveE5RetailProduct =
-    /(?<![\p{L}\d])(?:túi|thảm|găng|bình\s*(?:lắc|nước|giữ\s*nhiệt|thể\s*thao|uống|xịt|đựng|tập)|shaker|dây|whey|creatine|protein|bcaa|bàn\s*chải|máy\s*tăm|tăm\s*nước|miếng\s*dán|kem|gel|nước\s*súc\s*miệng|chỉ\s*nha\s*khoa|tăm\s*chỉ|sáp\s*nha\s*khoa|xịt\s*thơm\s*miệng|bột\s*(?:tẩy\s*trắng|trắng\s*răng|đánh\s*răng|protein|whey)|máng\s*(?:tẩy\s*trắng|chống\s*nghiến)|tạ\s*(?:tay|đơn|đòn|ấm|bánh|chân|tập)|đai\s*(?:lưng|tập|kháng\s*lực|quấn)|khăn\s*(?:tập|gym|lau)|(?:quần|áo|giày)\s*(?:tập|gym|yoga|thể\s*thao)|bóng\s*(?:tập|yoga)|gạch\s*yoga|xà\s*đơn|máy\s*chạy\s*bộ|toothbrush|flosser|mouthwash|toothpaste|gym\s*bag|yoga\s*mat)(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:túi|thảm|găng|bình\s*(?:lắc|nước|giữ\s*nhiệt|thể\s*thao|uống|xịt|đựng|tập)|shaker|dây|whey|creatine|protein|bcaa|bàn\s*chải|máy\s*tăm|tăm\s*nước|miếng\s*dán|kem|gel|nước\s*súc\s*miệng|chỉ\s*nha\s*khoa|tăm\s*chỉ|sáp\s*nha\s*khoa|xịt\s*thơm\s*miệng|bột\s*(?:tẩy\s*trắng|trắng\s*răng|đánh\s*răng|protein|whey)|máng\s*(?:tẩy\s*trắng|chống\s*nghiến)|tạ\s*(?:tay|đơn|đòn|ấm|bánh|chân|tập)|đai\s*(?:lưng|tập|kháng\s*lực|quấn)|khăn\s*(?:tập|gym|lau)|(?:quần|áo|giày)\s*(?:tập|gym|yoga|thể\s*thao)|bóng\s*(?:tập|yoga)|gạch\s*yoga|xà\s*đơn|máy\s*(?:chạy\s*bộ|tập)|may\s*(?:chay\s*bo|tap)|giàn\s*(?:tạ|tập)|gian\s*(?:ta|tap)|xe\s*đạp\s*tập|xe\s*dap\s*tap|ghế\s*(?:tập|đẩy\s*tạ)|ghe\s*(?:tap|day\s*ta)|toothbrush|flosser|mouthwash|toothpaste|gym\s*bag|yoga\s*mat)(?![\p{L}\d])/iu.test(
       haystack
     );
   if (
     !isWaveE5RetailProduct &&
-    (/(?<![\p{L}\d])(?:phòng khám (?:nha|răng)|trung tâm nha khoa|bệnh viện răng hàm mặt|nha khoa (?:quốc tế|thẩm mỹ)|dental (?:clinic|center|centre|hospital))(?![\p{L}\d])/iu.test(
+    (/(?<![\p{L}\d])(?:phòng\s*khám\s*(?:nha|răng)|trung\s*tâm\s*nha\s*khoa|bệnh\s*viện\s*răng\s*hàm\s*mặt|hệ\s*thống\s*nha\s*khoa|he\s*thong\s*nha\s*khoa|nha\s*khoa\s*(?:quốc\s*tế|thẩm\s*mỹ)|dental\s*(?:clinic|center|centre|hospital))(?![\p{L}\d])/iu.test(
       haystack
     ) ||
-      /^\s*nha khoa(?![\p{L}\d])/iu.test(haystack))
+      /^\s*nha\s*khoa(?![\p{L}\d])/iu.test(haystack))
   ) {
     return 'dental-clinics';
   }
   if (
     !isWaveE5RetailProduct &&
-    /(?<![\p{L}\d])(?:phòng (?:tập )?(?:gym|thể hình|fitness)|trung tâm (?:thể hình|fitness|gym)|(?:fitness|gym) (?:center|centre|club)|california fitness|citi ?gym|elite fitness|the new gym)(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:phòng\s*(?:tập\s*)?(?:gym|thể\s*hình|fitness)|trung\s*tâm\s*(?:thể\s*hình|fitness|gym)|(?:fitness|gym)\s*(?:center|centre|club)|california\s*fitness|citi\s*gym|elite\s*fitness|get\s*fit\s*gym|the\s*new\s*gym|swequity)(?![\p{L}\d])/iu.test(
       haystack
     )
   ) {
