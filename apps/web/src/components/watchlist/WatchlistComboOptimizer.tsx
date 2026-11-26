@@ -390,6 +390,10 @@ const PLATFORM_DISPLAY: Record<string, string> = {
   mediamart: 'MediaMart',
   memoryzone: 'MemoryZone',
   anphatpc: 'An Phát Computer',
+  avakids: 'AVAKids',
+  pharmacity: 'Pharmacity',
+  kidsplaza: 'Kids Plaza',
+  concung: 'Con Cưng',
 };
 
 const VIETNAMESE_PLATFORMS = new Set([
@@ -400,6 +404,7 @@ const VIETNAMESE_PLATFORMS = new Set([
   'dienmayxanh',
   'nguyenkim',
   'anphatpc',
+  'concung',
 ]);
 
 function displayPlatformLabel(platform: string): string {
@@ -1280,7 +1285,7 @@ export default function WatchlistComboOptimizer({
                               lang={
                                 locale !== 'vi' &&
                                 VIETNAMESE_PLATFORMS.has(
-                                  group.platform.toLowerCase()
+                                  group.platform.trim().toLowerCase()
                                 )
                                   ? 'vi'
                                   : undefined

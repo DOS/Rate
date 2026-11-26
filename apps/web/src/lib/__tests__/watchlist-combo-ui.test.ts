@@ -18,7 +18,9 @@ import { pickClientMessages } from '../client-messages';
 import { NBSP, formatPriceVnd } from '../locale-format';
 import { evaluateMerchantTrustBadge } from '../merchant-trust-badge';
 import type { CrossPlatformDealRadarResponse } from '../../server/rate/deals';
-import WatchlistWorkspace from '../../components/watchlist/WatchlistWorkspace';
+import WatchlistWorkspace, {
+  type LiveWatchlistDeal,
+} from '../../components/watchlist/WatchlistWorkspace';
 import WatchlistComboOptimizer, {
   buildComboCartApiUrl,
   doesComboResultMatchQueryState,
@@ -1886,6 +1888,147 @@ async function main() {
       /href=\{comboCartHref\}[\s\S]{0,160}prefetch=\{false\}/,
       `${rel} must pass prefetch={false} on combo CTA Link`
     );
+  }
+
+  // 7.5 Retail ingestion platform display labels & Vietnamese lang="vi" tag (#1923)
+  const retailPlatformCases: Array<readonly [string, string, string, boolean]> =
+    [
+      ['avakids', '  AVAKids ', 'AVAKids', false],
+      ['pharmacity', ' Pharmacity', 'Pharmacity', false],
+      ['kidsplaza', 'KidsPlaza ', 'Kids Plaza', false],
+      ['concung', ' CONCUNG ', 'Con Cưng', true],
+    ];
+  for (const [
+    platformKey,
+    rawPlatformVariant,
+    displayLabel,
+    isVietnameseName,
+  ] of retailPlatformCases) {
+    const templateGroup = comboPayload.multiStoreOptimal!.storeGroups[0]!;
+    const retailPayload: ComboCartApiPayload = {
+      ...comboPayload,
+      singleStoreBest: {
+        ...comboPayload.singleStoreBest!,
+        storeGroups: [
+          {
+            ...templateGroup,
+            storeKey: `store-${platformKey}`,
+            merchantId: `store-${platformKey}`,
+            merchantName: `${displayLabel} Official`,
+            platform: rawPlatformVariant,
+            items: templateGroup.items.map((item) => ({
+              ...item,
+              platform: rawPlatformVariant,
+              offerUrl: `https://${platformKey}.vn/item`,
+            })),
+            trustBadge: {
+              ...templateGroup.trustBadge,
+              platform: rawPlatformVariant,
+            },
+          },
+        ],
+      },
+      multiStoreOptimal: null,
+    };
+    const retailLiveDeals: Record<string, LiveWatchlistDeal> = {
+      'apple-iphone-16': {
+        slug: 'apple-iphone-16',
+        product_href: '/smartphones/apple-iphone-16',
+        current_min_price: 18_500_000,
+        current_max_price: 20_500_000,
+        merchant_count: 1,
+        platform_count: 1,
+        offer_platforms: [rawPlatformVariant],
+        best_offer: {
+          id: `best-${platformKey}`,
+          title: 'iPhone 16',
+          price: 18_500_000,
+          original_price: 20_500_000,
+          url: `https://${platformKey}.vn/item`,
+          platform: rawPlatformVariant,
+          merchant_name: `${displayLabel} Official`,
+          is_official_mall: true,
+        },
+      },
+    };
+    const watchedSample = [
+      {
+        slug: 'apple-iphone-16',
+        name: 'Apple iPhone 16',
+        brand: 'Apple',
+        categoryPath: '/smartphones',
+        thumbnail: null,
+        priceWhenAdded: 19_000_000,
+        targetPrice: 18_000_000,
+        addedAt: '2026-11-26T00:00:00.000Z',
+      },
+    ];
+    for (const loc of ['vi', 'en', 'cs'] as const) {
+      const messages = pickClientMessages(localeCatalogs[loc], 'watchlist');
+      const comboHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: mockRouter as never },
+          React.createElement(
+            IntlProvider,
+            { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+            React.createElement(WatchlistComboOptimizer, {
+              watchedItems: [],
+              catalogProducts: catalogSample,
+              locale: loc,
+              initialSelectedSlugs: [
+                'apple-iphone-16',
+                'apple-airpods-pro-2-usb-c',
+              ],
+              initialOptions: {
+                officialOnly: false,
+                minTrust: 80,
+                maxStores: 3,
+                shippingVnd: 30_000,
+              },
+              initialResult: retailPayload,
+            })
+          )
+        )
+      );
+      const workspaceHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: mockRouter as never },
+          React.createElement(
+            IntlProvider,
+            { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+            React.createElement(WatchlistWorkspace, {
+              catalogProducts: catalogSample,
+              locale: loc,
+              initialItems: watchedSample,
+              initialLiveDeals: retailLiveDeals,
+            })
+          )
+        )
+      );
+      for (const [surface, html] of [
+        ['WatchlistComboOptimizer', comboHtml],
+        ['WatchlistWorkspace', workspaceHtml],
+      ] as const) {
+        if (loc !== 'vi' && isVietnameseName) {
+          assert.ok(
+            html.includes(`lang="vi">${displayLabel}<`),
+            `${loc} ${surface}: expected lang="vi" on ${displayLabel} badge`
+          );
+        } else {
+          assert.ok(
+            html.includes(`>${displayLabel}<`),
+            `${loc} ${surface}: expected ${displayLabel} badge`
+          );
+          assert.equal(
+            html.includes(`lang="vi">${displayLabel}<`),
+            false,
+            `${loc} ${surface}: ${displayLabel} must not set lang="vi"`
+          );
+        }
+      }
+    }
   }
 
   console.warn('✅ All F8 combo cart UI & verified safe merchant tests passed');

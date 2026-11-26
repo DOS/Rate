@@ -83,11 +83,21 @@ assert.equal(
 
 const {
   ProductSpecificationsSchema,
+  CustomFieldsSchema,
+  SUPPORTED_RETAIL_INGESTION_PLATFORMS,
   HttpUrlSchema,
   isValidSupabaseHttpUrl,
   isValidSupabaseApiKey,
   seedingRiskPenalty,
 } = await import('@repo/shared-data');
+const { sanitizeCustomFields, mergeCustomFields } = await import('@repo/shared-data/rules');
+assert.equal(typeof CustomFieldsSchema?.safeParse, 'function', 'CustomFieldsSchema export broken');
+assert.equal(typeof sanitizeCustomFields, 'function', 'sanitizeCustomFields rules export broken');
+assert.equal(typeof mergeCustomFields, 'function', 'mergeCustomFields rules export broken');
+assert.deepEqual(
+  [...SUPPORTED_RETAIL_INGESTION_PLATFORMS],
+  ['avakids', 'pharmacity', 'kidsplaza', 'concung']
+);
 assert.equal(
   typeof ProductSpecificationsSchema?.safeParse,
   'function',
