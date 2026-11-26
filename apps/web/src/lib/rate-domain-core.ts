@@ -1469,23 +1469,6 @@ export function getMasterProductCategorySlug(
   ) {
     return 'tvs';
   }
-  // Wave E5 places before the device patterns: "California Fitness & Yoga" is a gym,
-  // not a Lenovo Yoga laptop (DOS/Rate#1937).
-  if (
-    /(?<![\p{L}\d])(?:phòng khám (?:nha|răng)|trung tâm nha khoa|bệnh viện răng hàm mặt|nha khoa (?:quốc tế|thẩm mỹ)|dental (?:clinic|center|centre|hospital))(?![\p{L}\d])/iu.test(
-      haystack
-    ) ||
-    /^\s*nha khoa(?![\p{L}\d])/iu.test(haystack)
-  ) {
-    return 'dental-clinics';
-  }
-  if (
-    /(?<![\p{L}\d])(?:phòng (?:tập )?(?:gym|thể hình|fitness)|trung tâm (?:thể hình|fitness|gym)|(?:fitness|gym) (?:center|centre|club)|california fitness|citi ?gym|elite fitness|the new gym)(?![\p{L}\d])/iu.test(
-      haystack
-    )
-  ) {
-    return 'gyms-fitness';
-  }
   if (
     /ipad|galaxy tab|xiaomi pad|matepad|redmi pad|tab s\d|tab a\d|tab p\d|tab m\d|oneplus pad|oppo pad|vivo pad|honor pad|surface pro|tablet|máy tính bảng/i.test(
       haystack
@@ -1494,7 +1477,7 @@ export function getMasterProductCategorySlug(
     return 'tablets';
   }
   if (
-    /macbook|thinkpad|zenbook|vivobook|inspiron|xps|latitude|legion|ideapad|yoga|loq|rog|tuf|omen|victus|pavilion|spectre|envy|elitebook|probook|zbook|swift|aspire|predator|nitro|prestige|stealth|raider|katana|cyborg|modern \d|matebook|gram|surface laptop|ultrabook|laptop|máy tính xách tay/i.test(
+    /macbook|thinkpad|zenbook|vivobook|inspiron|xps|latitude|legion|ideapad|lenovo\s+yoga|yoga\s+(?:slim|pro|book|duet|c?\d)|loq|rog|tuf|omen|victus|pavilion|spectre|envy|elitebook|probook|zbook|swift|aspire|predator|nitro|prestige|stealth|raider|katana|cyborg|modern \d|matebook|gram|surface laptop|ultrabook|laptop|máy tính xách tay/i.test(
       haystack
     )
   ) {
@@ -1515,14 +1498,14 @@ export function getMasterProductCategorySlug(
     return 'earbuds';
   }
   if (
-    /(?<![\p{L}\d])(?:mỹ phẩm|kem chống nắng|sữa rửa mặt|nước tẩy trang|kem dưỡng|son môi|tinh chất|serum|toner|retinol|niacinamide|cosmetics?|skincare|la roche-posay|bioderma|cerave)(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:mỹ phẩm|kem chống nắng|sữa rửa mặt|nước tẩy trang|kem dưỡng|son môi|tinh chất|serum|toner|retinol|niacinamide|miếng dán (?:mụn|lột mụn|trắng răng)|cosmetics?|skincare|la roche-posay|bioderma|cerave)(?![\p{L}\d])/iu.test(
       haystack
     )
   ) {
     return 'cosmetics';
   }
   if (
-    /(?<![\p{L}\d])(?:thực phẩm chức năng|tpcn|viên uống|collagen|omega[\s-]?3|vitamin[\s-]?[a-z0-9]+|glucosamine|men vi sinh|bổ sung dinh dưỡng|supplements?|blackmores|doppelherz)(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:thực phẩm chức năng|tpcn|viên uống|collagen|omega[\s-]?3|vitamin[\s-]?[a-z0-9]+|glucosamine|men vi sinh|bổ sung dinh dưỡng|whey\s*protein|creatine|supplements?|blackmores|doppelherz)(?![\p{L}\d])/iu.test(
       haystack
     )
   ) {
@@ -1562,6 +1545,30 @@ export function getMasterProductCategorySlug(
     )
   ) {
     return 'restaurants';
+  }
+  // Wave E5 places run after Wave E3 retail checks and reject retail product nouns
+  // (e.g. gym bags/mats/gloves/shakers/supplements, oral-care devices/consumables)
+  // while keeping Vietnamese district names like Tan Binh / Binh Thanh unblocked (DOS/Rate#1937).
+  const isWaveE5RetailProduct =
+    /(?<![\p{L}\d])(?:túi|thảm|găng|bình\s*(?:lắc|nước|giữ\s*nhiệt|thể\s*thao|uống|xịt|đựng|tập)|shaker|dây|whey|creatine|protein|bcaa|bàn\s*chải|máy\s*tăm|tăm\s*nước|miếng\s*dán|kem|gel|nước\s*súc\s*miệng|chỉ\s*nha\s*khoa|tăm\s*chỉ|sáp\s*nha\s*khoa|xịt\s*thơm\s*miệng|bột\s*(?:tẩy\s*trắng|trắng\s*răng|đánh\s*răng|protein|whey)|máng\s*(?:tẩy\s*trắng|chống\s*nghiến)|tạ\s*(?:tay|đơn|đòn|ấm|bánh|chân|tập)|đai\s*(?:lưng|tập|kháng\s*lực|quấn)|khăn\s*(?:tập|gym|lau)|(?:quần|áo|giày)\s*(?:tập|gym|yoga|thể\s*thao)|bóng\s*(?:tập|yoga)|gạch\s*yoga|xà\s*đơn|máy\s*chạy\s*bộ|toothbrush|flosser|mouthwash|toothpaste|gym\s*bag|yoga\s*mat)(?![\p{L}\d])/iu.test(
+      haystack
+    );
+  if (
+    !isWaveE5RetailProduct &&
+    (/(?<![\p{L}\d])(?:phòng khám (?:nha|răng)|trung tâm nha khoa|bệnh viện răng hàm mặt|nha khoa (?:quốc tế|thẩm mỹ)|dental (?:clinic|center|centre|hospital))(?![\p{L}\d])/iu.test(
+      haystack
+    ) ||
+      /^\s*nha khoa(?![\p{L}\d])/iu.test(haystack))
+  ) {
+    return 'dental-clinics';
+  }
+  if (
+    !isWaveE5RetailProduct &&
+    /(?<![\p{L}\d])(?:phòng (?:tập )?(?:gym|thể hình|fitness)|trung tâm (?:thể hình|fitness|gym)|(?:fitness|gym) (?:center|centre|club)|california fitness|citi ?gym|elite fitness|the new gym)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'gyms-fitness';
   }
   return 'smartphones';
 }

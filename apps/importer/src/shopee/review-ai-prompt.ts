@@ -225,8 +225,6 @@ const PLACE_CATEGORY_SLUGS = new Set([
   'dental-clinics',
   'gyms-fitness',
 ]);
-/** Wave E5 local service places: their own examples, since no food or room keys apply. */
-const LOCAL_SERVICE_PLACE_SLUGS = new Set(['dental-clinics', 'gyms-fitness']);
 const E3_RETAIL_CATEGORY_SLUGS = new Set(['supplements', 'cosmetics', 'mother-baby']);
 
 const PLACE_EXAMPLES = `Ví dụ (minh hoạ, không phải review thật):
@@ -243,20 +241,39 @@ Kết quả: {"ref": 3, "points": [
   {"kind": "pro", "criterion_key": "location", "body": "Vị trí gần trung tâm, tiện đi lại", "evidence": "gần trung tâm tiện đi lại"},
   {"kind": "con", "criterion_key": "room_quality", "body": "Phòng cách âm chưa tốt", "evidence": "cách âm hơi kém"}]}`;
 
-const LOCAL_SERVICE_EXAMPLES = `Ví dụ (minh hoạ, không phải review thật):
+/**
+ * Per-category place examples for Wave E5 so every example only uses valid criterion keys
+ * for its own category, while existing Wave E4 place prompts stay byte-for-byte unchanged.
+ */
+const PLACE_EXAMPLES_BY_CATEGORY: Readonly<Record<string, string>> = {
+  'dental-clinics': `Ví dụ (minh hoạ, không phải review thật):
 Review ref 1: "bác sĩ làm nhẹ tay, giải thích kỹ từng bước, dụng cụ được tiệt trùng trước mặt, nhưng chi phí phát sinh thêm so với báo giá ban đầu"
 Kết quả: {"ref": 1, "points": [
   {"kind": "pro", "criterion_key": "service_attitude", "body": "Bác sĩ nhẹ tay, giải thích kỹ", "evidence": "bác sĩ làm nhẹ tay, giải thích kỹ từng bước"},
   {"kind": "pro", "criterion_key": "hygiene", "body": "Dụng cụ được tiệt trùng cẩn thận", "evidence": "dụng cụ được tiệt trùng trước mặt"},
   {"kind": "con", "criterion_key": "price", "body": "Chi phí phát sinh so với báo giá", "evidence": "chi phí phát sinh thêm so với báo giá ban đầu"}]}
-Review ref 2: "sẽ giới thiệu bạn bè tới đây nha mọi người ơi"
+Review ref 2: "sẽ giới thiệu bạn bè tới phòng khám nha mọi người ơi"
 Kết quả: {"ref": 2, "points": []}
-Review ref 3: "phòng tập rộng, máy móc mới, nhưng phòng tắm hơi bẩn và giờ cao điểm phải chờ máy"
+Review ref 3: "bác sĩ trám răng chắc tay, không đau, phòng khám ngay mặt tiền dễ tìm nhưng chỗ gửi xe hơi nhỏ"
 Kết quả: {"ref": 3, "points": [
+  {"kind": "pro", "criterion_key": "service_quality", "body": "Trám răng chắc tay, không đau", "evidence": "trám răng chắc tay, không đau"},
+  {"kind": "pro", "criterion_key": "location", "body": "Phòng khám mặt tiền dễ tìm", "evidence": "phòng khám ngay mặt tiền dễ tìm"},
+  {"kind": "con", "criterion_key": "location", "body": "Chỗ gửi xe hơi nhỏ", "evidence": "chỗ gửi xe hơi nhỏ"}]}`,
+  'gyms-fitness': `Ví dụ (minh hoạ, không phải review thật):
+Review ref 1: "phòng tập rộng, máy móc mới, huấn luyện viên hướng dẫn nhiệt tình, nhưng phòng tắm hơi bẩn và giờ cao điểm phải chờ máy"
+Kết quả: {"ref": 1, "points": [
   {"kind": "pro", "criterion_key": "quality", "body": "Phòng tập rộng, máy tập mới", "evidence": "phòng tập rộng, máy móc mới"},
+  {"kind": "pro", "criterion_key": "service_attitude", "body": "Huấn luyện viên hướng dẫn nhiệt tình", "evidence": "huấn luyện viên hướng dẫn nhiệt tình"},
   {"kind": "con", "criterion_key": "hygiene", "body": "Phòng tắm chưa sạch", "evidence": "phòng tắm hơi bẩn"},
   {"kind": "con", "criterion_key": "quality", "body": "Giờ cao điểm phải chờ máy tập", "evidence": "giờ cao điểm phải chờ máy"}]}
-(Chỉ dùng các criterion_key có trong danh sách tiêu chí của danh mục này.)`;
+Review ref 2: "sẽ giới thiệu bạn bè tới tập nha mọi người ơi"
+Kết quả: {"ref": 2, "points": []}
+Review ref 3: "gói tập giá hợp lý so với thiết bị, gần nhà tiện đi làm về nhưng không có chỗ đậu xe hơi"
+Kết quả: {"ref": 3, "points": [
+  {"kind": "pro", "criterion_key": "value", "body": "Gói tập đáng tiền so với thiết bị", "evidence": "gói tập giá hợp lý so với thiết bị"},
+  {"kind": "pro", "criterion_key": "location", "body": "Vị trí gần nhà, tiện đi lại", "evidence": "gần nhà tiện đi làm về"},
+  {"kind": "con", "criterion_key": "location", "body": "Không có chỗ đậu xe hơi", "evidence": "không có chỗ đậu xe hơi"}]}`,
+};
 
 const EXAMPLES = `Ví dụ (minh hoạ, không phải review thật):
 Review ref 1: "pin xài cả ngày vẫn còn 30%, mà ra nắng hơi khó nhìn. shop giao nhanh"
@@ -285,6 +302,12 @@ export function reviewAiInstructions(categorySlug: string): string {
     })
     .join('\n');
   if (PLACE_CATEGORY_SLUGS.has(categorySlug)) {
+    const placeExamples = Object.prototype.hasOwnProperty.call(
+      PLACE_EXAMPLES_BY_CATEGORY,
+      categorySlug
+    )
+      ? PLACE_EXAMPLES_BY_CATEGORY[categorySlug]!
+      : PLACE_EXAMPLES;
     return `Bạn đọc review địa điểm do khách trải nghiệm thực tế viết và rút ra ưu điểm, nhược điểm của chính địa điểm này.
 
 Tiêu chí của danh mục này (criterion_key: tên):
@@ -300,7 +323,7 @@ Luật:
 7. Không có dòng nào vừa là ưu vừa là nhược. Không lặp ý.
 8. Trả đúng một mục cho mỗi ref nhận được.
 
-${LOCAL_SERVICE_PLACE_SLUGS.has(categorySlug) ? LOCAL_SERVICE_EXAMPLES : PLACE_EXAMPLES}`;
+${placeExamples}`;
   }
   const rule6 = E3_RETAIL_CATEGORY_SLUGS.has(categorySlug)
     ? '6. Bỏ qua chuyện giao hàng của đơn vị vận chuyển, người bán, khuyến mãi, quà tặng, xu (chỉ xét bao bì của chính sản phẩm nếu thuộc tiêu chí packaging).'

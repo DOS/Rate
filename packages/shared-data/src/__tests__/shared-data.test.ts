@@ -3926,7 +3926,8 @@ function testWaveE5Readiness(): void {
   assert.equal(rules.getRatingCriteriaVersion('tvs'), 2);
   assert.equal(rules.getRatingCriteriaVersion('smartphones'), 1);
 
-  // Clinic and gym vocabulary lands on the right criterion.
+  // Clinic and gym vocabulary lands on the right criterion and stays strictly
+  // scoped to dental-clinics / gyms-fitness (never leaks into existing categories).
   assert.equal(
     rules.assignPointCriterion(
       'dental-clinics',
@@ -3944,6 +3945,34 @@ function testWaveE5Readiness(): void {
     'service_quality'
   );
   assert.equal(
+    rules.assignPointCriterion('dental-clinics', null, 'Bác sĩ tư vấn kỹ'),
+    'service_attitude'
+  );
+  assert.equal(
+    rules.assignPointCriterion('restaurants', null, 'Bác sĩ cũng hay ăn ở đây'),
+    null
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'gyms-fitness',
+      null,
+      'Bác sĩ cũng hay tập ở đây'
+    ),
+    null
+  );
+  assert.equal(
+    rules.assignPointCriterion('cafes', null, 'Vô trùng sạch đẹp'),
+    null
+  );
+  assert.equal(
+    rules.assignPointCriterion('services', null, 'Tay nghề cao'),
+    null
+  );
+  assert.equal(
+    rules.assignPointCriterion('mother-baby', null, 'Thiết bị nhỏ gọn dễ mang'),
+    null
+  );
+  assert.equal(
     rules.assignPointCriterion(
       'gyms-fitness',
       null,
@@ -3956,6 +3985,14 @@ function testWaveE5Readiness(): void {
       'gyms-fitness',
       null,
       'Huấn luyện viên nhiệt tình'
+    ),
+    'service_attitude'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'gyms-fitness',
+      null,
+      'Huấn luyện viên theo sát buổi tập'
     ),
     'service_attitude'
   );

@@ -324,14 +324,7 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
   wash_quality: ['giặt sạch', 'vắt', 'vết bẩn', 'sấy', 'nước giặt'],
   filtration: ['lọc khí', 'bụi mịn', 'pm2.5', 'hepa', 'khử mùi', 'lọc bụi'],
   filter_cost: ['lõi lọc', 'màng lọc', 'thay lõi', 'thay màng', 'chi phí lõi'],
-  service_quality: [
-    'chất lượng',
-    'dịch vụ',
-    'sạch',
-    'ngon',
-    'điều trị',
-    'tay nghề',
-  ],
+  service_quality: ['chất lượng', 'dịch vụ', 'sạch', 'ngon'],
   price: ['giá', 'tiền', 'rẻ', 'đắt'],
   attitude: ['thái độ', 'nhân viên', 'phục vụ', 'nhiệt tình', 'lịch sự'],
   speed: ['nhanh', 'chậm', 'đợi', 'lâu'],
@@ -400,9 +393,6 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
     'đường may',
     'hoàn thiện',
     'bền đẹp',
-    'máy tập',
-    'thiết bị',
-    'lớp tập',
   ],
   ease_of_use: [
     'dễ dùng',
@@ -433,8 +423,6 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
     'thân thiện',
     'lễ phép',
     'chu đáo',
-    'bác sĩ',
-    'huấn luyện viên',
   ],
   hygiene: [
     'vệ sinh',
@@ -443,8 +431,6 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
     'bàn ghế sạch',
     'nhà vệ sinh',
     'bẩn',
-    'vô trùng',
-    'khử trùng',
   ],
   ambiance: [
     'không gian',
@@ -495,6 +481,23 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
+// Extra keywords scoped strictly to a single category, merged on top of
+// CRITERION_KEYWORDS only for that category so existing categories stay
+// byte-for-byte unchanged (DOS/Rate#1937).
+const CATEGORY_CRITERION_EXTRA_KEYWORDS: Readonly<
+  Record<string, Readonly<Record<string, readonly string[]>>>
+> = {
+  'dental-clinics': {
+    service_quality: ['điều trị', 'tay nghề'],
+    service_attitude: ['bác sĩ'],
+    hygiene: ['vô trùng', 'khử trùng'],
+  },
+  'gyms-fitness': {
+    quality: ['máy tập', 'thiết bị', 'lớp tập'],
+    service_attitude: ['huấn luyện viên'],
+  },
+};
+
 /**
  * Whether a keyword's words appear in a line's words, in order. A line typed
  * without any diacritics ("pin trau, sac nhanh") matches the plain keyword;
@@ -543,15 +546,29 @@ export function assignPointCriterion(
   const criteria = getRatingCriteria(categorySlug);
   if (criterionKey && criteria.some((cr) => cr.key === criterionKey))
     return criterionKey;
+  const categoryExtras =
+    typeof categorySlug === 'string' &&
+    Object.prototype.hasOwnProperty.call(
+      CATEGORY_CRITERION_EXTRA_KEYWORDS,
+      categorySlug
+    )
+      ? CATEGORY_CRITERION_EXTRA_KEYWORDS[categorySlug]
+      : undefined;
   const words = comparablePoint(body).split(SPACE);
   const plainLine = words.every((word) => word === plainWord(word));
   const perCriterion = criteria.map((criterion) => {
-    const keywords = Object.prototype.hasOwnProperty.call(
+    const base = Object.prototype.hasOwnProperty.call(
       CRITERION_KEYWORDS,
       criterion.key
     )
       ? CRITERION_KEYWORDS[criterion.key]!
       : [];
+    const extra =
+      categoryExtras &&
+      Object.prototype.hasOwnProperty.call(categoryExtras, criterion.key)
+        ? categoryExtras[criterion.key]!
+        : [];
+    const keywords = extra.length > 0 ? [...base, ...extra] : base;
     return {
       key: criterion.key,
       matched: matchedKeywords(words, keywords, plainLine),

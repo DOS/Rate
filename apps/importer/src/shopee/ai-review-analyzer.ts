@@ -914,10 +914,17 @@ const PLACE_CATEGORIES = new Set<string>([
 ]);
 const WAVE_E3_RETAIL_CATEGORIES = new Set<string>(['supplements', 'cosmetics', 'mother-baby']);
 
-// Domain feedback for Wave E4/E5 places, including dental clinic and gym vocabulary
-// (excludes delivery couriers / shipper-only praise).
+// Domain feedback for Wave E4/E5 places (shared place vocabulary; excludes delivery couriers).
 const PLACE_DOMAIN_MENTION_RE =
-  /(?<![\p{L}\p{N}])(?:món(?:\s*ăn)?|đồ\s*(?:ăn|uống)|thức\s*(?:ăn|uống)|thực\s*đơn|menu|nước\s*(?:lèo|dùng|sốt|chấm|uống)|thịt|cá|hải\s*sản|rau|cơm|phở|bún|trà|cà\s*phê|bánh|vị|nêm(?:\s*nếm)?|đậm\s*đà|nhạt|mặn|ngọt|cay|tươi|giòn|ngon|dở|nguội|không\s*gian|quán|nhà\s*hàng|khách\s*sạn|homestay|phòng(?:\s*(?:ốc|ngủ|tắm))?|giường|nệm|ga\s*(?:giường|gối)|gối|chăn|vệ\s*sinh|sạch(?:\s*sẽ)?|bẩn|dơ|mùi(?:\s*hôi)?|ồn(?:\s*ào)?|yên\s*tĩnh|thoáng|view|tầm\s*nhìn|vị\s*trí|trung\s*tâm|đỗ\s*xe|đậu\s*xe|check[\s-]*in|check[\s-]*out|lễ\s*tân|nhân\s*viên(?!\s*(?:giao|ship|vận\s*chuyển))|phục\s*vụ(?!\s*(?:giao|ship|vận\s*chuyển))|thái\s*độ|hồ\s*bơi|ăn\s*sáng|điều\s*hòa|máy\s*lạnh|nước\s*nóng|cách\s*âm|giá(?:\s*(?:cả|tiền))?|đáng\s*tiền|nha\s*khoa|phòng\s*khám|bác\s*sĩ|nha\s*sĩ|răng|niềng|trám|nhổ|cạo\s*vôi|implant|tẩy\s*trắng|tiệt\s*trùng|vô\s*trùng|phòng\s*tập|gym|máy\s*tập|huấn\s*luyện\s*viên|pt|lớp\s*(?:tập|yoga|aerobic)|yoga|gói\s*tập|tủ\s*đồ|phòng\s*thay\s*đồ)(?![\p{L}\p{N}])/iu;
+  /(?<![\p{L}\p{N}])(?:món(?:\s*ăn)?|đồ\s*(?:ăn|uống)|thức\s*(?:ăn|uống)|thực\s*đơn|menu|nước\s*(?:lèo|dùng|sốt|chấm|uống)|thịt|cá|hải\s*sản|rau|cơm|phở|bún|trà|cà\s*phê|bánh|vị|nêm(?:\s*nếm)?|đậm\s*đà|nhạt|mặn|ngọt|cay|tươi|giòn|ngon|dở|nguội|không\s*gian|quán|nhà\s*hàng|khách\s*sạn|homestay|phòng(?:\s*(?:ốc|ngủ|tắm))?|giường|nệm|ga\s*(?:giường|gối)|gối|chăn|vệ\s*sinh|sạch(?:\s*sẽ)?|bẩn|dơ|mùi(?:\s*hôi)?|ồn(?:\s*ào)?|yên\s*tĩnh|thoáng|view|tầm\s*nhìn|vị\s*trí|trung\s*tâm|đỗ\s*xe|đậu\s*xe|check[\s-]*in|check[\s-]*out|lễ\s*tân|nhân\s*viên(?!\s*(?:giao|ship|vận\s*chuyển))|phục\s*vụ(?!\s*(?:giao|ship|vận\s*chuyển))|thái\s*độ|hồ\s*bơi|ăn\s*sáng|điều\s*hòa|máy\s*lạnh|nước\s*nóng|cách\s*âm|giá(?:\s*(?:cả|tiền))?|đáng\s*tiền)(?![\p{L}\p{N}])/iu;
+
+// Category-scoped domain feedback for Wave E5 places (keeps dental/gym terms out of Wave E4
+// and omits the ambiguous bare "pt" token).
+const DENTAL_CLINIC_MENTION_RE =
+  /(?<![\p{L}\p{N}])(?:nha\s*khoa|phòng\s*khám|bác\s*sĩ|nha\s*sĩ|răng|niềng|trám|nhổ|cạo\s*vôi|implant|tẩy\s*trắng|tiệt\s*trùng|vô\s*trùng)(?![\p{L}\p{N}])/iu;
+
+const GYM_FITNESS_MENTION_RE =
+  /(?<![\p{L}\p{N}])(?:phòng\s*tập|gym|máy\s*tập|huấn\s*luyện\s*viên|personal\s*trainer|lớp\s*(?:tập|yoga|aerobic)|yoga|gói\s*tập|tủ\s*đồ|phòng\s*thay\s*đồ)(?![\p{L}\p{N}])/iu;
 
 // Intrinsic product/packaging feedback for Wave E3 consumables (keeps courier-only remarks excluded).
 const E3_CONSUMABLE_MENTION_RE =
@@ -935,6 +942,12 @@ function hasDomainSubstance(text: string, context?: ShippingCommentContext): boo
     (context?.entityType === 'place' || (category !== null && PLACE_CATEGORIES.has(category))) &&
     PLACE_DOMAIN_MENTION_RE.test(text)
   ) {
+    return true;
+  }
+  if (category === 'dental-clinics' && DENTAL_CLINIC_MENTION_RE.test(text)) {
+    return true;
+  }
+  if (category === 'gyms-fitness' && GYM_FITNESS_MENTION_RE.test(text)) {
     return true;
   }
   if (

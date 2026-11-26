@@ -819,21 +819,6 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
     return 'cafes';
   }
   if (
-    /(?<![\p{L}\d])(?:phòng\s*khám\s*(?:nha|răng)|trung\s*tâm\s*nha\s*khoa|bệnh\s*viện\s*răng\s*hàm\s*mặt|nha\s*khoa\s*(?:quốc\s*tế|thẩm\s*mỹ)|dental\s*(?:clinic|center|centre|hospital))(?![\p{L}\d])/iu.test(
-      t
-    ) ||
-    /^\s*nha\s*khoa(?![\p{L}\d])/iu.test(t)
-  ) {
-    return 'dental-clinics';
-  }
-  if (
-    /(?<![\p{L}\d])(?:phòng\s*(?:tập\s*)?(?:gym|thể\s*hình|fitness)|trung\s*tâm\s*(?:thể\s*hình|fitness|gym)|(?:fitness|gym)\s*(?:center|centre|club)|california\s*fitness|citi\s*gym|elite\s*fitness|the\s*new\s*gym)(?![\p{L}\d])/iu.test(
-      t
-    )
-  ) {
-    return 'gyms-fitness';
-  }
-  if (
     /(?<![\p{L}\d])(?:sữa\s*(?:bột|công\s*thức|non|cho\s*bé|tắm\s*gội\s*cho\s*bé)|tã\s*(?:dán|quần|giấy|bỉm|sơ\s*sinh|em\s*bé)|bỉm\s*(?:dán|quần|sơ\s*sinh|em\s*bé|\p{L}+)|bình\s*sữa|núm\s*ti|máy\s*hút\s*sữa|máy\s*tiệt\s*trùng\s*bình\s*sữa|máy\s*hâm\s*sữa|xe\s*đẩy\s*(?:cho\s*bé|em\s*bé|gấp\s*gọn)|ghế\s*ăn\s*dặm|địu\s*em\s*bé|cũi\s*(?:cho\s*bé|trẻ\s*em)|baby\s*formula|diapers?|mẹ\s*&\s*bé)(?![\p{L}\d])/iu.test(
       t
     )
@@ -856,6 +841,30 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
   }
   if (/(?<![\p{L}\d])vitamin\s*(?:c|d\d*|e|b\d*|tổng\s*hợp)(?![\p{L}\d])/iu.test(t)) {
     return 'supplements';
+  }
+  // Wave E5 places run after Wave E3 retail checks and reject retail product nouns
+  // (e.g. gym bags/mats/gloves/shakers/supplements, oral-care devices/consumables)
+  // while keeping Vietnamese district names like Tan Binh / Binh Thanh unblocked (DOS/Rate#1937).
+  const isWaveE5RetailProduct =
+    /(?<![\p{L}\d])(?:túi|thảm|găng|bình\s*(?:lắc|nước|giữ\s*nhiệt|thể\s*thao|uống|xịt|đựng|tập)|shaker|dây|whey|creatine|protein|bcaa|bàn\s*chải|máy\s*tăm|tăm\s*nước|miếng\s*dán|kem|gel|nước\s*súc\s*miệng|chỉ\s*nha\s*khoa|tăm\s*chỉ|sáp\s*nha\s*khoa|xịt\s*thơm\s*miệng|bột\s*(?:tẩy\s*trắng|trắng\s*răng|đánh\s*răng|protein|whey)|máng\s*(?:tẩy\s*trắng|chống\s*nghiến)|tạ\s*(?:tay|đơn|đòn|ấm|bánh|chân|tập)|đai\s*(?:lưng|tập|kháng\s*lực|quấn)|khăn\s*(?:tập|gym|lau)|(?:quần|áo|giày)\s*(?:tập|gym|yoga|thể\s*thao)|bóng\s*(?:tập|yoga)|gạch\s*yoga|xà\s*đơn|máy\s*chạy\s*bộ|toothbrush|flosser|mouthwash|toothpaste|gym\s*bag|yoga\s*mat)(?![\p{L}\d])/iu.test(
+      t
+    );
+  if (
+    !isWaveE5RetailProduct &&
+    (/(?<![\p{L}\d])(?:phòng\s*khám\s*(?:nha|răng)|trung\s*tâm\s*nha\s*khoa|bệnh\s*viện\s*răng\s*hàm\s*mặt|nha\s*khoa\s*(?:quốc\s*tế|thẩm\s*mỹ)|dental\s*(?:clinic|center|centre|hospital))(?![\p{L}\d])/iu.test(
+      t
+    ) ||
+      /^\s*nha\s*khoa(?![\p{L}\d])/iu.test(t))
+  ) {
+    return 'dental-clinics';
+  }
+  if (
+    !isWaveE5RetailProduct &&
+    /(?<![\p{L}\d])(?:phòng\s*(?:tập\s*)?(?:gym|thể\s*hình|fitness)|trung\s*tâm\s*(?:thể\s*hình|fitness|gym)|(?:fitness|gym)\s*(?:center|centre|club)|california\s*fitness|citi\s*gym|elite\s*fitness|the\s*new\s*gym)(?![\p{L}\d])/iu.test(
+      t
+    )
+  ) {
+    return 'gyms-fitness';
   }
   return null;
 }

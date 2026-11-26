@@ -81,13 +81,20 @@ assert.equal(isPlaceCategorySlug('smartphones'), false);
 assert.equal(RATE_ROUTES.DENTAL_CLINICS, '/dental-clinics');
 assert.equal(RATE_ROUTES.GYMS_FITNESS, '/gyms-fitness');
 
-// 2. Keyword fallback, including a gym name that contains a laptop line ("Yoga").
+// 2. Keyword fallback, including a gym name containing "Yoga" and retail titles mentioning
+// clinic/gym terms that must stay in their E3 or default category.
 const keywordSamples: Array<[string, string]> = [
-  ['Phòng khám nha khoa Sài Gòn Smile', 'dental-clinics'],
+  ['Nha khoa Kim', 'dental-clinics'],
   ['Nha khoa Kim Quận 3', 'dental-clinics'],
+  ['Nha khoa Kim Bình Thạnh', 'dental-clinics'],
+  ['Phòng khám nha khoa Paris', 'dental-clinics'],
+  ['Phòng khám nha khoa Sài Gòn Smile', 'dental-clinics'],
   ['Bệnh viện Răng Hàm Mặt Trung ương', 'dental-clinics'],
+  ['California Fitness & Yoga', 'gyms-fitness'],
   ['California Fitness & Yoga Hai Bà Trưng', 'gyms-fitness'],
+  ['Phòng tập gym Elite Fitness', 'gyms-fitness'],
   ['Phòng tập gym Hùng Fitness Quận 7', 'gyms-fitness'],
+  ['CitiGym', 'gyms-fitness'],
   ['CitiGym Tân Bình', 'gyms-fitness'],
   ['Lenovo Yoga Slim 7 14 inch', 'laptops'],
 ];
@@ -105,13 +112,29 @@ assert.equal(
   }),
   '/dental-clinics/nha-khoa-kim-q3'
 );
-assert.notEqual(
-  getMasterProductCategorySlug({
-    slug: 'chi-nha-khoa',
-    name: 'Chỉ nha khoa Oral-B 50m',
-  }),
-  'dental-clinics'
-);
+const retailSamples: Array<[string, string]> = [
+  ['Whey Protein Rule 1 5lbs dùng cho phòng gym', 'supplements'],
+  ['Creatine Monohydrate phòng gym', 'supplements'],
+  ['Miếng dán trắng răng chuẩn nha khoa thẩm mỹ', 'cosmetics'],
+  ['Bình lắc whey phòng tập gym', 'smartphones'],
+  ['Túi đựng đồ đi phòng gym', 'smartphones'],
+  ['Thảm tập yoga cho phòng gym', 'smartphones'],
+  ['Găng tay tập gym fitness club', 'smartphones'],
+  ['Dây kháng lực fitness center tại nhà', 'smartphones'],
+  ['Máy tăm nước Panasonic phòng khám nha khoa', 'smartphones'],
+  ['Bàn chải điện Oral-B Dental Center khuyên dùng', 'smartphones'],
+  ['Kem đánh răng chuẩn nha khoa thẩm mỹ', 'smartphones'],
+  ['Gel tẩy trắng răng phòng khám nha khoa', 'smartphones'],
+  ['Nước súc miệng chuẩn nha khoa quốc tế', 'smartphones'],
+  ['Chỉ nha khoa Oral-B 50m', 'smartphones'],
+  ['Tăm chỉ nha khoa thẩm mỹ 50 cây', 'smartphones'],
+];
+for (const [name, expected] of retailSamples) {
+  const actual = getMasterProductCategorySlug({ slug: 'sample-slug', name });
+  assert.equal(actual, expected, `"${name}" must stay ${expected}`);
+  assert.notEqual(actual, 'dental-clinics', name);
+  assert.notEqual(actual, 'gyms-fitness', name);
+}
 
 // 3. Price units keep NULL semantics: no per-person or per-night suffix by default.
 for (const slug of E5) {

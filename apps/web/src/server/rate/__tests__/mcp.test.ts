@@ -1569,6 +1569,10 @@ async function runMcpTestSuite() {
   assert.match(compareTool.description, /earbuds omitting screen/);
   assert.match(compareTool.description, /screen \+ value on tvs/);
   assert.match(compareTool.description, /value only on other Wave E1-E5/);
+  assert.match(
+    compareTool.description,
+    /maps to price on bank-savings, internet-telecom, restaurants, cafes, and dental-clinics/
+  );
   assert.match(compareTool.description, /ok: false, isError: true/);
   assert.match(compareTool.description, /fewer than two requested slugs/);
   assert.doesNotMatch(compareTool.description, /\b5 categories\b/);
@@ -1632,8 +1636,16 @@ async function runMcpTestSuite() {
     compareSchemaFor19.properties.persona?.description ?? '',
     /value only on other Wave E1-E5/
   );
+  assert.match(
+    compareSchemaFor19.properties.persona?.description ?? '',
+    /maps to price on bank-savings, internet-telecom, restaurants, cafes, and dental-clinics/
+  );
 
   assert.match(llmsBody, /across 21 categories/);
+  assert.match(
+    llmsBody,
+    /`value` slot maps to `price` on `bank-savings`, `internet-telecom`, `restaurants`, `cafes`, and `dental-clinics`/
+  );
   assert.match(llmsBody, /\*\*21 Canonical Categories\*\*/);
   assert.match(llmsBody, /no published items yet returns empty results/);
   assert.match(llmsBody, /for category-filtered tools/);
