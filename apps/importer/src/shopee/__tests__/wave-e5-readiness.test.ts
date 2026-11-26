@@ -286,8 +286,12 @@ describe('Wave E5 importer normalization', () => {
       ['California Fitness & Yoga', 'gyms-fitness'],
       ['CitiGym', 'gyms-fitness'],
       ['CitiGym Tân Bình', 'gyms-fitness'],
+      ['CitiGym - khong gian tap luyen hien dai', 'gyms-fitness'],
+      ['CitiGym - Không gian tập luyện hiện đại', 'gyms-fitness'],
       ['Getfit Gym', 'gyms-fitness'],
       ['Getfit Gym Hoàng Diệu', 'gyms-fitness'],
+      ['Getfit Gym - thoi gian tap linh hoat', 'gyms-fitness'],
+      ['Getfit Gym - Thời gian tập linh hoạt', 'gyms-fitness'],
       ['Get Fit Gym Quận 4', 'gyms-fitness'],
       ['GetFit Gym', 'gyms-fitness'],
       ['Swequity', 'gyms-fitness'],
@@ -326,6 +330,7 @@ describe('Wave E5 importer normalization', () => {
       ['May tap da nang cho Getfit Gym', 'smartphones'],
       ['Giàn tạ đa năng cho phòng gym', 'smartphones'],
       ['Gian ta da nang Swequity', 'smartphones'],
+      ['Gian tap ta da nang Swequity', 'smartphones'],
       ['Máy chạy bộ điện phòng gym', 'smartphones'],
       ['May chay bo dien California Fitness', 'smartphones'],
       ['Xe đạp tập thể dục phòng gym', 'smartphones'],
@@ -347,10 +352,15 @@ describe('Wave E5 importer normalization', () => {
       ['Găng tay tập gym chống chai', 'smartphones'],
     ];
     for (const [title, expected] of retailExpectations) {
-      assert.equal(detectCategorySlug(title), expected, title);
-      assert.equal(detectCategorySlug(title.normalize('NFD')), expected, `${title} (NFD)`);
-      assert.notEqual(detectCategorySlug(title), 'dental-clinics', title);
-      assert.notEqual(detectCategorySlug(title), 'gyms-fitness', title);
+      for (const [label, candidate] of [
+        [title, title],
+        [`${title} (NFD)`, title.normalize('NFD')],
+      ] as const) {
+        const actual = detectCategorySlug(candidate);
+        assert.equal(actual, expected, label);
+        assert.notEqual(actual, 'dental-clinics', label);
+        assert.notEqual(actual, 'gyms-fitness', label);
+      }
     }
   });
 });

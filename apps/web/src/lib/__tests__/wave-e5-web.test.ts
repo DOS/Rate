@@ -104,8 +104,12 @@ const keywordSamples: Array<[string, string]> = [
   ['Trung tâm thể hình Elite Fitness', 'gyms-fitness'],
   ['CitiGym', 'gyms-fitness'],
   ['CitiGym Tân Bình', 'gyms-fitness'],
+  ['CitiGym - khong gian tap luyen hien dai', 'gyms-fitness'],
+  ['CitiGym - Không gian tập luyện hiện đại', 'gyms-fitness'],
   ['Getfit Gym', 'gyms-fitness'],
   ['Getfit Gym Hoàng Diệu', 'gyms-fitness'],
+  ['Getfit Gym - thoi gian tap linh hoat', 'gyms-fitness'],
+  ['Getfit Gym - Thời gian tập linh hoạt', 'gyms-fitness'],
   ['Get Fit Gym Quận 4', 'gyms-fitness'],
   ['GetFit Gym', 'gyms-fitness'],
   ['Swequity', 'gyms-fitness'],
@@ -134,6 +138,14 @@ assert.equal(
     slug: 'kim-q3',
     name: '',
     model: 'Hệ thống Nha khoa Kim',
+  }),
+  'dental-clinics'
+);
+assert.equal(
+  getMasterProductCategorySlug({
+    slug: 'kim-q3',
+    name: '',
+    model: 'Hệ thống Nha khoa Kim'.normalize('NFD'),
   }),
   'dental-clinics'
 );
@@ -185,6 +197,7 @@ const retailSamples: Array<[string, string]> = [
   ['May tap da nang cho Getfit Gym', 'smartphones'],
   ['Giàn tạ đa năng cho phòng gym', 'smartphones'],
   ['Gian ta da nang Swequity', 'smartphones'],
+  ['Gian tap ta da nang Swequity', 'smartphones'],
   ['Máy chạy bộ điện phòng gym', 'smartphones'],
   ['May chay bo dien California Fitness', 'smartphones'],
   ['Xe đạp tập thể dục phòng gym', 'smartphones'],
@@ -206,18 +219,18 @@ const retailSamples: Array<[string, string]> = [
   ['Găng tay tập gym chống chai', 'smartphones'],
 ];
 for (const [name, expected] of retailSamples) {
-  const actual = getMasterProductCategorySlug({ slug: 'sample-slug', name });
-  assert.equal(actual, expected, `"${name}" must stay ${expected}`);
-  assert.equal(
-    getMasterProductCategorySlug({
+  for (const [label, candidate] of [
+    [name, name],
+    [`${name} (NFD)`, name.normalize('NFD')],
+  ] as const) {
+    const actual = getMasterProductCategorySlug({
       slug: 'sample-slug',
-      name: name.normalize('NFD'),
-    }),
-    expected,
-    `"${name}" (NFD) must stay ${expected}`
-  );
-  assert.notEqual(actual, 'dental-clinics', name);
-  assert.notEqual(actual, 'gyms-fitness', name);
+      name: candidate,
+    });
+    assert.equal(actual, expected, `"${label}" must stay ${expected}`);
+    assert.notEqual(actual, 'dental-clinics', label);
+    assert.notEqual(actual, 'gyms-fitness', label);
+  }
 }
 assert.equal(
   getMasterProductHref({
