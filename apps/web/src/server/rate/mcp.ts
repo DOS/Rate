@@ -206,9 +206,12 @@ export const MCP_SUPPORTED_CATEGORY_COUNT =
 
 export const MCP_CATEGORY_COVERAGE_TEXT = `${MCP_SUPPORTED_CATEGORY_COUNT} categories: ${MCP_SUPPORTED_CATEGORY_GROUPS.map(
   (group) => `${group.label} (${group.slugs.length}: ${group.slugs.join(', ')})`
-).join('; ')}. A category with no published items yet returns empty results.`;
+).join('; ')}.`;
 
-export const MCP_SERVER_INSTRUCTIONS = `Read-only Vietnamese shopping intelligence across 22 retail platforms and ${MCP_CATEGORY_COVERAGE_TEXT} Always cite canonical_citation_url (https://rate.vn/...) and freshness timestamps (observed_at / price_observed_at) when presenting prices, specifications, combo-cart store plans (including verified_safe audit_scope), or 6-axis review trust verdicts to users. Sold-out and implausibly low bait-price listings are excluded from market floor calculations. Effective price estimates are reference estimates (is_reference_estimate: true) rather than binding retailer quotes.`;
+export const MCP_EMPTY_CATEGORY_BEHAVIOR_TEXT =
+  'For category-filtered tools (search_verified_catalog, get_genuine_deals), a category with no published items yet returns empty results; compare_devices_by_use_case returns its insufficient-products error (ok: false, isError: true) when fewer than two requested slugs resolve.';
+
+export const MCP_SERVER_INSTRUCTIONS = `Read-only Vietnamese shopping intelligence across 22 retail platforms and ${MCP_CATEGORY_COVERAGE_TEXT} ${MCP_EMPTY_CATEGORY_BEHAVIOR_TEXT} Always cite canonical_citation_url (https://rate.vn/...) and freshness timestamps (observed_at / price_observed_at) when presenting prices, specifications, combo-cart store plans (including verified_safe audit_scope), or 6-axis review trust verdicts to users. Sold-out and implausibly low bait-price listings are excluded from market floor calculations. Effective price estimates are reference estimates (is_reference_estimate: true) rather than binding retailer quotes.`;
 
 export const MCP_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -752,7 +755,7 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = [
   {
     name: 'search_verified_catalog',
     title: 'Search Verified Catalog',
-    description: `Search normalized products and items across ${MCP_CATEGORY_COVERAGE_TEXT} Supports brand and price filters (VND, or PCT rates for bank-savings), excludes sold-out and bait-price traps from floor prices, and returns canonical_citation_url plus freshness timestamps (max 10 items).`,
+    description: `Search normalized products and items across ${MCP_CATEGORY_COVERAGE_TEXT} A category with no published items yet returns empty results. Supports brand and price filters (VND, or PCT rates for bank-savings), excludes sold-out and bait-price traps from floor prices, and returns canonical_citation_url plus freshness timestamps (max 10 items).`,
     inputSchema: exportToolInputJsonSchema(SearchVerifiedCatalogInputSchema),
     annotations: READ_ONLY_ANNOTATIONS('Search Verified Catalog'),
   },
@@ -770,7 +773,7 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = [
     name: 'compare_devices_by_use_case',
     title: 'Compare Products by Use Case',
     description:
-      'Compare 2 to 4 same-category product slugs side-by-side across category-scoped specs (full 10 groups on smartphones/tablets/laptops, fewer on smartwatches/earbuds/tvs/appliances, availability + regulatory on Wave E2/E3/E4), verified multi-store floor prices, and category JReviews criteria (up to 5 on tech: screen, performance, camera, battery, value with earbuds omitting screen; screen + value on tvs; value only on other Wave E1-E4 categories), with persona or custom overrides acting on those 5 keys.',
+      'Compare 2 to 4 same-category product slugs side-by-side across category-scoped specs (full 10 groups on smartphones/tablets/laptops, fewer on smartwatches/earbuds/tvs/appliances, availability + regulatory on Wave E2/E3/E4), verified multi-store floor prices, and category JReviews criteria (up to 5 on tech: screen, performance, camera, battery, value with earbuds omitting screen; screen + value on tvs; value only on other Wave E1-E4 categories), with persona or custom overrides acting on those 5 keys. Returns an insufficient-products error (ok: false, isError: true) when fewer than two requested slugs resolve.',
     inputSchema: exportToolInputJsonSchema(CompareDevicesByUseCaseInputSchema),
     annotations: READ_ONLY_ANNOTATIONS('Compare Products by Use Case'),
   },
@@ -3846,8 +3849,7 @@ export function buildRateWellKnownMcpDescriptor(): Record<string, unknown> {
     supportedProtocolVersions: [...SUPPORTED_MCP_PROTOCOL_VERSIONS],
     name: 'io.github.dos/rate-vn',
     serverInfo: MCP_SERVER_INFO,
-    description:
-      'Stateless read-only Streamable HTTP Model Context Protocol (MCP) server for Rate.vn: verified prices across 22 Vietnamese retail platforms and 19 categories (tech, appliances, services, retail, places), category-scoped specs (full 10 groups on smartphones/tablets/laptops, fewer on smartwatches/earbuds/tvs/appliances, availability + regulatory on Wave E2/E3/E4), historical fake-discount audits, DOSafe scam risk, 6-axis Review Trust Model v2 scores, multi-store combo cart optimization, and VN/A effective price estimation. A category with no published items yet returns empty results.',
+    description: `Stateless read-only Streamable HTTP Model Context Protocol (MCP) server for Rate.vn: verified prices across 22 Vietnamese retail platforms and 19 categories (tech, appliances, services, retail, places), category-scoped specs (full 10 groups on smartphones/tablets/laptops, fewer on smartwatches/earbuds/tvs/appliances, availability + regulatory on Wave E2/E3/E4), historical fake-discount audits, DOSafe scam risk, 6-axis Review Trust Model v2 scores, multi-store combo cart optimization, and VN/A effective price estimation. ${MCP_EMPTY_CATEGORY_BEHAVIOR_TEXT}`,
     transport: 'streamable-http',
     url: `${CANONICAL_RATE_ORIGIN}/api/mcp`,
     endpoints: {
@@ -3913,7 +3915,7 @@ export function buildRateLlmsTxt(): string {
     '',
     '1. `search_verified_catalog`: Search normalized products and items across all 19 category slugs (see "19 Canonical Categories" below) with brand, price floor/ceiling (VND, or PCT rates for `bank-savings`), and rating sort (`limit <= 10`). Excludes sold-out and implausibly low bait-price listings. A category with no published items yet returns empty results.',
     '2. `get_22_store_offers_and_price_truth`: Fetch verified in-stock offers across all 22 Vietnamese retail platforms, historical floor/median price truth, Deal Radar fake-sale flags, Bayesian rating (`k = 3`, prior `4.2`), and 6-axis Review Trust Model v2 summary for a product slug (`limit <= 10`).',
-    '3. `compare_devices_by_use_case`: Compare 2 to 4 same-category product slugs side-by-side across category-scoped specs (full 10 groups on smartphones/tablets/laptops, fewer on smartwatches/earbuds/tvs/appliances, `availability` + `regulatory` on Wave E2/E3/E4), verified floor prices, and category JReviews criteria (up to 5 on tech: `screen`, `performance`, `camera`, `battery`, `value` with `earbuds` omitting `screen`; `screen` + `value` on `tvs`; `value` only on other Wave E1-E4 categories), with optional `persona` or custom `weights` acting on those 5 keys.',
+    '3. `compare_devices_by_use_case`: Compare 2 to 4 same-category product slugs side-by-side across category-scoped specs (full 10 groups on smartphones/tablets/laptops, fewer on smartwatches/earbuds/tvs/appliances, `availability` + `regulatory` on Wave E2/E3/E4), verified floor prices, and category JReviews criteria (up to 5 on tech: `screen`, `performance`, `camera`, `battery`, `value` with `earbuds` omitting `screen`; `screen` + `value` on `tvs`; `value` only on other Wave E1-E4 categories), with optional `persona` or custom `weights` acting on those 5 keys. Returns its insufficient-products error (`ok: false`, `isError: true`) when fewer than two requested slugs resolve.',
     '4. `audit_listing_url`: Inspect a marketplace product URL across the 22 supported Vietnamese stores and return catalog match, 5-level fake-discount verdict, accessory gatekeeper status, and DOSafe + AI review seller risk scores.',
     '5. `get_genuine_deals`: List verified below-median and cross-platform floor deals (`limit <= 10`, optional category/platform/budget filter) with fake strikethrough markups and high-risk sellers filtered out. Deal Radar covers the 15 non-place categories and always returns no deals (empty results) for Wave E4 places (`restaurants`, `cafes`, `hotels`, `homestays`) or any category with no published items yet.',
     '6. `optimize_combo_cart`: Solve exact single-store (Plan A) and bounded multi-store (Plan B, `maxStores` 1..5) combo cart plans across 2 to 5 product or Item slugs, filtering unavailable/bait offers, enforcing retired-variant size selection safety, and auditing merchant-wide `verified_safe` trust badges (`audit_scope`: `merchant_wide` vs `cart_only_unverified`).',
@@ -3926,7 +3928,7 @@ export function buildRateLlmsTxt(): string {
     '',
     '## Methodology & Data Integrity',
     '',
-    '- **19 Canonical Categories** (a category with no published items yet returns empty results from every tool and API filter; Deal Radar / `get_genuine_deals` covers the 15 non-place categories and always returns empty for Wave E4 places):',
+    '- **19 Canonical Categories** (for category-filtered tools `search_verified_catalog` and `get_genuine_deals`, a category with no published items yet returns empty results; `compare_devices_by_use_case` returns its insufficient-products error `ok: false` / `isError: true` when fewer than two requested slugs resolve; Deal Radar / `get_genuine_deals` covers the 15 non-place categories and always returns empty for Wave E4 places):',
     ...MCP_SUPPORTED_CATEGORY_GROUPS.map(
       (group) =>
         `  - ${group.label} (${group.slugs.length}): ${group.slugs
@@ -3945,7 +3947,7 @@ export function buildRateLlmsTxt(): string {
     '- [Truth Card OG Image API](https://rate.vn/api/v1/rate/og): Render verified PNG social/OG truth cards for products (`type=product`), head-to-head versus (`type=versus`), and deal radar (`type=deals`) via `GET /api/v1/rate/og`.',
     '- [Deal Hub](https://rate.vn/deals): Cross-platform genuine deals and inflated list-price warnings.',
     '- [URL & Fake-Discount Inspector](https://rate.vn/inspect): Verify any listing URL across the 22 supported Vietnamese stores.',
-    '- [Category Leaderboard](https://rate.vn/leaderboard): JReviews dual-rating rankings across all 19 categories (categories without published items yet return empty results).',
+    '- [Category Leaderboard](https://rate.vn/leaderboard): JReviews dual-rating rankings across all 19 categories (category filters with no published items yet show empty rankings).',
     '- [Open-Core Source Repository](https://github.com/DOS/Rate): Public normalization, scoring, and API verification code.',
     '',
   ].join('\n');

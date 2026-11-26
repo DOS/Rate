@@ -1536,6 +1536,11 @@ async function runMcpTestSuite() {
       /no published items yet returns empty results/,
       `${label} must explain empty categories`
     );
+    assert.doesNotMatch(
+      text,
+      /from every tool|every tool returns/i,
+      `${label} must not claim every tool returns empty results`
+    );
     for (const [groupLabel, slugs] of expectedCategoryGroups) {
       assert.ok(
         text.includes(`${groupLabel} (${slugs.length}: ${slugs.join(', ')})`),
@@ -1543,6 +1548,10 @@ async function runMcpTestSuite() {
       );
     }
   }
+  assert.match(MCP_SERVER_INSTRUCTIONS, /category-filtered tools/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /compare_devices_by_use_case/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /ok: false, isError: true/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /fewer than two requested slugs/);
   assert.match(dealsTool.description, /19 categories/);
   assert.match(dealsTool.description, /15 non-place categories/);
   assert.match(dealsTool.description, /Wave E4 places/);
@@ -1559,6 +1568,8 @@ async function runMcpTestSuite() {
   assert.match(compareTool.description, /earbuds omitting screen/);
   assert.match(compareTool.description, /screen \+ value on tvs/);
   assert.match(compareTool.description, /value only on other Wave E1-E4/);
+  assert.match(compareTool.description, /ok: false, isError: true/);
+  assert.match(compareTool.description, /fewer than two requested slugs/);
   assert.doesNotMatch(compareTool.description, /\b5 categories\b/);
   assert.doesNotMatch(compareTool.description, /standardized 10-group specs/);
 
@@ -1624,9 +1635,13 @@ async function runMcpTestSuite() {
   assert.match(llmsBody, /across 19 categories/);
   assert.match(llmsBody, /\*\*19 Canonical Categories\*\*/);
   assert.match(llmsBody, /no published items yet returns empty results/);
+  assert.match(llmsBody, /for category-filtered tools/);
+  assert.match(llmsBody, /`ok: false`.*`isError: true`/);
+  assert.match(llmsBody, /fewer than two requested slugs/);
   assert.match(llmsBody, /15 non-place categories/);
   assert.match(llmsBody, /category-scoped specification templates/);
   assert.match(llmsBody, /`earbuds` omitting `screen`/);
+  assert.doesNotMatch(llmsBody, /from every tool|every tool returns/i);
   assert.doesNotMatch(llmsBody, /\b5 (hardware |tech )?categories\b/);
   assert.doesNotMatch(llmsBody, /5 Canonical Categories/);
   assert.doesNotMatch(llmsBody, /across 10-group (hardware )?specs/);
@@ -1665,6 +1680,13 @@ async function runMcpTestSuite() {
   };
   assert.match(wkJson.description, /19 categories/);
   assert.match(wkJson.description, /category-scoped specs/);
+  assert.match(wkJson.description, /category-filtered tools/);
+  assert.match(wkJson.description, /compare_devices_by_use_case/);
+  assert.match(wkJson.description, /ok: false, isError: true/);
+  assert.doesNotMatch(
+    wkJson.description,
+    /from every tool|every tool returns/i
+  );
   assert.doesNotMatch(wkJson.description, /10-group standardized specs/);
   assert.doesNotMatch(
     wkJson.description,

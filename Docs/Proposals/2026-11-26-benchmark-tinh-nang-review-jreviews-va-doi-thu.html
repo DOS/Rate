@@ -846,8 +846,10 @@
               Chiếm 24.5%: gồm các tính năng còn tắt cờ/chưa cấu hình
               (<code>RATE_ITEM_MODEL</code>, AI Points /
               <code>product_points</code>, Resend) hoặc mới phủ 5 ngành Tech
-              (Form v2 đã Live nhưng Prod hiện có <code>0</code> review mang
-              <code>criteria_ratings</code>).
+              (Form v2 đã Live nhưng trên API công khai ngày 26/11/2026 cả
+              <code>16</code> master publish có <code>criteria_scores: {}</code>
+              và <code>0</code> review mang <code>criteria_ratings</code> trong
+              <code>392</code> review được lấy mẫu).
             </div>
           </div>
           <div class="kpi-card kpi-rose">
@@ -901,9 +903,12 @@
           và cả Trustpilot/G2/Yelp về chiều sâu dữ liệu và độ tin cậy. Kiểm tra
           Live Prod ngày 26/11/2026 xác nhận <code>ReviewFormV2</code>
           (<code>#1544</code>) đã bật sẵn cho người dùng (chấm sao tiêu chí
-          bước 0.5, N/A Skip, Verdict + Pros/Cons), nhưng Prod hiện vẫn có
-          <code>0</code> review cộng đồng mang <code>criteria_ratings</code> và
-          <code>criteria_scores</code> trên các master đã publish vẫn rỗng.
+          bước 0.5, N/A Skip, Verdict + Pros/Cons), nhưng trên API công khai
+          cùng ngày cả <code>16</code> master đã publish đều có
+          <code>criteria_scores: {}</code>, ghi nhận <code>0</code> review mang
+          <code>criteria_ratings</code> trong <code>392</code> review được lấy
+          mẫu và các trang sản phẩm kiểm tra trả <code>productPoints: []</code>
+          (<code>productPointsReviewCount: 0</code>).
           Ngược lại, Rate vẫn hụt ở "tương tác cộng đồng &amp; công cụ doanh
           nghiệp" (upload ảnh/video, Edit/Delete, Owner Reply, Q&amp;A, Hồ sơ
           Reviewer, GeoMaps Wave E4, B2B Claim &amp; Widget). Ở nhóm Quick Wins
@@ -1122,12 +1127,14 @@
                     trên Prod (xác minh ngày 26/11/2026 qua
                     <code>"reviewCategorySlug":"smartphones"</code> trong RSC
                     payload và chunk client), nên luồng gửi sao đa tiêu chí đã
-                    mở; tuy vậy trên Prod cột JSONB
-                    <code>rate.master_products.criteria_scores</code> hiện vẫn
-                    rỗng (<code>{}</code> trên
+                    mở; tuy vậy trên API công khai ngày 26/11/2026, cả
+                    <code>16</code> master đã publish vẫn có
+                    <code>criteria_scores: {}</code> (như trên
                     <code>/api/v1/rate/products/apple-iphone-16-128gb</code>)
-                    vì <code>0</code> review cộng đồng hiện tại có
-                    <code>criteria_ratings</code> (chưa có lượt gửi v2 mới).
+                    và có <code>0</code> review mang
+                    <code>criteria_ratings</code> trong <code>392</code> review
+                    được lấy mẫu (chưa ghi nhận lượt gửi v2 mới trong mẫu công
+                    khai).
                   </div>
                 </td>
                 <td>
@@ -1431,15 +1438,16 @@
                     review theo tiêu chí) và phần nhập 1-5 Pros/Cons thủ công
                     (kèm Pros/Cons theo tiêu chí) trong
                     <code>ReviewFormV2</code> (<code>#1544</code>) ĐÃ LIVE trên
-                    Prod (xác minh 26/11/2026). Tuy nhiên trên Prod trang
-                    <code>/smartphones/apple-iphone-16-128gb</code> hiện vẫn
-                    trả <code>productPoints: []</code> và
+                    Prod (xác minh 26/11/2026). Tuy nhiên các trang sản phẩm
+                    kiểm tra ngày 26/11/2026 (như
+                    <code>/smartphones/apple-iphone-16-128gb</code>) vẫn trả
+                    <code>productPoints: []</code> và
                     <code>productPointsReviewCount: 0</code> (nên đang hiển thị
-                    Pros/Cons cũ từ <code>rate.review_analysis</code>) vì chưa
-                    có review v2 mới được gửi và pipeline batch
+                    Pros/Cons cũ từ <code>rate.review_analysis</code>), cho thấy
+                    chưa có lượt gửi v2 tạo points mới và pipeline batch
                     <code>REVIEW_AI_POINTS_ENABLED</code> (cờ backend trong
                     <code>apps/importer</code>, không lộ qua web) chưa backfill
-                    <code>rate.product_points</code>
+                    dữ liệu hiển thị cho các trang kiểm tra
                     (<code>PRODUCT_POINTS_HIDE_AI</code> mặc định là
                     <code>false</code>).
                   </div>
@@ -1519,10 +1527,12 @@
                     tránh). Trọng số danh mục cố định trong
                     <code>rating-criteria.ts</code> /
                     <code>rate.rating_criteria</code>, còn chỉnh trọng số cá
-                    nhân nằm ở <code>UseCaseWeightBar.tsx</code>. Lưu ý: Prod
-                    hiện có <code>0</code> review mang
-                    <code>criteria_ratings</code> nên đòn bẩy lúc này là thúc
-                    đẩy lượt gửi bài v2 mới.
+                    nhân nằm ở <code>UseCaseWeightBar.tsx</code>. Lưu ý: kiểm
+                    tra API công khai ngày 26/11/2026 ghi nhận <code>0</code>
+                    review mang <code>criteria_ratings</code> trong
+                    <code>392</code> review được lấy mẫu trên <code>16</code>
+                    master đã publish nên đòn bẩy lúc này là thúc đẩy lượt gửi
+                    bài v2 mới.
                   </div>
                 </td>
                 <td>
@@ -2817,9 +2827,14 @@
                     và <code>/api/v1/rate/watchlist</code> đã Live (chú ý: chế
                     độ theo dõi theo biến thể Item nằm sau cờ
                     <code>RATE_ITEM_MODEL</code> - xác minh live ngày 26/11/2026
-                    vẫn đang TẮT trên Prod qua <code>/smartphones/apple-iphone-16</code>
-                    trả <code>404</code> và OpenAPI chưa có schema
-                    <code>RateItem</code>).
+                    đang TẮT trên Prod dựa trên
+                    <code>/api/v1/rate/openapi.json</code> chưa xuất schema
+                    <code>RateItem</code> hay tham số <code>group=item</code>
+                    mà <code>buildRateOpenApiSpec()</code> chỉ gắn khi cờ bật;
+                    bằng chứng phụ trợ là
+                    <code>/smartphones/apple-iphone-16</code> trả
+                    <code>404</code>, dù <code>resolveItemRoute</code> cũng trả
+                    <code>null</code> khi thiếu bảng Item).
                   </div>
                 </td>
                 <td>
@@ -3572,12 +3587,19 @@
                     <code>Hotel</code>, <code>CafeOrCoffeeShop</code>...) đã sẵn
                     sàng; <code>ProductGroup</code> + <code>hasVariant</code>
                     (<code>buildItemProductGroupNode</code>) chờ bật cờ
-                    <code>RATE_ITEM_MODEL</code> (xác minh live ngày 26/11/2026:
-                    <code>/smartphones/apple-iphone-16-128gb</code> hiện xuất
-                    <code>BreadcrumbList</code> + <code>Product</code> +
-                    <code>AggregateRating</code>, chưa có
-                    <code>ProductGroup</code>; <code>/smartphones/apple-iphone-16</code>
-                    trả <code>404</code> và OpenAPI chưa có <code>RateItem</code>).
+                    <code>RATE_ITEM_MODEL</code> (xác minh live ngày 26/11/2026
+                    đang TẮT trên Prod dựa trên
+                    <code>/api/v1/rate/openapi.json</code> thiếu schema
+                    <code>RateItem</code> và tham số <code>group=item</code> mà
+                    <code>buildRateOpenApiSpec()</code> chỉ gắn khi cờ bật;
+                    bằng chứng phụ trợ trên
+                    <code>/smartphones/apple-iphone-16-128gb</code> là JSON-LD
+                    chỉ xuất <code>BreadcrumbList</code> + <code>Product</code>
+                    + <code>AggregateRating</code> chưa có
+                    <code>ProductGroup</code>, và
+                    <code>/smartphones/apple-iphone-16</code> trả
+                    <code>404</code> dù <code>resolveItemRoute</code> cũng trả
+                    <code>null</code> khi thiếu bảng Item).
                   </div>
                 </td>
                 <td>
@@ -3688,8 +3710,10 @@
                 (<code>z=1.96</code>) ngay trên từng thẻ đánh giá. Song hành
                 trên Prod là <code>ReviewFormV2</code> (<code>#1544</code> đã
                 Live) thu thập sao đa tiêu chí, N/A skip và Pros/Cons chống né
-                tránh; đòn bẩy kế tiếp là thu hút lượt gửi bài v2 thật (Prod
-                hiện có <code>0</code> review mang <code>criteria_ratings</code>).
+                tránh; đòn bẩy kế tiếp là thu hút lượt gửi bài v2 thật (API
+                công khai ngày 26/11/2026 ghi nhận <code>0</code> review mang
+                <code>criteria_ratings</code> trong <code>392</code> review
+                được lấy mẫu trên <code>16</code> master đã publish).
               </p>
             </div>
             <div class="weapon-meta">
@@ -3829,9 +3853,9 @@
                 <td>
                   <strong>Thu hút lượt gửi Review v2 (đã Live) &amp; Bật 3 cấu hình còn tắt:</strong>
                   <ul>
-                    <li><strong>Thúc đẩy submission cho <code>ReviewFormV2</code> (<code>#1544</code> ĐÃ LIVE):</strong> Form chấm sao tiêu chí, N/A skip, verdict và Pros/Cons đã bật sẵn trên Prod; Prod hiện có <code>0</code> review mang <code>criteria_ratings</code> và <code>criteria_scores</code> trên master vẫn rỗng (<code>{}</code>), nên đòn bẩy P0 là kích hoạt lượt gửi đánh giá v2 từ người dùng thật.</li>
-                    <li><code>RATE_ITEM_MODEL</code> (gom biến thể &amp; <code>ProductGroup</code>; xác minh live 26/11/2026 vẫn TẮT)</li>
-                    <li><code>REVIEW_AI_POINTS_ENABLED=true</code> + backfill <code>product_points</code> / <code>criteria_scores</code> (<code>PRODUCT_POINTS_HIDE_AI</code> mặc định <code>false</code>; Prod hiện trả <code>productPoints: []</code>)</li>
+                    <li><strong>Thúc đẩy submission cho <code>ReviewFormV2</code> (<code>#1544</code> ĐÃ LIVE):</strong> Form chấm sao tiêu chí, N/A skip, verdict và Pros/Cons đã bật sẵn trên Prod; API công khai ngày 26/11/2026 ghi nhận <code>criteria_scores: {}</code> trên cả <code>16</code> master đã publish và <code>0</code> review mang <code>criteria_ratings</code> trong <code>392</code> review được lấy mẫu, nên đòn bẩy P0 là kích hoạt lượt gửi đánh giá v2 từ người dùng thật.</li>
+                    <li><code>RATE_ITEM_MODEL</code> (gom biến thể &amp; <code>ProductGroup</code>; xác minh live 26/11/2026 vẫn TẮT dựa trên <code>/api/v1/rate/openapi.json</code> thiếu schema <code>RateItem</code> / <code>group=item</code>; bằng chứng phụ trợ là <code>/smartphones/apple-iphone-16</code> trả <code>404</code>)</li>
+                    <li><code>REVIEW_AI_POINTS_ENABLED=true</code> + backfill <code>product_points</code> / <code>criteria_scores</code> (<code>PRODUCT_POINTS_HIDE_AI</code> mặc định <code>false</code>; các trang sản phẩm kiểm tra ngày 26/11/2026 trả <code>productPoints: []</code> / <code>productPointsReviewCount: 0</code>)</li>
                     <li>Credential Resend, <code>RATE_ALERT_UNSUBSCRIBE_SECRET</code> &amp; cron <code>--apply</code> cho <code>price-alerts-digest.ts</code> (xác minh live 26/11/2026: <code>/api/v1/rate/watchlist/unsubscribe</code> trả <code>503</code>)</li>
                   </ul>
                 </td>
@@ -3844,12 +3868,15 @@
                   trên Prod và chạy backfill AI points.
                 </td>
                 <td>
-                  Biến <code>ReviewFormV2</code> đã Live thành dữ liệu thật
-                  (lấp đầy <code>criteria_ratings</code> và
-                  <code>rate.master_products.criteria_scores</code> đang rỗng),
-                  lấp đầy <code>rate.product_points</code> (hiện 0 dòng trên
-                  Prod), bật <code>ProductGroup</code> JSON-LD và email cảnh
-                  báo giá RFC 8058.
+                  Biến <code>ReviewFormV2</code> đã Live thành dữ liệu thật (bổ
+                  sung <code>criteria_ratings</code> trong mẫu review và lấp
+                  <code>criteria_scores</code> hiện là <code>{}</code> trên cả
+                  <code>16</code> master đã publish), điền dữ liệu
+                  <code>rate.product_points</code> cho
+                  <code>ProductPointsBlock</code> (các trang kiểm tra hiện trả
+                  <code>productPoints: []</code>), bật
+                  <code>ProductGroup</code> JSON-LD và email cảnh báo giá RFC
+                  8058.
                 </td>
               </tr>
 
