@@ -41,7 +41,7 @@ import {
   getCachedMasterProductPriceHistory,
   getCachedMasterPlaceDetail,
   getCachedPlaceBranchSiblings,
-  getCachedMasterProductReviews,
+  getCachedMasterProductReviewsPage,
   getCachedMasterProductReviewSummary,
   getCachedMasterProductSiblings,
   getCachedMasterProducts,
@@ -455,9 +455,9 @@ export async function ProductDetailView({
     'offers',
     getCachedMasterProductOffers(storedProduct.id)
   );
-  const reviewsRead = timing.time(
+  const reviewPageRead = timing.time(
     'reviews',
-    getCachedMasterProductReviews(storedProduct.id)
+    getCachedMasterProductReviewsPage(storedProduct.id)
   );
   const productPointsRead = timing.time(
     'productPoints',
@@ -478,7 +478,7 @@ export async function ProductDetailView({
   placeDetailRead.catch(() => undefined);
   placeBranchesRead.catch(() => undefined);
   offersRead.catch(() => undefined);
-  reviewsRead.catch(() => undefined);
+  reviewPageRead.catch(() => undefined);
   productPointsRead.catch(() => undefined);
   // The other variants of this model, linked under the price where the
   // quick-spec cards used to be; Item routes (flag on) keep the #1154 size
@@ -547,10 +547,10 @@ export async function ProductDetailView({
           getCachedMasterProductPriceHistory(product.id, offers)
         )
       );
-  const reviewSummaryRead = reviewsRead.then((reviews) =>
+  const reviewSummaryRead = reviewPageRead.then((reviewPage) =>
     timing.time(
       'reviewSummary',
-      getCachedMasterProductReviewSummary(product.id, reviews)
+      getCachedMasterProductReviewSummary(product.id, reviewPage.reviews)
     )
   );
   const currentItemSlug =
@@ -621,7 +621,7 @@ export async function ProductDetailView({
   });
   const [
     offers,
-    reviews,
+    reviewPage,
     productPointsData,
     priceHistory,
     reviewSummary,
@@ -637,7 +637,7 @@ export async function ProductDetailView({
     placeBranches,
   ] = await Promise.all([
     offersRead,
-    reviewsRead,
+    reviewPageRead,
     productPointsRead,
     priceHistoryRead,
     reviewSummaryRead,
@@ -647,6 +647,7 @@ export async function ProductDetailView({
     placeDetailRead,
     placeBranchesRead,
   ]);
+  const reviews = reviewPage.reviews;
   timing.done();
   // With review form v2 on, the category the RPC rates (DOS/Rate#1544).
   const reviewCategory = isReviewFormV2Enabled()
@@ -1912,6 +1913,8 @@ export async function ProductDetailView({
               authenticReviewCount={authenticCount}
               ignoredReviewCount={ignoredCount}
               reviews={reviews}
+              initialNextCursor={reviewPage.nextCursor}
+              totalReviewCount={reviewPage.totalCount}
               summary={reviewSummary}
               productPoints={productPointsData.rows}
               productPointsReviewCount={productPointsData.reviewCount}

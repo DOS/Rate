@@ -1175,6 +1175,7 @@ async function runTests() {
       slug: 'iphone-16-pro-max-256gb',
       hideFake: true,
       limit: 50,
+      cursor: null,
     }
   );
   assert.deepEqual(
@@ -1188,6 +1189,7 @@ async function runTests() {
       slug: null,
       hideFake: false,
       limit: 25,
+      cursor: null,
     }
   );
   assert.equal(

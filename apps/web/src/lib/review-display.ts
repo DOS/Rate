@@ -1,12 +1,14 @@
 import { formatDecimal, toFormatLocale } from './locale-format';
-import type {
-  CombinedDualScoreBlendMode,
-  ReviewFlagCategory,
-  ReviewIndependenceAxis,
-  ReviewItem,
-  ReviewWeightBreakdown,
-  ReviewWeightExplanationKind,
-} from './rate-api';
+import {
+  REVIEW_REPORT_REASONS,
+  type CombinedDualScoreBlendMode,
+  type ReviewFlagCategory,
+  type ReviewIndependenceAxis,
+  type ReviewItem,
+  type ReviewReportReason,
+  type ReviewWeightBreakdown,
+  type ReviewWeightExplanationKind,
+} from './rate-domain-core';
 
 /**
  * Badge shown on a review card. Community reviews are stored unanalyzed and
@@ -235,4 +237,98 @@ export function submitErrorKey(code: unknown): SubmitErrorKey {
     .trim()
     .toUpperCase();
   return SUBMIT_ERROR_KEYS.get(normalized) ?? 'errSubmitFailed';
+}
+
+export interface ReviewReportOptionCopy {
+  reason: ReviewReportReason;
+  labelKey:
+    | 'reportReasonSpamLabel'
+    | 'reportReasonFakeLabel'
+    | 'reportReasonOffensiveLabel'
+    | 'reportReasonOffTopicLabel'
+    | 'reportReasonOtherLabel';
+  descKey:
+    | 'reportReasonSpamDesc'
+    | 'reportReasonFakeDesc'
+    | 'reportReasonOffensiveDesc'
+    | 'reportReasonOffTopicDesc'
+    | 'reportReasonOtherDesc';
+}
+
+export const REVIEW_REPORT_OPTION_COPY: readonly ReviewReportOptionCopy[] = [
+  {
+    reason: 'spam',
+    labelKey: 'reportReasonSpamLabel',
+    descKey: 'reportReasonSpamDesc',
+  },
+  {
+    reason: 'fake',
+    labelKey: 'reportReasonFakeLabel',
+    descKey: 'reportReasonFakeDesc',
+  },
+  {
+    reason: 'offensive',
+    labelKey: 'reportReasonOffensiveLabel',
+    descKey: 'reportReasonOffensiveDesc',
+  },
+  {
+    reason: 'off_topic',
+    labelKey: 'reportReasonOffTopicLabel',
+    descKey: 'reportReasonOffTopicDesc',
+  },
+  {
+    reason: 'other',
+    labelKey: 'reportReasonOtherLabel',
+    descKey: 'reportReasonOtherDesc',
+  },
+];
+
+const REPORT_REASON_SET = new Set<string>(REVIEW_REPORT_REASONS);
+
+/**
+ * Builds the JSON request body for `POST /api/reviews/[id]/vote`.
+ * Includes `reportReason` only when `voteType === 'report'`.
+ */
+export function buildReviewVoteRequestBody(
+  voteType: 'up' | 'down' | 'report' | 'clear',
+  reportReason?: ReviewReportReason
+): {
+  voteType: 'up' | 'down' | 'report' | 'clear';
+  reportReason?: ReviewReportReason;
+} {
+  if (voteType !== 'report') {
+    return { voteType };
+  }
+  const safeReason: ReviewReportReason =
+    typeof reportReason === 'string' && REPORT_REASON_SET.has(reportReason)
+      ? reportReason
+      : 'spam';
+  return {
+    voteType: 'report',
+    reportReason: safeReason,
+  };
+}
+
+/**
+ * Appends a paginated page of reviews onto the already-loaded list without
+ * introducing duplicate review IDs.
+ */
+export function mergeLoadedReviews(
+  existing: readonly ReviewItem[],
+  incoming: readonly ReviewItem[]
+): ReviewItem[] {
+  const out = [...existing];
+  const seen = new Set<string>();
+  for (const r of existing) {
+    if (r && typeof r.id === 'string' && r.id) seen.add(r.id);
+  }
+  for (const r of incoming) {
+    if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id) {
+      continue;
+    }
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    out.push(r);
+  }
+  return out;
 }

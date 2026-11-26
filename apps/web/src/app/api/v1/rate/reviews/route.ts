@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { z } from 'zod';
-import type { ReviewFlagCategory, ReviewItem } from '@/lib/rate-api';
+import {
+  sanitizeReviewImages,
+  type ReviewFlagCategory,
+  type ReviewItem,
+} from '@/lib/rate-api';
 import {
   RATE_CACHE_TAGS,
   getCachedMasterProductBySlug,
-  getCachedMasterProductReviews,
+  getCachedMasterProductReviewsPage,
   getCachedMasterProductReviewSummary,
   getCachedPublishedMasterProductCategory,
   isCachedPublishedMasterProduct,
 } from '@/server/rate';
 import {
+  BoundedSlidingWindowRateLimiter,
   PUBLIC_API_CORS_HEADERS,
+  extractClientRateLimitKey,
   jsonApiError,
   parseReviewsQueryParams,
   payloadTooLargeResponse,
@@ -36,11 +42,16 @@ import {
 } from '@/server/rate/review-v2';
 import { hasRatingCriteria, storedPoint } from '@repo/shared-data/rules';
 import { evaluateReviewTrustAssessment } from '@/lib/rate-domain';
-import { isFilteredOutReview } from '@/lib/review-display';
 import { resolveApiItemContext } from '@/server/rate/item-api';
 import type { AuthenticatedRateRequest } from '@/server/rate/request-auth';
 
 const log = createLogger('api.reviews');
+
+const reviewsGetRateLimiter = new BoundedSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 60,
+  maxBuckets: 5_000,
+});
 
 const REVIEWS_CORS_HEADERS: Record<string, string> = {
   ...PUBLIC_API_CORS_HEADERS,
@@ -57,16 +68,25 @@ export async function OPTIONS() {
 }
 
 /**
- * GET /api/v1/rate/reviews?slug=<slug>&hideFake=<boolean>
+ * GET /api/v1/rate/reviews?slug=<slug>&hideFake=<boolean>&limit=<1..200>&cursor=<token>
  * Returns AI-audited user and expert reviews + JReviews summary for a master product.
  */
 export async function GET(request: NextRequest) {
   try {
+    const clientKey = extractClientRateLimitKey(request.headers);
+    if (!reviewsGetRateLimiter.allow(clientKey)) {
+      return rateLimitExceededResponse(
+        'Rate limit exceeded. Maximum 60 review reads per minute.',
+        { ...REVIEWS_CORS_HEADERS, 'Cache-Control': 'no-store' },
+        60
+      );
+    }
+
     const parsedQuery = parseReviewsQueryParams(request.nextUrl.searchParams);
     if (!parsedQuery) {
       return jsonApiError(
         400,
-        'Provide ?slug=<product-slug> or a valid ?masterProductId=<uuid>',
+        'Provide ?slug=<product-slug> or a valid ?masterProductId=<uuid>, with valid optional ?limit=1..200 and ?cursor',
         undefined,
         REVIEWS_CORS_HEADERS
       );
@@ -107,31 +127,28 @@ export async function GET(request: NextRequest) {
       resolvedMasterId = product.id;
     }
 
-    const allReviews = await getCachedMasterProductReviews(resolvedMasterId);
+    const page = await getCachedMasterProductReviewsPage(resolvedMasterId, {
+      limit: parsedQuery.limit,
+      cursor: parsedQuery.cursor,
+      hideFake: parsedQuery.hideFake,
+    });
     const summary = await getCachedMasterProductReviewSummary(
       resolvedMasterId,
-      allReviews
+      parsedQuery.cursor || parsedQuery.hideFake || parsedQuery.limit !== 50
+        ? undefined
+        : page.reviews
     );
-    const filteredReviews = parsedQuery.hideFake
-      ? allReviews.filter(
-          (r) =>
-            r != null &&
-            typeof r === 'object' &&
-            r.verdict !== 'fake' &&
-            r.flag_category === 'authentic' &&
-            !isFilteredOutReview(r)
-        )
-      : allReviews;
-    const reviews = filteredReviews.slice(0, parsedQuery.limit);
 
     return NextResponse.json(
       {
         ok: true,
         masterProductId: resolvedMasterId,
-        count: reviews.length,
-        totalCount: allReviews.length,
+        count: page.reviews.length,
+        totalCount: page.totalCount,
+        nextCursor: page.nextCursor,
+        hasMore: page.hasMore,
         summary,
-        data: reviews,
+        data: page.reviews,
       },
       {
         status: 200,
@@ -421,6 +438,7 @@ export function toReviewItem(
       : null,
     flag_category: FLAG_CATEGORIES.has(flag) ? flag : 'authentic',
     reason: cleanReason,
+    images: sanitizeReviewImages(safeRecord.images),
     signals: {
       source: 'rate_community_jreviews',
       criteria_count: Object.keys(effectiveCriteria).length,
