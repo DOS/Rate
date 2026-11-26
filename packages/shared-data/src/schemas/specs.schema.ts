@@ -1,5 +1,15 @@
 import { z } from 'zod';
 import { MAX_VALID_VND_PRICE } from '../rules/price-limits.js';
+import {
+  CUSTOM_FIELD_KEY_RE,
+  LONE_SURROGATE_RE,
+  MAX_CUSTOM_FIELD_ABS_NUMBER,
+  MAX_CUSTOM_FIELD_KEY_LENGTH,
+  MAX_CUSTOM_FIELD_LIST_ITEM_LENGTH,
+  MAX_CUSTOM_FIELD_LIST_ITEMS,
+  MAX_CUSTOM_FIELD_STRING_LENGTH,
+  MAX_CUSTOM_FIELDS,
+} from '../rules/custom-fields.js';
 import { HttpUrlSchema, StatusSchema } from './common.schema.js';
 
 /**
@@ -100,9 +110,56 @@ export const RegulatorySchema = z.object({
   certifications: z.string().max(500).optional(),
 });
 
+const hasNoLoneSurrogates = (value: string): boolean => {
+  LONE_SURROGATE_RE.lastIndex = 0;
+  return !LONE_SURROGATE_RE.test(value);
+};
+
+export const CustomFieldValueSchema = z.union([
+  z
+    .string()
+    .min(1)
+    .max(MAX_CUSTOM_FIELD_STRING_LENGTH)
+    .refine((value) => value.trim().length > 0 && hasNoLoneSurrogates(value)),
+  z.number().min(-MAX_CUSTOM_FIELD_ABS_NUMBER).max(MAX_CUSTOM_FIELD_ABS_NUMBER),
+  z.boolean(),
+  z
+    .array(
+      z
+        .string()
+        .min(1)
+        .max(MAX_CUSTOM_FIELD_LIST_ITEM_LENGTH)
+        .refine(
+          (value) => value.trim().length > 0 && hasNoLoneSurrogates(value)
+        )
+    )
+    .min(1)
+    .max(MAX_CUSTOM_FIELD_LIST_ITEMS),
+]);
+
+/**
+ * Per-category facts outside the 10 spec groups (DOS/Rate#1923), such as an air
+ * conditioner's `capacity_btu` or a supplement's `dosage_form`. Writers run
+ * `sanitizeCustomFields` from `@repo/shared-data/rules` first, which coerces keys to
+ * snake_case and enforces these bounds.
+ */
+export const CustomFieldsSchema = z
+  .record(
+    z
+      .string()
+      .max(MAX_CUSTOM_FIELD_KEY_LENGTH)
+      .regex(CUSTOM_FIELD_KEY_RE)
+      .refine((key) => key !== 'constructor' && key !== 'prototype'),
+    CustomFieldValueSchema
+  )
+  .refine((fields) => Object.keys(fields).length <= MAX_CUSTOM_FIELDS, {
+    message: `custom_fields holds at most ${MAX_CUSTOM_FIELDS} entries`,
+  });
+
 export const ProductSpecificationsSchema = z
   .object({
     category_slug: z.string().max(64).optional(),
+    custom_fields: CustomFieldsSchema.optional(),
     availability: AvailabilitySchema.optional(),
     design: DesignSchema.optional(),
     display: DisplaySchema.optional(),
@@ -335,10 +392,21 @@ export type SupportedServicePlatform = z.infer<
   typeof SupportedServicePlatformSchema
 >;
 
+/**
+ * Retail chains ingested from first-party catalogs only. They are not extension
+ * platforms: `SupportedEcommercePlatformSchema` stays at the 22 the extension supports.
+ */
+export const SUPPORTED_RETAIL_INGESTION_PLATFORMS = [
+  'avakids',
+  'pharmacity',
+  'kidsplaza',
+  'concung',
+] as const;
+
 export const SupportedIngestionPlatformSchema = z.enum([
   ...SupportedEcommercePlatformSchema.options,
   ...SUPPORTED_SERVICE_PLATFORMS,
-  'avakids',
+  ...SUPPORTED_RETAIL_INGESTION_PLATFORMS,
 ]);
 
 export type SupportedIngestionPlatform = z.infer<

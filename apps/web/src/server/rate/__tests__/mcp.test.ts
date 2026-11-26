@@ -9,7 +9,11 @@ import {
   MAX_MCP_RESULT_ITEMS,
   MCP_LATEST_PROTOCOL_VERSION,
   MCP_SERVER_INFO,
+  MCP_SERVER_INSTRUCTIONS,
+  MCP_SUPPORTED_CATEGORY_COUNT,
+  MCP_SUPPORTED_CATEGORY_GROUPS,
   MCP_TOOL_DEFINITIONS,
+  SUPPORTED_CATEGORY_ENUM,
   buildRateLlmsTxt,
   buildRateWellKnownMcpDescriptor,
   handleMcpHttpPost,
@@ -32,6 +36,7 @@ import {
   type ReviewAnalysisSummary,
   type UrlInspectionResult,
 } from '../../../lib/rate-api';
+import { ALL_CANONICAL_CATEGORY_SLUGS } from '../../../lib/rate-domain';
 import type { CrossPlatformDealRadarResponse } from '../deals';
 
 const FIXED_NOW_ISO = '2026-11-22T14:30:00.000Z';
@@ -1470,6 +1475,189 @@ async function runMcpTestSuite() {
     );
   }
 
+  // 11b. 19-category coverage in server instructions, tool text and /llms.txt (#1927)
+  const expectedCategoryGroups: ReadonlyArray<
+    readonly [string, readonly string[]]
+  > = [
+    ['tech', ['smartphones', 'tablets', 'laptops', 'smartwatches', 'earbuds']],
+    [
+      'Wave E1 appliances',
+      [
+        'tvs',
+        'air-conditioners',
+        'refrigerators',
+        'washing-machines',
+        'air-purifiers',
+      ],
+    ],
+    ['Wave E2 services', ['bank-savings', 'internet-telecom']],
+    ['Wave E3 retail', ['supplements', 'cosmetics', 'mother-baby']],
+    ['Wave E4 places', ['restaurants', 'cafes', 'hotels', 'homestays']],
+  ];
+  assert.deepEqual(
+    MCP_SUPPORTED_CATEGORY_GROUPS.map((g) => [g.label, [...g.slugs]]),
+    expectedCategoryGroups.map(([label, slugs]) => [label, [...slugs]])
+  );
+  const enumCategories = SUPPORTED_CATEGORY_ENUM.options.filter(
+    (c) => c !== 'all'
+  );
+  assert.equal(enumCategories.length, 19);
+  assert.equal(SUPPORTED_CATEGORY_ENUM.options.length, 20);
+  assert.equal(MCP_SUPPORTED_CATEGORY_COUNT, 19);
+  assert.deepEqual(
+    MCP_SUPPORTED_CATEGORY_GROUPS.flatMap((g) => [...g.slugs]),
+    enumCategories,
+    'advertised category groups must match SUPPORTED_CATEGORY_ENUM exactly'
+  );
+  assert.deepEqual(
+    enumCategories,
+    [...ALL_CANONICAL_CATEGORY_SLUGS],
+    'SUPPORTED_CATEGORY_ENUM must stay aligned with ALL_CANONICAL_CATEGORY_SLUGS'
+  );
+
+  const searchTool = MCP_TOOL_DEFINITIONS.find(
+    (t) => t.name === 'search_verified_catalog'
+  )!;
+  const dealsTool = MCP_TOOL_DEFINITIONS.find(
+    (t) => t.name === 'get_genuine_deals'
+  )!;
+  for (const [label, text] of [
+    ['MCP_SERVER_INSTRUCTIONS', MCP_SERVER_INSTRUCTIONS],
+    ['search_verified_catalog description', searchTool.description],
+  ] as const) {
+    assert.match(text, /19 categories/, `${label} must say 19 categories`);
+    assert.doesNotMatch(
+      text,
+      /\b5 (device |hardware |tech )?categories\b/,
+      `${label} must not claim only 5 categories`
+    );
+    assert.match(
+      text,
+      /no published items yet returns empty results/,
+      `${label} must explain empty categories`
+    );
+    assert.doesNotMatch(
+      text,
+      /from every tool|every tool returns/i,
+      `${label} must not claim every tool returns empty results`
+    );
+    for (const [groupLabel, slugs] of expectedCategoryGroups) {
+      assert.ok(
+        text.includes(`${groupLabel} (${slugs.length}: ${slugs.join(', ')})`),
+        `${label} must list the ${groupLabel} group`
+      );
+    }
+  }
+  assert.match(MCP_SERVER_INSTRUCTIONS, /category-filtered tools/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /compare_devices_by_use_case/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /ok: false, isError: true/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /fewer than two requested slugs/);
+  assert.match(dealsTool.description, /19 categories/);
+  assert.match(dealsTool.description, /15 non-place categories/);
+  assert.match(dealsTool.description, /Wave E4 places/);
+  assert.match(dealsTool.description, /returns no deals/);
+  assert.match(dealsTool.description, /empty results/);
+  const compareTool = MCP_TOOL_DEFINITIONS.find(
+    (t) => t.name === 'compare_devices_by_use_case'
+  )!;
+  assert.match(compareTool.description, /category-scoped specs/);
+  assert.match(
+    compareTool.description,
+    /availability \+ regulatory on Wave E2\/E3\/E4/
+  );
+  assert.match(compareTool.description, /earbuds omitting screen/);
+  assert.match(compareTool.description, /screen \+ value on tvs/);
+  assert.match(compareTool.description, /value only on other Wave E1-E4/);
+  assert.match(compareTool.description, /ok: false, isError: true/);
+  assert.match(compareTool.description, /fewer than two requested slugs/);
+  assert.doesNotMatch(compareTool.description, /\b5 categories\b/);
+  assert.doesNotMatch(compareTool.description, /standardized 10-group specs/);
+
+  const initInstructionsRes = await handleMcpHttpPost(
+    makeMcpRequest(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'init-instructions',
+        method: 'initialize',
+        params: { protocolVersion: '2025-06-18' },
+      })
+    ),
+    { readers, rateLimiter: limiter, auditUrlRateLimiter: auditLimiter }
+  );
+  const initInstructionsJson = (await initInstructionsRes.json()) as {
+    result: { instructions: string };
+  };
+  assert.equal(
+    initInstructionsJson.result.instructions,
+    MCP_SERVER_INSTRUCTIONS
+  );
+
+  const searchSchemaFor19 = searchTool.inputSchema as {
+    properties: Record<string, { enum?: string[]; description?: string }>;
+  };
+  assert.deepEqual(searchSchemaFor19.properties.category?.enum, [
+    ...SUPPORTED_CATEGORY_ENUM.options,
+  ]);
+  assert.match(
+    searchSchemaFor19.properties.category?.description ?? '',
+    /19 supported categories/
+  );
+  const dealsSchemaFor19 = dealsTool.inputSchema as {
+    properties: Record<string, { enum?: string[]; description?: string }>;
+  };
+  assert.deepEqual(dealsSchemaFor19.properties.category?.enum, [
+    ...SUPPORTED_CATEGORY_ENUM.options,
+  ]);
+  assert.match(
+    dealsSchemaFor19.properties.category?.description ?? '',
+    /15 non-place categories/
+  );
+  assert.match(
+    dealsSchemaFor19.properties.category?.description ?? '',
+    /Wave E4 places/
+  );
+  const compareSchemaFor19 = compareTool.inputSchema as {
+    properties: Record<string, { description?: string }>;
+  };
+  assert.match(
+    compareSchemaFor19.properties.persona?.description ?? '',
+    /4 without screen on earbuds/
+  );
+  assert.match(
+    compareSchemaFor19.properties.persona?.description ?? '',
+    /screen \+ value on tvs/
+  );
+  assert.match(
+    compareSchemaFor19.properties.persona?.description ?? '',
+    /value only on other Wave E1-E4/
+  );
+
+  assert.match(llmsBody, /across 19 categories/);
+  assert.match(llmsBody, /\*\*19 Canonical Categories\*\*/);
+  assert.match(llmsBody, /no published items yet returns empty results/);
+  assert.match(llmsBody, /for category-filtered tools/);
+  assert.match(llmsBody, /`ok: false`.*`isError: true`/);
+  assert.match(llmsBody, /fewer than two requested slugs/);
+  assert.match(llmsBody, /15 non-place categories/);
+  assert.match(llmsBody, /category-scoped specification templates/);
+  assert.match(llmsBody, /`earbuds` omitting `screen`/);
+  assert.doesNotMatch(llmsBody, /from every tool|every tool returns/i);
+  assert.doesNotMatch(llmsBody, /\b5 (hardware |tech )?categories\b/);
+  assert.doesNotMatch(llmsBody, /5 Canonical Categories/);
+  assert.doesNotMatch(llmsBody, /across 10-group (hardware )?specs/);
+  for (const [groupLabel, slugs] of expectedCategoryGroups) {
+    assert.ok(
+      llmsBody.includes(`  - ${groupLabel} (${slugs.length}): `),
+      `/llms.txt must list the ${groupLabel} group`
+    );
+    for (const slug of slugs) {
+      assert.ok(
+        llmsBody.includes(`[\`${slug}\`](https://rate.vn/${slug})`),
+        `/llms.txt must link the ${slug} category`
+      );
+    }
+  }
+
   const wkRes = await getWellKnownMcpRoute();
   assert.equal(wkRes.status, 200);
   assert.match(wkRes.headers.get('content-type') ?? '', /application\/json/);
@@ -1483,12 +1671,28 @@ async function runMcpTestSuite() {
   );
   const wkJson = (await wkRes.json()) as {
     mcpVersion: string;
+    description: string;
     serverInfo: { name: string; version: string };
     transport: string;
     url: string;
     endpoints: { mcp: string; transport: string };
-    tools: Array<{ name: string }>;
+    tools: Array<{ name: string; description: string }>;
   };
+  assert.match(wkJson.description, /19 categories/);
+  assert.match(wkJson.description, /category-scoped specs/);
+  assert.match(wkJson.description, /category-filtered tools/);
+  assert.match(wkJson.description, /compare_devices_by_use_case/);
+  assert.match(wkJson.description, /ok: false, isError: true/);
+  assert.doesNotMatch(
+    wkJson.description,
+    /from every tool|every tool returns/i
+  );
+  assert.doesNotMatch(wkJson.description, /10-group standardized specs/);
+  assert.doesNotMatch(
+    wkJson.description,
+    /\b5 (device |hardware |tech )?categories\b/
+  );
+  assert.match(wkJson.description, /empty results/);
   assert.equal(wkJson.mcpVersion, '2025-06-18');
   assert.equal(wkJson.serverInfo.version, '1.1.0');
   assert.equal(wkJson.transport, 'streamable-http');

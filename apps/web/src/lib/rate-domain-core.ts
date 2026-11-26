@@ -129,6 +129,18 @@ export interface ReviewTrustAssessment {
   wilsonScore: number;
 }
 
+export const REVIEW_REPORT_REASONS = [
+  'spam',
+  'fake',
+  'offensive',
+  'off_topic',
+  'other',
+] as const;
+
+export type ReviewReportReason = (typeof REVIEW_REPORT_REASONS)[number];
+
+export const REVIEW_IMAGES_MAX = 6;
+
 export interface ReviewItem {
   id: string;
   author_name: string;
@@ -148,6 +160,7 @@ export interface ReviewItem {
   flag_category: ReviewFlagCategory;
   reason: string | null;
   signals: Record<string, unknown> | null;
+  images?: string[];
   trust_assessment?: ReviewTrustAssessment;
   /** The public quality tier (DOS/Rate#1547, D7); null when unscored. */
   value_tier?: ReviewValueTier | null;
@@ -991,6 +1004,52 @@ export function usableImageUrls(
   return (Array.isArray(images) ? images : [])
     .filter(isImageUrl)
     .map((url) => url.trim());
+}
+
+/**
+ * Sanitizes stored marketplace/community review photo URLs for public rendering:
+ * HTTPS only, parsed with `URL`, no embedded credentials or non-standard ports,
+ * deduplicated by normalized href, capped at `REVIEW_IMAGES_MAX` (6).
+ */
+export function sanitizeReviewImages(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const scanCap = Math.min(raw.length, 100);
+  for (let i = 0; i < scanCap && out.length < REVIEW_IMAGES_MAX; i += 1) {
+    const entry = raw[i];
+    if (typeof entry !== 'string') continue;
+    const trimmed = entry.trim();
+    if (
+      !trimmed ||
+      trimmed.length > 2048 ||
+      /[\s\p{Cc}]/u.test(trimmed) ||
+      trimmed.slice(0, 8).toLowerCase() !== 'https://'
+    ) {
+      continue;
+    }
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== 'https:') continue;
+      if (parsed.username !== '' || parsed.password !== '') continue;
+      if (parsed.port !== '' && parsed.port !== '443') continue;
+      const host = parsed.hostname.toLowerCase();
+      if (
+        !host ||
+        host.startsWith('.') ||
+        host.endsWith('.') ||
+        host.includes('..')
+      ) {
+        continue;
+      }
+      if (seen.has(parsed.href)) continue;
+      seen.add(parsed.href);
+      out.push(parsed.href);
+    } catch {
+      // Drop unparseable URLs
+    }
+  }
+  return out;
 }
 
 /** The first usable image of a stored `images` list, or null. */

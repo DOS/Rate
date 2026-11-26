@@ -15,7 +15,11 @@ import {
   type ProductSpecifications,
   type KeySpecs,
 } from '@repo/shared-data';
-import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
+import {
+  applyCategorySpecTemplate,
+  mergeCustomFields,
+  sanitizeCustomFields,
+} from '@repo/shared-data/rules';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
 import { computeRetryDelayMs, createImporterLogger, sanitizeAiGeneratedText } from './logger.js';
 
@@ -47,7 +51,8 @@ export const AiSpecEnrichmentPayloadSchema = z.object({
   screen_size_inch: z.number().positive().max(120).nullable().optional(),
   battery_mah: z.number().int().positive().max(500000).nullable().optional(),
   has_5g: z.boolean().optional(),
-  specifications: ProductSpecificationsSchema,
+  // Crawlers supply `custom_fields`; keep them out of the model's output schema (DOS/Rate#1923).
+  specifications: ProductSpecificationsSchema.omit({ custom_fields: true }),
   key_specs: KeySpecsSchema.optional(),
 });
 
@@ -321,8 +326,13 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
       })
     : undefined;
 
+  // Typed per-category facts (DOS/Rate#1923): sanitized to `CustomFieldsSchema` bounds so
+  // one bad entry never fails the whole specification parse below.
+  const customFields = sanitizeCustomFields(root.custom_fields);
+
   const candidateSpecs: Record<string, unknown> = {
     category_slug: toStringOrUndefined(root.category_slug, 64),
+    ...(customFields ? { custom_fields: customFields } : {}),
     availability: availabilityParsed?.success ? availabilityParsed.data : undefined,
     design: designParsed?.success ? designParsed.data : undefined,
     display: displayParsed?.success ? displayParsed.data : undefined,
@@ -338,6 +348,7 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
   for (const [extraKey, extraVal] of Object.entries(root)) {
     if (
       extraKey === 'category_slug' ||
+      extraKey === 'custom_fields' ||
       extraKey === '__proto__' ||
       extraKey === 'constructor' ||
       extraKey === 'prototype' ||
@@ -443,6 +454,13 @@ export function mergeProductSpecifications(
     mergedRaw.category_slug = mergedCategorySlug;
   }
 
+  // Per key: an incoming value replaces the base value, base keys are never dropped
+  // (DOS/Rate#1923).
+  const mergedCustomFields = mergeCustomFields(safeBase.custom_fields, safeIncoming.custom_fields);
+  if (mergedCustomFields) {
+    mergedRaw.custom_fields = mergedCustomFields;
+  }
+
   for (const key of SPEC_FIELD_GROUP_KEYS) {
     const mergedGroup = mergeSpecGroupRecord(asRecord(safeBase[key]), asRecord(safeIncoming[key]));
     if (mergedGroup) {
@@ -453,6 +471,7 @@ export function mergeProductSpecifications(
   for (const key of new Set([...Object.keys(safeBase), ...Object.keys(safeIncoming)])) {
     if (
       key === 'category_slug' ||
+      key === 'custom_fields' ||
       key === '__proto__' ||
       key === 'constructor' ||
       key === 'prototype' ||
@@ -980,6 +999,9 @@ REQUIRED JSON SCHEMA:
       }
       const parsedJson = rawParsed as Record<string, unknown>;
       const specifications = sanitizeSpecifications(parsedJson.specifications || parsedJson);
+      // `custom_fields` hold facts a crawler read from the listing (DOS/Rate#1923); a model
+      // answer must not add or override them.
+      delete specifications.custom_fields;
 
       const ramGb =
         safeParamRamGb ??

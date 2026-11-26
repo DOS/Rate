@@ -1033,6 +1033,8 @@ async function testSpecMatchesBodies() {
     'masterProductId',
     'count',
     'totalCount',
+    'nextCursor',
+    'hasMore',
     'summary',
     'data',
   ]);

@@ -18,7 +18,14 @@ import {
 } from '@/lib/locale-format';
 import { timeStep } from '@/lib/server-timing';
 import { rankModelCandidates } from '@/lib/model-match';
-import { isPendingReview } from '@/lib/review-display';
+import { isFilteredOutReview, isPendingReview } from '@/lib/review-display';
+import {
+  compareReviewOrderDesc,
+  encodeReviewCursor,
+  isAfterReviewCursor,
+  parseReviewCursor,
+  type ReviewKeysetCursor,
+} from '@/lib/review-cursor';
 import { parseReviewValueTier } from '@/lib/review-value-display';
 import { listingReviewSummary } from '@/lib/analyzer-copy';
 import { countBrandsByItem } from '@/lib/item-directory';
@@ -54,6 +61,7 @@ import {
   filterAndSortMerchants,
   resolveListingPriceCurrency,
   sanitizePostgrestFilterToken,
+  sanitizeReviewImages,
   type ParsedEcommerceUrl,
   parseEcommerceUrlOrQuery,
   sanitizeAnPhatItemId,
@@ -90,11 +98,20 @@ export {
   sanitizePostgrestFilterToken,
   parseEcommerceUrlOrQuery,
   sanitizeAnPhatItemId,
+  sanitizeReviewImages,
+  REVIEW_IMAGES_MAX,
+  REVIEW_REPORT_REASONS,
   stripEcommerceNoiseTokens,
   extractProductKeywordFromUrl,
 } from './rate-domain-core';
+export {
+  encodeReviewCursor,
+  parseReviewCursor,
+  type ReviewKeysetCursor,
+} from './review-cursor';
 export type {
   ReviewFlagCategory,
+  ReviewReportReason,
   ReviewAuthenticityAxis,
   ReviewIndependenceAxis,
   ReviewDepthAxis,
@@ -1727,6 +1744,7 @@ interface RawReviewFlagRow {
 /**
  * A review row with its analyzer flag and the writer's pros and cons
  * (form v2), which axis C reads with the comment (DOS/Rate#1583).
+ * `*` selects all `rate.reviews` columns including `images`.
  */
 const REVIEW_SELECT =
   '*, review_flags(*), review_points(kind, criterion_key, body, method)';
@@ -1744,6 +1762,7 @@ interface RawReviewRow {
   rating_star?: number | string | null;
   comment?: string | null;
   variation?: string | null;
+  images?: unknown;
   created_at: string;
   reviewer_type?: string | null;
   upvotes?: number | string | null;
@@ -1859,100 +1878,334 @@ export async function getPublishedMasterProductCategorySlug(
   };
 }
 
-export async function getMasterProductReviews(
-  masterId: string
-): Promise<ReviewItem[]> {
+export const REVIEWS_PAGE_DEFAULT_LIMIT = 50;
+export const REVIEWS_PAGE_MAX_LIMIT = 200;
+const HIDE_FAKE_MAX_BATCHES = 10;
+
+export interface GetMasterProductReviewsOptions {
+  limit?: number;
+  cursor?: ReviewKeysetCursor | null;
+  hideFake?: boolean;
+}
+
+export interface MasterProductReviewsPage {
+  reviews: ReviewItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  totalCount: number;
+}
+
+function mapRawReviewRowToItem(r: RawReviewRow): ReviewItem {
+  const rawVf = Array.isArray(r.review_flags)
+    ? r.review_flags[0]
+    : r.review_flags;
+  const vf =
+    rawVf && typeof rawVf === 'object' && !Array.isArray(rawVf) ? rawVf : null;
+  const verdict = vf?.verdict ?? null;
+  const flagCategory: ReviewFlagCategory =
+    vf?.flag_category ||
+    (verdict === 'fake'
+      ? 'seeding_fake'
+      : verdict === 'suspicious'
+        ? 'low_value_coin_spam'
+        : 'authentic');
+  const includeInRating = resolveIncludeInRating(
+    vf?.include_in_rating,
+    flagCategory,
+    verdict
+  );
+  const upvotes = Number(r.upvotes ?? 0);
+  const downvotes = Number(r.downvotes ?? 0);
+  const reports = Number(r.report_count ?? 0);
+  const computedWeight =
+    r.helpfulness_weight != null
+      ? Number(r.helpfulness_weight)
+      : computeJReviewsWeight({
+          upvotes,
+          downvotes,
+          reports,
+          flagCategory,
+          verdict,
+          includeInRating,
+        });
+
+  const item: ReviewItem = {
+    id: r.id,
+    author_name: r.author_name || 'Khách hàng',
+    rating_star: Number(r.rating_star || 5),
+    comment: r.comment || '',
+    variation: r.variation || null,
+    created_at: r.created_at,
+    reviewer_type: r.reviewer_type === 'expert' ? 'expert' : 'user',
+    upvotes,
+    downvotes,
+    report_count: reports,
+    helpfulness_weight: includeInRating ? computedWeight : 0,
+    include_in_rating: includeInRating,
+    criteria_ratings: r.criteria_ratings || {},
+    verdict,
+    fake_probability:
+      vf?.fake_probability != null ? Number(vf.fake_probability) : null,
+    flag_category: flagCategory,
+    reason: vf?.reason || null,
+    signals: vf?.signals || null,
+    images: sanitizeReviewImages(r.images),
+    value_tier: parseReviewValueTier(r.value_tier),
+  };
+  item.trust_assessment = evaluateReviewTrustAssessment(item, {
+    verdict: r.verdict,
+    points: r.review_points,
+  });
+  return item;
+}
+
+async function readReviewChunkBatch(
+  supabase: RateSchemaClient,
+  productIds: readonly string[],
+  label: string,
+  perChunkLimit: number,
+  cursor: ReviewKeysetCursor | null,
+  includeCount: boolean
+): Promise<{
+  rows: RawReviewRow[];
+  truncatedChunkLasts: RawReviewRow[];
+  exactCount: number | null;
+}> {
+  const rows: RawReviewRow[] = [];
+  const truncatedChunkLasts: RawReviewRow[] = [];
+  let countSum = 0;
+  let allChunksHaveCount = includeCount;
+
+  for (let i = 0; i < productIds.length; i += IN_FILTER_CHUNK_SIZE) {
+    const chunk = productIds.slice(i, i + IN_FILTER_CHUNK_SIZE);
+    let query = (
+      includeCount
+        ? supabase.from('reviews').select(REVIEW_SELECT, { count: 'exact' })
+        : supabase.from('reviews').select(REVIEW_SELECT)
+    )
+      .in('product_id', chunk)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(perChunkLimit);
+    if (cursor) {
+      const quotedCreatedAt = quotePostgrestFilterLiteral(cursor.createdAt);
+      query = query.or(
+        `created_at.lt.${quotedCreatedAt},and(created_at.eq.${quotedCreatedAt},id.lt.${cursor.id})`
+      );
+    }
+    const { data, error, count } = await query;
+    if (error) throw new RateDataUnavailableError(label, error);
+    const chunkRows = (data as unknown as RawReviewRow[]) ?? [];
+    rows.push(...chunkRows);
+    if (chunkRows.length >= perChunkLimit) {
+      const last = chunkRows[chunkRows.length - 1];
+      if (last) truncatedChunkLasts.push(last);
+    }
+    if (includeCount && typeof count === 'number' && Number.isFinite(count)) {
+      countSum += count;
+    } else {
+      allChunksHaveCount = false;
+    }
+  }
+
+  return {
+    rows,
+    truncatedChunkLasts,
+    exactCount: allChunksHaveCount ? countSum : null,
+  };
+}
+
+async function countMasterProductReviews(
+  supabase: RateSchemaClient,
+  productIds: readonly string[],
+  label: string
+): Promise<number | null> {
+  let countSum = 0;
+  for (let i = 0; i < productIds.length; i += IN_FILTER_CHUNK_SIZE) {
+    const chunk = productIds.slice(i, i + IN_FILTER_CHUNK_SIZE);
+    const { error, count } = await supabase
+      .from('reviews')
+      .select('id', { count: 'exact', head: true })
+      .in('product_id', chunk);
+    if (error) throw new RateDataUnavailableError(label, error);
+    if (typeof count !== 'number' || !Number.isFinite(count)) {
+      return null;
+    }
+    countSum += count;
+  }
+  return countSum;
+}
+
+function isVisibleWhenHideFake(item: ReviewItem): boolean {
+  return (
+    item.verdict !== 'fake' &&
+    item.flag_category === 'authentic' &&
+    !isFilteredOutReview(item)
+  );
+}
+
+/**
+ * Fetches one keyset-ordered page (`created_at DESC, id DESC`) of reviews across
+ * all listings grouped under a master product, with optional `hideFake` filter.
+ */
+export async function getMasterProductReviewsPage(
+  masterId: string,
+  options?: GetMasterProductReviewsOptions
+): Promise<MasterProductReviewsPage> {
+  const rawLimit = options?.limit ?? REVIEWS_PAGE_DEFAULT_LIMIT;
+  const limit =
+    typeof rawLimit === 'number' && Number.isFinite(rawLimit)
+      ? Math.max(1, Math.min(REVIEWS_PAGE_MAX_LIMIT, Math.floor(rawLimit)))
+      : REVIEWS_PAGE_DEFAULT_LIMIT;
+  const initialCursor = options?.cursor ?? null;
+  const hideFake = Boolean(options?.hideFake);
+
   const productIds = await getListingIdsForMaster(
     masterId,
     `listings for master ${masterId}`
   );
-  if (productIds.length === 0) return [];
+  if (productIds.length === 0) {
+    return { reviews: [], nextCursor: null, hasMore: false, totalCount: 0 };
+  }
   const supabase = getRateClient();
+  const label = `reviews for master ${masterId}`;
 
-  const reviewRows = await readInChunks(
-    productIds,
-    `reviews for master ${masterId}`,
-    (chunk) =>
-      supabase
-        .from('reviews')
-        .select(REVIEW_SELECT)
-        .in('product_id', chunk)
-        .order('created_at', { ascending: false })
-        .limit(50)
-  );
-
-  const reviews = (reviewRows as unknown as RawReviewRow[])
-    .sort(
-      (a, b) =>
-        (Date.parse(b.created_at ?? '') || 0) -
-        (Date.parse(a.created_at ?? '') || 0)
-    )
-    .slice(0, 50);
-
-  return reviews.map((r) => {
-    const rawVf = Array.isArray(r.review_flags)
-      ? r.review_flags[0]
-      : r.review_flags;
-    const vf =
-      rawVf && typeof rawVf === 'object' && !Array.isArray(rawVf)
-        ? rawVf
-        : null;
-    const verdict = vf?.verdict ?? null;
-    const flagCategory: ReviewFlagCategory =
-      vf?.flag_category ||
-      (verdict === 'fake'
-        ? 'seeding_fake'
-        : verdict === 'suspicious'
-          ? 'low_value_coin_spam'
-          : 'authentic');
-    const includeInRating = resolveIncludeInRating(
-      vf?.include_in_rating,
-      flagCategory,
-      verdict
+  if (!hideFake) {
+    const { rows, exactCount } = await readReviewChunkBatch(
+      supabase,
+      productIds,
+      label,
+      limit + 1,
+      initialCursor,
+      !initialCursor
     );
-    const upvotes = Number(r.upvotes ?? 0);
-    const downvotes = Number(r.downvotes ?? 0);
-    const reports = Number(r.report_count ?? 0);
-    const computedWeight =
-      r.helpfulness_weight != null
-        ? Number(r.helpfulness_weight)
-        : computeJReviewsWeight({
-            upvotes,
-            downvotes,
-            reports,
-            flagCategory,
-            verdict,
-            includeInRating,
-          });
+    const seen = new Set<string>();
+    const filtered: RawReviewRow[] = [];
+    for (const row of rows) {
+      if (!row || typeof row.id !== 'string' || !row.id) continue;
+      if (seen.has(row.id)) continue;
+      if (!isAfterReviewCursor(row, initialCursor)) continue;
+      seen.add(row.id);
+      filtered.push(row);
+    }
+    filtered.sort(compareReviewOrderDesc);
+    const hasMoreRows = filtered.length > limit;
+    const reviews = filtered.slice(0, limit).map(mapRawReviewRowToItem);
+    const nextCursor =
+      hasMoreRows && reviews.length > 0
+        ? encodeReviewCursor(reviews[reviews.length - 1])
+        : null;
+    const totalCount = initialCursor
+      ? ((await countMasterProductReviews(supabase, productIds, label)) ??
+        reviews.length)
+      : (exactCount ?? filtered.length);
 
-    const item: ReviewItem = {
-      id: r.id,
-      author_name: r.author_name || 'Khách hàng',
-      rating_star: Number(r.rating_star || 5),
-      comment: r.comment || '',
-      variation: r.variation || null,
-      created_at: r.created_at,
-      reviewer_type: r.reviewer_type === 'expert' ? 'expert' : 'user',
-      upvotes,
-      downvotes,
-      report_count: reports,
-      helpfulness_weight: includeInRating ? computedWeight : 0,
-      include_in_rating: includeInRating,
-      criteria_ratings: r.criteria_ratings || {},
-      verdict,
-      fake_probability:
-        vf?.fake_probability != null ? Number(vf.fake_probability) : null,
-      flag_category: flagCategory,
-      reason: vf?.reason || null,
-      signals: vf?.signals || null,
-      value_tier: parseReviewValueTier(r.value_tier),
+    return {
+      reviews,
+      nextCursor,
+      hasMore: nextCursor !== null,
+      totalCount,
     };
-    item.trust_assessment = evaluateReviewTrustAssessment(item, {
-      verdict: r.verdict,
-      points: r.review_points,
-    });
-    return item;
+  }
+
+  const batchLimit = Math.min(
+    REVIEWS_PAGE_MAX_LIMIT,
+    Math.max(limit + 1, REVIEWS_PAGE_DEFAULT_LIMIT)
+  );
+  let batchCursor = initialCursor;
+  const kept: ReviewItem[] = [];
+  const seenIds = new Set<string>();
+  let firstBatchExactCount: number | null = null;
+  let firstBatchRawCount = 0;
+  let lastFrontierRow: RawReviewRow | null = null;
+  let moreDbRows = false;
+  let batchesRun = 0;
+
+  while (batchesRun < HIDE_FAKE_MAX_BATCHES) {
+    const { rows, truncatedChunkLasts, exactCount } =
+      await readReviewChunkBatch(
+        supabase,
+        productIds,
+        label,
+        batchLimit,
+        batchCursor,
+        batchesRun === 0 && !initialCursor
+      );
+    const batchRows: RawReviewRow[] = [];
+    const batchRowIds = new Set<string>();
+    for (const row of rows) {
+      if (!row || typeof row.id !== 'string' || !row.id) continue;
+      if (seenIds.has(row.id) || batchRowIds.has(row.id)) continue;
+      if (!isAfterReviewCursor(row, batchCursor)) continue;
+      batchRowIds.add(row.id);
+      batchRows.push(row);
+    }
+    batchRows.sort(compareReviewOrderDesc);
+    if (batchesRun === 0 && !initialCursor) {
+      firstBatchExactCount = exactCount;
+      firstBatchRawCount = batchRows.length;
+    }
+    batchesRun += 1;
+
+    // A multi-chunk read is globally complete only down to the newest boundary
+    // among truncated chunks; rows past that boundary stay unseen for the next batch.
+    const validTruncated = truncatedChunkLasts
+      .filter((r) => isAfterReviewCursor(r, batchCursor))
+      .sort(compareReviewOrderDesc);
+    const frontierRow =
+      validTruncated.length > 0 ? (validTruncated[0] ?? null) : null;
+    const completeRows = frontierRow
+      ? batchRows.filter((r) => compareReviewOrderDesc(r, frontierRow) <= 0)
+      : batchRows;
+
+    for (const rawRow of completeRows) {
+      seenIds.add(rawRow.id);
+      const mapped = mapRawReviewRowToItem(rawRow);
+      if (isVisibleWhenHideFake(mapped)) {
+        kept.push(mapped);
+        if (kept.length > limit) break;
+      }
+    }
+
+    lastFrontierRow =
+      frontierRow ?? batchRows[batchRows.length - 1] ?? lastFrontierRow;
+    moreDbRows = frontierRow !== null && completeRows.length > 0;
+    if (kept.length > limit || !moreDbRows) break;
+
+    const nextBatchCursor = parseReviewCursor(encodeReviewCursor(frontierRow));
+    if (!nextBatchCursor) break;
+    batchCursor = nextBatchCursor;
+  }
+
+  const hasExtraKept = kept.length > limit;
+  const reviews = kept.slice(0, limit);
+  const nextCursor = hasExtraKept
+    ? reviews.length > 0
+      ? encodeReviewCursor(reviews[reviews.length - 1])
+      : null
+    : batchesRun >= HIDE_FAKE_MAX_BATCHES && moreDbRows && lastFrontierRow
+      ? encodeReviewCursor(lastFrontierRow)
+      : null;
+  const totalCount = initialCursor
+    ? ((await countMasterProductReviews(supabase, productIds, label)) ??
+      reviews.length)
+    : (firstBatchExactCount ?? firstBatchRawCount);
+
+  return {
+    reviews,
+    nextCursor,
+    hasMore: nextCursor !== null,
+    totalCount,
+  };
+}
+
+export async function getMasterProductReviews(
+  masterId: string
+): Promise<ReviewItem[]> {
+  const page = await getMasterProductReviewsPage(masterId, {
+    limit: REVIEWS_PAGE_DEFAULT_LIMIT,
   });
+  return page.reviews;
 }
 
 interface RawReviewAnalysisRow {
