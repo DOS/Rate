@@ -626,3 +626,118 @@
 .rate-report-option-desc {
   color: var(--rate-fg-secondary);
 }
+
+.rate-star-hist-btn {
+  width: 100%;
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--rate-border-subtle);
+  background-color: var(--rate-bg-elevated);
+  color: var(--rate-fg-primary);
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.875rem;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+
+  &:hover {
+    border-color: var(--rate-border-strong);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--rate-focus-ring);
+    outline-offset: 2px;
+  }
+
+  &.is-selected,
+  &[aria-pressed='true'] {
+    background-color: var(--rate-bg-surface);
+    border-color: var(--rate-fg-primary);
+    box-shadow: inset 0 0 0 1px var(--rate-fg-primary);
+
+    @media (forced-colors: active) {
+      outline: 2px solid Highlight;
+    }
+  }
+
+  &.is-empty:not([aria-pressed='true']) {
+    background-color: var(--rate-bg-surface);
+  }
+
+  @media (max-width: 575.98px) {
+    gap: 0.5rem;
+    padding: 0.5rem 0.625rem;
+  }
+}
+
+.rate-star-hist-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: var(--rate-fg-primary);
+  white-space: nowrap;
+}
+
+.rate-star-hist-star {
+  color: #b45309;
+}
+
+:root[data-bs-theme='dark'] .rate-star-hist-star {
+  color: #fbbf24;
+}
+
+.rate-star-hist-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 0.625rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: var(--rate-bg-surface);
+  border: 1px solid var(--rate-border-strong);
+}
+
+.rate-star-hist-btn.is-selected .rate-star-hist-track,
+.rate-star-hist-btn[aria-pressed='true'] .rate-star-hist-track,
+.rate-star-hist-btn.is-empty .rate-star-hist-track {
+  background-color: var(--rate-bg-elevated);
+}
+
+.rate-star-hist-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background-color: #b45309;
+  transition: width 0.2s ease;
+}
+
+:root[data-bs-theme='dark'] .rate-star-hist-fill {
+  background-color: #f59e0b;
+}
+
+.rate-star-hist-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  min-width: 4.5rem;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--rate-fg-primary);
+}
+
+.rate-star-hist-pct {
+  color: var(--rate-fg-secondary);
+  font-size: 0.8125rem;
+}
+
+.btn.rate-star-chip-btn {
+  transition: none;
+}

@@ -831,19 +831,20 @@
             </div>
           </div>
           <div class="kpi-card kpi-green">
-            <div class="kpi-num" id="kpi-adv-count">23</div>
+            <div class="kpi-num" id="kpi-adv-count">24</div>
             <div class="kpi-title">Tính năng Rate vượt trội / Độc quyền</div>
             <div class="kpi-desc">
-              Đang Live đầy đủ trên Prod (46.9%), gồm Review Form v2
-              (<code>#1544</code>: sao tiêu chí, N/A, Pros/Cons), chống seeding
-              6 trục, Omnibus 90d, Extension 22 sàn và MCP v1.1.
+              Đang Live đầy đủ trên Prod (49.0%), gồm Review Form v2
+              (<code>#1544</code>: sao tiêu chí, N/A, Pros/Cons), Histogram
+              5★-1★ + lọc <code>?star=1..5</code> (<code>#1940</code>), chống
+              seeding 6 trục, Omnibus 90d, Extension 22 sàn và MCP v1.1.
             </div>
           </div>
           <div class="kpi-card kpi-amber">
-            <div class="kpi-num" id="kpi-partial-count">12</div>
+            <div class="kpi-num" id="kpi-partial-count">11</div>
             <div class="kpi-title">Đã code xong nhưng tắt cờ / Dở dang</div>
             <div class="kpi-desc">
-              Chiếm 24.5%: gồm các tính năng còn tắt cờ/chưa cấu hình
+              Chiếm 22.4%: gồm các tính năng còn tắt cờ/chưa cấu hình
               (<code>RATE_ITEM_MODEL</code>, AI Points /
               <code>product_points</code>, Resend) hoặc mới phủ 5 ngành Tech
               (Form v2 đã Live nhưng trên API công khai ngày 26/11/2026 cả
@@ -873,20 +874,20 @@
           <div
             class="stacked-bar"
             role="img"
-            aria-label="Phân bổ 23 tính năng lợi thế, 12 tính năng tắt cờ hoặc một phần, 14 tính năng chưa có"
+            aria-label="Phân bổ 24 tính năng lợi thế, 11 tính năng tắt cờ hoặc một phần, 14 tính năng chưa có"
           >
-            <div class="seg-green" style="width: 46.94%"></div>
-            <div class="seg-amber" style="width: 24.49%"></div>
+            <div class="seg-green" style="width: 48.98%"></div>
+            <div class="seg-amber" style="width: 22.45%"></div>
             <div class="seg-rose" style="width: 28.57%"></div>
           </div>
           <div class="legend-inline">
             <span
               ><span class="legend-dot seg-green"></span>Lợi thế Rate / Live
-              Prod: <strong>23 (46.9%)</strong></span
+              Prod: <strong>24 (49.0%)</strong></span
             >
             <span
               ><span class="legend-dot seg-amber"></span>Tắt cờ / Một phần:
-              <strong>12 (24.5%)</strong></span
+              <strong>11 (22.4%)</strong></span
             >
             <span
               ><span class="legend-dot seg-rose"></span>Chưa có - Cần xây:
@@ -1017,7 +1018,7 @@
                   data-status-pill="advantage"
                   aria-pressed="false"
                 >
-                  Lợi thế Rate (23)
+                  Lợi thế Rate (24)
                 </button>
                 <button
                   type="button"
@@ -1025,7 +1026,7 @@
                   data-status-pill="partial"
                   aria-pressed="false"
                 >
-                  Tắt cờ / Một phần (12)
+                  Tắt cờ / Một phần (11)
                 </button>
                 <button
                   type="button"
@@ -1273,7 +1274,7 @@
                 </td>
               </tr>
 
-              <tr class="feature-row" data-group="g1" data-status="partial">
+              <tr class="feature-row" data-group="g1" data-status="advantage">
                 <td>
                   <span class="feat-name"
                     >Biểu đồ phân phối sao 5★ - 1★ (Rating Histogram)</span
@@ -1283,13 +1284,13 @@
                   >
                 </td>
                 <td class="cell-rate">
-                  <span class="badge badge-amber">Một phần</span>
+                  <span class="badge badge-green">Lợi thế của Rate</span>
                   <div class="cell-note">
-                    <code>JReviewsSection.tsx</code> hiện chỉ có 4 nút chip lọc
-                    (<code>Tất cả</code>, <code>5★</code>, <code>4★</code>,
-                    <code>&lt;=3★</code>) và cảnh báo bất thường
-                    <code>&gt;=90%</code> 5 sao, chưa có thanh bar trực quan 5
-                    mức sao.
+                    <code>JReviewsSection.tsx</code> hiển thị biểu đồ thanh
+                    5★-1★ với số đếm toàn DB (<code>getCachedMasterProductReviewStarCounts</code>),
+                    tỷ lệ % tương tác lọc toggle kết hợp bộ lọc chip 5 mức sao
+                    và phân trang server-side qua <code>?star=1..5</code> trên
+                    <code>/api/v1/rate/reviews</code> (<code>#1940</code>).
                   </div>
                 </td>
                 <td>
@@ -3913,7 +3914,7 @@
                 <td>
                   <strong>Vòng đời Review đầy đủ &amp; Tương tác Cộng đồng:</strong>
                   <ul>
-                    <li>Biểu đồ Histogram 5★-1★ + Phân trang server-side (&gt; 50 reviews)</li>
+                    <li><strong>Đã xong phần Histogram 5★-1★ + lọc/phân trang <code>?star=1..5</code> server-side (<code>#1940</code>):</strong> biểu đồ 5-1 sao theo số đếm toàn DB + cursor pagination theo mức sao</li>
                     <li>Upload Ảnh/Video cho user + <code>PATCH/DELETE</code> sửa/xóa bài viết của mình</li>
                     <li><code>Owner Official Reply</code> (nối cột <code>seller_reply</code> từ <code>ShopeeReview.sellerReply</code>) + <code>Nested Comments</code> / <code>Community Q&amp;A</code></li>
                     <li><code>Moderation Queue &amp; Admin Dashboard UI</code> + xác thực hóa đơn <code>Verified Buyer</code></li>

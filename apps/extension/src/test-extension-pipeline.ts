@@ -1174,6 +1174,7 @@ async function runTests() {
       masterProductId: null,
       slug: 'iphone-16-pro-max-256gb',
       hideFake: true,
+      star: null,
       limit: 50,
       cursor: null,
     }
@@ -1188,6 +1189,7 @@ async function runTests() {
       masterProductId: '123e4567-e89b-12d3-a456-426614174000',
       slug: null,
       hideFake: false,
+      star: null,
       limit: 25,
       cursor: null,
     }

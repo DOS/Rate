@@ -12,6 +12,8 @@ import { pickClientMessages } from '../client-messages';
 import {
   REVIEW_IMAGES_MAX,
   REVIEW_REPORT_REASONS,
+  addReviewStarCounts,
+  computeReviewStarCounts,
   sanitizeReviewImages,
   type ReviewItem,
   type ReviewReportReason,
@@ -439,10 +441,44 @@ function testCursorParsingOrderAndPaginationUi() {
       masterProductId: null,
       slug: 'iphone-16',
       hideFake: false,
+      star: null,
       limit: 25,
       cursor: parsedA,
     }
   );
+  for (const s of ['1', '2', '3', '4', '5'] as const) {
+    assert.equal(
+      parseReviewsQueryParams(
+        new URLSearchParams({ slug: 'iphone-16', star: s })
+      )?.star,
+      Number(s)
+    );
+  }
+  assert.equal(
+    parseReviewsQueryParams(
+      new URLSearchParams({ slug: 'iphone-16', star: '' })
+    )?.star,
+    null
+  );
+  for (const badStar of [
+    '0',
+    '6',
+    '-1',
+    '4.5',
+    '5.0',
+    '05',
+    '+5',
+    'abc',
+    '1\u00000',
+  ]) {
+    assert.equal(
+      parseReviewsQueryParams(
+        new URLSearchParams({ slug: 'iphone-16', star: badStar })
+      ),
+      null,
+      `reject invalid star=${JSON.stringify(badStar)}`
+    );
+  }
 
   // Deduplicating client merge
   const r1 = makeReview('11111111-1111-4111-8111-111111111111');
@@ -486,6 +522,85 @@ function testCursorParsingOrderAndPaginationUi() {
   }
 }
 
+function testStarHistogramSsrAndFallback() {
+  const counts = computeReviewStarCounts([
+    makeReview('44444444-4444-4444-8444-444444444501', { rating_star: 5 }),
+    makeReview('44444444-4444-4444-8444-444444444502', { rating_star: 5 }),
+    makeReview('44444444-4444-4444-8444-444444444503', { rating_star: 4 }),
+    makeReview('44444444-4444-4444-8444-444444444504', { rating_star: 2.6 }),
+    makeReview('44444444-4444-4444-8444-444444444505', { rating_star: 1 }),
+  ]);
+  assert.deepEqual(counts, { 1: 1, 2: 0, 3: 1, 4: 1, 5: 2, total: 5 });
+  assert.deepEqual(
+    addReviewStarCounts(counts, { 1: 0, 2: 1, 3: 0, 4: 0, 5: 1, total: 2 }),
+    { 1: 1, 2: 1, 3: 1, 4: 1, 5: 3, total: 7 }
+  );
+
+  for (const loc of ['vi', 'en', 'cs'] as const) {
+    const dbHistogramHtml = renderSection(loc, {
+      starCounts: { 1: 5, 2: 5, 3: 10, 4: 20, 5: 60, total: 100 },
+      initialNextCursor: null,
+      totalReviewCount: 100,
+    });
+    assert.ok(dbHistogramHtml.includes('data-testid="review-star-histogram"'));
+    const histStart = dbHistogramHtml.indexOf(
+      'data-testid="review-star-histogram"'
+    );
+    const btnPositions = [5, 4, 3, 2, 1].map((star) =>
+      dbHistogramHtml.indexOf(
+        `data-testid="review-star-histogram-btn-${star}"`,
+        histStart
+      )
+    );
+    assert.ok(
+      btnPositions.every((pos) => pos > histStart) &&
+        btnPositions[0]! < btnPositions[1]! &&
+        btnPositions[1]! < btnPositions[2]! &&
+        btnPositions[2]! < btnPositions[3]! &&
+        btnPositions[3]! < btnPositions[4]!,
+      `${loc}: histogram renders 5-to-1 buttons in descending order`
+    );
+    assert.ok(
+      dbHistogramHtml.includes('width:60%') &&
+        dbHistogramHtml.includes('width:20%') &&
+        dbHistogramHtml.includes('width:10%') &&
+        dbHistogramHtml.includes('width:5%'),
+      `${loc}: proportional percentage bar widths rendered`
+    );
+    assert.ok(
+      loc === 'cs'
+        ? dbHistogramHtml.includes('60\u00a0%')
+        : dbHistogramHtml.includes('60%'),
+      `${loc}: localized percent formatting in histogram`
+    );
+    const histButtons = findOpeningTags(dbHistogramHtml, 'button').filter(
+      (tag) =>
+        (readTagAttr(tag, 'data-testid') ?? '').startsWith(
+          'review-star-histogram-btn-'
+        )
+    );
+    assert.equal(histButtons.length, 5);
+    for (const tag of histButtons) {
+      assert.equal(readTagAttr(tag, 'aria-pressed'), 'false');
+    }
+
+    // Fallback when starCounts prop is omitted computes from reviews prop.
+    const fallbackHtml = renderSection(loc, {
+      reviews: [
+        makeReview('44444444-4444-4444-8444-444444444511', { rating_star: 5 }),
+        makeReview('44444444-4444-4444-8444-444444444512', { rating_star: 4 }),
+      ],
+    });
+    assert.ok(fallbackHtml.includes('width:50%'));
+    assert.ok(fallbackHtml.includes('width:0%'));
+    assert.ok(
+      loc === 'cs'
+        ? fallbackHtml.includes('50\u00a0%')
+        : fallbackHtml.includes('50%')
+    );
+  }
+}
+
 function testLocaleParityAndDashes() {
   const enKeys = Object.keys(enMessages.reviews).sort();
   const viKeys = Object.keys(viMessages.reviews).sort();
@@ -509,10 +624,11 @@ function testLocaleParityAndDashes() {
 }
 
 function main() {
-  console.warn('🧪 Review quick-wins suite (#1924, #1925, #1926)');
+  console.warn('🧪 Review quick-wins suite (#1924, #1925, #1926, #1940)');
   testReviewImageSanitizerAndStrip();
   testReportReasonPickerAndPayload();
   testCursorParsingOrderAndPaginationUi();
+  testStarHistogramSsrAndFallback();
   testLocaleParityAndDashes();
   console.warn('✅ Review quick-wins suite passed');
 }

@@ -139,6 +139,50 @@ export const REVIEW_REPORT_REASONS = [
 
 export type ReviewReportReason = (typeof REVIEW_REPORT_REASONS)[number];
 
+export type ReviewStarTier = 1 | 2 | 3 | 4 | 5;
+
+export interface ReviewStarCounts {
+  1: number;
+  2: number;
+  3: number;
+  4: number;
+  5: number;
+  total: number;
+}
+
+export function computeReviewStarCounts(
+  reviews: ReadonlyArray<Pick<ReviewItem, 'rating_star'>>
+): ReviewStarCounts {
+  const counts: ReviewStarCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, total: 0 };
+  if (!Array.isArray(reviews)) return counts;
+  for (const r of reviews) {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+    const raw = Number(r.rating_star);
+    if (!Number.isFinite(raw)) continue;
+    const rounded = Math.round(raw);
+    if (rounded >= 1 && rounded <= 5) {
+      const star = rounded as ReviewStarTier;
+      counts[star] += 1;
+      counts.total += 1;
+    }
+  }
+  return counts;
+}
+
+export function addReviewStarCounts(
+  base: ReviewStarCounts,
+  delta: ReviewStarCounts
+): ReviewStarCounts {
+  return {
+    1: Math.max(0, base[1] + delta[1]),
+    2: Math.max(0, base[2] + delta[2]),
+    3: Math.max(0, base[3] + delta[3]),
+    4: Math.max(0, base[4] + delta[4]),
+    5: Math.max(0, base[5] + delta[5]),
+    total: Math.max(0, base.total + delta.total),
+  };
+}
+
 export const REVIEW_IMAGES_MAX = 6;
 
 export interface ReviewItem {
