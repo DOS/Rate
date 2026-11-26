@@ -25,6 +25,7 @@ export default function InfoTip({
   testId?: string;
 }) {
   const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const rootRef = useRef<HTMLSpanElement>(null);
   const tipId = useId();
@@ -38,14 +39,37 @@ export default function InfoTip({
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [pinned]);
 
-  // A bubble hidden with Escape comes back on the next hover.
+  // Track the pointer so a hover-only bubble can be dismissed and a bubble
+  // hidden with Escape comes back on the next hover.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const onMouseLeave = () => setDismissed(false);
+    const onMouseEnter = () => setHovered(true);
+    const onMouseLeave = () => {
+      setHovered(false);
+      setDismissed(false);
+    };
+    root.addEventListener('mouseenter', onMouseEnter);
     root.addEventListener('mouseleave', onMouseLeave);
-    return () => root.removeEventListener('mouseleave', onMouseLeave);
+    return () => {
+      root.removeEventListener('mouseenter', onMouseEnter);
+      root.removeEventListener('mouseleave', onMouseLeave);
+    };
   }, []);
+
+  // Escape closes the bubble wherever focus is, also when it shows only
+  // because of hover (WCAG 1.4.13).
+  useEffect(() => {
+    if (dismissed || !(pinned || hovered)) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      setPinned(false);
+      setDismissed(true);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [dismissed, pinned, hovered]);
 
   const classes = [
     'rate-infotip',
@@ -68,7 +92,9 @@ export default function InfoTip({
           setPinned(false);
           setDismissed(true);
         }}
-        onBlur={() => setDismissed(false)}
+        onBlur={() => {
+          if (!hovered) setDismissed(false);
+        }}
         onClick={() => {
           setDismissed(false);
           setPinned((open) => !open);

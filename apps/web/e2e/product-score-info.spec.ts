@@ -24,6 +24,13 @@ test('the scoreboard shows no eyebrow and explains the score on hover and focus'
   await button.hover();
   await expect(bubble).toBeVisible();
   await expect(bubble).toHaveText(NOTE);
+  // Escape hides a hover-only bubble too (WCAG 1.4.13), until the pointer
+  // leaves and comes back.
+  await page.keyboard.press('Escape');
+  await expect(bubble).toBeHidden();
+  await page.mouse.move(0, 0);
+  await button.hover();
+  await expect(bubble).toBeVisible();
   await page.mouse.move(0, 0);
   await expect(bubble).toBeHidden();
 
@@ -36,7 +43,7 @@ test('the scoreboard shows no eyebrow and explains the score on hover and focus'
   await expect(bubble).toBeHidden();
 });
 
-test('a tap on a phone pins the score note open until the next tap outside', async ({
+test('a tap on a phone pins the score note open until the next tap', async ({
   browser,
 }) => {
   const context = await browser.newContext({
@@ -58,6 +65,12 @@ test('a tap on a phone pins the score note open until the next tap outside', asy
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
 
   await page.locator('h1').first().tap();
+  await expect(bubble).toBeHidden();
+
+  // A second tap on the (i) closes it as well.
+  await info.getByRole('button').tap();
+  await expect(bubble).toBeVisible();
+  await info.getByRole('button').tap();
   await expect(bubble).toBeHidden();
   await context.close();
 });
