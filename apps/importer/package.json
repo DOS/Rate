@@ -82,11 +82,11 @@
   "dependencies": {
     "@repo/shared-data": "workspace:*",
     "@supabase/supabase-js": "^2.119.0",
-    "dotenv": "^18.0.8"
+    "dotenv": "^18.0.10"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "eslint": "^9.39.5",
     "prettier": "^3.10.1",
     "tsx": "^4.23.15",

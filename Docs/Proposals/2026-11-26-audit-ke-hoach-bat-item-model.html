@@ -1,0 +1,1028 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>
+      Kiểm toán Proposal Item Model (#1150, #1160) &amp; Kế hoạch bật
+      RATE_ITEM_MODEL | Rate.vn 2026-11-26
+    </title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f1113;
+        --card: #16191d;
+        --elevated: #1c2128;
+        --border: #272c35;
+        --border-strong: #374151;
+        --ink: #e6edf3;
+        --muted: #9da7b3;
+        --accent: #ff2e29;
+        --accent-ink: #ff7b77;
+        --accent-soft: rgba(255, 46, 41, 0.14);
+        --green: #34d399;
+        --green-soft: rgba(16, 185, 129, 0.14);
+        --green-border: rgba(52, 211, 153, 0.36);
+        --amber: #fbbf24;
+        --amber-soft: rgba(245, 158, 11, 0.14);
+        --amber-border: rgba(251, 191, 36, 0.38);
+        --rose: #fb7185;
+        --rose-soft: rgba(244, 63, 94, 0.14);
+        --rose-border: rgba(251, 113, 133, 0.38);
+        --blue: #60a5fa;
+        --blue-soft: rgba(59, 130, 246, 0.14);
+        --blue-border: rgba(96, 165, 250, 0.35);
+        --code-bg: #0b0d0f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        padding: 28px 18px 80px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter,
+          Helvetica, Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      .container {
+        max-width: 1220px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 12px 0 10px;
+        font-size: clamp(23px, 3vw, 32px);
+        line-height: 1.24;
+        letter-spacing: -0.02em;
+        color: #ffffff;
+      }
+
+      h2 {
+        margin: 42px 0 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--border);
+        font-size: 20px;
+        line-height: 1.3;
+        color: #ffffff;
+      }
+
+      h3 {
+        margin: 0 0 8px;
+        font-size: 16.5px;
+        line-height: 1.35;
+        color: #ffffff;
+      }
+
+      p {
+        margin: 0 0 12px;
+        color: var(--ink);
+      }
+
+      ul,
+      ol {
+        margin: 6px 0 12px;
+        padding-left: 20px;
+      }
+
+      li {
+        margin-bottom: 6px;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      code {
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 6px;
+        font-size: 12.5px;
+        color: #f1f5f9;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        overflow-wrap: anywhere;
+      }
+
+      .hero-card {
+        background:
+          radial-gradient(
+            circle at top right,
+            rgba(255, 46, 41, 0.14),
+            transparent 44%
+          ),
+          var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 24px 26px;
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.4;
+        white-space: nowrap;
+      }
+
+      .badge-accent {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        border: 1px solid rgba(255, 46, 41, 0.42);
+      }
+
+      .badge-green {
+        background: var(--green-soft);
+        color: var(--green);
+        border: 1px solid var(--green-border);
+      }
+
+      .badge-amber {
+        background: var(--amber-soft);
+        color: var(--amber);
+        border: 1px solid var(--amber-border);
+      }
+
+      .badge-rose {
+        background: var(--rose-soft);
+        color: var(--rose);
+        border: 1px solid var(--rose-border);
+      }
+
+      .badge-blue {
+        background: var(--blue-soft);
+        color: var(--blue);
+        border: 1px solid var(--blue-border);
+      }
+
+      .badge-neutral {
+        background: var(--elevated);
+        color: var(--muted);
+        border: 1px solid var(--border-strong);
+      }
+
+      .fact-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 20px;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .fact-bar strong {
+        color: #ffffff;
+      }
+
+      .verdict-banner {
+        margin-top: 18px;
+        background: var(--rose-soft);
+        border: 1px solid var(--rose-border);
+        border-left: 4px solid var(--accent);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+
+      .verdict-banner strong {
+        color: #ffffff;
+      }
+
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+        margin: 18px 0 22px;
+      }
+
+      .kpi-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: var(--border-strong);
+      }
+
+      .kpi-card.is-rose::before {
+        background: var(--accent);
+      }
+
+      .kpi-card.is-amber::before {
+        background: var(--amber);
+      }
+
+      .kpi-card.is-green::before {
+        background: var(--green);
+      }
+
+      .kpi-card.is-blue::before {
+        background: var(--blue);
+      }
+
+      .kpi-num {
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1.15;
+        color: #ffffff;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .kpi-title {
+        font-size: 13.5px;
+        font-weight: 700;
+        margin-top: 6px;
+      }
+
+      .kpi-desc {
+        font-size: 12.5px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+
+      .toc-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 16px 0 8px;
+      }
+
+      .toc-link {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 5px 12px;
+        color: var(--ink);
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .toc-link:hover {
+        border-color: var(--accent-ink);
+        color: #ffffff;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 14px;
+      }
+
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+      }
+
+      .callout {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--amber);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin: 14px 0;
+      }
+
+      .callout.is-blue {
+        border-left-color: var(--blue);
+      }
+
+      .callout.is-green {
+        border-left-color: var(--green);
+      }
+
+      .callout.is-rose {
+        border-left-color: var(--rose);
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--card);
+        margin: 14px 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 820px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      th {
+        background: var(--elevated);
+        color: #ffffff;
+        font-weight: 700;
+        text-align: left;
+        padding: 11px 12px;
+        border-bottom: 1px solid var(--border-strong);
+      }
+
+      td {
+        padding: 11px 12px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      .step-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .step-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+        display: grid;
+        grid-template-columns: 42px 1fr;
+        gap: 14px;
+        align-items: start;
+      }
+
+      .step-num {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: var(--accent-soft);
+        border: 1px solid rgba(255, 46, 41, 0.42);
+        color: var(--accent-ink);
+        font-weight: 800;
+        font-size: 15px;
+        display: grid;
+        place-items: center;
+      }
+
+      .footer-note {
+        margin-top: 38px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <section class="hero-card">
+        <div class="meta-row">
+          <span class="badge badge-accent">Audit Kỹ thuật</span>
+          <span class="badge badge-neutral">DOS/Rate#1150 &amp; #1160</span>
+          <span class="badge badge-blue">2026-11-26</span>
+          <span class="badge badge-green">Mục tiêu: Beta trước, Prod sau</span>
+        </div>
+
+        <h1>
+          Kiểm toán Bộ Proposal Item-Variant-Listing (#1150, #1160) &amp; Kế
+          hoạch bật <code>RATE_ITEM_MODEL</code> trên Beta / Production
+        </h1>
+
+        <p class="muted">
+          Đối chiếu toàn bộ 4 gói SQL dự thảo ngày 28-29/10/2026 trong
+          <code>Docs/Proposals/</code> với schema thực tế đang chạy trên
+          <code>DOS/DOS.Me@dev</code> (tới migration
+          <code>20261210170000</code>; migration mới nhất của riêng schema
+          <code>rate</code> là <code>20261210160000</code>), quyền
+          <code>rate_worker</code>, 21 danh mục Wave E1-E5, và lộ trình kiểm thử
+          qua <code>beta.rate.vn</code>.
+        </p>
+
+        <div class="verdict-banner">
+          <strong>Kết luận kiểm toán:</strong>
+          <strong>KHÔNG ĐƯỢC</strong> đẩy nguyên trạng 4 file SQL dự thảo tháng
+          10/2026 sang <code>DOS/DOS.Me</code>. Bộ dự thảo đang lệch so với mốc
+          <code>20261210170000</code> trên <code>DOS/DOS.Me@dev</code>: nếu gán
+          timestamp mới rồi chạy nguyên bản sẽ
+          <strong>ghi đè mất cơ chế chống deadlock</strong> và quyền bảo mật mới
+          của <code>20261210160000</code>, thiếu cột
+          <code>rating_score</code>/<code>criteria_scores</code> trên
+          <code>rate.items</code>, gán nhầm <code>entity_type = 'product'</code>
+          cho ngành dịch vụ/địa điểm, và bỏ sót 16 danh mục không dung lượng của
+          Wave E1-E5 (trong tổng 17 ngành thuộc
+          <code>SIZELESS_CATEGORY_SLUGS</code>).
+        </div>
+
+        <div class="fact-bar">
+          <div>
+            <strong>Nhánh DB chuẩn:</strong>
+            <code>DOS/DOS.Me@dev</code> -> Beta
+            (<code>oyajkbadsykigtfrpdpg</code>)
+          </div>
+          <div>
+            <strong>Mốc migration mới nhất:</strong>
+            <code>20261210170000</code> (toàn repo <code>DOS/DOS.Me@dev</code>)
+            / <code>20261210160000</code> (<code>rate</code> trên dev) /
+            <code>20261209100000</code> (<code>rate</code> trên main)
+          </div>
+          <div>
+            <strong>Môi trường thử UI:</strong>
+            <code>beta.rate.vn</code> đã gắn nhánh <code>dev</code> Vercel &amp;
+            nối Preview DB Beta (<code>oyajkbadsykigtfrpdpg</code>) ngày
+            2026-11-26; đang chờ trỏ CNAME Cloudflare và xác minh Preview
+            <code>DOS/Rate#438</code>
+          </div>
+        </div>
+      </section>
+
+      <nav class="toc-row" aria-label="Mục lục">
+        <a class="toc-link" href="#summary">1. Toàn cảnh lệch schema</a>
+        <a class="toc-link" href="#gaps">2. 5 Lỗi chặn cần sửa</a>
+        <a class="toc-link" href="#data-impact"
+          >3. Tác động dữ liệu &amp; Watch</a
+        >
+        <a class="toc-link" href="#security">4. Bảo mật, ACL &amp; Lock</a>
+        <a class="toc-link" href="#rollout">5. Trình tự bật Beta -&gt; Prod</a>
+        <a class="toc-link" href="#rollback">6. Phương án Rollback</a>
+      </nav>
+
+      <section id="summary">
+        <h2>1. Toàn cảnh chênh lệch Proposal (28-29/10) vs Hiện tại (26/11)</h2>
+        <div class="kpi-grid">
+          <div class="kpi-card is-rose">
+            <div class="kpi-num">5</div>
+            <div class="kpi-title">Lỗi chặn mức P0/P1 trong SQL cũ</div>
+            <div class="kpi-desc">
+              Ghi đè lock <code>20261210160000</code>, thiếu
+              <code>rating_score</code>, trigger thiếu <code>entity_type</code>,
+              RPC review bỏ sót <code>item_id</code>, hàm tìm kiếm Item dùng chữ
+              ký cũ.
+            </div>
+          </div>
+          <div class="kpi-card is-amber">
+            <div class="kpi-num">16 / 17</div>
+            <div class="kpi-title">Ngành không dung lượng bị bỏ sót</div>
+            <div class="kpi-desc">
+              M3/M4 chỉ loại trừ <code>earbuds</code>, bỏ sót 16 danh mục Wave
+              E1-E5 (<code>5 + 2 + 3 + 4 + 2</code>), tức thiếu 16 / 17 ngành
+              trong <code>SIZELESS_CATEGORY_SLUGS</code> (chỉ 4 / 21 ngành có
+              dung lượng).
+            </div>
+          </div>
+          <div class="kpi-card is-green">
+            <div class="kpi-num">6 dòng</div>
+            <div class="kpi-title">Dữ liệu thật bị chạm ở bước M0</div>
+            <div class="kpi-desc">
+              <code>M0</code> chỉ đổi khóa tại chỗ cho 6 mẫu seed lệch key; giữ
+              nguyên review, lịch sử giá, cảnh báo giá và watchlist.
+            </div>
+          </div>
+          <div class="kpi-card is-blue">
+            <div class="kpi-num">5 file</div>
+            <div class="kpi-title">Migration chưa mirror về DOS/Rate</div>
+            <div class="kpi-desc">
+              <code>Rate/supabase/migrations/</code> đang thiếu 5 file mới trên
+              <code>DOS/DOS.Me@dev</code> nên test giả lập nội bộ chưa phản ánh
+              đủ Production/Beta.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="gaps">
+        <h2>
+          2. Chi tiết 5 vấn đề chặn buộc phải sửa trước khi mở PR sang DOS.Me
+        </h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 110px">Mức độ</th>
+                <th style="width: 240px">Hạng mục lệch</th>
+                <th>Thực tế trong bộ Proposal (tháng 10)</th>
+                <th>Yêu cầu chuẩn trên DOS/DOS.Me@dev hiện tại</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="badge badge-rose">P0 Chặn</span></td>
+                <td>
+                  <strong>Ghi đè lock &amp; ACL</strong><br />
+                  <code>refresh_master_product_rating</code> &amp;
+                  <code>refresh_review_vote_counts</code>
+                </td>
+                <td>
+                  <code>2026-10-28-dos-me-m1-m2-items.sql:453-547</code> (và bản
+                  rollback
+                  <code>2026-10-28-dos-me-m1-m2-items-rollback.sql:22-107</code
+                  >; đoạn <code>:109-154</code> là
+                  <code>refresh_master_market_stats</code>) viết đè lại 2 hàm
+                  cũ, làm mất <code>FOR UPDATE</code> /
+                  <code>FOR NO KEY UPDATE</code>, mất gọi bù
+                  <code>refresh_master_rating_extras</code> và bỏ lệnh
+                  <code>REVOKE/GRANT</code>.
+                </td>
+                <td>
+                  Giữ nguyên thứ tự khóa chống deadlock, kiểm tra
+                  <code>IS NULL</code>, gọi fallback
+                  <code>refresh_master_rating_extras</code> và khối
+                  <code
+                    >REVOKE ... FROM PUBLIC, anon, authenticated, authenticator,
+                    rate_worker, service_role</code
+                  >
+                  theo <code>20261210160000:872-1015</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-rose">P0 Chặn</span></td>
+                <td>
+                  <strong>Timestamp cũ &amp; thiếu file</strong><br />
+                  Lịch sử migration <code>DOS.Me</code>
+                </td>
+                <td>
+                  Các file proposal mang ngày <code>20261028</code> /
+                  <code>20261029</code>. Trên <code>DOS/DOS.Me@main</code> đã có
+                  <code>20261210103000</code>; trên <code>dev</code> đã có
+                  migration mới nhất của <code>rate</code> là
+                  <code>20261210160000</code> và mốc mới nhất toàn repo là
+                  <code>20261210170000</code>
+                  (<code>20261210170000_catalog_alibaba_qwen4_max_data_retention_deny.sql</code>).
+                </td>
+                <td>
+                  <code>supabase db push</code> tự bỏ qua file có timestamp cũ
+                  hơn mốc đã áp dụng. Phải cấp timestamp mới tăng dần chặt chẽ
+                  <code>&gt; 20261210170000</code> (và rà lại
+                  <code>origin/dev</code> ngay trước khi mở PR sang
+                  <code>DOS.Me</code>) rồi thêm vào
+                  <code>test-rate-schema-replay.mjs</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-amber">P1 Nặng</span></td>
+                <td>
+                  <strong
+                    >Thiếu <code>rating_score</code> &amp; lỗi trigger
+                    <code>entity_type</code></strong
+                  ><br />
+                  Bảng <code>rate.items</code>
+                </td>
+                <td>
+                  <code>rate.items</code> chưa có cột <code>rating_score</code>,
+                  <code>rating_weight_sum</code>, <code>criteria_scores</code>;
+                  trigger <code>master_products_sync_item()</code> quên chép
+                  <code>entity_type</code> khi tạo Item mới (mặc định thành
+                  <code>'product'</code>).
+                </td>
+                <td>
+                  Bổ sung 3 cột điểm chuẩn hóa (tương thích
+                  <code>20261101120000</code>), thêm ràng buộc
+                  <code
+                    >CHECK (entity_type IN ('product','service','place'))</code
+                  >
+                  và truyền <code>entity_type</code> trong
+                  <code>master_products_sync_item()</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-amber">P1 Nặng</span></td>
+                <td>
+                  <strong>RPC review bỏ sót <code>item_id</code></strong
+                  ><br />
+                  <code>submit/edit/delete</code> &amp;
+                  <code>store_review_values</code>
+                </td>
+                <td>
+                  Trên <code>20261210160000</code>,
+                  <code>submit_community_review[_v2]</code> báo lỗi
+                  <code>P0002</code> nếu master chưa có listing khớp
+                  <code>cluster_id = p_master_product_id</code>
+                  (<code>:1145-1154, 1476-1483</code>). Khi bật
+                  <code>nullable_variant</code> hoặc sau bước M3 khiến listing
+                  chỉ gắn <code>item_id</code> (<code>cluster_id IS NULL</code
+                  >), <code>edit_community_review</code> báo lỗi
+                  <code>22023</code> với review v2 (hoặc bỏ qua cập nhật điểm
+                  master với review cũ), <code>delete_community_review</code> bỏ
+                  qua <code>refresh_master_product_rating</code>, còn
+                  <code>store_review_values</code> chỉ ghi khi
+                  <code>p.cluster_id IS NOT NULL</code>
+                  (<code>:1747-1771</code>).
+                </td>
+                <td>
+                  Cập nhật <code>submit_community_review[_v2]</code>,
+                  <code>edit_community_review</code>,
+                  <code>delete_community_review</code>,
+                  <code>store_review_values</code> và reader trong
+                  <code>apps/web</code> để gom review/điểm theo
+                  <code>COALESCE</code> / <code>item_id</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-amber">P1 Nặng</span></td>
+                <td>
+                  <strong
+                    ><code>search_items_v1</code> lỗi thời &amp; chưa nối
+                    Web</strong
+                  ><br />
+                  <code>2026-10-29-dos-me-item-rpcs.sql</code>
+                </td>
+                <td>
+                  Vẫn lọc/sắp theo <code>user_rating_weighted</code> thay vì
+                  <code>rating_score</code>, dùng <code>LANGUAGE sql</code> dễ
+                  quét tuần tự thay vì <code>plpgsql + force_custom_plan</code>,
+                  chưa nối vào <code>item-directory.ts</code> hay
+                  <code>/api/v1/rate/products</code>.
+                </td>
+                <td>
+                  Cập nhật theo chuẩn <code>20261104120000</code> và
+                  <code>20261104140000</code>
+                  (<code>idx_items_search_full_trgm</code>,
+                  <code>rating_score</code>, <code>entity_type</code>) rồi nối
+                  caller trong <code>apps/web</code>.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="data-impact">
+        <h2>
+          3. Tác động lên dữ liệu thật, Wave E1-E5 &amp; Apple Watch Ultra 2
+        </h2>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>A. Bước M0: Chỉ chạm đúng 6 key seed, an toàn 100%</h3>
+            <ul>
+              <li>
+                <code>M0</code> chỉ đổi <code>model_key</code> (và đặt
+                <code>storage_gb = NULL</code> cho tai nghe) trực tiếp trên 6
+                bản ghi seed cũ (<code>galaxy-buds3-pro</code>,
+                <code>airpods-pro-3</code>, <code>wf-1000xm5</code>,
+                <code>wf-1000xm6</code>, <code>airpods-pro-2-usbc</code>,
+                <code>apple:watch-ultra-3-49mm:64gb</code> -&gt;
+                <code>apple:watch-ultra-3:64gb</code>).
+              </li>
+              <li>
+                Giữ nguyên <code>master_products.id</code> và <code>slug</code>,
+                không xóa hay gộp dòng trùng (gặp đụng độ chỉ báo
+                <code>NOTICE</code>), nên <strong>không mất</strong> bất kỳ bài
+                review, ảnh, cảnh báo giá, điểm địa điểm hay watchlist đã lưu
+                của người dùng.
+              </li>
+              <li>
+                Lưu ý bắt buộc: ngay khi đẩy M0 lên <code>main</code>, phải đẩy
+                kèm PR sửa 6 key tương ứng trong
+                <code>apps/importer/src/shopee/flagship-seed-data.ts</code>.
+              </li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <h3>B. Wave E1-E5 (21 ngành) &amp; Apple Watch Ultra 2 64GB</h3>
+            <ul>
+              <li>
+                <strong
+                  >16 danh mục mới không có dung lượng (Wave E1-E5):</strong
+                >
+                <code>retire_item_unknown_variant</code> và <code>M3</code> chỉ
+                loại trừ <code>'earbuds'</code>, thiếu 16 ngành trong
+                <code>SIZELESS_CATEGORY_SLUGS</code> (<code
+                  >5 + 2 + 3 + 4 + 2</code
+                >: <code>tvs</code>, <code>air-conditioners</code>,
+                <code>hotels</code>, <code>dental-clinics</code>,
+                <code>gyms-fitness</code>...). Tổng danh mục không dung lượng là
+                17 / 21 ngành chuẩn (chỉ 4 ngành có dung lượng); phải đồng bộ đủ
+                17 ngành trước bước M1/M3.
+              </li>
+              <li>
+                <strong>Rủi ro cắt hậu tố slug:</strong> hàm
+                <code>item_slug_from_master</code> cắt đuôi
+                <code>-standard</code> / <code>-unknown</code>. Cần rà trước dữ
+                liệu xem có dịch vụ/địa điểm Wave E2-E5 nào trùng slug khi cắt
+                đuôi không.
+              </li>
+              <li>
+                <strong>Trường hợp Apple Watch Ultra 2 49mm 64GB:</strong> Khi
+                bật <code>RATE_ITEM_MODEL=item</code>, tên Item sẽ gọn thành
+                <code>Apple Watch Ultra 2 49mm</code> (bỏ <code>64GB</code> ở
+                ngoài thẻ, giữ <code>49mm</code>) và biến thể duy nhất
+                <code>64GB</code> nằm trong <code>?v=64gb</code>. Tuy nhiên cần
+                lưu ý <code>EntityMatcher</code> và SQL M3 đang coi mọi Item có
+                variant <code>^[0-9]+(gb|tb)$</code> là "nhiều dung lượng" nên
+                các dòng <code>:unknown</code> tồn đọng từ trước hoặc tiêu đề
+                crawl lọt qua nhánh <code>only_storage_gb</code> sẽ không tự gộp
+                vào bản <code>64GB</code> nếu chưa xử lý ngoại lệ
+                <code>only_storage_gb</code>.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="security">
+        <h2>4. Kiểm toán Bảo mật, Quyền hạn (ACL) &amp; Khóa bảng (Lock)</h2>
+        <div class="callout is-rose">
+          <strong
+            >Chuẩn bảo mật mới sau 20261210150000 (Authenticator ACL):</strong
+          >
+          Supabase Prod từng cấu hình default ACL cấp quyền cho vai trò
+          <code>authenticator</code>. Mọi bảng và hàm mới trong schema
+          <code>rate</code> (gồm <code>rate.items</code> và bảng backup
+          <code>rate.m3_unknown_variant_backup</code> tại
+          <code>2026-10-29-dos-me-m3-m4.sql:31</code>;
+          <code>rate.master_products</code> tiếp tục đóng vai trò bảng variant)
+          bắt buộc phải chạy
+          <code
+            >REVOKE ALL ... FROM PUBLIC, anon, authenticated, authenticator,
+            rate_worker</code
+          >
+          trước khi cấp quyền tối thiểu. Bộ proposal tháng 10 chưa thu hồi quyền
+          cho <code>authenticator</code> (và bảng
+          <code>rate.m3_unknown_variant_backup</code> thiếu cả lệnh thu hồi cho
+          <code>authenticator, rate_worker</code>).
+        </div>
+        <ul>
+          <li>
+            <strong>Quyền <code>rate_worker</code> (RS#700 / RS#739):</strong>
+            Bản <code>m1+m2</code> đã cấp đủ <code>SELECT</code> và
+            <code>UPDATE</code> giới hạn 6 cột trên <code>rate.items</code> cộng
+            quyền chạy <code>match_item</code> và
+            <code>refresh_item_stats</code>. Khi thêm <code>rating_score</code>,
+            <code>rating_weight_sum</code>, <code>criteria_scores</code> vào
+            <code>rate.items</code>, phải giữ chúng ngoài danh sách cột cho phép
+            <code>rate_worker</code> sửa.
+          </li>
+          <li>
+            <strong>Chống khóa bảng khi chạy trên Prod:</strong> Các ràng buộc
+            <code>products_variant_source_check</code>, khóa ngoại
+            <code>fk_master_products_item</code>, <code>fk_products_item</code>,
+            <code>fk_items_default_variant</code> và bước
+            <code>VALIDATE CONSTRAINT</code> của <code>M3/M4</code> đều phải đặt
+            <code>SET LOCAL lock_timeout = '5s';</code>, cài đặt trước ở trạng
+            thái <code>NOT VALID</code> trong giao dịch ngắn rồi mới
+            <code>VALIDATE CONSTRAINT</code> sau <code>COMMIT</code> có kiểm tra
+            <code>convalidated</code> (giống chuẩn
+            <code>20261209100000</code> và <code>20261210160000</code>).
+          </li>
+        </ul>
+      </section>
+
+      <section id="rollout">
+        <h2>5. Trình tự triển khai từng bước (Beta trước, Production sau)</h2>
+        <div class="callout is-blue">
+          <strong>Lưu ý hạ tầng Beta (tách rõ 3 thành phần):</strong>
+          (1) <code>DOS/DOS.Me</code>: nhánh Supabase persistent
+          <code>beta</code> (<code>oyajkbadsykigtfrpdpg</code>) đồng bộ tự động
+          từ <code>DOS/DOS.Me@dev</code> qua Supabase GitHub Integration
+          (<code>docs/product-owner-config.md:112-113</code>), trong khi
+          workflow cũ <code>.github/workflows/beta-migrations.yml</code> vẫn giữ
+          <code>if: ${{ false }}</code>. (2) <code>DOS/Rate</code> Web:
+          <code>beta.rate.vn</code> (gắn nhánh <code>dev</code>) và biến Preview
+          trỏ Beta DB (<code>oyajkbadsykigtfrpdpg</code>) đã được cấu hình trên
+          Vercel <code>metados/rate</code> ngày 2026-11-26, hiện còn chờ JOY trỏ
+          1 dòng CNAME Cloudflare (<code
+            >beta -&gt; da6e03e13f2ef28f.vercel-dns-016.com</code
+          >) và nghiệm thu Preview cho <code>DOS/Rate#438</code>. (3)
+          <code>DOS/Rate-Services</code>: chưa có pipeline worker Beta chạy tự
+          động sẵn, nên Giai đoạn 2 kiểm thử bằng 1 lượt chạy worker có phạm vi
+          giới hạn trỏ vào Beta <code>oyajkbadsykigtfrpdpg</code> thay vì giả
+          định đã có daemon Beta thường trực.
+        </div>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num">0</div>
+            <div>
+              <h3>Chuẩn bị &amp; Đồng bộ SQL (trong Rate + DOS.Me@dev)</h3>
+              <p>
+                Mirror 5 migration còn thiếu về
+                <code>Rate/supabase/migrations/</code>, nâng cấp SQL
+                <code>M0</code>, <code>M1+M2</code>, <code>Item RPCs</code> và
+                <code>M3/M4</code> theo 5 điểm sửa ở Mục 2 (lấy timestamp
+                <code>&gt; 20261210170000</code> sau khi rà lại
+                <code>DOS/DOS.Me@origin/dev</code>), chạy thử qua bộ test dự
+                thảo trong <code>DOS/Rate</code>
+                (<code>test-item-migration-proposal.mjs</code>,
+                <code>test-m0-seed-rekey-proposal.mjs</code>,
+                <code>test-m3-m4-item-rpcs-proposal.mjs</code>) lẫn bộ replay
+                Docker PG17 <code>test-rate-schema-replay.mjs</code> của
+                <code>DOS/DOS.Me</code>, và truy vấn đọc (read-only) kiểm tra
+                slug trùng khi cắt đuôi hay bản <code>:unknown</code> của Watch
+                Ultra 2.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <div>
+              <h3>
+                Đẩy M0 + M1+M2 + Item RPCs lên DOS/DOS.Me@dev (lên Beta trước)
+              </h3>
+              <p>
+                Giữ <code>RATE_ITEM_MODEL</code> tắt ở mọi nơi. Hợp nhất PR
+                migration vào <code>DOS/DOS.Me@dev</code> để Supabase áp dụng
+                lên Beta (<code>oyajkbadsykigtfrpdpg</code>), chạy các truy vấn
+                kiểm tra V1-V15 và kiểm tra ACL <code>authenticator</code>.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <div>
+              <h3>
+                Bật thử <code>RATE_ITEM_MODEL=item</code> duy nhất trên Beta
+              </h3>
+              <p>
+                Cấu hình <code>RATE_ITEM_MODEL=item</code> chỉ cho môi trường
+                <code>Preview</code> (nhánh <code>dev</code> /
+                <code>beta.rate.vn</code>) trên Vercel, sau đó tạo deployment
+                Preview mới (redeploy vì Vercel chỉ áp biến môi trường cho lần
+                build mới) và xác minh cờ đang bật trên
+                <code>beta.rate.vn</code>; đồng thời chạy kiểm thử thủ công có
+                phạm vi giới hạn trên <code>DOS/Rate-Services</code> trỏ về Beta
+                <code>oyajkbadsykigtfrpdpg</code>. Kiểm tra thực tế trên
+                <code>beta.rate.vn</code>: thẻ ngoài danh mục đã bỏ
+                <code>256GB</code>/<code>64GB</code>, vào trong thấy bộ chọn
+                variant, URL cũ redirect <code>308</code>, địa điểm Wave E4/E5
+                và luồng sửa/xóa review hoạt động trơn tru.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num">3</div>
+            <div>
+              <h3>
+                Duyệt promote lên <code>DOS/DOS.Me@main</code> &amp; bật trên
+                <code>rate.vn</code>
+              </h3>
+              <p>
+                Chỉ sau khi Beta chạy sạch và được JOY duyệt: tạm dừng crawler
+                ghi Prod -&gt; mở <code>selective-promotion</code> PR cho
+                <code>M0</code> -&gt; merge PR sửa 6 key trong
+                <code>flagship-seed-data.ts</code> -&gt; promote
+                <code>M1+M2</code> + <code>Item RPCs</code> lên
+                <code>DOS/DOS.Me@main</code> -&gt; kiểm tra Prod đọc V1-V15 = 0
+                -&gt; đặt <code>RATE_ITEM_MODEL=item</code> cho Vercel
+                Production và redeploy/promote bản build mới rồi xác minh cờ
+                hiệu lực trên <code>rate.vn</code> -&gt; cập nhật
+                <code>Rate-Services</code> và
+                <strong>mở lại crawler Production</strong>, xác nhận ít nhất 1
+                lượt nạp dữ liệu thành công trước khi qua Bước 4.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num">4</div>
+            <div>
+              <h3>
+                Cổng chuyển tiếp <code>nullable_variant</code>, cửa sổ SEO (~30
+                ngày) &amp; M3/M4
+              </h3>
+              <p>
+                Theo dõi <code>rate.vn</code> và Google re-crawl URL Item mới
+                qua redirect 308.
+                <strong>Cổng bắt buộc trước M3+M4:</strong> khi mọi listing đã
+                có <code>item_id</code> và không còn
+                <code>price_alerts</code> gắn vào bản <code>:unknown</code> đa
+                dung lượng, phải chuyển <code>DOS/Rate-Services</code> sang
+                <code>RATE_ITEM_MODEL=nullable_variant</code> và nghiệm thu
+                luồng xử lý <code>cluster_id IS NULL</code> trên RPC/Web trước
+                rồi mới đẩy <code>M3+M4</code> (đã cập nhật đủ 17 ngành không
+                dung lượng), vì nếu vẫn giữ
+                <code>RATE_ITEM_MODEL=item</code> khi <code>:unknown</code> bị
+                archive ở Item nhiều dung lượng thì
+                <code>apps/importer/src/shopee/entity-matcher.ts:393-400</code>
+                sẽ ném lỗi
+                <code
+                  >RATE_ITEM_MODEL=item cannot place a listing with no stated
+                  size</code
+                >.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="rollback">
+        <h2>
+          6. Phương án Rollback nhanh 4 cấp độ (không chạy DDL tay trên Prod)
+        </h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 140px">Cấp độ</th>
+                <th style="width: 210px">Tình huống sự cố</th>
+                <th>Thao tác hoàn tác an toàn</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="badge badge-green">Cấp 1 (1 phút)</span></td>
+                <td>Lỗi hiển thị UI, redirect 308 hoặc API lọc trên Web</td>
+                <td>
+                  Đổi <code>RATE_ITEM_MODEL=off</code> trên Vercel (<code
+                    >Preview</code
+                  >
+                  / <code>beta.rate.vn</code> hoặc <code>Production</code> /
+                  <code>rate.vn</code>) và <code>Rate-Services</code>,
+                  <strong>bắt buộc redeploy bản build mới trên Vercel</strong>
+                  (hoặc rollback về deployment sạch trước đó) và xác minh domain
+                  phục vụ đã nhận cờ tắt. Lưu ý: chỉ được bỏ qua bước DB khi
+                  chưa có listing nào <code>cluster_id IS NULL</code> (trước
+                  <code>M3</code> / <code>nullable_variant</code>); nếu đã tồn
+                  tại dòng gắn <code>item_id</code> nhưng
+                  <code>cluster_id IS NULL</code>, tắt cờ Web không thể chạy
+                  riêng lẻ (do RPC review trả <code>P0002</code> và truy vấn cũ
+                  lọc theo <code>cluster_id</code> bị hụt dòng) mà phải đi kèm
+                  khôi phục <code>cluster_id</code> như Cấp 2.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-amber">Cấp 2 (M3/M4)</span></td>
+                <td>
+                  Lỗi do chặn constraint <code>M4</code> hoặc gộp
+                  <code>unknown</code>
+                </td>
+                <td>
+                  Tạm dừng worker ghi -&gt; tạo migration tiến mới gỡ trigger
+                  <code>M4</code> và khôi phục bản ghi từ
+                  <code>rate.m3_unknown_variant_backup</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-rose">Cấp 3 (M1+M2)</span></td>
+                <td>Lỗi trigger/RPC trên <code>rate.items</code></td>
+                <td>
+                  Tắt cờ <code>RATE_ITEM_MODEL=off</code> trước -&gt; tạo
+                  migration hoàn tác mới gỡ các hàm Item
+                  <strong
+                    >và khôi phục nguyên bản <code>20261210160000</code></strong
+                  >
+                  của <code>refresh_master_product_rating</code> /
+                  <code>refresh_review_vote_counts</code> (tuyệt đối không dùng
+                  bản rollback tháng 10 cũ và không
+                  <code>TRUNCATE rate.items</code>).
+                </td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-neutral">Cấp 4 (M0)</span></td>
+                <td>Hoàn tác 6 key seed</td>
+                <td>
+                  Chỉ chạy khi <code>M1+M2</code> chưa áp dụng: đẩy migration
+                  <code>m0-rollback</code> và revert PR trên
+                  <code>flagship-seed-data.ts</code>.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="footer-note">
+        Báo cáo kiểm toán tự chứa, tạo ngày 2026-11-26 bởi Rate Core PO
+        (Antigravity) từ kiểm tra trực tiếp mã nguồn <code>DOS/Rate</code> và
+        <code>DOS/DOS.Me@dev</code> (tới commit <code>453e2baf3</code> /
+        migration <code>20261210170000</code>; migration gần nhất của schema
+        <code>rate</code> tại commit
+        <code>22089f24a7d0c4fb9e7f794e8e36cd4bd93ffbcb</code> /
+        <code>20261210160000</code>).
+      </footer>
+    </main>
+  </body>
+</html>

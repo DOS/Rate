@@ -8,21 +8,34 @@
   @media (min-width: 768px) {
     padding: 1.5rem;
   }
-}
 
-.rate-pdv-board-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  &.is-compact {
+    padding: 1rem 1.125rem;
+
+    @media (min-width: 768px) {
+      padding: 1.25rem 1.375rem;
+    }
+
+    > .rate-pdv-tags {
+      margin-bottom: 0.75rem;
+    }
+  }
 }
 
 .rate-pdv-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+// The review and price tags open the board; with none to show (no review,
+// no radar signal) the row takes no space.
+.rate-pdv-board > .rate-pdv-tags {
+  margin-bottom: 1rem;
+
+  &:empty {
+    display: none;
+  }
 }
 
 .rate-pdv-tag {
@@ -80,9 +93,37 @@
     background-color: rgba(99, 102, 241, 0.1);
     border-color: rgba(99, 102, 241, 0.28);
   }
+
+  &.is-compact {
+    padding: 0.875rem 1rem;
+  }
+}
+
+.rate-pdv-compact-scores .rate-pdv-score.is-compact {
+  @media (min-width: 576px) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem 1rem;
+
+    .rate-pdv-score-label {
+      flex: 1 0 100%;
+      margin-bottom: 0.1rem;
+    }
+
+    .rate-pdv-confidence {
+      margin-top: 0;
+    }
+  }
 }
 
 .rate-pdv-score-label {
+  // Anchors the InfoTip bubble so it spans the score card (DOS/Rate#1946).
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
   margin-bottom: 0.375rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -129,8 +170,8 @@
 
 // One line instead of five empty criterion bars (DOS/Rate#719).
 .rate-pdv-crit-empty {
-  font-size: 0.9375rem;
-  line-height: 1.5;
+  font-size: 0.875rem;
+  line-height: 1.45;
   color: var(--rate-fg-secondary);
 }
 
@@ -194,18 +235,41 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 1.25rem;
+  margin-top: 1rem;
 
-  > .btn {
+  > .btn,
+  .btn-sm,
+  .rate-chip-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.5rem 0.95rem;
-    font-size: 0.9375rem;
+    height: auto;
+    min-height: 2.375rem;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.875rem;
+    line-height: 1.25;
+    border-radius: 999px;
   }
 
   > .btn-outline-light {
     border-color: var(--rate-border-strong);
+  }
+}
+
+:root:not([data-bs-theme='dark'])
+  .rate-scoreboard-dark
+  .rate-pdv-actions
+  .btn-outline-primary {
+  color: var(--rate-ink-primary);
+  border-color: var(--rate-ink-primary);
+  background-color: var(--rate-bg-surface);
+
+  &:hover,
+  &:focus-visible,
+  &:active {
+    color: #ffffff;
+    background-color: var(--rate-ink-primary);
+    border-color: var(--rate-ink-primary);
   }
 }
 
@@ -234,22 +298,159 @@
   color: var(--rate-crimson-text);
 }
 
-// Product hero media: shorter on phones so the name, price and score fit in
-// the first screen (DOS/Rate#605).
+// Product hero media: clean theme-aware studio card with proportional frame,
+// shorter on phones so name, price, variants and jump row fit above fold.
+.rate-pdv-media-card {
+  background-color: var(--rate-bg-surface);
+  border: 1px solid var(--rate-border-subtle);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+:root[data-bs-theme='dark'] .rate-pdv-media-card {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
 .rate-pdv-media {
-  min-height: 380px;
+  min-height: 300px;
+  padding: 1.25rem;
+  border-radius: 0.875rem;
+  background-color: var(--rate-bg-elevated);
+  border: 1px dashed var(--rate-border-strong);
+
+  &.is-studio {
+    border: 1px solid var(--rate-border-subtle);
+    background: radial-gradient(circle at 50% 45%, #ffffff 0%, #f8fafc 100%);
+  }
 
   img {
+    width: auto;
+    max-width: 100%;
     max-height: 350px;
     object-fit: contain;
+    mix-blend-mode: multiply;
   }
 
   @media (max-width: 767.98px) {
-    min-height: 200px;
+    min-height: 190px;
+    padding: 0.875rem;
 
     img {
       max-height: 190px;
     }
+  }
+}
+
+:root[data-bs-theme='dark'] .rate-pdv-media.is-studio {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: radial-gradient(circle at 50% 45%, #ffffff 0%, #eef2f6 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.rate-pdv-noimage {
+  font-size: 0.875rem;
+  color: var(--rate-fg-secondary);
+}
+
+.rate-pdv-variant-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+
+  .rate-pdv-variants {
+    margin-bottom: 0 !important;
+    gap: 0.4rem !important;
+  }
+
+  .rate-pdv-variants .btn {
+    padding: 0.25rem 0.7rem !important;
+    font-size: 0.8125rem;
+    line-height: 1.2;
+  }
+
+  .rate-pdv-variants .btn-outline-secondary {
+    background-color: var(--rate-bg-surface);
+    border-color: var(--rate-border-strong);
+    color: var(--rate-fg-primary);
+
+    &:hover,
+    &:focus-visible {
+      background-color: var(--rate-bg-elevated) !important;
+      border-color: var(--rate-fg-primary) !important;
+      color: var(--rate-fg-primary) !important;
+    }
+  }
+}
+
+.rate-pdv-variant-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.rate-pdv-variant-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  border-radius: 999px;
+  border: 1px solid var(--rate-border-strong);
+  background-color: var(--rate-bg-surface);
+  color: var(--rate-fg-primary);
+
+  &.is-current {
+    background-color: var(--rate-fg-primary);
+    border-color: var(--rate-fg-primary);
+    color: var(--rate-bg-canvas);
+  }
+}
+
+.rate-pdv-colors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.rate-pdv-colors-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--rate-fg-secondary);
+  margin-right: 0.1rem;
+}
+
+.rate-pdv-color-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.25;
+  border-radius: 999px;
+  border: 1px solid var(--rate-border-strong);
+  background-color: var(--rate-bg-surface);
+  color: var(--rate-fg-primary);
+  text-decoration: none;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+
+  &:hover {
+    border-color: var(--rate-fg-primary);
+    background-color: var(--rate-bg-elevated);
+    color: var(--rate-fg-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--rate-focus-ring);
+    outline-offset: 2px;
   }
 }
 
@@ -740,4 +941,100 @@
 
 .btn.rate-star-chip-btn {
   transition: none;
+}
+
+// InfoTip (components/elementary/InfoTip.tsx, DOS/Rate#1946): an (i) button
+// whose bubble shows on hover, on keyboard focus and while pinned by a tap.
+.rate-infotip {
+  display: inline-flex;
+}
+
+.rate-infotip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  // 24x24 target (WCAG 2.5.8) without growing the label line.
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: -0.25rem 0;
+  padding: 0;
+  font-size: 0.9375rem;
+  line-height: 1;
+  color: var(--rate-fg-secondary);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: help;
+
+  &:hover,
+  .rate-infotip.is-open & {
+    color: var(--rate-fg-primary);
+  }
+
+  &:focus-visible {
+    color: var(--rate-fg-primary);
+    outline: 2px solid var(--rate-focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+.rate-infotip-bubble {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  left: 0;
+  z-index: 20;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--rate-fg-primary);
+  text-transform: none;
+  letter-spacing: normal;
+  background-color: var(--rate-bg-surface);
+  border: 1px solid var(--rate-border-strong);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px -10px rgba(15, 23, 42, 0.35);
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    visibility 0.12s ease;
+}
+
+// Bridges the gap to the button so the pointer can move onto the bubble.
+.rate-infotip-bubble::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 0.5rem;
+  content: '';
+}
+
+.rate-infotip-btn:focus-visible + .rate-infotip-bubble,
+.rate-infotip.is-open .rate-infotip-bubble {
+  visibility: visible;
+  opacity: 1;
+}
+
+// Only real hover: a tap leaves :hover stuck on touch screens, which would
+// keep the bubble up after a second tap unpins it.
+@media (hover: hover) {
+  .rate-infotip:hover .rate-infotip-bubble {
+    visibility: visible;
+    opacity: 1;
+  }
+}
+
+// Escape hides it until the pointer or focus leaves (WCAG 1.4.13).
+.rate-infotip.is-dismissed .rate-infotip-bubble {
+  visibility: hidden;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rate-infotip-bubble {
+    transition: none;
+  }
 }

@@ -168,7 +168,10 @@ control character. Its host is lowercase, with no user and no port.
    (10 minutes ahead, 24 hours behind), not to `now()`.
 4. **A change to the payload needs a migration.** The SQL repeats the rules of the shared
    validator, which is plain functions. A drift fails closed, and the replay compares both
-   over 233 payloads.
+   over 238 payloads.
+   - `external_item_id` allows 1 to 128 characters of `[A-Za-z0-9_.-]` (widened from 64 in
+     `20261209100000_rate_extension_observations_item_id_128.sql`, `DOS/Rate#1890`), while
+     `external_shop_id` and `sku_id` remain capped at 64.
    - `observed_at` takes seconds 00 to 59 (no leap second) and an offset up to 15:59, which is
      what Postgres parses.
 5. **Where the RPC and the validator differ on purpose:**

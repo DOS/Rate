@@ -5,7 +5,8 @@
  * a quarantine table and never to public prices directly.
  *
  * The rules here are repeated by rate.submit_extension_observation in the
- * DOS-Me migration (Docs/Proposals/2026-11-04-dos-me-extension-observations.sql);
+ * DOS-Me migration (Docs/Proposals/2026-11-04-dos-me-extension-observations.sql,
+ * updated by 20261201130000 and 20261209100000);
  * a change to one needs the other. Plain functions only, no zod, so the
  * extension and client code can import it.
  */
@@ -86,6 +87,7 @@ const EXTENSION_MARKETPLACE_HOSTS: Readonly<
 
 export const EXTENSION_OBSERVATION_LIMITS = {
   urlMax: 2048,
+  itemIdMax: 128,
   idMax: 64,
   variantMax: 120,
   priceMin: 1_000,
@@ -154,11 +156,14 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 const has = <T extends string>(list: readonly T[], v: unknown): v is T =>
   typeof v === 'string' && (list as readonly string[]).includes(v);
 
-function idOk(v: unknown): v is string {
+function idOk(
+  v: unknown,
+  maxLen: number = EXTENSION_OBSERVATION_LIMITS.idMax
+): v is string {
   return (
     typeof v === 'string' &&
     v.length >= 1 &&
-    v.length <= EXTENSION_OBSERVATION_LIMITS.idMax &&
+    v.length <= maxLen &&
     ID_RE.test(v)
   );
 }
@@ -255,7 +260,9 @@ export function parseExtensionObservationV1(
   const marketplace = raw.marketplace;
   if (!has(EXTENSION_MARKETPLACES, marketplace)) return fail('marketplace');
   if (!listingUrlOk(raw.listing_url, marketplace)) return fail('listing_url');
-  if (!idOk(raw.external_item_id)) return fail('external_item_id');
+  if (!idOk(raw.external_item_id, EXTENSION_OBSERVATION_LIMITS.itemIdMax)) {
+    return fail('external_item_id');
+  }
   if (!nullableId(raw.external_shop_id)) return fail('external_shop_id');
   if (!nullableId(raw.sku_id)) return fail('sku_id');
   const variant = raw.variant_label;

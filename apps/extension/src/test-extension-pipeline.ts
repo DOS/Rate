@@ -5642,6 +5642,88 @@ async function runTests() {
     );
     assert.ok(longObs && longObs.variant_label!.length <= 120);
 
+    // 65..128-char external_item_id passes while external_shop_id and sku_id stay at 64 (#1890).
+    const retail120Slug = `iphone-16-pro-max-${'a'.repeat(102)}`;
+    assert.equal(retail120Slug.length, 120);
+    const retail120Obs = guards.buildExtensionObservationV1(
+      {
+        ...signal,
+        platform: 'topzone',
+        canonicalUrl: `https://www.topzone.vn/iphone/${retail120Slug}`,
+        externalItemId: retail120Slug,
+        externalShopId: null,
+      },
+      at,
+      '2.1.0'
+    );
+    assert.equal(retail120Obs?.external_item_id, retail120Slug);
+
+    const anphat128Id = `ap-${'a'.repeat(114)}-0123456789`;
+    assert.equal(anphat128Id.length, 128);
+    const anphat128Obs = guards.buildExtensionObservationV1(
+      {
+        ...signal,
+        platform: 'anphatpc',
+        canonicalUrl:
+          'https://www.anphatpc.com.vn/laptop-apple-macbook-air-m5.html',
+        externalItemId: anphat128Id,
+        externalShopId: null,
+      },
+      at,
+      '2.1.0'
+    );
+    assert.equal(anphat128Obs?.external_item_id, anphat128Id);
+
+    assert.equal(
+      guards.buildExtensionObservationV1(
+        {
+          ...signal,
+          platform: 'anphatpc',
+          canonicalUrl:
+            'https://www.anphatpc.com.vn/laptop-apple-macbook-air-m5.html',
+          externalItemId: 'a'.repeat(129),
+          externalShopId: null,
+        },
+        at,
+        '2.1.0'
+      ),
+      null
+    );
+    assert.equal(
+      guards.buildExtensionObservationV1(
+        { ...signal, externalShopId: 's'.repeat(65) },
+        at,
+        '2.1.0'
+      ),
+      null
+    );
+    const oversizedSkuSignal = guards.sanitizeExtensionProductSignal({
+      ...signal,
+      skuId: 'k'.repeat(65),
+    });
+    assert.equal(oversizedSkuSignal.skuId, null);
+    const { parseExtensionObservationV1 } =
+      await import('@repo/shared-data/rules');
+    const oversizedSkuParse = parseExtensionObservationV1(
+      {
+        schema_version: 1,
+        marketplace: 'shopee',
+        listing_url: 'https://shopee.vn/iphone-16-i.123.456',
+        external_item_id: 'a'.repeat(65),
+        external_shop_id: '123',
+        sku_id: 'k'.repeat(65),
+        variant_label: 'Đen',
+        price_vnd: 19_990_000,
+        list_price_vnd: 22_990_000,
+        stock_state: 'in_stock',
+        stock_qty: 5,
+        observed_at: at.toISOString(),
+        extractor: { source: 'json_ld', extension_version: '2.1.0' },
+      },
+      at.getTime()
+    );
+    assert.deepEqual(oversizedSkuParse, { ok: false, field: 'sku_id' });
+
     // More availability forms; quantities only agree with the state.
     assert.equal(det.stockStateFromAvailability('schema:InStock'), 'in_stock');
     assert.equal(
@@ -12566,6 +12648,75 @@ async function runTests() {
         wave1To3Cases1850.length,
         'rejected spoofed sender must not emit M2 observation'
       );
+
+      // Long retail (120 chars) and anphatpc (128 chars) slugs emit M2 observations (#1890).
+      const longTopzoneSlug = `iphone-16-pro-max-${'a'.repeat(102)}`;
+      const longTopzoneUrl = `https://www.topzone.vn/iphone/${longTopzoneSlug}`;
+      const longAnPhatPath1890 =
+        'laptop-apple-macbook-air-mdhf4sa/a-mba-13.6-m5/10c/10gpu/16g/1t/35w/midnight-vietnam-edition-special-config-2026-ultra-extended-sku';
+      const longAnPhatUrl1890 = `https://www.anphatpc.com.vn/${longAnPhatPath1890}.html`;
+      const longAnPhatId1890 = extractIdsFromUrl(
+        'anphatpc',
+        longAnPhatUrl1890
+      ).externalItemId;
+      assert.ok(longAnPhatId1890 && longAnPhatId1890.length === 128);
+
+      const longObservationCases = [
+        ['topzone', longTopzoneUrl, longTopzoneSlug],
+        ['anphatpc', longAnPhatUrl1890, longAnPhatId1890],
+      ] as const;
+      for (const [platform, pageUrl, itemId] of longObservationCases) {
+        const res = await callSw1850(
+          {
+            type: 'RATE_PRODUCT_DETECTED',
+            signal: {
+              platform,
+              canonicalUrl: pageUrl,
+              externalItemId: itemId,
+              externalShopId: null,
+              title: 'Apple MacBook Air M5 16GB 1TB',
+              selectedVariant: '1TB',
+              price: 28_990_000,
+              originalPrice: 32_990_000,
+              ratingStar: 4.9,
+              ratingCount: 25,
+            },
+          },
+          {
+            id: 'rate-ext-1850',
+            tab: { id: 88, windowId: 1, active: true },
+            url: pageUrl,
+          }
+        );
+        assert.equal(
+          res.ok,
+          true,
+          `long slug lookup must succeed for ${platform}`
+        );
+      }
+      const expectedTotalObs =
+        wave1To3Cases1850.length + longObservationCases.length;
+      const longObsDeadline = Date.now() + 2_000;
+      while (
+        swObservationPayloads1850.length < expectedTotalObs &&
+        Date.now() < longObsDeadline
+      ) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      assert.equal(
+        swObservationPayloads1850.length,
+        expectedTotalObs,
+        '120-char retail and 128-char anphatpc slugs must emit M2 observations'
+      );
+      for (const [platform, pageUrl, itemId] of longObservationCases) {
+        const emitted = swObservationPayloads1850.find(
+          (entry) =>
+            entry.observation.marketplace === platform &&
+            entry.observation.external_item_id === itemId
+        );
+        assert.ok(emitted, `long-slug M2 observation missing for ${platform}`);
+        assert.equal(emitted.observation.listing_url, pageUrl);
+      }
     } finally {
       if (savedChrome1850)
         Object.defineProperty(g1850, 'chrome', savedChrome1850);
