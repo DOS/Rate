@@ -34,7 +34,8 @@ const PAGES: Record<string, { path: string; budget: Budget; photo?: string }> =
     },
     product: {
       path: '/smartphones/iphone-16-pro-max-256gb',
-      budget: { html: 56 * KB, js: 388 * KB, css: 48 * KB, prefetch: 8 * KB },
+      // Bumped from 56 * KB after adding #1924/#1925/#1926 review UI i18n strings (CI measured 56.1 KB / 57473 bytes).
+      budget: { html: 58 * KB, js: 388 * KB, css: 48 * KB, prefetch: 8 * KB },
     },
     merchant: {
       path: '/merchants/11111111-1111-4111-8111-111111111111',

@@ -1984,13 +1984,20 @@ function buildBaseRateOpenApiSpec(
             {
               name: 'limit',
               in: 'query',
-              description: 'Maximum number of reviews to return (1-200)',
+              description: 'Maximum number of reviews per page (1-200)',
               schema: { type: 'number', default: 50 },
+            },
+            {
+              name: 'cursor',
+              in: 'query',
+              description:
+                'Opaque keyset pagination cursor returned as `nextCursor` by the previous page (ordered by `created_at` desc, `id` desc).',
+              schema: { type: 'string', maxLength: 512 },
             },
           ],
           responses: {
             '200': {
-              description: 'List of audited reviews.',
+              description: 'Paginated list of audited reviews.',
               content: jsonBody({
                 type: 'object',
                 properties: {
@@ -1999,12 +2006,22 @@ function buildBaseRateOpenApiSpec(
                   count: {
                     type: 'integer',
                     description:
-                      'Reviews in `data` (after `hideFake` and `limit`).',
+                      'Reviews in `data` for this page (after `hideFake`, `cursor`, and `limit`).',
                   },
                   totalCount: {
                     type: 'integer',
                     description:
-                      'Reviews read for the product before `hideFake` and `limit`: the newest, at most 50.',
+                      'Total stored reviews for the product before `hideFake`, `cursor`, and `limit`.',
+                  },
+                  nextCursor: {
+                    type: ['string', 'null'],
+                    description:
+                      'Opaque keyset cursor to pass as `?cursor=` for the next page, or null when no older reviews remain.',
+                  },
+                  hasMore: {
+                    type: 'boolean',
+                    description:
+                      'True when additional matching reviews exist after this page.',
                   },
                   summary: {
                     anyOf: [
@@ -2020,10 +2037,13 @@ function buildBaseRateOpenApiSpec(
               }),
             },
             '400': errorResponse(
-              'Neither `slug` nor a valid `masterProductId` was given.'
+              'Neither `slug` nor a valid `masterProductId` was given, or `limit` / `cursor` is invalid.'
             ),
             '404': errorResponse(
               'Product not found, or not published (`code: "NOT_FOUND"`).'
+            ),
+            '429': rateLimitedResponse(
+              'More than 60 requests per minute from this client IP (counted on each server instance).'
             ),
           },
         },
@@ -2848,6 +2868,12 @@ function buildBaseRateOpenApiSpec(
               ],
             },
             reason: { type: ['string', 'null'] },
+            images: {
+              type: 'array',
+              maxItems: 6,
+              items: { type: 'string', format: 'uri' },
+              description: 'Sanitized HTTPS review photo URLs (at most 6).',
+            },
             value_tier: {
               type: ['string', 'null'],
               enum: ['basic', 'complete', 'excellent', null],

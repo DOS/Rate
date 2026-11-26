@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import PhoneCollapsible from '@/components/product/PhoneCollapsible';
@@ -18,6 +18,7 @@ import {
   BsPatchCheck,
   BsRobot,
   BsStarFill,
+  BsX,
 } from 'react-icons/bs';
 import { contentLang } from '@/lib/content-lang';
 import { computeJReviewsUserScores } from '@/lib/jreviews-user-score';
@@ -28,8 +29,10 @@ import {
   computeWilsonLowerBound,
   detectStarDistributionAnomaly,
   evaluateReviewTrustAssessment,
+  sanitizeReviewImages,
   type ReviewAnalysisSummary,
   type ReviewItem,
+  type ReviewReportReason,
 } from '@/lib/rate-domain';
 import type { CanonicalCategorySlug } from '@/lib/rate-domain-core';
 import {
@@ -44,14 +47,18 @@ import {
   jsonWriteHeaders,
 } from '@/lib/auth/access-token';
 import {
+  REVIEW_REPORT_OPTION_COPY,
   blendNoteKey,
+  buildReviewVoteRequestBody,
   isFilteredOutReview,
+  mergeLoadedReviews,
   reviewBadgeKind,
   sponsorshipBadgeKey,
   submitErrorKey,
   weightExplanationCopy,
   type ReviewBadgeKind,
 } from '@/lib/review-display';
+import { inertOutside, tabbableIn, wrapFocusTarget } from '@/lib/focus-trap';
 import AnalyzerText, { analyzerText } from './AnalyzerText';
 import ProductPointsBlock from './ProductPointsBlock';
 import ReviewFormV2 from './ReviewFormV2';
@@ -112,11 +119,15 @@ export interface JReviewsSectionProps {
   authenticReviewCount: number;
   ignoredReviewCount: number;
   reviews: ReviewItem[];
+  initialNextCursor?: string | null;
+  totalReviewCount?: number;
   summary: ReviewAnalysisSummary;
   productPoints?: readonly StoredProductPointRow[];
   productPointsReviewCount?: number;
   radarSignal?: RadarSignal | null;
   defaultWriteFormOpen?: boolean;
+  /** SSR/unit-test fixture override to render the report dialog open. */
+  defaultReportReviewId?: string | null;
 }
 
 const LEGACY_WRITE_CRITERIA_KEYS = [
@@ -308,6 +319,254 @@ export function buildJReviewsMarkdown({
   ].join('\n');
 }
 
+function ReviewPhotoStrip({
+  images,
+  authorLabel,
+}: {
+  images: readonly string[] | undefined;
+  authorLabel: string;
+}) {
+  const t = useTranslations('reviews');
+  const safeImages = useMemo(() => sanitizeReviewImages(images), [images]);
+  const [brokenUrls, setBrokenUrls] = useState<Record<string, boolean>>({});
+  const imgRefs = useRef<Record<string, HTMLImageElement | null>>({});
+
+  useEffect(() => {
+    // Images that failed before hydration do not re-fire React's onError.
+    const newlyBroken: string[] = [];
+    for (const url of safeImages) {
+      const el = imgRefs.current[url];
+      if (el && el.complete && el.naturalWidth === 0 && !brokenUrls[url]) {
+        newlyBroken.push(url);
+      }
+    }
+    if (newlyBroken.length > 0) {
+      setBrokenUrls((prev) => {
+        const next = { ...prev };
+        for (const u of newlyBroken) next[u] = true;
+        return next;
+      });
+    }
+  }, [safeImages, brokenUrls]);
+
+  const visibleImages = safeImages.filter((url) => !brokenUrls[url]);
+  if (visibleImages.length === 0) return null;
+
+  const markBroken = (url: string) => {
+    setBrokenUrls((prev) => (prev[url] ? prev : { ...prev, [url]: true }));
+  };
+
+  return (
+    <div
+      className="rate-review-photos d-flex flex-wrap gap-2 mb-2"
+      role="group"
+      aria-label={t('reviewPhotosAria')}
+      data-testid="review-photo-strip"
+    >
+      {visibleImages.map((url, idx) => (
+        <a
+          key={url}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rate-review-photo-thumb"
+        >
+          <img
+            ref={(node) => {
+              imgRefs.current[url] = node;
+            }}
+            src={url}
+            alt={t('reviewPhotoAlt', {
+              index: idx + 1,
+              author: authorLabel,
+            })}
+            width={64}
+            height={64}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={() => markBroken(url)}
+          />
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function ReportReasonDialog({
+  dialogId,
+  reviewId,
+  onClose,
+  onSubmit,
+}: {
+  dialogId: string;
+  reviewId: string;
+  onClose: (restoreFocus: boolean) => void;
+  onSubmit: (reviewId: string, reason: ReviewReportReason) => void;
+}) {
+  const t = useTranslations('reviews');
+  const titleId = `${dialogId}-title`;
+  const descId = `${dialogId}-desc`;
+  const radioName = `${dialogId}-reason`;
+  const [selectedReason, setSelectedReason] =
+    useState<ReviewReportReason>('spam');
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const firstRadioRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const restore = inertOutside([dialog]);
+    firstRadioRef.current?.focus({ preventScroll: true });
+
+    let pressedOutside = false;
+    const isBackdropPress = (e: Event) => e.target === backdropRef.current;
+
+    const onPointerDown = (e: PointerEvent) => {
+      pressedOutside = isBackdropPress(e);
+    };
+
+    const onClick = (e: MouseEvent) => {
+      if (e.button === 0 && pressedOutside && isBackdropPress(e)) {
+        onClose(true);
+      }
+      pressedOutside = false;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose(true);
+        return;
+      }
+      if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
+      const items = tabbableIn(dialog);
+      const active =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      const target = wrapFocusTarget(items, active, e.shiftKey);
+      if (!target) return;
+      e.preventDefault();
+      target.focus();
+    };
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKeyDown);
+      restore();
+    };
+  }, [onClose]);
+
+  return (
+    <div ref={backdropRef} className="rate-report-dialog-backdrop">
+      <div
+        ref={dialogRef}
+        id={dialogId}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descId}
+        className="rate-report-dialog"
+        data-testid="review-report-dialog"
+      >
+        <div className="d-flex justify-content-between align-items-center mb-2 gap-2">
+          <h3 id={titleId} className="h6 fw-bold mb-0">
+            {t('reportDialogTitle')}
+          </h3>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-dark rounded-circle rate-report-dialog-close"
+            aria-label={t('closeAlertAria')}
+            onClick={() => onClose(true)}
+          >
+            <BsX aria-hidden="true" size={20} />
+          </button>
+        </div>
+        <p id={descId} className="rate-report-dialog-desc small mb-3">
+          {t('reportDialogDesc')}
+        </p>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit(reviewId, selectedReason);
+          }}
+        >
+          <fieldset className="m-0 border-0 p-0">
+            <legend className="visually-hidden">
+              {t('reportReasonsLegend')}
+            </legend>
+            <div className="d-flex flex-column gap-2 mb-3">
+              {REVIEW_REPORT_OPTION_COPY.map((opt, idx) => {
+                const inputId = `${dialogId}-opt-${opt.reason}`;
+                const optDescId = `${inputId}-desc`;
+                const isSelected = selectedReason === opt.reason;
+                return (
+                  <div
+                    key={opt.reason}
+                    className={`rate-report-option${isSelected ? ' is-selected' : ''}`}
+                  >
+                    <input
+                      ref={idx === 0 ? firstRadioRef : undefined}
+                      id={inputId}
+                      type="radio"
+                      name={radioName}
+                      value={opt.reason}
+                      checked={isSelected}
+                      onChange={() => setSelectedReason(opt.reason)}
+                      aria-describedby={optDescId}
+                      className="form-check-input mt-1 flex-shrink-0"
+                    />
+                    <div className="flex-grow-1">
+                      <label
+                        htmlFor={inputId}
+                        className="d-block small fw-semibold stretched-link"
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {t(opt.labelKey)}
+                      </label>
+                      <span
+                        id={optDescId}
+                        className="rate-report-option-desc d-block"
+                        style={{ fontSize: '0.8125rem' }}
+                      >
+                        {t(opt.descKey)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <div className="d-flex justify-content-end gap-2">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-dark rounded-pill px-3"
+              onClick={() => onClose(true)}
+            >
+              {t('reportCancelBtn')}
+            </button>
+            <button
+              type="submit"
+              className="btn btn-sm btn-danger rounded-pill px-3 text-white"
+              data-testid="review-report-submit-btn"
+            >
+              {t('reportSubmitBtn')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function JReviewsSection({
   masterProductId,
   productSlug,
@@ -320,6 +579,8 @@ export default function JReviewsSection({
   authenticReviewCount,
   ignoredReviewCount,
   reviews: initialReviews,
+  initialNextCursor = null,
+  totalReviewCount,
   summary,
   productPoints,
   productPointsReviewCount,
@@ -327,6 +588,7 @@ export default function JReviewsSection({
   categorySlug,
   reviewCategorySlug,
   defaultWriteFormOpen = false,
+  defaultReportReviewId = null,
 }: JReviewsSectionProps) {
   const t = useTranslations('reviews');
   const tAnalyzer = useTranslations('analyzerCopy');
@@ -406,8 +668,25 @@ export default function JReviewsSection({
   );
 
   const [reviews, setReviews] = useState<ReviewItem[]>(initialReviews);
+  const [nextCursor, setNextCursor] = useState<string | null>(
+    initialNextCursor ?? null
+  );
+  const [knownTotalCount, setKnownTotalCount] = useState<number | null>(
+    typeof totalReviewCount === 'number' &&
+      Number.isFinite(totalReviewCount) &&
+      totalReviewCount >= 0
+      ? totalReviewCount
+      : null
+  );
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [userVotes, setUserVotes] = useState<Record<string, VoteChoice>>({});
   const [pendingIds, setPendingIds] = useState<Record<string, boolean>>({});
+  const [reportingReviewId, setReportingReviewId] = useState<string | null>(
+    defaultReportReviewId ?? null
+  );
+  const reportButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const pendingReportFocusIdRef = useRef<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [sortMode, setSortMode] = useState<SortMode>('weight_desc');
@@ -444,6 +723,28 @@ export default function JReviewsSection({
   );
   const fieldId = useId();
   const writeFormId = `${fieldId}-write-form`;
+  const reportDialogId = `${fieldId}-report-dialog`;
+
+  useEffect(() => {
+    const targetId = pendingReportFocusIdRef.current;
+    if (reportingReviewId === null && targetId && !pendingIds[targetId]) {
+      const targetBtn = reportButtonRefs.current[targetId];
+      pendingReportFocusIdRef.current = null;
+      targetBtn?.focus({ preventScroll: true });
+    }
+  }, [reportingReviewId, pendingIds]);
+
+  const closeReportDialog = React.useCallback(
+    (restoreFocus: boolean) => {
+      if (restoreFocus && reportingReviewId) {
+        pendingReportFocusIdRef.current = reportingReviewId;
+      } else {
+        pendingReportFocusIdRef.current = null;
+      }
+      setReportingReviewId(null);
+    },
+    [reportingReviewId]
+  );
   const totalAnalyzedCount = Number(summary.total_analyzed);
   const hasAnalyzedReviews =
     Number.isFinite(totalAnalyzedCount) && totalAnalyzedCount > 0;
@@ -726,7 +1027,11 @@ export default function JReviewsSection({
     };
   }, [reviewIdsKey]);
 
-  async function handleVote(reviewId: string, clickedVote: VoteChoice) {
+  async function handleVote(
+    reviewId: string,
+    clickedVote: VoteChoice,
+    reportReason?: ReviewReportReason
+  ) {
     if (pendingIds[reviewId]) return;
 
     const prevVote: VoteChoice | null = userVotes[reviewId] || null;
@@ -816,10 +1121,12 @@ export default function JReviewsSection({
       const res = await fetch(`/api/reviews/${reviewId}/vote`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          voteType: nextAction,
-          reportReason: nextAction === 'report' ? 'spam' : undefined,
-        }),
+        body: JSON.stringify(
+          buildReviewVoteRequestBody(
+            nextAction,
+            nextAction === 'report' ? reportReason : undefined
+          )
+        ),
       });
       if (res.ok) {
         const payload = await res.json();
@@ -859,6 +1166,60 @@ export default function JReviewsSection({
       rollBack(t('voteFailedNotice'));
     } finally {
       setPendingIds((prev) => ({ ...prev, [reviewId]: false }));
+    }
+  }
+
+  async function handleLoadMoreReviews() {
+    if (!nextCursor || loadingMore || (!masterProductId && !productSlug)) {
+      return;
+    }
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const params = new URLSearchParams();
+      if (masterProductId) {
+        params.set('masterProductId', masterProductId);
+      } else if (productSlug) {
+        params.set('slug', productSlug);
+      }
+      params.set('limit', '50');
+      params.set('cursor', nextCursor);
+      const res = await fetch(`/api/v1/rate/reviews?${params.toString()}`);
+      if (res.status === 429) {
+        setLoadMoreError(t('loadMoreReviewsRateLimit'));
+        return;
+      }
+      if (!res.ok) {
+        setLoadMoreError(t('loadMoreReviewsError'));
+        return;
+      }
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        data?: ReviewItem[];
+        nextCursor?: string | null;
+        totalCount?: number;
+      };
+      if (!payload?.ok || !Array.isArray(payload.data)) {
+        setLoadMoreError(t('loadMoreReviewsError'));
+        return;
+      }
+      setReviews((prev) => mergeLoadedReviews(prev, payload.data ?? []));
+      setNextCursor(
+        typeof payload.nextCursor === 'string' && payload.nextCursor
+          ? payload.nextCursor
+          : null
+      );
+      if (
+        typeof payload.totalCount === 'number' &&
+        Number.isFinite(payload.totalCount) &&
+        payload.totalCount >= 0
+      ) {
+        setKnownTotalCount(payload.totalCount);
+      }
+    } catch {
+      setLoadMoreError(t('loadMoreReviewsError'));
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -1876,6 +2237,22 @@ export default function JReviewsSection({
             )}
           </div>
         </div>
+
+        {nextCursor && (
+          <p
+            className="text-muted small mb-0"
+            data-testid="reviews-loaded-scope-note"
+          >
+            {knownTotalCount != null && knownTotalCount > reviews.length
+              ? t('loadedReviewsScopeWithTotal', {
+                  loaded: formatPlainNumber(reviews.length, locale),
+                  total: formatPlainNumber(knownTotalCount, locale),
+                })
+              : t('loadedReviewsScope', {
+                  loaded: formatPlainNumber(reviews.length, locale),
+                })}
+          </p>
+        )}
       </div>
 
       {/* 4. Review Cards List */}
@@ -2114,6 +2491,13 @@ export default function JReviewsSection({
                       {rev.comment || t('emptyCommentPlaceholder')}
                     </p>
 
+                    <ReviewPhotoStrip
+                      images={rev.images}
+                      authorLabel={
+                        rev.author_name.trim() || t('roleBuyerBadge')
+                      }
+                    />
+
                     {/* AI Flag Reason Transparency Note */}
                     {rev.reason && (
                       <div className="rounded-3 bg-light small text-secondary mb-2 border p-2">
@@ -2183,10 +2567,32 @@ export default function JReviewsSection({
                         ({rev.downvotes})
                       </button>
                       <button
+                        ref={(node) => {
+                          reportButtonRefs.current[rev.id] = node;
+                        }}
                         type="button"
                         disabled={isPending}
-                        onClick={() => handleVote(rev.id, 'report')}
+                        onClick={() => {
+                          if (myVote === 'report') {
+                            void handleVote(rev.id, 'report');
+                          } else {
+                            setReportingReviewId(rev.id);
+                          }
+                        }}
                         aria-pressed={myVote === 'report'}
+                        aria-haspopup={
+                          myVote === 'report' ? undefined : 'dialog'
+                        }
+                        aria-expanded={
+                          myVote === 'report'
+                            ? undefined
+                            : reportingReviewId === rev.id
+                        }
+                        aria-controls={
+                          reportingReviewId === rev.id
+                            ? reportDialogId
+                            : undefined
+                        }
                         className={`btn btn-sm rounded-pill px-2 py-1 ${
                           myVote === 'report'
                             ? 'btn-danger text-white'
@@ -2205,6 +2611,49 @@ export default function JReviewsSection({
             );
           })}
         </PhoneCollapsible>
+      )}
+
+      {(nextCursor || loadMoreError) && (
+        <div className="d-flex flex-column align-items-center mt-4 gap-2">
+          {loadMoreError && (
+            <div
+              role="alert"
+              className="alert alert-warning small rounded-3 mb-0 px-3 py-2"
+            >
+              {loadMoreError}
+            </div>
+          )}
+          {nextCursor && (
+            <button
+              type="button"
+              disabled={loadingMore}
+              aria-busy={loadingMore}
+              onClick={handleLoadMoreReviews}
+              className="btn btn-outline-dark btn-sm rounded-pill fw-medium px-4 py-2"
+              data-testid="load-more-reviews-btn"
+            >
+              {loadingMore
+                ? t('loadingMoreReviewsBtn')
+                : knownTotalCount != null && knownTotalCount > reviews.length
+                  ? t('loadMoreReviewsRemainingBtn', {
+                      remaining: knownTotalCount - reviews.length,
+                    })
+                  : t('loadMoreReviewsBtn')}
+            </button>
+          )}
+        </div>
+      )}
+
+      {reportingReviewId && (
+        <ReportReasonDialog
+          dialogId={reportDialogId}
+          reviewId={reportingReviewId}
+          onClose={closeReportDialog}
+          onSubmit={(reviewId, reason) => {
+            closeReportDialog(true);
+            void handleVote(reviewId, 'report', reason);
+          }}
+        />
       )}
     </div>
   );

@@ -23,6 +23,7 @@ import {
   getMasterProductOffersBatch as _getMasterProductOffersBatch,
   getMasterProductPriceHistory as _getMasterProductPriceHistory,
   getMasterProductReviews as _getMasterProductReviews,
+  getMasterProductReviewsPage as _getMasterProductReviewsPage,
   isPublishedMasterProduct as _isPublishedMasterProduct,
   getPublishedMasterProductCategorySlug as _getPublishedMasterProductCategorySlug,
   getMasterProductReviewSummary as _getMasterProductReviewSummary,
@@ -45,7 +46,9 @@ import {
   computeJReviewsWeight,
   filterAndSortMerchants,
   type MasterProductFilterParams,
+  type MasterProductReviewsPage,
   type MerchantListFilterParams,
+  type ReviewKeysetCursor,
   type SitemapRows,
 } from '../../lib/rate-api';
 import { categorySlugOnly } from '../../lib/rate-domain-core';
@@ -59,6 +62,7 @@ export type {
   PlaceListingSummary,
   MasterProductFilterParams,
   MasterProductPriceHistorySummary,
+  MasterProductReviewsPage,
   MerchantListFilterParams,
   MerchantOffer,
   MerchantProductListing,
@@ -73,6 +77,8 @@ export type {
   ReviewAnalysisSummary,
   ReviewFlagCategory,
   ReviewItem,
+  ReviewKeysetCursor,
+  ReviewReportReason,
   UrlInspectionResult,
 } from '../../lib/rate-api';
 
@@ -485,10 +491,66 @@ export function getCachedPublishedMasterProductCategory(
   return _getCachedPublishedCategoryByKey(cleanId);
 }
 
+const _getCachedMasterProductReviewsPageByKey = cache(
+  (cleanId: string, limit: number, hideFake: boolean) =>
+    withRateDataCache(
+      (id: string, pageLimit: number, filterFake: boolean) =>
+        _getMasterProductReviewsPage(id, {
+          limit: pageLimit,
+          hideFake: filterFake,
+        }),
+      [
+        'rate-master-product-reviews-page',
+        cleanId,
+        String(limit),
+        hideFake ? '1' : '0',
+      ],
+      {
+        revalidate: 300,
+        tags: [RATE_CACHE_TAGS.REVIEWS, masterReviewsCacheTag(cleanId)],
+      }
+    )(cleanId, limit, hideFake)
+);
+
 export function getCachedMasterProductReviews(masterProductId: string) {
   const cleanId = sanitizeCachedEntityId(masterProductId);
   if (!cleanId) return Promise.resolve([]);
   return _getCachedMasterProductReviewsByKey(cleanId);
+}
+
+export function getCachedMasterProductReviewsPage(
+  masterProductId: string,
+  options?: {
+    limit?: number;
+    cursor?: ReviewKeysetCursor | null;
+    hideFake?: boolean;
+  }
+): Promise<MasterProductReviewsPage> {
+  const cleanId = sanitizeCachedEntityId(masterProductId);
+  if (!cleanId) {
+    return Promise.resolve({
+      reviews: [],
+      nextCursor: null,
+      hasMore: false,
+      totalCount: 0,
+    });
+  }
+  const rawLimit = options?.limit ?? 50;
+  const limit =
+    typeof rawLimit === 'number' && Number.isFinite(rawLimit)
+      ? Math.max(1, Math.min(200, Math.floor(rawLimit)))
+      : 50;
+  const hideFake = Boolean(options?.hideFake);
+  if (options?.cursor) {
+    // Cursor pages bypass Next.js Data Cache to prevent unbounded cursor cache keys,
+    // while HTTP responses still carry public CDN Cache-Control headers.
+    return _getMasterProductReviewsPage(cleanId, {
+      limit,
+      cursor: options.cursor,
+      hideFake,
+    });
+  }
+  return _getCachedMasterProductReviewsPageByKey(cleanId, limit, hideFake);
 }
 
 export const getCachedMasterProductReviewSummary = cache(
