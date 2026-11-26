@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { buildWatchlistComboHref } from '@/lib/combo-cart-links';
 import { IntentLink } from '@/components/elementary/IntentLink';
+import InfoTip from '@/components/elementary/InfoTip';
 import { notFound, permanentRedirect } from 'next/navigation';
 import {
   getCachedCategorySlugById,
@@ -1277,6 +1278,11 @@ export async function ProductDetailView({
     <div className={`rate-pdv-score${hasCriteriaScores ? '' : ' is-compact'}`}>
       <div className="rate-pdv-score-label is-user">
         {t('userWeightedScoreLabel')}
+        <InfoTip
+          label={t('scoreFilterInfoLabel')}
+          text={t('scoreFilterInfo')}
+          testId="pdv-score-filter-info"
+        />
       </div>
       <div className="rate-pdv-score-row">
         <StarRating
@@ -1626,23 +1632,22 @@ export async function ProductDetailView({
                   hasCriteriaScores ? '' : ' is-compact'
                 } mb-4`}
               >
-                <div className="rate-pdv-board-head">
-                  <span className="rate-eyebrow">{t('scoreboardEyebrow')}</span>
-                  <div className="rate-pdv-tags">
-                    {authenticCount > 0 && (
-                      <span className="rate-pdv-tag is-good">
-                        <BsCheckCircleFill aria-hidden="true" />
-                        {t('authenticReviewsBadge', { count: authenticCount })}
-                      </span>
-                    )}
-                    {ignoredCount > 0 && (
-                      <span className="rate-pdv-tag is-bad">
-                        <BsShieldExclamation aria-hidden="true" />
-                        {t('filteredSeedingBadge', { count: ignoredCount })}
-                      </span>
-                    )}
-                    <RadarBadge signal={radarSignal} minSpreadPct={0} />
-                  </div>
+                {/* No eyebrow above the board (DOS/Rate#1946): the
+                    fake-review note is the InfoTip beside the buyer score. */}
+                <div className="rate-pdv-tags">
+                  {authenticCount > 0 && (
+                    <span className="rate-pdv-tag is-good">
+                      <BsCheckCircleFill aria-hidden="true" />
+                      {t('authenticReviewsBadge', { count: authenticCount })}
+                    </span>
+                  )}
+                  {ignoredCount > 0 && (
+                    <span className="rate-pdv-tag is-bad">
+                      <BsShieldExclamation aria-hidden="true" />
+                      {t('filteredSeedingBadge', { count: ignoredCount })}
+                    </span>
+                  )}
+                  <RadarBadge signal={radarSignal} minSpreadPct={0} />
                 </div>
 
                 {radarNote && (
