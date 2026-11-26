@@ -277,10 +277,9 @@
     background-color: rgba(148, 163, 184, 0.14) !important;
   }
 
-  // Device and store photos are drawn for a white page: they keep a light
-  // tile on the dark theme.
-  .rate-product-card-media-link img,
-  .rate-pdv-media img {
+  // Device and store card thumbnails are drawn for a white page: they keep
+  // a light tile on the dark theme. The hero uses .rate-pdv-media.is-studio.
+  .rate-product-card-media-link img {
     mix-blend-mode: normal;
     background-color: #ffffff;
     border-radius: 0.5rem;

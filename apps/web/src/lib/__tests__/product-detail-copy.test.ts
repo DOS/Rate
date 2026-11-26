@@ -334,6 +334,87 @@ function main() {
     'ProductShareAuditButton must contain zero em-dashes or en-dashes'
   );
 
+  // DOS/Rate#1945: Decluttered hero UX, aligned seller count, collapsed empty
+  // scoreboard boxes, variant strip under price, and single trophy icon.
+  for (const locale of ['vi', 'en', 'cs'] as const) {
+    const pd = readLocale(locale).productDetail!;
+    for (const k of [
+      'critEmpty',
+      'readAndSubmitReviewsBtn',
+      'writeOrReadReviewsBtn',
+      'availableColors',
+    ] as const) {
+      const val = pd[k];
+      assert.ok(val && val.trim().length > 0, `${locale}.productDetail.${k}`);
+      assert.ok(
+        !/[\u2013\u2014]/.test(val),
+        `${locale}.productDetail.${k} must not contain en-dash or em-dash`
+      );
+    }
+  }
+
+  const pdvSrc = readFileSync(
+    new URL('../../app/[locale]/smartphones/[slug]/page.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.ok(
+    pdvSrc.includes('data-testid="pdv-variant-strip"') &&
+      pdvSrc.includes('data-testid="pdv-single-variant-chip"') &&
+      pdvSrc.includes('rate-pdv-color-chip') &&
+      pdvSrc.includes(
+        'heroStats.sellerCount > 0 ? heroStats.sellerCount : offers.length'
+      ) &&
+      pdvSrc.includes('includeWatchlist={false}'),
+    'ProductDetailView must render pdv-variant-strip, align jumpNavOffers count, and keep 3 focused hero actions'
+  );
+  assert.equal(
+    pdvSrc.includes('tenSpecGroupsBtn'),
+    false,
+    'ProductDetailView must remove duplicate tenSpecGroupsBtn from hero actions'
+  );
+  assert.equal(
+    pdvSrc.includes('headToHeadCompareBtn'),
+    false,
+    'ProductDetailView must remove duplicate headToHeadCompareBtn from hero actions'
+  );
+  assert.equal(
+    pdvSrc.includes('is-compact'),
+    true,
+    'ProductDetailView must collapse empty scoreboard criteria into is-compact'
+  );
+  assert.ok(
+    !/[\u2013\u2014]/.test(pdvSrc),
+    'smartphones/[slug]/page.tsx must contain zero em-dashes or en-dashes'
+  );
+
+  const badgesSrc = readFileSync(
+    new URL(
+      '../../components/leaderboard/ProductLeaderboardBadges.tsx',
+      import.meta.url
+    ),
+    'utf8'
+  );
+  assert.equal(
+    (badgesSrc.match(/<BsTrophyFill\b/g) ?? []).length,
+    1,
+    'ProductLeaderboardBadges must render BsTrophyFill only inside the #1 rank badge (no duplicate trophy in section label)'
+  );
+
+  const productScss = readFileSync(
+    new URL('../../app/style/scss/_product.scss', import.meta.url),
+    'utf8'
+  );
+  assert.ok(
+    productScss.includes('.rate-pdv-variant-strip') &&
+      productScss.includes('.rate-pdv-media-card') &&
+      productScss.includes('.rate-pdv-board'),
+    '_product.scss must define hero polish styles'
+  );
+  assert.ok(
+    !/[\u2013\u2014]/.test(productScss),
+    '_product.scss must contain zero em-dashes or en-dashes'
+  );
+
   console.warn('✅ Product detail copy suite passed');
 }
 
