@@ -24,6 +24,7 @@ import {
   getMasterProductPriceHistory as _getMasterProductPriceHistory,
   getMasterProductReviews as _getMasterProductReviews,
   getMasterProductReviewsPage as _getMasterProductReviewsPage,
+  getMasterProductReviewStarCounts as _getMasterProductReviewStarCounts,
   isPublishedMasterProduct as _isPublishedMasterProduct,
   getPublishedMasterProductCategorySlug as _getPublishedMasterProductCategorySlug,
   getMasterProductReviewSummary as _getMasterProductReviewSummary,
@@ -49,6 +50,8 @@ import {
   type MasterProductReviewsPage,
   type MerchantListFilterParams,
   type ReviewKeysetCursor,
+  type ReviewStarCounts,
+  type ReviewStarTier,
   type SitemapRows,
 } from '../../lib/rate-api';
 import { categorySlugOnly } from '../../lib/rate-domain-core';
@@ -79,6 +82,8 @@ export type {
   ReviewItem,
   ReviewKeysetCursor,
   ReviewReportReason,
+  ReviewStarCounts,
+  ReviewStarTier,
   UrlInspectionResult,
 } from '../../lib/rate-api';
 
@@ -492,24 +497,51 @@ export function getCachedPublishedMasterProductCategory(
 }
 
 const _getCachedMasterProductReviewsPageByKey = cache(
-  (cleanId: string, limit: number, hideFake: boolean) =>
+  (cleanId: string, limit: number, hideFake: boolean, starKey: string) =>
     withRateDataCache(
-      (id: string, pageLimit: number, filterFake: boolean) =>
-        _getMasterProductReviewsPage(id, {
+      (
+        id: string,
+        pageLimit: number,
+        filterFake: boolean,
+        starFilterKey: string
+      ) => {
+        const starNum = Number(starFilterKey);
+        const starTier =
+          starFilterKey !== 'all' &&
+          Number.isInteger(starNum) &&
+          starNum >= 1 &&
+          starNum <= 5
+            ? (starNum as ReviewStarTier)
+            : null;
+        return _getMasterProductReviewsPage(id, {
           limit: pageLimit,
           hideFake: filterFake,
-        }),
+          star: starTier,
+        });
+      },
       [
         'rate-master-product-reviews-page',
         cleanId,
         String(limit),
         hideFake ? '1' : '0',
+        `star:${starKey}`,
       ],
       {
         revalidate: 300,
         tags: [RATE_CACHE_TAGS.REVIEWS, masterReviewsCacheTag(cleanId)],
       }
-    )(cleanId, limit, hideFake)
+    )(cleanId, limit, hideFake, starKey)
+);
+
+const _getCachedMasterProductReviewStarCountsByKey = cache((cleanId: string) =>
+  withRateDataCache(
+    (id: string) => _getMasterProductReviewStarCounts(id),
+    ['rate-master-product-review-star-counts', cleanId],
+    {
+      revalidate: 300,
+      tags: [RATE_CACHE_TAGS.REVIEWS, masterReviewsCacheTag(cleanId)],
+    }
+  )(cleanId)
 );
 
 export function getCachedMasterProductReviews(masterProductId: string) {
@@ -524,6 +556,7 @@ export function getCachedMasterProductReviewsPage(
     limit?: number;
     cursor?: ReviewKeysetCursor | null;
     hideFake?: boolean;
+    star?: ReviewStarTier | null;
   }
 ): Promise<MasterProductReviewsPage> {
   const cleanId = sanitizeCachedEntityId(masterProductId);
@@ -541,6 +574,14 @@ export function getCachedMasterProductReviewsPage(
       ? Math.max(1, Math.min(200, Math.floor(rawLimit)))
       : 50;
   const hideFake = Boolean(options?.hideFake);
+  const star: ReviewStarTier | null =
+    options?.star === 1 ||
+    options?.star === 2 ||
+    options?.star === 3 ||
+    options?.star === 4 ||
+    options?.star === 5
+      ? options.star
+      : null;
   if (options?.cursor) {
     // Cursor pages bypass Next.js Data Cache to prevent unbounded cursor cache keys,
     // while HTTP responses still carry public CDN Cache-Control headers.
@@ -548,9 +589,26 @@ export function getCachedMasterProductReviewsPage(
       limit,
       cursor: options.cursor,
       hideFake,
+      star,
     });
   }
-  return _getCachedMasterProductReviewsPageByKey(cleanId, limit, hideFake);
+  const starKey = star === null ? 'all' : String(star);
+  return _getCachedMasterProductReviewsPageByKey(
+    cleanId,
+    limit,
+    hideFake,
+    starKey
+  );
+}
+
+export function getCachedMasterProductReviewStarCounts(
+  masterProductId: string
+): Promise<ReviewStarCounts> {
+  const cleanId = sanitizeCachedEntityId(masterProductId);
+  if (!cleanId) {
+    return Promise.resolve({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, total: 0 });
+  }
+  return _getCachedMasterProductReviewStarCountsByKey(cleanId);
 }
 
 export const getCachedMasterProductReviewSummary = cache(

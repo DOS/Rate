@@ -42,6 +42,7 @@ import {
   getCachedMasterPlaceDetail,
   getCachedPlaceBranchSiblings,
   getCachedMasterProductReviewsPage,
+  getCachedMasterProductReviewStarCounts,
   getCachedMasterProductReviewSummary,
   getCachedMasterProductSiblings,
   getCachedMasterProducts,
@@ -457,6 +458,10 @@ export async function ProductDetailView({
     'reviews',
     getCachedMasterProductReviewsPage(storedProduct.id)
   );
+  const reviewStarCountsRead = timing.time(
+    'reviewStarCounts',
+    getCachedMasterProductReviewStarCounts(storedProduct.id)
+  );
   const productPointsRead = timing.time(
     'productPoints',
     getCachedMasterProductPoints(
@@ -477,6 +482,7 @@ export async function ProductDetailView({
   placeBranchesRead.catch(() => undefined);
   offersRead.catch(() => undefined);
   reviewPageRead.catch(() => undefined);
+  reviewStarCountsRead.catch(() => undefined);
   productPointsRead.catch(() => undefined);
   // The other variants of this model, linked under the price where the
   // quick-spec cards used to be; Item routes (flag on) keep the #1154 size
@@ -620,6 +626,7 @@ export async function ProductDetailView({
   const [
     offers,
     reviewPage,
+    reviewStarCounts,
     productPointsData,
     priceHistory,
     reviewSummary,
@@ -636,6 +643,7 @@ export async function ProductDetailView({
   ] = await Promise.all([
     offersRead,
     reviewPageRead,
+    reviewStarCountsRead,
     productPointsRead,
     priceHistoryRead,
     reviewSummaryRead,
@@ -1911,6 +1919,7 @@ export async function ProductDetailView({
               authenticReviewCount={authenticCount}
               ignoredReviewCount={ignoredCount}
               reviews={reviews}
+              starCounts={reviewStarCounts}
               initialNextCursor={reviewPage.nextCursor}
               totalReviewCount={reviewPage.totalCount}
               summary={reviewSummary}

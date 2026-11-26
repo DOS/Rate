@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     if (!parsedQuery) {
       return jsonApiError(
         400,
-        'Provide ?slug=<product-slug> or a valid ?masterProductId=<uuid>, with valid optional ?limit=1..200 and ?cursor',
+        'Provide ?slug=<product-slug> or a valid ?masterProductId=<uuid>, with valid optional ?star=1..5, ?limit=1..200 and ?cursor',
         undefined,
         REVIEWS_CORS_HEADERS
       );
@@ -131,10 +131,14 @@ export async function GET(request: NextRequest) {
       limit: parsedQuery.limit,
       cursor: parsedQuery.cursor,
       hideFake: parsedQuery.hideFake,
+      star: parsedQuery.star,
     });
     const summary = await getCachedMasterProductReviewSummary(
       resolvedMasterId,
-      parsedQuery.cursor || parsedQuery.hideFake || parsedQuery.limit !== 50
+      parsedQuery.cursor ||
+        parsedQuery.hideFake ||
+        parsedQuery.star != null ||
+        parsedQuery.limit !== 50
         ? undefined
         : page.reviews
     );

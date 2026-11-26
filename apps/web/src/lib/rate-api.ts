@@ -40,6 +40,8 @@ import {
 import {
   type ReviewFlagCategory,
   type ReviewItem,
+  type ReviewStarCounts,
+  type ReviewStarTier,
   toSafeNonNegativeVoteCount,
   evaluateReviewTrustAssessment,
   computeJReviewsWeight,
@@ -112,6 +114,8 @@ export {
 export type {
   ReviewFlagCategory,
   ReviewReportReason,
+  ReviewStarCounts,
+  ReviewStarTier,
   ReviewAuthenticityAxis,
   ReviewIndependenceAxis,
   ReviewDepthAxis,
@@ -1886,6 +1890,7 @@ export interface GetMasterProductReviewsOptions {
   limit?: number;
   cursor?: ReviewKeysetCursor | null;
   hideFake?: boolean;
+  star?: ReviewStarTier | null;
 }
 
 export interface MasterProductReviewsPage {
@@ -1965,7 +1970,8 @@ async function readReviewChunkBatch(
   label: string,
   perChunkLimit: number,
   cursor: ReviewKeysetCursor | null,
-  includeCount: boolean
+  includeCount: boolean,
+  star: ReviewStarTier | null = null
 ): Promise<{
   rows: RawReviewRow[];
   truncatedChunkLasts: RawReviewRow[];
@@ -1987,6 +1993,9 @@ async function readReviewChunkBatch(
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(perChunkLimit);
+    if (star !== null) {
+      query = query.eq('rating_star', star);
+    }
     if (cursor) {
       const quotedCreatedAt = quotePostgrestFilterLiteral(cursor.createdAt);
       query = query.or(
@@ -2018,15 +2027,20 @@ async function readReviewChunkBatch(
 async function countMasterProductReviews(
   supabase: RateSchemaClient,
   productIds: readonly string[],
-  label: string
+  label: string,
+  star: ReviewStarTier | null = null
 ): Promise<number | null> {
   let countSum = 0;
   for (let i = 0; i < productIds.length; i += IN_FILTER_CHUNK_SIZE) {
     const chunk = productIds.slice(i, i + IN_FILTER_CHUNK_SIZE);
-    const { error, count } = await supabase
+    let query = supabase
       .from('reviews')
       .select('id', { count: 'exact', head: true })
       .in('product_id', chunk);
+    if (star !== null) {
+      query = query.eq('rating_star', star);
+    }
+    const { error, count } = await query;
     if (error) throw new RateDataUnavailableError(label, error);
     if (typeof count !== 'number' || !Number.isFinite(count)) {
       return null;
@@ -2034,6 +2048,42 @@ async function countMasterProductReviews(
     countSum += count;
   }
   return countSum;
+}
+
+/**
+ * Fetches exact DB-wide review counts per star tier (1..5) and total across
+ * all listings clustered under a master product.
+ */
+export async function getMasterProductReviewStarCounts(
+  masterId: string
+): Promise<ReviewStarCounts> {
+  const productIds = await getListingIdsForMaster(
+    masterId,
+    `listings for master ${masterId}`
+  );
+  if (productIds.length === 0) {
+    return { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, total: 0 };
+  }
+  const supabase = getRateClient();
+  const label = `review star counts for master ${masterId}`;
+  const stars: readonly ReviewStarTier[] = [5, 4, 3, 2, 1];
+  const countsByStar = await Promise.all(
+    stars.map(async (star) => {
+      const count = await countMasterProductReviews(
+        supabase,
+        productIds,
+        label,
+        star
+      );
+      return [star, count ?? 0] as const;
+    })
+  );
+  const out: ReviewStarCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, total: 0 };
+  for (const [star, count] of countsByStar) {
+    out[star] = count;
+    out.total += count;
+  }
+  return out;
 }
 
 function isVisibleWhenHideFake(item: ReviewItem): boolean {
@@ -2046,7 +2096,7 @@ function isVisibleWhenHideFake(item: ReviewItem): boolean {
 
 /**
  * Fetches one keyset-ordered page (`created_at DESC, id DESC`) of reviews across
- * all listings grouped under a master product, with optional `hideFake` filter.
+ * all listings grouped under a master product, with optional `hideFake` and `star` filters.
  */
 export async function getMasterProductReviewsPage(
   masterId: string,
@@ -2059,6 +2109,14 @@ export async function getMasterProductReviewsPage(
       : REVIEWS_PAGE_DEFAULT_LIMIT;
   const initialCursor = options?.cursor ?? null;
   const hideFake = Boolean(options?.hideFake);
+  const star: ReviewStarTier | null =
+    options?.star === 1 ||
+    options?.star === 2 ||
+    options?.star === 3 ||
+    options?.star === 4 ||
+    options?.star === 5
+      ? options.star
+      : null;
 
   const productIds = await getListingIdsForMaster(
     masterId,
@@ -2077,7 +2135,8 @@ export async function getMasterProductReviewsPage(
       label,
       limit + 1,
       initialCursor,
-      !initialCursor
+      !initialCursor,
+      star
     );
     const seen = new Set<string>();
     const filtered: RawReviewRow[] = [];
@@ -2096,7 +2155,7 @@ export async function getMasterProductReviewsPage(
         ? encodeReviewCursor(reviews[reviews.length - 1])
         : null;
     const totalCount = initialCursor
-      ? ((await countMasterProductReviews(supabase, productIds, label)) ??
+      ? ((await countMasterProductReviews(supabase, productIds, label, star)) ??
         reviews.length)
       : (exactCount ?? filtered.length);
 
@@ -2129,7 +2188,8 @@ export async function getMasterProductReviewsPage(
         label,
         batchLimit,
         batchCursor,
-        batchesRun === 0 && !initialCursor
+        batchesRun === 0 && !initialCursor,
+        star
       );
     const batchRows: RawReviewRow[] = [];
     const batchRowIds = new Set<string>();
@@ -2187,7 +2247,7 @@ export async function getMasterProductReviewsPage(
       ? encodeReviewCursor(lastFrontierRow)
       : null;
   const totalCount = initialCursor
-    ? ((await countMasterProductReviews(supabase, productIds, label)) ??
+    ? ((await countMasterProductReviews(supabase, productIds, label, star)) ??
       reviews.length)
     : (firstBatchExactCount ?? firstBatchRawCount);
 

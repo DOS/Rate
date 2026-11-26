@@ -191,6 +191,105 @@ const MULTI_CHUNK_HF_ROWS: StubReviewRow[] = [
   },
 ];
 
+// Multi-chunk product with mixed 1..5 stars (including fake 1-star rows before
+// authentic 1-star rows) to verify DB-wide star counts and ?star=1..5 pagination (#1940).
+const STAR_MASTER = '99999999-9999-4999-8999-999999990004';
+const STAR_SLUG = 'star-histogram-phone';
+const EMPTY_MASTER = '99999999-9999-4999-8999-999999990005';
+const STAR_ROWS: StubReviewRow[] = [
+  // 4 x 5-star (3 authentic, 1 fake)
+  ...Array.from({ length: 4 }, (_, idx) => ({
+    id: uuidFor(8900 - idx),
+    product_id: idx % 2 === 0 ? LISTING_IDS[0]! : LISTING_IDS[159]!,
+    author_name: `Star5-${idx + 1}`,
+    rating_star: 5,
+    comment: `Five star experience ${idx + 1}.`,
+    variation: null,
+    images: [],
+    created_at: `2026-08-${String(20 - idx).padStart(2, '0')}T10:00:00Z`,
+    reviewer_type: 'user' as const,
+    upvotes: 2,
+    downvotes: 0,
+    report_count: 0,
+    helpfulness_weight: idx === 3 ? 0 : 1.3,
+    criteria_ratings: {},
+    review_flags: {
+      verdict: (idx === 3 ? 'fake' : 'authentic') as 'fake' | 'authentic',
+      flag_category: (idx === 3 ? 'seeding_fake' : 'authentic') as
+        'seeding_fake' | 'authentic',
+      include_in_rating: idx !== 3,
+    },
+  })),
+  // 5 x 4-star (all authentic, spanning both listing chunks)
+  ...Array.from({ length: 5 }, (_, idx) => ({
+    id: uuidFor(8800 - idx),
+    product_id: idx % 2 === 0 ? LISTING_IDS[0]! : LISTING_IDS[159]!,
+    author_name: `Star4-${idx + 1}`,
+    rating_star: 4,
+    comment: `Four star balanced feedback ${idx + 1}.`,
+    variation: null,
+    images: [],
+    created_at: `2026-08-${String(15 - idx).padStart(2, '0')}T10:00:00Z`,
+    reviewer_type: 'user' as const,
+    upvotes: 1,
+    downvotes: 0,
+    report_count: 0,
+    helpfulness_weight: 1.2,
+    criteria_ratings: {},
+    review_flags: {
+      verdict: 'authentic' as const,
+      flag_category: 'authentic' as const,
+      include_in_rating: true,
+    },
+  })),
+  // 2 x 3-star
+  ...Array.from({ length: 2 }, (_, idx) => ({
+    id: uuidFor(8700 - idx),
+    product_id: LISTING_IDS[0]!,
+    author_name: `Star3-${idx + 1}`,
+    rating_star: 3,
+    comment: `Three star average feedback ${idx + 1}.`,
+    variation: null,
+    images: [],
+    created_at: `2026-08-${String(10 - idx).padStart(2, '0')}T10:00:00Z`,
+    reviewer_type: 'user' as const,
+    upvotes: 0,
+    downvotes: 0,
+    report_count: 0,
+    helpfulness_weight: 1.0,
+    criteria_ratings: {},
+    review_flags: {
+      verdict: 'authentic' as const,
+      flag_category: 'authentic' as const,
+      include_in_rating: true,
+    },
+  })),
+  // 0 x 2-star (intentionally empty tier)
+  // 3 x 1-star (2 newer fake rows, 1 older authentic row)
+  ...Array.from({ length: 3 }, (_, idx) => ({
+    id: uuidFor(8600 - idx),
+    product_id: idx === 2 ? LISTING_IDS[159]! : LISTING_IDS[0]!,
+    author_name: `Star1-${idx + 1}`,
+    rating_star: 1,
+    comment: idx < 2 ? 'Competitor sabotage fake' : 'Genuine battery defect.',
+    variation: null,
+    images: [],
+    created_at: `2026-08-${String(5 - idx).padStart(2, '0')}T10:00:00Z`,
+    reviewer_type: 'user' as const,
+    upvotes: 0,
+    downvotes: 0,
+    report_count: 0,
+    helpfulness_weight: idx < 2 ? 0 : 1.1,
+    criteria_ratings: {},
+    review_flags: {
+      verdict: (idx < 2 ? 'fake' : 'authentic') as 'fake' | 'authentic',
+      flag_category: (idx < 2 ? 'competitor_sabotage' : 'authentic') as
+        'competitor_sabotage' | 'authentic',
+      include_in_rating: idx === 2,
+    },
+  })),
+];
+
 function parseInValues(filter: string | null): string[] | null {
   if (!filter) return null;
   if (filter.startsWith('eq.')) return [filter.slice(3)];
@@ -227,6 +326,10 @@ function jsonResp(
 }
 
 let activeReviewsSet: StubReviewRow[] = ALL_REVIEWS;
+const recordedReviewCalls: Array<{
+  method: string;
+  ratingStar: string | null;
+}> = [];
 
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url =
@@ -251,43 +354,72 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const isMultiChunkHf =
       idFilter === `eq.${MULTI_CHUNK_HF_MASTER}` ||
       slugFilter === `eq.${MULTI_CHUNK_HF_SLUG}`;
-    const row = isMultiChunkHf
+    const isStarMaster =
+      idFilter === `eq.${STAR_MASTER}` || slugFilter === `eq.${STAR_SLUG}`;
+    const isEmptyMaster = idFilter === `eq.${EMPTY_MASTER}`;
+    const row = isStarMaster
       ? {
-          id: MULTI_CHUNK_HF_MASTER,
-          slug: MULTI_CHUNK_HF_SLUG,
-          name: 'Multi Chunk Hide Fake Phone',
+          id: STAR_MASTER,
+          slug: STAR_SLUG,
+          name: 'Star Histogram Phone',
           brand: 'Test',
           status: 'published',
           category_id: CATEGORY_ID,
           specifications: {},
           key_specs: {},
         }
-      : isHideFake
+      : isEmptyMaster
         ? {
-            id: HIDE_FAKE_MASTER,
-            slug: HIDE_FAKE_SLUG,
-            name: 'Hide Fake Phone',
+            id: EMPTY_MASTER,
+            slug: 'empty-listings-phone',
+            name: 'Empty Listings Phone',
             brand: 'Test',
             status: 'published',
             category_id: CATEGORY_ID,
             specifications: {},
             key_specs: {},
           }
-        : {
-            id: MASTER_ID,
-            slug: MASTER_SLUG,
-            name: 'Paginated Test Phone',
-            brand: 'Test',
-            status: 'published',
-            category_id: CATEGORY_ID,
-            specifications: {},
-            key_specs: {},
-          };
-    activeReviewsSet = isMultiChunkHf
-      ? MULTI_CHUNK_HF_ROWS
-      : isHideFake
-        ? HIDE_FAKE_ROWS
-        : ALL_REVIEWS;
+        : isMultiChunkHf
+          ? {
+              id: MULTI_CHUNK_HF_MASTER,
+              slug: MULTI_CHUNK_HF_SLUG,
+              name: 'Multi Chunk Hide Fake Phone',
+              brand: 'Test',
+              status: 'published',
+              category_id: CATEGORY_ID,
+              specifications: {},
+              key_specs: {},
+            }
+          : isHideFake
+            ? {
+                id: HIDE_FAKE_MASTER,
+                slug: HIDE_FAKE_SLUG,
+                name: 'Hide Fake Phone',
+                brand: 'Test',
+                status: 'published',
+                category_id: CATEGORY_ID,
+                specifications: {},
+                key_specs: {},
+              }
+            : {
+                id: MASTER_ID,
+                slug: MASTER_SLUG,
+                name: 'Paginated Test Phone',
+                brand: 'Test',
+                status: 'published',
+                category_id: CATEGORY_ID,
+                specifications: {},
+                key_specs: {},
+              };
+    activeReviewsSet = isStarMaster
+      ? STAR_ROWS
+      : isEmptyMaster
+        ? []
+        : isMultiChunkHf
+          ? MULTI_CHUNK_HF_ROWS
+          : isHideFake
+            ? HIDE_FAKE_ROWS
+            : ALL_REVIEWS;
     return jsonResp(
       200,
       headers.get('accept')?.includes('application/vnd.pgrst.object+json')
@@ -298,9 +430,11 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (pathname === '/rest/v1/products') {
     const cluster = searchParams.get('cluster_id');
     const rows =
-      cluster === `eq.${HIDE_FAKE_MASTER}`
-        ? [{ id: HIDE_FAKE_LISTING }]
-        : LISTING_IDS.map((id) => ({ id }));
+      cluster === `eq.${EMPTY_MASTER}`
+        ? []
+        : cluster === `eq.${HIDE_FAKE_MASTER}`
+          ? [{ id: HIDE_FAKE_LISTING }]
+          : LISTING_IDS.map((id) => ({ id }));
     const offset = Number(searchParams.get('offset') ?? 0);
     const limit = Number(searchParams.get('limit') ?? rows.length);
     const slice = rows.slice(offset, offset + limit);
@@ -309,10 +443,20 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     });
   }
   if (pathname === '/rest/v1/reviews') {
+    recordedReviewCalls.push({
+      method,
+      ratingStar: searchParams.get('rating_star'),
+    });
     const wantedProducts = parseInValues(searchParams.get('product_id'));
     let matching = wantedProducts
       ? activeReviewsSet.filter((r) => wantedProducts.includes(r.product_id))
       : [...activeReviewsSet];
+
+    const starFilterParam = searchParams.get('rating_star');
+    if (starFilterParam && starFilterParam.startsWith('eq.')) {
+      const targetStar = Number(starFilterParam.slice(3));
+      matching = matching.filter((r) => r.rating_star === targetStar);
+    }
 
     const totalMatching = matching.length;
     const cursor = parseOrCursor(searchParams.get('or'));
@@ -343,8 +487,11 @@ async function main() {
     '🧪 Reviews keyset pagination & photos API suite (#1924, #1926)'
   );
 
-  const { getMasterProductReviews, getMasterProductReviewsPage } =
-    await import('@/lib/rate-api');
+  const {
+    getMasterProductReviews,
+    getMasterProductReviewsPage,
+    getMasterProductReviewStarCounts,
+  } = await import('@/lib/rate-api');
   const { GET } = await import('../reviews/route');
   const { buildRateOpenApiSpec } = await import('@/server/rate/openapi');
 
@@ -494,11 +641,18 @@ async function main() {
   const otherIp = await get(`slug=${MASTER_SLUG}&limit=1`, '198.51.100.78');
   assert.equal(otherIp.status, 200);
 
-  // 7. OpenAPI documents cursor, nextCursor, hasMore, 429, and ReviewItem.images.
+  // 7. OpenAPI documents cursor, star, nextCursor, hasMore, 429, and ReviewItem.images.
   const spec = buildRateOpenApiSpec('https://rate.vn');
   const reviewsGet = spec.paths['/api/v1/rate/reviews']?.get;
   assert.ok(reviewsGet);
   assert.ok(reviewsGet.parameters?.some((p) => p.name === 'cursor'));
+  const starParamDoc = reviewsGet.parameters?.find((p) => p.name === 'star');
+  assert.ok(starParamDoc);
+  assert.deepEqual(starParamDoc.schema, {
+    type: 'integer',
+    minimum: 1,
+    maximum: 5,
+  });
   assert.ok(reviewsGet.responses['429']);
   const okSchema = reviewsGet.responses['200']?.content?.['application/json']
     ?.schema as { properties?: Record<string, unknown> } | undefined;
@@ -517,8 +671,126 @@ async function main() {
     description: 'Sanitized HTTPS review photo URLs (at most 6).',
   });
 
+  // 8. #1940: getMasterProductReviewStarCounts computes DB-wide 1-5 counts across >150 listing chunks.
+  activeReviewsSet = STAR_ROWS;
+  recordedReviewCalls.length = 0;
+  const starCounts = await getMasterProductReviewStarCounts(STAR_MASTER);
+  assert.deepEqual(starCounts, { 1: 3, 2: 0, 3: 2, 4: 5, 5: 4, total: 14 });
+  assert.ok(
+    recordedReviewCalls.some(
+      (c) => c.method === 'HEAD' && c.ratingStar === 'eq.5'
+    ) &&
+      recordedReviewCalls.some(
+        (c) => c.method === 'HEAD' && c.ratingStar === 'eq.1'
+      ),
+    'getMasterProductReviewStarCounts uses HEAD count=exact per star tier'
+  );
+
+  const emptyStarCounts = await getMasterProductReviewStarCounts(EMPTY_MASTER);
+  assert.deepEqual(emptyStarCounts, { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, total: 0 });
+
+  // 9. #1940: getMasterProductReviewsPage + GET /api/v1/rate/reviews?star=4 paginates across chunks.
+  recordedReviewCalls.length = 0;
+  const directStar4Page1 = await getMasterProductReviewsPage(STAR_MASTER, {
+    star: 4,
+    limit: 3,
+  });
+  assert.equal(directStar4Page1.totalCount, 5);
+  assert.equal(directStar4Page1.reviews.length, 3);
+  assert.equal(directStar4Page1.hasMore, true);
+  assert.ok(
+    recordedReviewCalls.length > 0 &&
+      recordedReviewCalls.every((c) => c.ratingStar === 'eq.4'),
+    'getMasterProductReviewsPage(star=4) pushes rating_star=eq.4 to PostgREST'
+  );
+
+  recordedReviewCalls.length = 0;
+  const star4Page1Res = await get(
+    `slug=${STAR_SLUG}&star=4&limit=3`,
+    '198.51.100.81'
+  );
+  assert.equal(star4Page1Res.status, 200);
+  const star4Page1 = await star4Page1Res.json();
+  assert.equal(star4Page1.totalCount, 5);
+  assert.equal(star4Page1.count, 3);
+  assert.equal(star4Page1.hasMore, true);
+  assert.ok(star4Page1.nextCursor);
+  assert.ok(
+    star4Page1.data.every((r: { rating_star: number }) => r.rating_star === 4)
+  );
+  assert.ok(
+    recordedReviewCalls.some((c) => c.ratingStar === 'eq.4'),
+    'GET /api/v1/rate/reviews?star=4 pushes rating_star=eq.4 to PostgREST'
+  );
+
+  const star4Page2Res = await get(
+    `slug=${STAR_SLUG}&star=4&limit=3&cursor=${encodeURIComponent(star4Page1.nextCursor)}`,
+    '198.51.100.81'
+  );
+  assert.equal(star4Page2Res.status, 200);
+  const star4Page2 = await star4Page2Res.json();
+  assert.equal(star4Page2.totalCount, 5);
+  assert.equal(star4Page2.count, 2);
+  assert.equal(star4Page2.hasMore, false);
+  assert.equal(star4Page2.nextCursor, null);
+  const star4Ids = [...star4Page1.data, ...star4Page2.data].map(
+    (r: { id: string }) => r.id
+  );
+  assert.equal(new Set(star4Ids).size, 5);
+
+  // 10. #1940: star=1 with hideFake=1 filters fake 1-star reviews while keeping rating_star=eq.1 pushdown.
+  recordedReviewCalls.length = 0;
+  const star1HideFakeRes = await get(
+    `slug=${STAR_SLUG}&star=1&hideFake=1&limit=5`,
+    '198.51.100.82'
+  );
+  assert.equal(star1HideFakeRes.status, 200);
+  const star1HideFake = await star1HideFakeRes.json();
+  assert.equal(star1HideFake.totalCount, 3);
+  assert.equal(star1HideFake.count, 1);
+  assert.equal(star1HideFake.hasMore, false);
+  assert.equal(star1HideFake.data[0]?.author_name, 'Star1-3');
+  assert.ok(recordedReviewCalls.some((c) => c.ratingStar === 'eq.1'));
+
+  recordedReviewCalls.length = 0;
+  const star1HideFakeCursorPage = await getMasterProductReviewsPage(
+    STAR_MASTER,
+    {
+      star: 1,
+      hideFake: true,
+      limit: 5,
+      cursor: (await import('@/lib/review-cursor')).parseReviewCursor(
+        (await import('@/lib/review-cursor')).encodeReviewCursor({
+          id: uuidFor(8600),
+          created_at: '2026-08-05T10:00:00Z',
+        })
+      ),
+    }
+  );
+  assert.equal(star1HideFakeCursorPage.totalCount, 3);
+  assert.equal(star1HideFakeCursorPage.reviews.length, 1);
+  assert.equal(star1HideFakeCursorPage.reviews[0]?.author_name, 'Star1-3');
+  assert.ok(
+    recordedReviewCalls.length > 0 &&
+      recordedReviewCalls.every((c) => c.ratingStar === 'eq.1'),
+    'getMasterProductReviewsPage(star=1, hideFake=true) pushes rating_star=eq.1 to PostgREST'
+  );
+
+  // 11. #1940: invalid ?star values return HTTP 400; empty ?star= falls back to unfiltered 200.
+  for (const badStar of ['0', '6', '-1', '4.5', 'abc']) {
+    const badStarRes = await get(
+      `slug=${STAR_SLUG}&star=${encodeURIComponent(badStar)}`,
+      '198.51.100.83'
+    );
+    assert.equal(badStarRes.status, 400, `reject invalid ?star=${badStar}`);
+    assert.equal((await badStarRes.json()).ok, false);
+  }
+  const emptyStarRes = await get(`slug=${STAR_SLUG}&star=`, '198.51.100.83');
+  assert.equal(emptyStarRes.status, 200);
+  assert.equal((await emptyStarRes.json()).totalCount, 14);
+
   console.warn(
-    '✅ Reviews keyset pagination & photos API suite passed (#1924, #1926)'
+    '✅ Reviews keyset pagination, star counts & ?star=1..5 API suite passed (#1924, #1926, #1940)'
   );
 }
 

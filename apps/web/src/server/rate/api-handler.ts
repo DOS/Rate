@@ -24,6 +24,7 @@ import {
 import {
   REVIEW_REPORT_REASONS,
   type ReviewReportReason,
+  type ReviewStarTier,
 } from '@/lib/rate-domain-core';
 import {
   encodeReviewCursor,
@@ -1184,6 +1185,7 @@ export function parseReviewsQueryParams(
   masterProductId: string | null;
   slug: string | null;
   hideFake: boolean;
+  star: ReviewStarTier | null;
   limit: number;
   cursor: ReviewKeysetCursor | null;
 } | null {
@@ -1193,6 +1195,18 @@ export function parseReviewsQueryParams(
       ? trimEdgeControlAndWhitespace(hideFakeRaw).toLowerCase()
       : '';
   const hideFake = cleanedHideFake === '1' || cleanedHideFake === 'true';
+
+  const rawStar = searchParams.get('star');
+  let star: ReviewStarTier | null = null;
+  if (rawStar != null) {
+    const cleanedStar = trimEdgeControlAndWhitespace(rawStar);
+    if (cleanedStar !== '') {
+      if (!/^[1-5]$/.test(cleanedStar)) {
+        return null;
+      }
+      star = Number(cleanedStar) as ReviewStarTier;
+    }
+  }
 
   const rawLimit = searchParams.get('limit');
   let limit = 50;
@@ -1229,7 +1243,14 @@ export function parseReviewsQueryParams(
     ) {
       return null;
     }
-    return { masterProductId: trimmedId, slug: null, hideFake, limit, cursor };
+    return {
+      masterProductId: trimmedId,
+      slug: null,
+      hideFake,
+      star,
+      limit,
+      cursor,
+    };
   }
 
   const rawSlug = searchParams.get('slug');
@@ -1246,6 +1267,7 @@ export function parseReviewsQueryParams(
       masterProductId: null,
       slug: trimmedSlug,
       hideFake,
+      star,
       limit,
       cursor,
     };

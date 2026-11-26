@@ -15,6 +15,8 @@ export interface OpenApiParameter {
     format?: string;
     enum?: string[];
     default?: string | number | boolean;
+    minimum?: number;
+    maximum?: number;
     maxLength?: number;
   };
 }
@@ -1982,6 +1984,13 @@ function buildBaseRateOpenApiSpec(
               schema: { type: 'boolean' },
             },
             {
+              name: 'star',
+              in: 'query',
+              description:
+                'Optional exact rating filter (integer 1 to 5). Filters returned reviews and `totalCount` to that star tier.',
+              schema: { type: 'integer', minimum: 1, maximum: 5 },
+            },
+            {
               name: 'limit',
               in: 'query',
               description: 'Maximum number of reviews per page (1-200)',
@@ -2006,12 +2015,12 @@ function buildBaseRateOpenApiSpec(
                   count: {
                     type: 'integer',
                     description:
-                      'Reviews in `data` for this page (after `hideFake`, `cursor`, and `limit`).',
+                      'Reviews in `data` for this page (after `star`, `hideFake`, `cursor`, and `limit`).',
                   },
                   totalCount: {
                     type: 'integer',
                     description:
-                      'Total stored reviews for the product before `hideFake`, `cursor`, and `limit`.',
+                      'Total stored reviews for the product (filtered by `star` when specified) before `hideFake`, `cursor`, and `limit`.',
                   },
                   nextCursor: {
                     type: ['string', 'null'],
