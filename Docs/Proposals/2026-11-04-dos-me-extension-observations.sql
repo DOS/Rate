@@ -145,7 +145,7 @@ CREATE TABLE IF NOT EXISTS rate.extension_observations (
       WHEN 'anphatpc' THEN listing_url ~ '^https://([a-z0-9-]+\.)*anphatpc\.com\.vn(/|$)'
       ELSE false END),
   CONSTRAINT extension_observations_external_item_id_check
-    CHECK (external_item_id ~ '^[A-Za-z0-9_.-]{1,64}$'),
+    CHECK (external_item_id ~ '^[A-Za-z0-9_.-]{1,128}$'),
   CONSTRAINT extension_observations_external_shop_id_check
     CHECK (external_shop_id ~ '^[A-Za-z0-9_.-]{1,64}$'),
   CONSTRAINT extension_observations_sku_id_check CHECK (sku_id ~ '^[A-Za-z0-9_.-]{1,64}$'),
@@ -317,6 +317,7 @@ DECLARE
   c_keys constant text[] := ARRAY['schema_version', 'marketplace', 'listing_url',
     'external_item_id', 'external_shop_id', 'sku_id', 'variant_label', 'price_vnd',
     'list_price_vnd', 'stock_state', 'stock_qty', 'observed_at', 'extractor'];
+  c_item_id_pattern constant text := '^[A-Za-z0-9_.-]{1,128}$';
   c_id_pattern constant text := '^[A-Za-z0-9_.-]{1,64}$';
   o jsonb := p_observation;
   v_marketplace text;
@@ -419,10 +420,10 @@ BEGIN
     RAISE EXCEPTION 'Invalid listing_url' USING ERRCODE = '22023', DETAIL = 'listing_url';
   END IF;
 
-  -- The ids: 1 to 64 of [A-Za-z0-9_.-]; the shop and SKU may be null.
+  -- The ids: 1 to 128 of [A-Za-z0-9_.-] for external_item_id; 1 to 64 for shop and SKU (which may be null).
   v_item := CASE WHEN jsonb_typeof(o -> 'external_item_id') = 'string'
                  THEN o ->> 'external_item_id' END;
-  IF v_item IS NULL OR v_item !~ c_id_pattern THEN
+  IF v_item IS NULL OR v_item !~ c_item_id_pattern THEN
     RAISE EXCEPTION 'Invalid external_item_id' USING ERRCODE = '22023',
       DETAIL = 'external_item_id';
   END IF;

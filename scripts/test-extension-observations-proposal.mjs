@@ -407,6 +407,24 @@ try {
       sku_id: 'sku_1.2-3',
       variant_label: 'x'.repeat(120),
     },
+    {
+      external_item_id: 'A'.repeat(65),
+      external_shop_id: 'S'.repeat(64),
+      sku_id: 'K'.repeat(64),
+    },
+    {
+      marketplace: 'topzone',
+      listing_url: 'https://www.topzone.vn/iphone/iphone-16-pro-max',
+      external_item_id: `iphone-16-pro-max-${'a'.repeat(102)}`,
+      external_shop_id: null,
+    },
+    {
+      marketplace: 'anphatpc',
+      listing_url: 'https://www.anphatpc.com.vn/laptop-apple-macbook-air.html',
+      external_item_id: `ap-${'a'.repeat(114)}-0123456789`,
+      external_shop_id: null,
+    },
+    { external_item_id: 'A'.repeat(128) },
     { variant_label: emoji.repeat(120) },
     { variant_label: `Mau ${ch(0x111)}en ${ch(0x200b)}` },
     (t) =>
@@ -542,12 +560,13 @@ try {
     ['listing_url', good({ listing_url: 5 })],
     ['listing_url', good({ listing_url: null })],
     ['external_item_id', good({ external_item_id: '' })],
-    ['external_item_id', good({ external_item_id: 'a'.repeat(65) })],
+    ['external_item_id', good({ external_item_id: 'a'.repeat(129) })],
     ['external_item_id', good({ external_item_id: 'a b' })],
     ['external_item_id', good({ external_item_id: 'a/b' })],
     ['external_item_id', good({ external_item_id: 'a\n' })],
     ['external_item_id', good({ external_item_id: 123 })],
     ['external_shop_id', good({ external_shop_id: '' })],
+    ['external_shop_id', good({ external_shop_id: 'a'.repeat(65) })],
     ['external_shop_id', good({ external_shop_id: 'x y' })],
     ['external_shop_id', good({ external_shop_id: 5 })],
     ['sku_id', good({ sku_id: 'a'.repeat(65) })],
@@ -1177,16 +1196,58 @@ try {
     undefined,
     'rate_worker insert'
   );
-  const directFor = (marketplace, url) =>
+  const directFor = (
+    marketplace,
+    url,
+    itemId = 'x',
+    shopId = null,
+    skuId = null
+  ) =>
     `INSERT INTO rate.extension_observations (submitter_id, schema_version,
-      marketplace, listing_url, external_item_id, price_vnd, stock_state, observed_at, extractor)
-    VALUES (${q(s1)}, 1, ${q(marketplace)}, ${q(url)}, 'x', 1000, 'unknown', now(),
+      marketplace, listing_url, external_item_id, external_shop_id, sku_id,
+      price_vnd, stock_state, observed_at, extractor)
+    VALUES (${q(s1)}, 1, ${q(marketplace)}, ${q(url)}, ${q(itemId)}, ${lit(shopId)},
+      ${lit(skuId)}, 1000, 'unknown', now(),
       '{"source": "dom", "extension_version": "1"}') RETURNING status`;
   assert.equal(
     as('service_role', directFor('shopee', 'https://shopee.vn/x')),
     'quarantined',
     'service_role inserts directly'
   );
+  assert.equal(
+    as(
+      'service_role',
+      directFor(
+        'anphatpc',
+        'https://www.anphatpc.com.vn/laptop-apple-macbook-air.html',
+        `ap-${'a'.repeat(114)}-0123456789`
+      )
+    ),
+    'quarantined',
+    'service_role direct insert accepts 128-char external_item_id'
+  );
+  for (const [label, query] of [
+    [
+      '129-char external_item_id',
+      directFor('shopee', 'https://shopee.vn/x', 'a'.repeat(129)),
+    ],
+    [
+      '65-char external_shop_id',
+      directFor('shopee', 'https://shopee.vn/x', 'x', 's'.repeat(65)),
+    ],
+    [
+      '65-char sku_id',
+      directFor('shopee', 'https://shopee.vn/x', 'x', null, 'k'.repeat(65)),
+    ],
+  ]) {
+    refused(
+      'service_role',
+      query,
+      '23514',
+      undefined,
+      `the id CHECK holds service_role: ${label}`
+    );
+  }
   for (const [marketplace, url] of [
     ['dienmayxanh', 'https://www.dienmayxanh.com/dtdd/x'],
     ['topzone', 'https://www.topzone.vn/iphone/x'],
