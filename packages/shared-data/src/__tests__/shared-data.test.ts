@@ -2959,8 +2959,10 @@ function testExtensionObservation(): void {
     [{ ...valid, observed_at: '2026-11-04 09:59Z' }, 'observed_at'],
     [{ ...valid, external_item_id: '' }, 'external_item_id'],
     [{ ...valid, external_item_id: 'a b' }, 'external_item_id'],
+    [{ ...valid, external_item_id: 'a'.repeat(129) }, 'external_item_id'],
     [{ ...valid, external_shop_id: 'x'.repeat(65) }, 'external_shop_id'],
     [{ ...valid, sku_id: 7 }, 'sku_id'],
+    [{ ...valid, sku_id: 's'.repeat(65) }, 'sku_id'],
     [{ ...valid, variant_label: '' }, 'variant_label'],
     [{ ...valid, variant_label: 'a\u0000b' }, 'variant_label'],
     [{ ...valid, price_vnd: 999 }, 'price_vnd'],
@@ -2993,6 +2995,42 @@ function testExtensionObservation(): void {
       JSON.stringify(input).slice(0, 80)
     );
   }
+  // external_item_id widens to 128 chars (DOS/Rate#1890) while external_shop_id and sku_id stay at 64.
+  assert.equal(rules.EXTENSION_OBSERVATION_LIMITS.itemIdMax, 128);
+  assert.equal(rules.EXTENSION_OBSERVATION_LIMITS.idMax, 64);
+  const retail120Slug = `iphone-16-pro-max-${'a'.repeat(102)}`;
+  assert.equal(retail120Slug.length, 120);
+  const anphat128Id = `ap-${'a'.repeat(114)}-0123456789`;
+  assert.equal(anphat128Id.length, 128);
+  assert.ok(parse({ ...valid, external_item_id: 'a'.repeat(65) }).ok);
+  assert.ok(
+    parse({
+      ...valid,
+      marketplace: 'topzone',
+      listing_url: 'https://www.topzone.vn/iphone/iphone-16-pro-max',
+      external_item_id: retail120Slug,
+      external_shop_id: null,
+    }).ok
+  );
+  assert.ok(
+    parse({
+      ...valid,
+      marketplace: 'anphatpc',
+      listing_url:
+        'https://www.anphatpc.com.vn/laptop-apple-macbook-air-m5.html',
+      external_item_id: anphat128Id,
+      external_shop_id: null,
+    }).ok
+  );
+  assert.ok(
+    parse({
+      ...valid,
+      external_item_id: 'A'.repeat(128),
+      external_shop_id: 'S'.repeat(64),
+      sku_id: 'K'.repeat(64),
+    }).ok
+  );
+
   // Offsets the RPC accepts are accepted here too.
   for (const at of [
     '2026-11-04T16:59+07',

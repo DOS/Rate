@@ -1602,7 +1602,43 @@ async function testExtensionObservations() {
       waveObservation
     );
 
-    // Bad input is refused before the database (including tgdd/topzone host isolation).
+    // 120-char retail slugs and 128-char anphatpc item ids reach the RPC (#1890).
+    for (const longObs of [
+      {
+        ...waveObservation,
+        external_item_id: `iphone-16-pro-max-${'a'.repeat(102)}`,
+      },
+      {
+        ...observation,
+        marketplace: 'anphatpc',
+        listing_url:
+          'https://www.anphatpc.com.vn/laptop-apple-macbook-air-m5.html',
+        external_item_id: `ap-${'a'.repeat(114)}-0123456789`,
+        external_shop_id: null,
+      },
+    ]) {
+      calls = [];
+      res = await observationRoute.POST(
+        withIp(
+          post('/api/v1/rate/extension/observation', {
+            submitterId: SUBMITTER,
+            observation: longObs,
+          }),
+          '203.0.113.77'
+        )
+      );
+      assert.equal(res.status, 200);
+      assert.deepEqual(await res.json(), { ok: true, status: 'quarantined' });
+      const [longCall] = rpcCalls('submit_extension_observation');
+      assert.ok(longCall, 'long external_item_id must reach the RPC');
+      assert.deepEqual(
+        (longCall.body as Record<string, unknown>).p_observation,
+        longObs
+      );
+    }
+
+    // Bad input is refused before the database (including tgdd/topzone host isolation
+    // and 129-char item id / 65-char shop & sku id bounds).
     for (const [body, code, field] of [
       [{ submitterId: 'x', observation }, 'INVALID_SUBMITTER', undefined],
       [
@@ -1612,6 +1648,30 @@ async function testExtensionObservations() {
         },
         'INVALID_OBSERVATION',
         'observation',
+      ],
+      [
+        {
+          submitterId: SUBMITTER,
+          observation: { ...observation, external_item_id: 'a'.repeat(129) },
+        },
+        'INVALID_OBSERVATION',
+        'external_item_id',
+      ],
+      [
+        {
+          submitterId: SUBMITTER,
+          observation: { ...observation, external_shop_id: 's'.repeat(65) },
+        },
+        'INVALID_OBSERVATION',
+        'external_shop_id',
+      ],
+      [
+        {
+          submitterId: SUBMITTER,
+          observation: { ...observation, sku_id: 'k'.repeat(65) },
+        },
+        'INVALID_OBSERVATION',
+        'sku_id',
       ],
       [
         {
