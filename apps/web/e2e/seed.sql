@@ -422,3 +422,41 @@ VALUES
   ('77777777-7777-4777-8777-777777771609', '22222222-2222-4222-8222-222222222221', 'battery', 'pro',
    'Dòng code dự phòng khi chưa có ai', 25.00, 30, false, 'code', timestamptz '2026-10-30 12:00:00+07');
 
+-- Single-SKU smartwatch with variant_name, colors, hero photo, 0 verified reviews
+-- (stored 4.9 prior), no expert score, no criteria scores, and 3 in-stock + 1
+-- out-of-stock offer (DOS/Rate#1945).
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official, follower_count)
+VALUES
+  ('ffffffff-ffff-4fff-8fff-ffffffff1941', 'shopee', 'shop_hero_1945_1', 'Watch Store One', 'watch-store-one', true, 0),
+  ('ffffffff-ffff-4fff-8fff-ffffffff1942', 'lazada', 'shop_hero_1945_2', 'Watch Store Two', 'watch-store-two', true, 0),
+  ('ffffffff-ffff-4fff-8fff-ffffffff1943', 'tiki', 'shop_hero_1945_3', 'Watch Store Three', 'watch-store-three', false, 0),
+  ('ffffffff-ffff-4fff-8fff-ffffffff1944', 'shopee', 'shop_hero_1945_4', 'Watch Store Out', 'watch-store-out', false, 0);
+
+INSERT INTO rate.master_products
+  (id, category_id, brand, model, variant_name, model_key, name, slug, screen_size_inch, battery_mah,
+   images, thumbnail, colors, min_price, max_price, merchant_count, user_rating_weighted, authentic_review_count,
+   status, metadata, created_at, updated_at)
+VALUES
+  ('22222222-2222-4222-8222-222222221945', NULL, 'Apple', 'Hero Watch E2E', '49mm 64GB',
+   'apple:hero-watch-e2e:49mm-64gb', 'Apple Watch Ultra 2 49mm 64GB E2E', 'e2e-hero-watch-49mm-64gb',
+   1.92, 564, ARRAY['/img/devices/apple-iphone-16-pro-max-256gb.jpg'],
+   '/img/devices/apple-iphone-16-pro-max-256gb.jpg', ARRAY['Titan Tự Nhiên', 'Titan Đen'],
+   18990000, 21990000, 3, 4.9, 0, 'published', '{"category_slug": "smartwatches"}',
+   timestamptz '2026-01-01 00:00:00+00', timestamptz '2026-01-01 00:00:00+00');
+
+INSERT INTO rate.products
+  (id, merchant_id, platform, platform_item_id, title, brand, price_current, url, cluster_id, availability)
+VALUES
+  ('cccccccc-cccc-4ccc-8ccc-ccccccc19451', 'ffffffff-ffff-4fff-8fff-ffffffff1941', 'shopee', 'hero_1945_1',
+   'Apple Watch Ultra 2 49mm 64GB E2E Shop 1', 'Apple', 18990000, 'https://shopee.vn/hero-1945-1',
+   '22222222-2222-4222-8222-222222221945', 'in_stock'),
+  ('cccccccc-cccc-4ccc-8ccc-ccccccc19452', 'ffffffff-ffff-4fff-8fff-ffffffff1942', 'lazada', 'hero_1945_2',
+   'Apple Watch Ultra 2 49mm 64GB E2E Shop 2', 'Apple', 19990000, 'https://lazada.vn/hero-1945-2',
+   '22222222-2222-4222-8222-222222221945', 'in_stock'),
+  ('cccccccc-cccc-4ccc-8ccc-ccccccc19453', 'ffffffff-ffff-4fff-8fff-ffffffff1943', 'tiki', 'hero_1945_3',
+   'Apple Watch Ultra 2 49mm 64GB E2E Shop 3', 'Apple', 21990000, 'https://tiki.vn/hero-1945-3',
+   '22222222-2222-4222-8222-222222221945', 'in_stock'),
+  ('cccccccc-cccc-4ccc-8ccc-ccccccc19454', 'ffffffff-ffff-4fff-8fff-ffffffff1944', 'shopee', 'hero_1945_4',
+   'Apple Watch Ultra 2 49mm 64GB E2E Out', 'Apple', 17990000, 'https://shopee.vn/hero-1945-4',
+   '22222222-2222-4222-8222-222222221945', 'out_of_stock');
+
