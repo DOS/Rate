@@ -1544,13 +1544,23 @@ async function runMcpTestSuite() {
     }
   }
   assert.match(dealsTool.description, /19 categories/);
+  assert.match(dealsTool.description, /15 non-place categories/);
+  assert.match(dealsTool.description, /Wave E4 places/);
   assert.match(dealsTool.description, /returns no deals/);
   assert.match(dealsTool.description, /empty results/);
   const compareTool = MCP_TOOL_DEFINITIONS.find(
     (t) => t.name === 'compare_devices_by_use_case'
   )!;
-  assert.match(compareTool.description, /10-group specs/);
+  assert.match(compareTool.description, /category-scoped specs/);
+  assert.match(
+    compareTool.description,
+    /availability \+ regulatory on Wave E2\/E3\/E4/
+  );
+  assert.match(compareTool.description, /earbuds omitting screen/);
+  assert.match(compareTool.description, /screen \+ value on tvs/);
+  assert.match(compareTool.description, /value only on other Wave E1-E4/);
   assert.doesNotMatch(compareTool.description, /\b5 categories\b/);
+  assert.doesNotMatch(compareTool.description, /standardized 10-group specs/);
 
   const initInstructionsRes = await handleMcpHttpPost(
     makeMcpRequest(
@@ -1582,17 +1592,44 @@ async function runMcpTestSuite() {
     /19 supported categories/
   );
   const dealsSchemaFor19 = dealsTool.inputSchema as {
-    properties: Record<string, { enum?: string[] }>;
+    properties: Record<string, { enum?: string[]; description?: string }>;
   };
   assert.deepEqual(dealsSchemaFor19.properties.category?.enum, [
     ...SUPPORTED_CATEGORY_ENUM.options,
   ]);
+  assert.match(
+    dealsSchemaFor19.properties.category?.description ?? '',
+    /15 non-place categories/
+  );
+  assert.match(
+    dealsSchemaFor19.properties.category?.description ?? '',
+    /Wave E4 places/
+  );
+  const compareSchemaFor19 = compareTool.inputSchema as {
+    properties: Record<string, { description?: string }>;
+  };
+  assert.match(
+    compareSchemaFor19.properties.persona?.description ?? '',
+    /4 without screen on earbuds/
+  );
+  assert.match(
+    compareSchemaFor19.properties.persona?.description ?? '',
+    /screen \+ value on tvs/
+  );
+  assert.match(
+    compareSchemaFor19.properties.persona?.description ?? '',
+    /value only on other Wave E1-E4/
+  );
 
   assert.match(llmsBody, /across 19 categories/);
   assert.match(llmsBody, /\*\*19 Canonical Categories\*\*/);
   assert.match(llmsBody, /no published items yet returns empty results/);
+  assert.match(llmsBody, /15 non-place categories/);
+  assert.match(llmsBody, /category-scoped specification templates/);
+  assert.match(llmsBody, /`earbuds` omitting `screen`/);
   assert.doesNotMatch(llmsBody, /\b5 (hardware |tech )?categories\b/);
   assert.doesNotMatch(llmsBody, /5 Canonical Categories/);
+  assert.doesNotMatch(llmsBody, /across 10-group (hardware )?specs/);
   for (const [groupLabel, slugs] of expectedCategoryGroups) {
     assert.ok(
       llmsBody.includes(`  - ${groupLabel} (${slugs.length}): `),
@@ -1627,6 +1664,8 @@ async function runMcpTestSuite() {
     tools: Array<{ name: string; description: string }>;
   };
   assert.match(wkJson.description, /19 categories/);
+  assert.match(wkJson.description, /category-scoped specs/);
+  assert.doesNotMatch(wkJson.description, /10-group standardized specs/);
   assert.doesNotMatch(
     wkJson.description,
     /\b5 (device |hardware |tech )?categories\b/
