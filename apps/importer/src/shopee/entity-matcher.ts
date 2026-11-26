@@ -514,6 +514,7 @@ export class EntityMatcher {
     const hasSpecs = Object.entries(specifications).some(
       ([group, fields]) =>
         group !== 'category_slug' &&
+        group !== 'custom_fields' &&
         Boolean(fields) &&
         typeof fields === 'object' &&
         Object.values(fields as Record<string, unknown>).some(v => v !== undefined && v !== null)

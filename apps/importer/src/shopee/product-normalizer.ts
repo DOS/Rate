@@ -5,7 +5,11 @@ import {
   type KeySpecs,
   type VariantSource,
 } from '@repo/shared-data';
-import { detectProductOrigin, type ProductOrigin } from '@repo/shared-data/rules';
+import {
+  detectProductOrigin,
+  mergeCustomFields,
+  type ProductOrigin,
+} from '@repo/shared-data/rules';
 import type { ShopeeProduct } from './types.js';
 
 export { detectProductOrigin, type ProductOrigin };
@@ -2387,6 +2391,9 @@ const WAVE_E3_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bsudocrem\b/i, 'Sudocrem'],
   [/(?<![\p{L}\d])dr\.?\s*brown['’]?s(?![\p{L}\d])/iu, "Dr. Brown's"],
   [/\bdoppelherz\b/i, 'Doppelherz'],
+  [/\bpharmaton\b/i, 'Pharmaton'],
+  [/\btraphaco\b/i, 'Traphaco'],
+  [/\bsanofi\b/i, 'Sanofi'],
 ];
 
 /**
@@ -2446,6 +2453,11 @@ const WAVE_E3_GENERIC_BRAND_SLUGS = new Set([
   'lazada',
   'tiktok',
   'avakids',
+  'pharmacity',
+  'kidsplaza',
+  'kids-plaza',
+  'concung',
+  'con-cung',
   'hasaki',
   'watsons',
   'guardian',
@@ -2456,6 +2468,18 @@ const WAVE_E3_GENERIC_BRAND_SLUGS = new Set([
   'none',
   'unknown',
 ]);
+/**
+ * First-party retail chain catalogs (DOS/Rate#1923) and the category a listing falls back
+ * to when its title names none: a chain that sells baby goods or supplements never lists
+ * a phone without saying so, so the phone default would misfile it. These catalogs are
+ * curated, so a structured brand hint is trusted even when the title omits it.
+ */
+const RETAIL_INGESTION_DEFAULT_CATEGORY: Readonly<Record<string, CanonicalCategorySlug>> = {
+  avakids: 'mother-baby',
+  kidsplaza: 'mother-baby',
+  concung: 'mother-baby',
+  pharmacity: 'supplements',
+};
 const WAVE_E3_RETAIL_SHOP_PREFIX_RE =
   /^(?:shop|cua hang|nha thuoc|sieu thi|tong kho|dai ly|tiem)(?:\s|$)/;
 
@@ -2631,7 +2655,10 @@ export function sanitizeWaveE3StructuredBrand(
   const groundedInTitle = containsWordBoundedSubstring(foldedTitle, foldedCandidate);
   if (!groundedInTitle) {
     const isCuratedCatalog =
-      context.platform === 'tiki' || context.platform === 'avakids' || context.isMall === true;
+      context.platform === 'tiki' ||
+      (typeof context.platform === 'string' &&
+        Object.hasOwn(RETAIL_INGESTION_DEFAULT_CATEGORY, context.platform)) ||
+      context.isMall === true;
     if (!isCuratedCatalog) return null;
     const foldedShopName = foldAccentsLower(
       stripControlChars(context.shopName ?? '').normalize('NFC')
@@ -3153,14 +3180,19 @@ export class ProductNormalizer {
       title,
       explicitCategorySlug ?? platformSlugHint
     );
+    const retailDefaultCategory =
+      typeof safeRaw.platform === 'string' &&
+      Object.hasOwn(RETAIL_INGESTION_DEFAULT_CATEGORY, safeRaw.platform)
+        ? RETAIL_INGESTION_DEFAULT_CATEGORY[safeRaw.platform]
+        : undefined;
     const categorySlug: CanonicalCategorySlug =
       !explicitCategorySlug &&
-      safeRaw.platform === 'avakids' &&
+      retailDefaultCategory !== undefined &&
       detectedCategorySlug === 'smartphones' &&
       !/(?<![\p{L}\d])(?:iphone|ipad|macbook|laptop|điện\s*thoại|smartphone|tablet|tai\s*nghe|smartwatch|tivi)(?![\p{L}\d])/iu.test(
         title
       )
-        ? 'mother-baby'
+        ? retailDefaultCategory
         : detectedCategorySlug;
 
     // 1. Extract Brand
@@ -4716,6 +4748,17 @@ export class ProductNormalizer {
       safeRaw.metadata && typeof safeRaw.metadata === 'object' && !Array.isArray(safeRaw.metadata)
         ? safeRaw.metadata
         : undefined;
+    // Deterministic per-category facts the crawler extracted travel in
+    // `metadata.custom_fields`; they are stored with the specs so a new master gets
+    // them without a post-ingest write (DOS/Rate#1923). Merged, never replaced, and
+    // sanitized to the bounds of `CustomFieldsSchema`.
+    const customFields = mergeCustomFields(
+      (specifications as Record<string, unknown>).custom_fields,
+      normalizedMetadata?.custom_fields
+    );
+    if (customFields) {
+      specifications.custom_fields = customFields;
+    }
 
     return {
       category_slug: categorySlug,

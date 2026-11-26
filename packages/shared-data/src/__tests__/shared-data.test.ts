@@ -4197,6 +4197,226 @@ function testWaveE3E4Readiness(): void {
   );
 }
 
+function testRetailPlatformsAndCustomFields1923(): void {
+  // Retail chain catalogs are ingestion-only: the extension list stays at 22.
+  for (const platform of ['avakids', 'pharmacity', 'kidsplaza', 'concung']) {
+    assert.equal(
+      SupportedIngestionPlatformSchema.safeParse(platform).success,
+      true,
+      platform
+    );
+    assert.equal(
+      SupportedEcommercePlatformSchema.safeParse(platform).success,
+      false,
+      platform
+    );
+    assert.ok(
+      (
+        sharedDataRoot.SUPPORTED_RETAIL_INGESTION_PLATFORMS as readonly string[]
+      ).includes(platform),
+      `${platform} must be listed in SUPPORTED_RETAIL_INGESTION_PLATFORMS`
+    );
+  }
+  assert.equal(SupportedEcommercePlatformSchema.options.length, 22);
+  assert.equal(
+    SupportedIngestionPlatformSchema.safeParse('pharma').success,
+    false
+  );
+  for (const sample of [
+    {
+      platform: 'pharmacity' as const,
+      itemId: 'p-1',
+      shopId: 'pharmacity',
+      url: 'https://www.pharmacity.vn/vien-uong-blackmores-fish-oil-1000mg.html',
+      title: 'Viên uống Blackmores Fish Oil 1000mg 400 viên',
+      priceMin: 450000,
+      priceMax: 450000,
+      shop: { shopId: 'pharmacity', name: 'Pharmacity', isMall: true },
+      metadata: { custom_fields: { dosage_form: 'capsule', pack_count: 400 } },
+    },
+    {
+      platform: 'kidsplaza' as const,
+      itemId: 'kp-1',
+      shopId: 'kidsplaza',
+      url: 'https://www.kidsplaza.vn/sua-aptamil-so-1-800g.html',
+      title: 'Sữa bột Aptamil Profutura số 1 800g',
+      priceMin: 790000,
+      priceMax: 790000,
+      shop: { shopId: 'kidsplaza', name: 'Kids Plaza', isMall: true },
+    },
+    {
+      platform: 'concung' as const,
+      itemId: 'cc-1',
+      shopId: 'concung',
+      url: 'https://concung.com/sua-bot/similac-total-comfort-1-820g.html',
+      title: 'Sữa bột Similac Total Comfort số 1 820g',
+      priceMin: 650000,
+      priceMax: 650000,
+      shop: { shopId: 'concung', name: 'Con Cưng', isMall: true },
+    },
+  ]) {
+    assert.equal(
+      ScrapedProductSchema.safeParse(sample).success,
+      true,
+      `ScrapedProductSchema must accept ${sample.platform}`
+    );
+  }
+
+  // custom_fields is a typed optional record on ProductSpecificationsSchema.
+  const specs = ProductSpecificationsSchema.parse({
+    category_slug: 'supplements',
+    custom_fields: {
+      dosage_form: 'capsule',
+      pack_count: 400,
+      is_otc_safe: true,
+      actives: ['omega-3', 'dha'],
+      room_area_m2: 25,
+    },
+  });
+  assert.deepEqual(specs.custom_fields, {
+    dosage_form: 'capsule',
+    pack_count: 400,
+    is_otc_safe: true,
+    actives: ['omega-3', 'dha'],
+    room_area_m2: 25,
+  });
+  assert.equal(ProductSpecificationsSchema.safeParse({}).success, true);
+  for (const bad of [
+    { CamelKey: 'x' },
+    { 'kebab-key': 'x' },
+    { _leading: 'x' },
+    { double__underscore: 'x' },
+    { empty_string: '' },
+    { blank_string: '   ' },
+    { lone_surrogate: 'ab\uD800cd' },
+    { nested: { a: 1 } },
+    { nullable: null },
+    { mixed_list: ['a', 1] },
+    { empty_list: [] },
+    { blank_list_item: ['  '] },
+    { lone_surrogate_list_item: ['x\uDC00y'] },
+    { too_long: 'x'.repeat(501) },
+    { infinite: Number.POSITIVE_INFINITY },
+    { constructor: 'x' },
+    { prototype: 'x' },
+    ['not', 'a', 'record'],
+  ]) {
+    assert.equal(
+      sharedDataRoot.CustomFieldsSchema.safeParse(bad).success,
+      false,
+      JSON.stringify(bad)
+    );
+  }
+  const parsedProto = sharedDataRoot.CustomFieldsSchema.parse(
+    JSON.parse('{"__proto__":"x"}') as Record<string, unknown>
+  );
+  assert.deepEqual(parsedProto, {});
+  assert.equal(Object.hasOwn(parsedProto, '__proto__'), false);
+  const tooMany = Object.fromEntries(
+    Array.from({ length: 65 }, (_, i) => [`field_${i}`, i])
+  );
+  assert.equal(
+    sharedDataRoot.CustomFieldsSchema.safeParse(tooMany).success,
+    false
+  );
+
+  // sanitizeCustomFields: coerces keys, bounds values, strips lone surrogates, drops invalid.
+  const sanitized = rules.sanitizeCustomFields({
+    skinType: '  da\u0000 dầu   mụn ',
+    'Pack Count': 30,
+    'kích-thước': 'L',
+    __proto__: { polluted: true },
+    constructor: 'x',
+    prototype: 'y',
+    empty: '   ',
+    nested: { a: 1 },
+    infinite: Number.NaN,
+    flags: ['a', 'a', '', 3, { b: 2 }, ' b ', 'x\uD800y'],
+    long_text: 'y'.repeat(499) + '😀',
+    lone_surrogate: 'ok\uD800text\uDFFF',
+    skin_type: 'ignored duplicate of skinType',
+  });
+  assert.deepEqual(sanitized, {
+    skin_type: 'da dầu mụn',
+    pack_count: 30,
+    kich_thuoc: 'L',
+    flags: ['a', '3', 'b', 'xy'],
+    long_text: 'y'.repeat(499),
+    lone_surrogate: 'oktext',
+  });
+  assert.equal(({} as Record<string, unknown>).polluted, undefined);
+  assert.equal(
+    sharedDataRoot.CustomFieldsSchema.safeParse(sanitized).success,
+    true
+  );
+  assert.equal(rules.sanitizeCustomFields(undefined), undefined);
+  assert.equal(rules.sanitizeCustomFields(['a']), undefined);
+  assert.equal(
+    rules.sanitizeCustomFields({ '---': 'x', empty: '' }),
+    undefined
+  );
+  const bounded = rules.sanitizeCustomFields(
+    Object.fromEntries(Array.from({ length: 80 }, (_, i) => [`k_${i}`, i]))
+  );
+  assert.equal(Object.keys(bounded ?? {}).length, 64);
+  assert.equal(bounded?.k_0, 0);
+  assert.equal(bounded?.k_64, undefined);
+
+  // mergeCustomFields: incoming wins per key, base keys are never dropped.
+  assert.deepEqual(
+    rules.mergeCustomFields(
+      { inverter: true, capacity_btu: 9000, door_style: 'french' },
+      { capacity_btu: 12000, door_style: '  ', panel_tech: 'QLED' }
+    ),
+    {
+      inverter: true,
+      capacity_btu: 12000,
+      door_style: 'french',
+      panel_tech: 'QLED',
+    }
+  );
+  assert.deepEqual(rules.mergeCustomFields(undefined, { a: false }), {
+    a: false,
+  });
+  assert.deepEqual(rules.mergeCustomFields({ a: 1 }, null), { a: 1 });
+  assert.equal(rules.mergeCustomFields(undefined, undefined), undefined);
+  const fullBase = Object.fromEntries(
+    Array.from({ length: 64 }, (_, i) => [`k_${i}`, i])
+  );
+  const mergedFull = rules.mergeCustomFields(fullBase, {
+    k_0: 'new',
+    extra: 1,
+  });
+  assert.equal(Object.keys(mergedFull ?? {}).length, 64);
+  assert.equal(mergedFull?.k_0, 'new');
+  assert.equal(mergedFull?.extra, undefined);
+
+  // applyCategorySpecTemplate preserves custom_fields for both storage and display.
+  for (const forStorage of [true, false]) {
+    const scoped = rules.applyCategorySpecTemplate(
+      'supplements',
+      {
+        ram_gb: 8,
+        specifications: {
+          category_slug: 'supplements',
+          custom_fields: { dosage_form: 'capsule', pack_count: 60 },
+          hardware: { ram_gb: 8 },
+        },
+      },
+      { forStorage }
+    );
+    assert.deepEqual(
+      (scoped.specifications as Record<string, unknown>).custom_fields,
+      { dosage_form: 'capsule', pack_count: 60 }
+    );
+    assert.equal(
+      'hardware' in (scoped.specifications as Record<string, unknown>),
+      false
+    );
+    assert.equal(scoped.ram_gb, null);
+  }
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
@@ -4251,6 +4471,10 @@ function main(): void {
   testWaveE3E4Readiness();
   console.log(
     '  ✅ [16/16] Wave E3/E4 schemas, criteria v3, and place details verified'
+  );
+  testRetailPlatformsAndCustomFields1923();
+  console.log(
+    '  ✅ [17/17] Retail ingestion platforms and typed custom_fields (DOS/Rate#1923) verified'
   );
   console.log('🎉 All @repo/shared-data tests passed!');
 }

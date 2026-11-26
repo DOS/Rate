@@ -1888,6 +1888,91 @@ async function main() {
     );
   }
 
+  // 7.5 Retail ingestion platform display labels & Vietnamese lang="vi" tag (#1923)
+  const retailPlatformCases: Array<readonly [string, string, boolean]> = [
+    ['avakids', 'AVAKids', false],
+    ['pharmacity', 'Pharmacity', false],
+    ['kidsplaza', 'Kids Plaza', false],
+    ['concung', 'Con Cưng', true],
+  ];
+  for (const [
+    platformKey,
+    displayLabel,
+    isVietnameseName,
+  ] of retailPlatformCases) {
+    const templateGroup = comboPayload.multiStoreOptimal!.storeGroups[0]!;
+    const retailPayload: ComboCartApiPayload = {
+      ...comboPayload,
+      singleStoreBest: {
+        ...comboPayload.singleStoreBest!,
+        storeGroups: [
+          {
+            ...templateGroup,
+            storeKey: `store-${platformKey}`,
+            merchantId: `store-${platformKey}`,
+            merchantName: `${displayLabel} Official`,
+            platform: platformKey,
+            items: templateGroup.items.map((item) => ({
+              ...item,
+              platform: platformKey,
+              offerUrl: `https://${platformKey}.vn/item`,
+            })),
+            trustBadge: {
+              ...templateGroup.trustBadge,
+              platform: platformKey,
+            },
+          },
+        ],
+      },
+      multiStoreOptimal: null,
+    };
+    for (const loc of ['vi', 'en', 'cs'] as const) {
+      const messages = pickClientMessages(localeCatalogs[loc], 'watchlist');
+      const comboHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: mockRouter as never },
+          React.createElement(
+            IntlProvider,
+            { locale: loc, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+            React.createElement(WatchlistComboOptimizer, {
+              watchedItems: [],
+              catalogProducts: catalogSample,
+              locale: loc,
+              initialSelectedSlugs: [
+                'apple-iphone-16',
+                'apple-airpods-pro-2-usb-c',
+              ],
+              initialOptions: {
+                officialOnly: false,
+                minTrust: 80,
+                maxStores: 3,
+                shippingVnd: 30_000,
+              },
+              initialResult: retailPayload,
+            })
+          )
+        )
+      );
+      if (loc !== 'vi' && isVietnameseName) {
+        assert.ok(
+          comboHtml.includes(`lang="vi">${displayLabel}<`),
+          `${loc}: expected lang="vi" on ${displayLabel} badge`
+        );
+      } else {
+        assert.ok(
+          comboHtml.includes(`>${displayLabel}<`),
+          `${loc}: expected ${displayLabel} badge`
+        );
+        assert.equal(
+          comboHtml.includes(`lang="vi">${displayLabel}<`),
+          false,
+          `${loc}: ${displayLabel} must not set lang="vi"`
+        );
+      }
+    }
+  }
+
   console.warn('✅ All F8 combo cart UI & verified safe merchant tests passed');
 }
 

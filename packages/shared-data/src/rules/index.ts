@@ -18,3 +18,4 @@ export * from './review-depth.js';
 export * from './review-value.js';
 export * from './extension-observation.js';
 export * from './offer-origin.js';
+export * from './custom-fields.js';

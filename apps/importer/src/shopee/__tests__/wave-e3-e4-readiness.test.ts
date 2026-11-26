@@ -6,10 +6,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  CustomFieldsSchema,
   EntityTypeSchema,
   PlaceDetailSchema,
   PlacePriceTierSchema,
   PlacePriceUnitSchema,
+  ProductSpecificationsSchema,
+  SUPPORTED_RETAIL_INGESTION_PLATFORMS,
   SupportedEcommercePlatformSchema,
   SupportedIngestionPlatformSchema,
 } from '@repo/shared-data';
@@ -20,10 +23,18 @@ import {
   RATING_CRITERIA_VERSION,
   RATING_CRITERION_KEYS,
   V3_RATING_CRITERIA_CATEGORIES,
+  applyCategorySpecTemplate,
   getRatingCriteria,
   getRatingCriteriaVersion,
+  mergeCustomFields,
   minimumListingPriceVnd,
+  sanitizeCustomFields,
 } from '@repo/shared-data/rules';
+import {
+  AiSpecEnricher,
+  mergeProductSpecifications,
+  sanitizeSpecifications,
+} from '../ai-spec-enricher.js';
 import { EntityMatcher } from '../entity-matcher.js';
 import {
   AiReviewAnalyzer,
@@ -1459,5 +1470,566 @@ describe('Ingestion pipeline, EntityMatcher, and upsertPlaceDetails Open-Core gu
     );
     assert.ok(restaurantResults[0].helpfulness_weight > 0);
     assert.equal(restaurantResults[1].helpfulness_weight, 0);
+  });
+});
+
+describe('DOS/Rate#1923 retail platforms, typed custom_fields, and Wave E3 brand allowlist', () => {
+  const normalizer = new ProductNormalizer();
+
+  it('supports pharmacity, kidsplaza, and concung ingestion while keeping extension platforms at 22', async () => {
+    assert.equal(SupportedEcommercePlatformSchema.options.length, 22);
+    assert.deepEqual(
+      [...SUPPORTED_RETAIL_INGESTION_PLATFORMS],
+      ['avakids', 'pharmacity', 'kidsplaza', 'concung']
+    );
+    for (const platform of ['pharmacity', 'kidsplaza', 'concung'] as const) {
+      assert.equal(SupportedIngestionPlatformSchema.safeParse(platform).success, true);
+      assert.equal(SupportedEcommercePlatformSchema.safeParse(platform).success, false);
+    }
+
+    // Default category fallbacks: pharmacity -> supplements, kidsplaza/concung -> mother-baby.
+    const pharmacityDefault = normalizer.normalize(
+      createSampleProduct({
+        platform: 'pharmacity',
+        title: 'Viên bổ mắt hỗ trợ thị lực hộp 30 viên',
+        priceMin: 185_000,
+        priceMax: 185_000,
+        url: 'https://www.pharmacity.vn/vien-bo-mat-30-vien.html',
+        shop: { shopId: 'pharmacity', name: 'Pharmacity', isMall: true },
+      })
+    );
+    assert.equal(pharmacityDefault.category_slug, 'supplements');
+    assert.equal(pharmacityDefault.entity_type, 'product');
+    assert.equal(pharmacityDefault.keyable, true);
+
+    for (const babyPlatform of ['kidsplaza', 'concung'] as const) {
+      const babyDefault = normalizer.normalize(
+        createSampleProduct({
+          platform: babyPlatform,
+          title: 'Khăn xô tắm sợi tre cao cấp 4 lớp cho bé',
+          priceMin: 145_000,
+          priceMax: 145_000,
+          shop: {
+            shopId: babyPlatform,
+            name: babyPlatform === 'kidsplaza' ? 'Kids Plaza' : 'Con Cưng',
+            isMall: true,
+          },
+        })
+      );
+      assert.equal(babyDefault.category_slug, 'mother-baby');
+      assert.equal(babyDefault.entity_type, 'product');
+      assert.equal(babyDefault.keyable, true);
+    }
+
+    // Explicit smartphone title on retail ingestion platforms still stays smartphones.
+    const phoneOnPharmacity = normalizer.normalize(
+      createSampleProduct({
+        platform: 'pharmacity',
+        title: 'Điện thoại Samsung Galaxy A55 5G 128GB',
+        priceMin: 8_990_000,
+        priceMax: 8_990_000,
+      })
+    );
+    assert.equal(phoneOnPharmacity.category_slug, 'smartphones');
+
+    // Generic store names are rejected while curated catalog structured brand hints are trusted.
+    for (const badHint of [
+      { hint: 'Pharmacity', platform: 'pharmacity' as const },
+      { hint: 'Kids Plaza', platform: 'kidsplaza' as const },
+      { hint: 'kidsplaza', platform: 'kidsplaza' as const },
+      { hint: 'Con Cưng', platform: 'concung' as const },
+      { hint: 'concung', platform: 'concung' as const },
+    ]) {
+      assert.equal(
+        sanitizeWaveE3StructuredBrand(badHint.hint, {
+          identityTitle: 'Sữa tắm gội dịu nhẹ cho bé 200ml',
+          platform: badHint.platform,
+          shopName: badHint.hint,
+          isMall: true,
+        }),
+        null,
+        `Generic retail chain hint ${badHint.hint} must be rejected`
+      );
+    }
+
+    const curatedHint = normalizer.normalize(
+      createSampleProduct({
+        platform: 'concung',
+        title: 'Bình sữa cổ rộng PPSU 240ml',
+        brand: 'Richell',
+        shop: { shopId: 'concung', name: 'Con Cưng', isMall: true },
+      })
+    );
+    assert.equal(curatedHint.category_slug, 'mother-baby');
+    assert.equal(curatedHint.brand, 'Richell');
+
+    // End-to-end pipeline ingestion succeeds for pharmacity, kidsplaza, and concung.
+    for (const tc of [
+      {
+        platform: 'pharmacity' as const,
+        title: 'Viên uống Pharmaton Energy hộp 30 viên',
+        categorySlug: 'supplements',
+        url: 'https://www.pharmacity.vn/pharmaton-energy-30-vien.html',
+      },
+      {
+        platform: 'kidsplaza' as const,
+        title: 'Sữa bột Aptamil Profutura số 1 800g',
+        categorySlug: 'mother-baby',
+        url: 'https://www.kidsplaza.vn/sua-aptamil-so-1-800g.html',
+      },
+      {
+        platform: 'concung' as const,
+        title: 'Sữa bột Friso Gold Pro số 4 800g',
+        categorySlug: 'mother-baby',
+        url: 'https://concung.com/sua-bot/friso-gold-pro-so-4-800g.html',
+      },
+    ]) {
+      const { client, mutations, rpcs } = createMockSupabase();
+      const pipeline = new ShopeeIngestionPipeline({
+        supabaseClient: client,
+        itemModel: 'off',
+      });
+      const res = await pipeline.ingestProduct(
+        createSampleProduct({
+          platform: tc.platform,
+          title: tc.title,
+          categorySlug: tc.categorySlug,
+          priceMin: 320_000,
+          priceMax: 320_000,
+          url: tc.url,
+        }),
+        undefined,
+        { skipReviewAnalysis: true }
+      );
+      assert.equal(res.platform, tc.platform);
+      assert.ok(res.masterId);
+      assert.equal(
+        mutations.some(m => m.table === 'master_products' && m.op === 'upsert'),
+        true
+      );
+      assert.equal(
+        rpcs.some(r => r.fn === 'record_price_observation'),
+        true
+      );
+    }
+  });
+
+  it('normalizes all Wave E3 allowlist brands including newly added Pharmaton, Traphaco, and Sanofi', () => {
+    const cases: Array<readonly [string, string, string]> = [
+      ['cosmetics', 'Kem dưỡng La Roche-Posay Cicaplast Baume B5 40ml', 'La Roche-Posay'],
+      ['cosmetics', 'Nước tẩy trang Bioderma Sensibio H2O 500ml', 'Bioderma'],
+      ['cosmetics', 'Sữa rửa mặt CeraVe Foaming Cleanser 473ml', 'CeraVe'],
+      ['cosmetics', 'Kem chống nắng Anessa Perfect UV Milk 60ml', 'Anessa'],
+      ['cosmetics', 'Nước hoa hồng Klairs Supple Preparation 180ml', 'Klairs'],
+      ['cosmetics', 'Serum rau má Skin1004 Madagascar Centella 55ml', 'Skin1004'],
+      ['mother-baby', 'Sữa bột Aptamil Profutura số 2 800g', 'Aptamil'],
+      ['mother-baby', 'Sữa bột Similac Total Comfort số 1 820g', 'Similac'],
+      ['mother-baby', 'Sữa bột Meiji Infant Formula số 0 800g', 'Meiji'],
+      ['mother-baby', 'Sữa bột Enfa A+ Lactofree Care 400g', 'Enfamil'],
+      ['mother-baby', 'Sữa bột Friso Gold số 3 850g', 'Friso'],
+      ['supplements', 'Viên uống Pharmaton Energy 30 viên', 'Pharmaton'],
+      ['supplements', 'Viên uống Doppelherz Aktiv A-Z Fizz 15 viên', 'Doppelherz'],
+      ['supplements', 'Viên uống Blackmores Fish Oil 1000mg 400 viên', 'Blackmores'],
+      ['supplements', 'Vitamin D3 Ostelin Kids Liquid 20ml', 'Ostelin'],
+      ['supplements', 'Men vi sinh BioGaia Protectis Baby Drops 5ml', 'BioGaia'],
+      ['supplements', 'Hoạt huyết dưỡng não Traphaco hộp 5 vỉ x 20 viên', 'Traphaco'],
+      ['supplements', 'Men tiêu hóa Enterogermina Sanofi hộp 20 ống', 'Sanofi'],
+    ];
+
+    for (const [categorySlug, title, expectedBrand] of cases) {
+      assert.equal(detectWaveE3AllowlistBrand(title), expectedBrand);
+      const candidate = normalizer.normalize(
+        createSampleProduct({
+          platform: 'pharmacity',
+          title,
+          categorySlug,
+          priceMin: 250_000,
+          priceMax: 250_000,
+        })
+      );
+      assert.equal(candidate.brand, expectedBrand, `Expected brand ${expectedBrand} for ${title}`);
+    }
+
+    // Verify new OTC brands are stripped cleanly from model when extracting model_key.
+    const traphaco = normalizer.normalize(
+      createSampleProduct({
+        platform: 'pharmacity',
+        title: 'Hoạt huyết dưỡng não Traphaco 100 viên',
+        categorySlug: 'supplements',
+        priceMin: 115_000,
+        priceMax: 115_000,
+      })
+    );
+    assert.equal(traphaco.brand, 'Traphaco');
+    assert.doesNotMatch(traphaco.model, /\btraphaco\b/i);
+    assert.ok(traphaco.model_key.startsWith('traphaco:'));
+  });
+
+  it('normalizes, merges, protects against AI overwrite, and persists typed specifications.custom_fields', async () => {
+    // 1. ProductNormalizer.normalize() copies and sanitizes metadata.custom_fields into specifications.custom_fields.
+    const pharmacityCandidate = normalizer.normalize(
+      createSampleProduct({
+        platform: 'pharmacity',
+        title: 'Viên uống Pharmaton Energy hộp 30 viên',
+        categorySlug: 'supplements',
+        priceMin: 215_000,
+        priceMax: 215_000,
+        metadata: {
+          source_tag: 'pharmacity-api',
+          custom_fields: {
+            dosageForm: 'capsule',
+            packCount: 30,
+            isOtc: true,
+            activeIngredients: ['Ginseng G115', 'Vitamin B1', 'Ginseng G115'],
+            blank_field: '   ',
+            constructor: 'pollute',
+            __proto__: { evil: true },
+          },
+        },
+      })
+    );
+    assert.deepEqual(pharmacityCandidate.specifications.custom_fields, {
+      dosage_form: 'capsule',
+      pack_count: 30,
+      is_otc: true,
+      active_ingredients: ['Ginseng G115', 'Vitamin B1'],
+    });
+    assert.equal(
+      CustomFieldsSchema.safeParse(pharmacityCandidate.specifications.custom_fields).success,
+      true
+    );
+    assert.equal(
+      ProductSpecificationsSchema.safeParse(pharmacityCandidate.specifications).success,
+      true
+    );
+
+    // Works across Wave E1 appliances too.
+    const acCandidate = normalizer.normalize(
+      createSampleProduct({
+        platform: 'dienmayxanh',
+        title: 'Máy lạnh Daikin Inverter 1 HP FTKB25YVMV',
+        categorySlug: 'air-conditioners',
+        priceMin: 9_490_000,
+        priceMax: 9_490_000,
+        metadata: {
+          custom_fields: {
+            capacityBtu: 9000,
+            inverter: true,
+            refrigerant: 'R32',
+          },
+        },
+      })
+    );
+    assert.deepEqual(acCandidate.specifications.custom_fields, {
+      capacity_btu: 9000,
+      inverter: true,
+      refrigerant: 'R32',
+    });
+
+    // 2. sanitizeSpecifications + mergeProductSpecifications preserve base keys and override non-empty incoming keys.
+    const sanitized = sanitizeSpecifications({
+      category_slug: 'supplements',
+      custom_fields: {
+        dosageForm: 'capsule',
+        pack_count: 30,
+        empty_note: '  ',
+        bad_obj: { nested: 1 },
+      },
+      availability: { status: 'In Stock' },
+    });
+    assert.deepEqual(sanitized.custom_fields, {
+      dosage_form: 'capsule',
+      pack_count: 30,
+    });
+
+    const mergedSpecs = mergeProductSpecifications(
+      {
+        category_slug: 'supplements',
+        custom_fields: {
+          dosage_form: 'capsule',
+          pack_count: 30,
+          origin_country: 'Switzerland',
+        },
+      },
+      {
+        custom_fields: {
+          pack_count: 60,
+          origin_country: '   ',
+          is_otc: false,
+        },
+      }
+    );
+    assert.deepEqual(mergedSpecs.custom_fields, {
+      dosage_form: 'capsule',
+      pack_count: 60,
+      origin_country: 'Switzerland',
+      is_otc: false,
+    });
+    assert.deepEqual(mergeCustomFields({ a: 1, b: 'keep' }, { a: 2, b: '' }), { a: 2, b: 'keep' });
+    assert.equal(sanitizeCustomFields({ bad: '   ' }), undefined);
+
+    // 3. applyCategorySpecTemplate(..., { forStorage: true }) keeps custom_fields while stripping unsupported groups.
+    const storageScoped = applyCategorySpecTemplate(
+      'supplements',
+      {
+        specifications: {
+          ...pharmacityCandidate.specifications,
+          hardware: { ram_gb: 8 },
+        },
+        ram_gb: 8,
+      },
+      { forStorage: true }
+    );
+    assert.deepEqual(
+      (storageScoped.specifications as Record<string, unknown>).custom_fields,
+      pharmacityCandidate.specifications.custom_fields
+    );
+    assert.equal('hardware' in (storageScoped.specifications as Record<string, unknown>), false);
+
+    // 4. AiSpecEnricher preserves crawler custom_fields and strips LLM-supplied custom_fields.
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  specifications: {
+                    category_slug: 'supplements',
+                    availability: { status: 'Available' },
+                    custom_fields: {
+                      dosage_form: 'hallucinated_by_llm',
+                      invented_key: 'should_be_dropped',
+                    },
+                  },
+                  key_specs: {},
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )) as typeof fetch;
+
+    try {
+      const enricher = new AiSpecEnricher({
+        provider: 'openai',
+        apiKey: 'test-key-1923',
+        baseUrl: 'https://api.example.invalid/v1',
+        model: 'test-model',
+      });
+      const enriched = await enricher.enrichCandidate(
+        pharmacityCandidate,
+        'Viên uống Pharmaton Energy hộp 30 viên'
+      );
+      assert.deepEqual(enriched.specifications.custom_fields, {
+        dosage_form: 'capsule',
+        pack_count: 30,
+        is_otc: true,
+        active_ingredients: ['Ginseng G115', 'Vitamin B1'],
+      });
+      assert.equal(
+        (enriched.specifications.custom_fields as Record<string, unknown>).invented_key,
+        undefined
+      );
+      assert.equal(enriched.specifications.availability?.status, 'Available');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    // 5. EntityMatcher master upsert (and ShopeeIngestionPipeline) persists specifications.custom_fields.
+    const { client, mutations } = createMockSupabase();
+    const pipeline = new ShopeeIngestionPipeline({
+      supabaseClient: client,
+      itemModel: 'off',
+    });
+    const ingestRes = await pipeline.ingestProduct(
+      createSampleProduct({
+        platform: 'pharmacity',
+        title: 'Viên uống Pharmaton Energy hộp 30 viên',
+        categorySlug: 'supplements',
+        priceMin: 215_000,
+        priceMax: 215_000,
+        url: 'https://www.pharmacity.vn/pharmaton-energy-30-vien.html',
+        metadata: {
+          custom_fields: {
+            dosageForm: 'capsule',
+            packCount: 30,
+            isOtc: true,
+          },
+        },
+      }),
+      undefined,
+      { skipReviewAnalysis: true }
+    );
+    assert.ok(ingestRes.masterId);
+    const masterUpsert = mutations.find(m => m.table === 'master_products' && m.op === 'upsert');
+    assert.ok(masterUpsert);
+    const persistedSpecs = (masterUpsert.payload as Record<string, unknown>)
+      .specifications as Record<string, unknown>;
+    assert.deepEqual(persistedSpecs.custom_fields, {
+      dosage_form: 'capsule',
+      pack_count: 30,
+      is_otc: true,
+    });
+
+    // 6. EntityMatcher.enrichMasterProductById preserves stored custom_fields during AI re-enrichment.
+    let updatedPayload: Record<string, unknown> | null = null;
+    const enrichMockClient = {
+      from(table: string) {
+        assert.equal(table, 'master_products');
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  async maybeSingle() {
+                    return {
+                      data: {
+                        id: 'master-custom-1923',
+                        brand: 'Pharmaton',
+                        model: 'Energy 30 vien',
+                        storage_gb: null,
+                        ram_gb: null,
+                        screen_size_inch: null,
+                        battery_mah: null,
+                        has_5g: false,
+                        name: 'Pharmaton Energy 30 vien',
+                        description: 'Multivitamin supplement',
+                        colors: [],
+                        specifications: {
+                          category_slug: 'supplements',
+                          custom_fields: {
+                            dosage_form: 'capsule',
+                            pack_count: 30,
+                          },
+                        },
+                        key_specs: {},
+                      },
+                      error: null,
+                    };
+                  },
+                };
+              },
+            };
+          },
+          update(payload: Record<string, unknown>) {
+            updatedPayload = payload;
+            return {
+              async eq() {
+                return { data: null, error: null };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as RateSupabaseClient;
+
+    const stubEnricher = new AiSpecEnricher({ apiKey: '' });
+    stubEnricher.fetchSpecsFromAi = async () => ({
+      ram_gb: null,
+      storage_gb: null,
+      screen_size_inch: null,
+      battery_mah: null,
+      has_5g: false,
+      specifications: {
+        category_slug: 'supplements',
+        availability: { status: 'Available' },
+      },
+      key_specs: {},
+    });
+    const enrichMatcher = new EntityMatcher(enrichMockClient, stubEnricher, { itemModel: 'off' });
+    const updatedOk = await enrichMatcher.enrichMasterProductById('master-custom-1923');
+    assert.equal(updatedOk, true);
+    const updatedSpecs = (updatedPayload as { specifications?: Record<string, unknown> } | null)
+      ?.specifications;
+    assert.deepEqual(updatedSpecs?.custom_fields, {
+      dosage_form: 'capsule',
+      pack_count: 30,
+    });
+
+    // 7. EntityMatcher.resolveItemAndVariant does not mistake custom_fields-only Item specs for full 10-group specs.
+    let itemEnrichCalled = false;
+    let itemMasterUpsertSpecs: Record<string, unknown> | null = null;
+    const itemModeClient = {
+      from(table: string) {
+        if (table === 'items') {
+          return {
+            select() {
+              return {
+                eq() {
+                  return {
+                    async maybeSingle() {
+                      return {
+                        data: {
+                          id: 'item-custom-1923',
+                          item_key: acCandidate.item_key,
+                          status: 'published',
+                          description: null,
+                          specifications: {
+                            category_slug: 'air-conditioners',
+                            custom_fields: { capacity_btu: 9000 },
+                          },
+                          key_specs: {},
+                          images: [],
+                        },
+                        error: null,
+                      };
+                    },
+                  };
+                },
+              };
+            },
+          };
+        }
+        assert.equal(table, 'master_products');
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  limit: async () => ({ data: [], error: null }),
+                };
+              },
+            };
+          },
+          upsert(payload: Record<string, unknown>) {
+            itemMasterUpsertSpecs =
+              (payload.specifications as Record<string, unknown> | undefined) ?? null;
+            return {
+              select() {
+                return Promise.resolve({ data: [{ id: 'variant-1923' }], error: null });
+              },
+            };
+          },
+        };
+      },
+    } as unknown as RateSupabaseClient;
+
+    const itemStubEnricher = new AiSpecEnricher({ apiKey: '' });
+    itemStubEnricher.fetchSpecsFromAi = async () => {
+      itemEnrichCalled = true;
+      return {
+        ram_gb: null,
+        storage_gb: null,
+        screen_size_inch: null,
+        battery_mah: null,
+        has_5g: false,
+        specifications: {
+          category_slug: 'air-conditioners',
+          availability: { status: 'Available' },
+        },
+        key_specs: {},
+      };
+    };
+    const itemMatcher = new EntityMatcher(itemModeClient, itemStubEnricher, { itemModel: 'item' });
+    const itemRes = await itemMatcher.resolveItemAndVariant(acCandidate);
+    assert.equal(itemRes.isNew, true);
+    assert.equal(itemEnrichCalled, true);
+    assert.deepEqual(
+      (itemMasterUpsertSpecs as { custom_fields?: unknown } | null)?.custom_fields,
+      acCandidate.specifications.custom_fields
+    );
   });
 });

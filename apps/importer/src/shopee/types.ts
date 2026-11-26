@@ -14,6 +14,7 @@ export {
   SupportedEcommercePlatformSchema,
   SupportedServicePlatformSchema,
   SupportedIngestionPlatformSchema,
+  SUPPORTED_RETAIL_INGESTION_PLATFORMS,
   SupportedPriceCurrencySchema,
   ScrapedReviewerSchema,
   ScrapedReviewSchema,
@@ -69,7 +70,15 @@ export type SupportedEcommercePlatform =
   | 'anphatpc';
 
 export type SupportedPlatform =
-  SupportedEcommercePlatform | 'vietcombank' | 'acb' | 'vnpt' | 'fpttelecom' | 'avakids';
+  | SupportedEcommercePlatform
+  | 'vietcombank'
+  | 'acb'
+  | 'vnpt'
+  | 'fpttelecom'
+  | 'avakids'
+  | 'pharmacity'
+  | 'kidsplaza'
+  | 'concung';
 
 /**
  * Reviewer metadata scraped alongside a review. What each platform exposes differs
