@@ -95,7 +95,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await page.getByTestId('review-report-submit-btn').click();
 
     await expect(dialog).toBeHidden();
-    await expect(reportBtn).toBeFocused();
+    const reportedBtn = page.getByRole('button', {
+      name: /Báo cáo \(\d+\)/,
+      pressed: true,
+    });
+    await expect(reportedBtn).toHaveCount(1);
+    await expect(reportedBtn).toBeFocused();
     expect(capturedBody).toEqual({
       voteType: 'report',
       reportReason: 'offensive',

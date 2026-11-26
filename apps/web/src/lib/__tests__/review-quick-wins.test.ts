@@ -53,6 +53,16 @@ function findOpeningTags(html: string, tagName: string): string[] {
   return out;
 }
 
+function readTagAttr(tag: string, attrName: string): string | null {
+  const token = ` ${attrName.toLowerCase()}="`;
+  const lower = tag.toLowerCase();
+  const idx = lower.indexOf(token);
+  if (idx === -1) return null;
+  const valStart = idx + token.length;
+  const valEnd = tag.indexOf('"', valStart);
+  return valEnd === -1 ? null : tag.slice(valStart, valEnd);
+}
+
 function makeReview(
   id: string,
   overrides: Partial<ReviewItem> = {}
@@ -204,32 +214,34 @@ function testReviewImageSanitizerAndStrip() {
       ],
     });
     assert.ok(htmlWithPhotos.includes('data-testid="review-photo-strip"'));
-    const anchorTags = findOpeningTags(htmlWithPhotos, 'a');
-    assert.ok(
-      anchorTags.some(
-        (tag) =>
-          tag.includes('href="https://cdn.example.com/photo-a.jpg"') &&
-          tag.includes('target="_blank"') &&
-          tag.includes('rel="noopener noreferrer"')
-      ),
-      `${loc}: anchor links to full photo with noopener noreferrer`
+    const photoAnchors = findOpeningTags(htmlWithPhotos, 'a').filter(
+      (tag) => readTagAttr(tag, 'class') === 'rate-review-photo-thumb'
     );
+    const photoHrefs = photoAnchors.map((tag) => readTagAttr(tag, 'href'));
+    assert.deepEqual(photoHrefs, [
+      'https://cdn.example.com/photo-a.jpg',
+      'https://cdn.example.com/photo-b.jpg',
+    ]);
+    for (const tag of photoAnchors) {
+      assert.equal(readTagAttr(tag, 'target'), '_blank');
+      assert.equal(readTagAttr(tag, 'rel'), 'noopener noreferrer');
+    }
+
     const imgTags = findOpeningTags(htmlWithPhotos, 'img');
-    assert.ok(
-      imgTags.some((tag) => {
-        const lower = tag.toLowerCase();
-        return (
-          tag.includes('src="https://cdn.example.com/photo-a.jpg"') &&
-          tag.includes('width="64"') &&
-          tag.includes('height="64"') &&
-          tag.includes('loading="lazy"') &&
-          tag.includes('decoding="async"') &&
-          lower.includes('referrerpolicy="no-referrer"')
-        );
-      }),
-      `${loc}: lazy img includes fixed dimensions, async decoding, and no-referrer`
-    );
-    assert.equal(htmlWithPhotos.includes('dropped.example.com'), false);
+    const photoSrcs = imgTags.map((tag) => readTagAttr(tag, 'src'));
+    assert.deepEqual(photoSrcs, [
+      'https://cdn.example.com/photo-a.jpg',
+      'https://cdn.example.com/photo-b.jpg',
+    ]);
+    assert.equal(readTagAttr(imgTags[0]!, 'width'), '64');
+    assert.equal(readTagAttr(imgTags[0]!, 'height'), '64');
+    assert.equal(readTagAttr(imgTags[0]!, 'loading'), 'lazy');
+    assert.equal(readTagAttr(imgTags[0]!, 'decoding'), 'async');
+    assert.equal(readTagAttr(imgTags[0]!, 'referrerpolicy'), 'no-referrer');
+    for (const u of [...photoHrefs, ...photoSrcs]) {
+      assert.ok(typeof u === 'string');
+      assert.notEqual(new URL(u).hostname, 'dropped.example.com');
+    }
 
     const expectedAlt =
       loc === 'vi'
@@ -237,8 +249,9 @@ function testReviewImageSanitizerAndStrip() {
         : loc === 'cs'
           ? 'Fotografie č. 1 od Minh'
           : 'Review photo 1 by Minh';
-    assert.ok(
-      htmlWithPhotos.includes(`alt="${expectedAlt}"`),
+    assert.equal(
+      readTagAttr(imgTags[0]!, 'alt'),
+      expectedAlt,
       `${loc} photo alt text rendered`
     );
 
