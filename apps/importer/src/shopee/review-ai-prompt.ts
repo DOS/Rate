@@ -24,6 +24,7 @@ import {
   RATING_CRITERIA_VERSION,
   RATING_CRITERIA_V2_VERSION,
   RATING_CRITERIA_V3_VERSION,
+  RATING_CRITERIA_V4_VERSION,
   REVIEW_POINT_MAX,
   REVIEW_POINT_MIN,
 } from '@repo/shared-data/rules';
@@ -34,6 +35,7 @@ export {
   RATING_CRITERIA_VERSION,
   RATING_CRITERIA_V2_VERSION,
   RATING_CRITERIA_V3_VERSION,
+  RATING_CRITERIA_V4_VERSION,
   getRatingCriteriaVersion,
 };
 
@@ -183,7 +185,48 @@ const CRITERION_HINTS: Readonly<Record<string, string>> = {
   service: 'dịch vụ lễ tân, nhận trả phòng, tiện ích đi kèm',
 };
 
-const PLACE_CATEGORY_SLUGS = new Set(['restaurants', 'cafes', 'hotels', 'homestays']);
+/**
+ * Hints that replace the shared ones for a category whose criterion means something
+ * else there: a dental clinic's hygiene is sterilisation, not a kitchen (DOS/Rate#1937).
+ */
+const CATEGORY_CRITERION_HINTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  'dental-clinics': {
+    service_quality:
+      'tay nghề bác sĩ, kết quả điều trị, tư vấn phác đồ (niềng, trám, nhổ, cạo vôi, implant)',
+    hygiene: 'vô trùng dụng cụ, khử khuẩn, sạch sẽ phòng khám và ghế nha',
+    service_attitude: 'thái độ bác sĩ, phụ tá và lễ tân, giải thích rõ ràng, nhẹ nhàng',
+    price: 'chi phí điều trị, báo giá minh bạch, chi phí phát sinh',
+    location: 'vị trí phòng khám, chỗ gửi xe, sự thuận tiện đi lại',
+  },
+  'gyms-fitness': {
+    quality: 'máy tập, thiết bị, lớp tập nhóm, không gian tập, phòng tắm và tủ đồ',
+    hygiene: 'vệ sinh máy tập, phòng tắm, phòng thay đồ, mùi',
+    service_attitude: 'huấn luyện viên (PT), nhân viên, tư vấn, ép mua gói',
+    location: 'vị trí phòng tập, chỗ gửi xe, sự thuận tiện đi lại',
+    value: 'giá gói tập, phí PT, đáng tiền so với chất lượng',
+  },
+};
+
+function criterionHint(categorySlug: string, key: string): string | undefined {
+  const own = Object.prototype.hasOwnProperty.call(CATEGORY_CRITERION_HINTS, categorySlug)
+    ? CATEGORY_CRITERION_HINTS[categorySlug]
+    : undefined;
+  if (own && Object.prototype.hasOwnProperty.call(own, key)) return own[key];
+  return Object.prototype.hasOwnProperty.call(CRITERION_HINTS, key)
+    ? CRITERION_HINTS[key]
+    : undefined;
+}
+
+const PLACE_CATEGORY_SLUGS = new Set([
+  'restaurants',
+  'cafes',
+  'hotels',
+  'homestays',
+  'dental-clinics',
+  'gyms-fitness',
+]);
+/** Wave E5 local service places: their own examples, since no food or room keys apply. */
+const LOCAL_SERVICE_PLACE_SLUGS = new Set(['dental-clinics', 'gyms-fitness']);
 const E3_RETAIL_CATEGORY_SLUGS = new Set(['supplements', 'cosmetics', 'mother-baby']);
 
 const PLACE_EXAMPLES = `Ví dụ (minh hoạ, không phải review thật):
@@ -199,6 +242,21 @@ Kết quả: {"ref": 3, "points": [
   {"kind": "pro", "criterion_key": "cleanliness", "body": "Phòng nghỉ sạch sẽ", "evidence": "phòng sạch sẽ"},
   {"kind": "pro", "criterion_key": "location", "body": "Vị trí gần trung tâm, tiện đi lại", "evidence": "gần trung tâm tiện đi lại"},
   {"kind": "con", "criterion_key": "room_quality", "body": "Phòng cách âm chưa tốt", "evidence": "cách âm hơi kém"}]}`;
+
+const LOCAL_SERVICE_EXAMPLES = `Ví dụ (minh hoạ, không phải review thật):
+Review ref 1: "bác sĩ làm nhẹ tay, giải thích kỹ từng bước, dụng cụ được tiệt trùng trước mặt, nhưng chi phí phát sinh thêm so với báo giá ban đầu"
+Kết quả: {"ref": 1, "points": [
+  {"kind": "pro", "criterion_key": "service_attitude", "body": "Bác sĩ nhẹ tay, giải thích kỹ", "evidence": "bác sĩ làm nhẹ tay, giải thích kỹ từng bước"},
+  {"kind": "pro", "criterion_key": "hygiene", "body": "Dụng cụ được tiệt trùng cẩn thận", "evidence": "dụng cụ được tiệt trùng trước mặt"},
+  {"kind": "con", "criterion_key": "price", "body": "Chi phí phát sinh so với báo giá", "evidence": "chi phí phát sinh thêm so với báo giá ban đầu"}]}
+Review ref 2: "sẽ giới thiệu bạn bè tới đây nha mọi người ơi"
+Kết quả: {"ref": 2, "points": []}
+Review ref 3: "phòng tập rộng, máy móc mới, nhưng phòng tắm hơi bẩn và giờ cao điểm phải chờ máy"
+Kết quả: {"ref": 3, "points": [
+  {"kind": "pro", "criterion_key": "quality", "body": "Phòng tập rộng, máy tập mới", "evidence": "phòng tập rộng, máy móc mới"},
+  {"kind": "con", "criterion_key": "hygiene", "body": "Phòng tắm chưa sạch", "evidence": "phòng tắm hơi bẩn"},
+  {"kind": "con", "criterion_key": "quality", "body": "Giờ cao điểm phải chờ máy tập", "evidence": "giờ cao điểm phải chờ máy"}]}
+(Chỉ dùng các criterion_key có trong danh sách tiêu chí của danh mục này.)`;
 
 const EXAMPLES = `Ví dụ (minh hoạ, không phải review thật):
 Review ref 1: "pin xài cả ngày vẫn còn 30%, mà ra nắng hơi khó nhìn. shop giao nhanh"
@@ -221,10 +279,10 @@ Kết quả: {"ref": 4, "points": [
 /** The cached instruction block of a category (design 2.1). */
 export function reviewAiInstructions(categorySlug: string): string {
   const criteria = getRatingCriteria(categorySlug)
-    .map(
-      c =>
-        `- ${c.key}: ${c.label.vi}${CRITERION_HINTS[c.key] ? ` (${CRITERION_HINTS[c.key]})` : ''}`
-    )
+    .map(c => {
+      const hint = criterionHint(categorySlug, c.key);
+      return `- ${c.key}: ${c.label.vi}${hint ? ` (${hint})` : ''}`;
+    })
     .join('\n');
   if (PLACE_CATEGORY_SLUGS.has(categorySlug)) {
     return `Bạn đọc review địa điểm do khách trải nghiệm thực tế viết và rút ra ưu điểm, nhược điểm của chính địa điểm này.
@@ -242,7 +300,7 @@ Luật:
 7. Không có dòng nào vừa là ưu vừa là nhược. Không lặp ý.
 8. Trả đúng một mục cho mỗi ref nhận được.
 
-${PLACE_EXAMPLES}`;
+${LOCAL_SERVICE_PLACE_SLUGS.has(categorySlug) ? LOCAL_SERVICE_EXAMPLES : PLACE_EXAMPLES}`;
   }
   const rule6 = E3_RETAIL_CATEGORY_SLUGS.has(categorySlug)
     ? '6. Bỏ qua chuyện giao hàng của đơn vị vận chuyển, người bán, khuyến mãi, quà tặng, xu (chỉ xét bao bì của chính sản phẩm nếu thuộc tiêu chí packaging).'

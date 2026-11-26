@@ -3610,7 +3610,7 @@ function testWaveE1E2Readiness(): void {
   assert.equal(rules.RATING_CRITERIA_V2_VERSION, 2);
   assert.equal(rules.RATING_CRITERIA_V3_VERSION, 3);
   assert.equal(rules.RATING_CRITERIA_CATEGORIES.length, 6);
-  assert.equal(rules.RATING_CRITERIA_ALL_CATEGORIES.length, 20);
+  assert.equal(rules.RATING_CRITERIA_ALL_CATEGORIES.length, 22);
 
   const expectedWeights: Record<string, Record<string, number>> = {
     tvs: {
@@ -3861,6 +3861,107 @@ function testWaveE1E2Readiness(): void {
     rules.minimumListingPriceVnd(['Op lung iPhone 16']),
     rules.MINIMUM_DEVICE_PRICE_FLOOR_VND
   );
+}
+
+function testWaveE5Readiness(): void {
+  // Criteria v4 mirrors DOS/DOS.Me#1989 rows exactly (key, weight, required, position).
+  assert.equal(rules.RATING_CRITERIA_V4_VERSION, 4);
+  assert.deepEqual([...rules.V4_RATING_CRITERIA_CATEGORIES].sort(), [
+    'dental-clinics',
+    'gyms-fitness',
+  ]);
+  const snap = (slug: string) =>
+    rules
+      .getRatingCriteria(slug)
+      .map(
+        (cr) =>
+          `${cr.key}:${cr.weight}:${cr.specGroup ?? '-'}:${cr.required ? 1 : 0}`
+      );
+  assert.deepEqual(snap('dental-clinics'), [
+    'service_quality:30:-:0',
+    'hygiene:25:-:0',
+    'service_attitude:20:-:0',
+    'price:15:-:1',
+    'location:10:-:0',
+  ]);
+  assert.deepEqual(snap('gyms-fitness'), [
+    'quality:30:-:0',
+    'hygiene:20:-:0',
+    'service_attitude:15:-:0',
+    'location:15:-:0',
+    'value:20:-:1',
+  ]);
+  for (const slug of ['dental-clinics', 'gyms-fitness']) {
+    assert.equal(rules.getRatingCriteriaVersion(slug), 4, slug);
+    assert.equal(rules.getRatingCriteriaVersion(` ${slug.toUpperCase()} `), 4);
+    assert.equal(rules.hasRatingCriteria(slug), true);
+    assert.equal(rules.V3_RATING_CRITERIA_CATEGORIES.has(slug), false);
+    assert.ok(rules.RATING_CRITERIA_ALL_CATEGORIES.includes(slug));
+    assert.equal(rules.RATING_CRITERIA_CATEGORIES.includes(slug), false);
+    const presets = rules.getRatingUseCasePresets(slug);
+    assert.equal(presets.length, 1);
+    assert.equal(presets[0]!.id, 'default');
+    assert.deepEqual(
+      presets[0]!.weights,
+      Object.fromEntries(
+        rules.getRatingCriteria(slug).map((cr) => [cr.key, cr.weight])
+      )
+    );
+    assert.deepEqual(rules.mapLegacyCriteriaRatings(slug, { value: 5 }), {});
+    const tmpl = rules.getCategorySpecTemplate(slug);
+    assert.equal(tmpl.ram, false);
+    assert.equal(tmpl.storage, false);
+    assert.equal(tmpl.screen, false);
+    assert.equal(tmpl.has5g, false);
+    assert.equal(
+      rules.minimumListingPriceVnd(['Gói tập 12 tháng'], {
+        categorySlug: slug,
+      }),
+      0,
+      `Expected 0 floor for ${slug}`
+    );
+  }
+  // Existing versions stay pinned.
+  assert.equal(rules.getRatingCriteriaVersion('cafes'), 3);
+  assert.equal(rules.getRatingCriteriaVersion('tvs'), 2);
+  assert.equal(rules.getRatingCriteriaVersion('smartphones'), 1);
+
+  // Clinic and gym vocabulary lands on the right criterion.
+  assert.equal(
+    rules.assignPointCriterion(
+      'dental-clinics',
+      null,
+      'Phòng khám vô trùng kỹ lưỡng'
+    ),
+    'hygiene'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'dental-clinics',
+      null,
+      'Bác sĩ điều trị tay nghề cao'
+    ),
+    'service_quality'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'gyms-fitness',
+      null,
+      'Máy tập mới, nhiều lớp tập'
+    ),
+    'quality'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'gyms-fitness',
+      null,
+      'Huấn luyện viên nhiệt tình'
+    ),
+    'service_attitude'
+  );
+
+  assert.equal(RATE_ROUTES.DENTAL_CLINICS, '/dental-clinics');
+  assert.equal(RATE_ROUTES.GYMS_FITNESS, '/gyms-fitness');
 }
 
 function testWaveE3E4Readiness(): void {
@@ -4479,6 +4580,10 @@ function main(): void {
   testRetailPlatformsAndCustomFields1923();
   console.log(
     '  ✅ [17/17] Retail ingestion platforms and typed custom_fields (DOS/Rate#1923) verified'
+  );
+  testWaveE5Readiness();
+  console.log(
+    '  ✅ [18/18] Wave E5 dental-clinics and gyms-fitness criteria v4 (DOS/Rate#1937) verified'
   );
   console.log('🎉 All @repo/shared-data tests passed!');
 }

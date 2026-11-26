@@ -10,6 +10,8 @@ export type PlaceJsonLdType =
   | 'CafeOrCoffeeShop'
   | 'Hotel'
   | 'LodgingBusiness'
+  | 'Dentist'
+  | 'ExerciseGym'
   | 'LocalBusiness';
 
 export interface PlaceDetail {
@@ -284,6 +286,10 @@ export function resolvePlaceJsonLdType(
       return 'Hotel';
     case 'homestays':
       return 'LodgingBusiness';
+    case 'dental-clinics':
+      return 'Dentist';
+    case 'gyms-fitness':
+      return 'ExerciseGym';
     default:
       return 'LocalBusiness';
   }

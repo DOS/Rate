@@ -79,7 +79,9 @@ export type CanonicalCategorySlug =
   | 'restaurants'
   | 'cafes'
   | 'hotels'
-  | 'homestays';
+  | 'homestays'
+  | 'dental-clinics'
+  | 'gyms-fitness';
 
 export const CANONICAL_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
   'smartphones',
@@ -101,6 +103,8 @@ export const CANONICAL_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new 
   'cafes',
   'hotels',
   'homestays',
+  'dental-clinics',
+  'gyms-fitness',
 ]);
 
 export const WAVE_E1_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
@@ -129,12 +133,24 @@ export const WAVE_E4_PLACE_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = 
   'homestays',
 ]);
 
+/** Wave E5 local place categories (DOS/Rate#1937): dental clinics and gyms. */
+export const WAVE_E5_PLACE_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
+  'dental-clinics',
+  'gyms-fitness',
+]);
+
+/** Every category whose masters are `entity_type = 'place'` (Wave E4 and Wave E5). */
+export const PLACE_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
+  ...WAVE_E4_PLACE_CATEGORY_SLUGS,
+  ...WAVE_E5_PLACE_CATEGORY_SLUGS,
+]);
+
 export const SIZELESS_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
   'earbuds',
   ...WAVE_E1_CATEGORY_SLUGS,
   ...WAVE_E2_SERVICE_CATEGORY_SLUGS,
   ...WAVE_E3_CATEGORY_SLUGS,
-  ...WAVE_E4_PLACE_CATEGORY_SLUGS,
+  ...PLACE_CATEGORY_SLUGS,
 ]);
 
 export type ProductCondition = 'new' | 'like_new_99' | 'used' | 'refurbished';
@@ -636,7 +652,7 @@ export function isAccessoryTitle(
     categorySlug &&
     (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug) ||
       WAVE_E3_CATEGORY_SLUGS.has(categorySlug) ||
-      WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug))
+      PLACE_CATEGORY_SLUGS.has(categorySlug))
   ) {
     return false;
   }
@@ -801,6 +817,21 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
     )
   ) {
     return 'cafes';
+  }
+  if (
+    /(?<![\p{L}\d])(?:phòng\s*khám\s*(?:nha|răng)|trung\s*tâm\s*nha\s*khoa|bệnh\s*viện\s*răng\s*hàm\s*mặt|nha\s*khoa\s*(?:quốc\s*tế|thẩm\s*mỹ)|dental\s*(?:clinic|center|centre|hospital))(?![\p{L}\d])/iu.test(
+      t
+    ) ||
+    /^\s*nha\s*khoa(?![\p{L}\d])/iu.test(t)
+  ) {
+    return 'dental-clinics';
+  }
+  if (
+    /(?<![\p{L}\d])(?:phòng\s*(?:tập\s*)?(?:gym|thể\s*hình|fitness)|trung\s*tâm\s*(?:thể\s*hình|fitness|gym)|(?:fitness|gym)\s*(?:center|centre|club)|california\s*fitness|citi\s*gym|elite\s*fitness|the\s*new\s*gym)(?![\p{L}\d])/iu.test(
+      t
+    )
+  ) {
+    return 'gyms-fitness';
   }
   if (
     /(?<![\p{L}\d])(?:sữa\s*(?:bột|công\s*thức|non|cho\s*bé|tắm\s*gội\s*cho\s*bé)|tã\s*(?:dán|quần|giấy|bỉm|sơ\s*sinh|em\s*bé)|bỉm\s*(?:dán|quần|sơ\s*sinh|em\s*bé|\p{L}+)|bình\s*sữa|núm\s*ti|máy\s*hút\s*sữa|máy\s*tiệt\s*trùng\s*bình\s*sữa|máy\s*hâm\s*sữa|xe\s*đẩy\s*(?:cho\s*bé|em\s*bé|gấp\s*gọn)|ghế\s*ăn\s*dặm|địu\s*em\s*bé|cũi\s*(?:cho\s*bé|trẻ\s*em)|baby\s*formula|diapers?|mẹ\s*&\s*bé)(?![\p{L}\d])/iu.test(
@@ -3250,7 +3281,7 @@ export class ProductNormalizer {
           }
         }
       }
-    } else if (WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug)) {
+    } else if (PLACE_CATEGORY_SLUGS.has(categorySlug)) {
       if (/\bhighlands\s*coffee\b/i.test(identityTitle)) brand = 'Highlands Coffee';
       else if (/\bthe\s*coffee\s*house\b/i.test(identityTitle)) brand = 'The Coffee House';
       else if (/(?<![\p{L}\d])ph[uú]c\s*long(?![\p{L}\d])/iu.test(identityTitle))
@@ -3291,11 +3322,21 @@ export class ProductNormalizer {
       else if (/\bla\s*siesta\b/i.test(identityTitle)) brand = 'La Siesta';
       else if (/\bsojo\b/i.test(identityTitle)) brand = 'SOJO';
       else if (/\ba25\b/i.test(identityTitle)) brand = 'A25';
+      else if (/(?<![\p{L}\d])nha\s*khoa\s*kim(?![\p{L}\d])/iu.test(identityTitle))
+        brand = 'Nha khoa Kim';
+      else if (/(?<![\p{L}\d])nha\s*khoa\s*paris(?![\p{L}\d])/iu.test(identityTitle))
+        brand = 'Nha khoa Paris';
+      else if (/\bcalifornia\s*fitness\b/i.test(identityTitle)) brand = 'California Fitness & Yoga';
+      else if (/\bciti\s*gym\b/i.test(identityTitle)) brand = 'CitiGym';
+      else if (/\belite\s*fitness\b/i.test(identityTitle)) brand = 'Elite Fitness';
+      else if (/\bget\s*fit\s*gym\b/i.test(identityTitle)) brand = 'Getfit Gym';
+      else if (/\bthe\s*new\s*gym\b/i.test(identityTitle)) brand = 'The New Gym';
+      else if (/\bswequity\b/i.test(identityTitle)) brand = 'Swequity';
     }
     if (
       brand === 'Khác' &&
       !WAVE_E3_CATEGORY_SLUGS.has(categorySlug) &&
-      !WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug)
+      !PLACE_CATEGORY_SLUGS.has(categorySlug)
     ) {
       // Not the "ipad" in Xiaomi's "Mipad" (DOS/Rate#826).
       if (/apple|iphone|(?<![a-z])ipad|macbook|airpods/i.test(identityTitle)) brand = 'Apple';
@@ -3836,7 +3877,7 @@ export class ProductNormalizer {
       if (!slugify(model)) {
         model = baseE3Title || title;
       }
-    } else if (WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug)) {
+    } else if (PLACE_CATEGORY_SLUGS.has(categorySlug)) {
       const basePlaceTitle = modelTitle.replace(LEADING_PROMO_GROUPS, '').trim();
       const brandAliases: string[] = [brand];
       if (brand === 'Phúc Long') brandAliases.push('Phuc Long');
@@ -3845,6 +3886,9 @@ export class ProductNormalizer {
       if (brand === 'Cộng Cà Phê') brandAliases.push('Cong Ca Phe');
       if (brand === 'Mường Thanh') brandAliases.push('Muong Thanh');
       if (brand === 'Meliá') brandAliases.push('Melia');
+      if (brand === 'CitiGym') brandAliases.push('Citi Gym');
+      if (brand === 'California Fitness & Yoga') brandAliases.push('California Fitness');
+      if (brand === 'Getfit Gym') brandAliases.push('Get Fit Gym', 'GetFit Gym');
       const brandRe =
         brand !== 'Khác'
           ? new RegExp(
@@ -4272,7 +4316,8 @@ export class ProductNormalizer {
     const isWaveE1 = WAVE_E1_CATEGORY_SLUGS.has(categorySlug);
     const isWaveE2 = WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug);
     const isWaveE3 = WAVE_E3_CATEGORY_SLUGS.has(categorySlug);
-    const isWaveE4 = WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug);
+    // Wave E4 and Wave E5 places share the place pipeline (entity_type = 'place').
+    const isWaveE4 = PLACE_CATEGORY_SLUGS.has(categorySlug);
     const isWaveE1OrE2 = isWaveE1 || isWaveE2;
     const isNonDeviceWave = isWaveE1OrE2 || isWaveE3 || isWaveE4;
 

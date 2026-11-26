@@ -1177,7 +1177,9 @@ export type CanonicalCategorySlug =
   | 'restaurants'
   | 'cafes'
   | 'hotels'
-  | 'homestays';
+  | 'homestays'
+  | 'dental-clinics'
+  | 'gyms-fitness';
 
 export const CORE_TECH_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   'smartphones',
@@ -1211,12 +1213,19 @@ export const WAVE_E4_PLACE_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   'homestays',
 ] as const;
 
+/** Wave E5 local place categories (DOS/Rate#1937). */
+export const WAVE_E5_PLACE_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
+  'dental-clinics',
+  'gyms-fitness',
+] as const;
+
 export const ALL_CANONICAL_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   ...CORE_TECH_CATEGORY_SLUGS,
   ...WAVE_E1_CATEGORY_SLUGS,
   ...WAVE_E2_SERVICE_CATEGORY_SLUGS,
   ...WAVE_E3_CATEGORY_SLUGS,
   ...WAVE_E4_PLACE_CATEGORY_SLUGS,
+  ...WAVE_E5_PLACE_CATEGORY_SLUGS,
 ] as const;
 
 const CANONICAL_CATEGORY_SLUG_SET = new Set<string>(
@@ -1230,6 +1239,9 @@ const WAVE_E2_SERVICE_CATEGORY_SLUG_SET = new Set<string>(
 const WAVE_E3_CATEGORY_SLUG_SET = new Set<string>(WAVE_E3_CATEGORY_SLUGS);
 const WAVE_E4_PLACE_CATEGORY_SLUG_SET = new Set<string>(
   WAVE_E4_PLACE_CATEGORY_SLUGS
+);
+const WAVE_E5_PLACE_CATEGORY_SLUG_SET = new Set<string>(
+  WAVE_E5_PLACE_CATEGORY_SLUGS
 );
 
 export function isCanonicalCategorySlug(
@@ -1262,8 +1274,15 @@ export function isWaveE4PlaceCategorySlug(value: unknown): boolean {
   );
 }
 
+export function isWaveE5PlaceCategorySlug(value: unknown): boolean {
+  return (
+    typeof value === 'string' && WAVE_E5_PLACE_CATEGORY_SLUG_SET.has(value)
+  );
+}
+
+/** Wave E4 and Wave E5 places: masters with `entity_type = 'place'`. */
 export function isPlaceCategorySlug(value: unknown): boolean {
-  return isWaveE4PlaceCategorySlug(value);
+  return isWaveE4PlaceCategorySlug(value) || isWaveE5PlaceCategorySlug(value);
 }
 
 /**
@@ -1449,6 +1468,23 @@ export function getMasterProductCategorySlug(
     !/(?<![\p{L}\d])(?:apple tv|tv box)(?![\p{L}\d])/iu.test(haystack)
   ) {
     return 'tvs';
+  }
+  // Wave E5 places before the device patterns: "California Fitness & Yoga" is a gym,
+  // not a Lenovo Yoga laptop (DOS/Rate#1937).
+  if (
+    /(?<![\p{L}\d])(?:phòng khám (?:nha|răng)|trung tâm nha khoa|bệnh viện răng hàm mặt|nha khoa (?:quốc tế|thẩm mỹ)|dental (?:clinic|center|centre|hospital))(?![\p{L}\d])/iu.test(
+      haystack
+    ) ||
+    /^\s*nha khoa(?![\p{L}\d])/iu.test(haystack)
+  ) {
+    return 'dental-clinics';
+  }
+  if (
+    /(?<![\p{L}\d])(?:phòng (?:tập )?(?:gym|thể hình|fitness)|trung tâm (?:thể hình|fitness|gym)|(?:fitness|gym) (?:center|centre|club)|california fitness|citi ?gym|elite fitness|the new gym)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'gyms-fitness';
   }
   if (
     /ipad|galaxy tab|xiaomi pad|matepad|redmi pad|tab s\d|tab a\d|tab p\d|tab m\d|oneplus pad|oppo pad|vivo pad|honor pad|surface pro|tablet|máy tính bảng/i.test(

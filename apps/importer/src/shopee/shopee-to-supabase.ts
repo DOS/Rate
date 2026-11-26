@@ -25,7 +25,7 @@ import {
   UnkeyableProductTitleError,
   WAVE_E2_SERVICE_CATEGORY_SLUGS,
   WAVE_E3_CATEGORY_SLUGS,
-  WAVE_E4_PLACE_CATEGORY_SLUGS,
+  PLACE_CATEGORY_SLUGS,
 } from './product-normalizer.js';
 import {
   EntityMatcher,
@@ -662,7 +662,7 @@ export class ShopeeIngestionPipeline {
       candidate.entity_type ??
       (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(candidate.category_slug)
         ? 'service'
-        : WAVE_E4_PLACE_CATEGORY_SLUGS.has(candidate.category_slug)
+        : PLACE_CATEGORY_SLUGS.has(candidate.category_slug)
           ? 'place'
           : 'product');
     if (resolvedEntityType !== 'place' && product.priceMin <= 0) {

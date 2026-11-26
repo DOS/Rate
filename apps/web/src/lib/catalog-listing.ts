@@ -35,6 +35,8 @@ const CANONICAL_CATEGORY_SLUGS: ReadonlySet<string> =
     'cafes',
     'hotels',
     'homestays',
+    'dental-clinics',
+    'gyms-fitness',
   ]);
 
 /**

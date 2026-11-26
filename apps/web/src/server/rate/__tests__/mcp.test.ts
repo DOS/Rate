@@ -1475,7 +1475,7 @@ async function runMcpTestSuite() {
     );
   }
 
-  // 11b. 19-category coverage in server instructions, tool text and /llms.txt (#1927)
+  // 11b. 21-category coverage in server instructions, tool text and /llms.txt (#1927, #1937)
   const expectedCategoryGroups: ReadonlyArray<
     readonly [string, readonly string[]]
   > = [
@@ -1493,6 +1493,7 @@ async function runMcpTestSuite() {
     ['Wave E2 services', ['bank-savings', 'internet-telecom']],
     ['Wave E3 retail', ['supplements', 'cosmetics', 'mother-baby']],
     ['Wave E4 places', ['restaurants', 'cafes', 'hotels', 'homestays']],
+    ['Wave E5 places', ['dental-clinics', 'gyms-fitness']],
   ];
   assert.deepEqual(
     MCP_SUPPORTED_CATEGORY_GROUPS.map((g) => [g.label, [...g.slugs]]),
@@ -1501,9 +1502,9 @@ async function runMcpTestSuite() {
   const enumCategories = SUPPORTED_CATEGORY_ENUM.options.filter(
     (c) => c !== 'all'
   );
-  assert.equal(enumCategories.length, 19);
-  assert.equal(SUPPORTED_CATEGORY_ENUM.options.length, 20);
-  assert.equal(MCP_SUPPORTED_CATEGORY_COUNT, 19);
+  assert.equal(enumCategories.length, 21);
+  assert.equal(SUPPORTED_CATEGORY_ENUM.options.length, 22);
+  assert.equal(MCP_SUPPORTED_CATEGORY_COUNT, 21);
   assert.deepEqual(
     MCP_SUPPORTED_CATEGORY_GROUPS.flatMap((g) => [...g.slugs]),
     enumCategories,
@@ -1525,7 +1526,7 @@ async function runMcpTestSuite() {
     ['MCP_SERVER_INSTRUCTIONS', MCP_SERVER_INSTRUCTIONS],
     ['search_verified_catalog description', searchTool.description],
   ] as const) {
-    assert.match(text, /19 categories/, `${label} must say 19 categories`);
+    assert.match(text, /21 categories/, `${label} must say 21 categories`);
     assert.doesNotMatch(
       text,
       /\b5 (device |hardware |tech )?categories\b/,
@@ -1552,9 +1553,9 @@ async function runMcpTestSuite() {
   assert.match(MCP_SERVER_INSTRUCTIONS, /compare_devices_by_use_case/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /ok: false, isError: true/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /fewer than two requested slugs/);
-  assert.match(dealsTool.description, /19 categories/);
+  assert.match(dealsTool.description, /21 categories/);
   assert.match(dealsTool.description, /15 non-place categories/);
-  assert.match(dealsTool.description, /Wave E4 places/);
+  assert.match(dealsTool.description, /Wave E4 and Wave E5 places/);
   assert.match(dealsTool.description, /returns no deals/);
   assert.match(dealsTool.description, /empty results/);
   const compareTool = MCP_TOOL_DEFINITIONS.find(
@@ -1563,11 +1564,11 @@ async function runMcpTestSuite() {
   assert.match(compareTool.description, /category-scoped specs/);
   assert.match(
     compareTool.description,
-    /availability \+ regulatory on Wave E2\/E3\/E4/
+    /availability \+ regulatory on Wave E2\/E3\/E4\/E5/
   );
   assert.match(compareTool.description, /earbuds omitting screen/);
   assert.match(compareTool.description, /screen \+ value on tvs/);
-  assert.match(compareTool.description, /value only on other Wave E1-E4/);
+  assert.match(compareTool.description, /value only on other Wave E1-E5/);
   assert.match(compareTool.description, /ok: false, isError: true/);
   assert.match(compareTool.description, /fewer than two requested slugs/);
   assert.doesNotMatch(compareTool.description, /\b5 categories\b/);
@@ -1600,7 +1601,7 @@ async function runMcpTestSuite() {
   ]);
   assert.match(
     searchSchemaFor19.properties.category?.description ?? '',
-    /19 supported categories/
+    /21 supported categories/
   );
   const dealsSchemaFor19 = dealsTool.inputSchema as {
     properties: Record<string, { enum?: string[]; description?: string }>;
@@ -1614,7 +1615,7 @@ async function runMcpTestSuite() {
   );
   assert.match(
     dealsSchemaFor19.properties.category?.description ?? '',
-    /Wave E4 places/
+    /Wave E4 and Wave E5 places/
   );
   const compareSchemaFor19 = compareTool.inputSchema as {
     properties: Record<string, { description?: string }>;
@@ -1629,11 +1630,11 @@ async function runMcpTestSuite() {
   );
   assert.match(
     compareSchemaFor19.properties.persona?.description ?? '',
-    /value only on other Wave E1-E4/
+    /value only on other Wave E1-E5/
   );
 
-  assert.match(llmsBody, /across 19 categories/);
-  assert.match(llmsBody, /\*\*19 Canonical Categories\*\*/);
+  assert.match(llmsBody, /across 21 categories/);
+  assert.match(llmsBody, /\*\*21 Canonical Categories\*\*/);
   assert.match(llmsBody, /no published items yet returns empty results/);
   assert.match(llmsBody, /for category-filtered tools/);
   assert.match(llmsBody, /`ok: false`.*`isError: true`/);
@@ -1678,7 +1679,7 @@ async function runMcpTestSuite() {
     endpoints: { mcp: string; transport: string };
     tools: Array<{ name: string; description: string }>;
   };
-  assert.match(wkJson.description, /19 categories/);
+  assert.match(wkJson.description, /21 categories/);
   assert.match(wkJson.description, /category-scoped specs/);
   assert.match(wkJson.description, /category-filtered tools/);
   assert.match(wkJson.description, /compare_devices_by_use_case/);

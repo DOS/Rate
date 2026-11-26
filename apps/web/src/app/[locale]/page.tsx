@@ -59,6 +59,8 @@ import {
   BsHeadphones,
   BsHeartPulse,
   BsHouseHeart,
+  BsHospital,
+  BsPersonArmsUp,
   BsLaptop,
   BsPhone,
   BsShieldCheck,
@@ -155,6 +157,8 @@ const CATEGORY_DESC_KEYS = {
   cafes: 'catDescCafes',
   hotels: 'catDescHotels',
   homestays: 'catDescHomestays',
+  'dental-clinics': 'catDescDentalClinics',
+  'gyms-fitness': 'catDescGymsFitness',
 } as const;
 
 type KnownCategorySlug = keyof typeof CATEGORY_DESC_KEYS;
@@ -207,6 +211,10 @@ function getCategoryIcon(slug: string) {
       return <BsBuilding />;
     case 'homestays':
       return <BsHouseHeart />;
+    case 'dental-clinics':
+      return <BsHospital />;
+    case 'gyms-fitness':
+      return <BsPersonArmsUp />;
     default:
       return <BsCpu />;
   }

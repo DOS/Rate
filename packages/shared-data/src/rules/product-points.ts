@@ -324,7 +324,14 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
   wash_quality: ['giặt sạch', 'vắt', 'vết bẩn', 'sấy', 'nước giặt'],
   filtration: ['lọc khí', 'bụi mịn', 'pm2.5', 'hepa', 'khử mùi', 'lọc bụi'],
   filter_cost: ['lõi lọc', 'màng lọc', 'thay lõi', 'thay màng', 'chi phí lõi'],
-  service_quality: ['chất lượng', 'dịch vụ', 'sạch', 'ngon'],
+  service_quality: [
+    'chất lượng',
+    'dịch vụ',
+    'sạch',
+    'ngon',
+    'điều trị',
+    'tay nghề',
+  ],
   price: ['giá', 'tiền', 'rẻ', 'đắt'],
   attitude: ['thái độ', 'nhân viên', 'phục vụ', 'nhiệt tình', 'lịch sự'],
   speed: ['nhanh', 'chậm', 'đợi', 'lâu'],
@@ -393,6 +400,9 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
     'đường may',
     'hoàn thiện',
     'bền đẹp',
+    'máy tập',
+    'thiết bị',
+    'lớp tập',
   ],
   ease_of_use: [
     'dễ dùng',
@@ -423,6 +433,8 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
     'thân thiện',
     'lễ phép',
     'chu đáo',
+    'bác sĩ',
+    'huấn luyện viên',
   ],
   hygiene: [
     'vệ sinh',
@@ -431,6 +443,8 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
     'bàn ghế sạch',
     'nhà vệ sinh',
     'bẩn',
+    'vô trùng',
+    'khử trùng',
   ],
   ambiance: [
     'không gian',

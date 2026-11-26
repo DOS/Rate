@@ -55,6 +55,8 @@ const CATEGORY_LINK_IDS = new Set([
   'cafes',
   'hotels',
   'homestays',
+  'dental-clinics',
+  'gyms-fitness',
 ]);
 const EXTRA_NAV_CATEGORY_SLUGS = [
   'tvs',
@@ -71,6 +73,8 @@ const EXTRA_NAV_CATEGORY_SLUGS = [
   'cafes',
   'hotels',
   'homestays',
+  'dental-clinics',
+  'gyms-fitness',
 ] as const;
 // Already reachable from the logo and the price-alert button on desktop.
 const DESKTOP_HIDDEN_LINK_IDS = new Set(['home', 'watchlist']);
