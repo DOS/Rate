@@ -38,6 +38,8 @@ const KNOWN_NON_DEVICE_TEMPLATES = [
   'cafes',
   'hotels',
   'homestays',
+  'dental-clinics',
+  'gyms-fitness',
 ];
 
 /** A keyset-paged stand-in for the audit's master_products read. */

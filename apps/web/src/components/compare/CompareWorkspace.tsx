@@ -1297,6 +1297,16 @@ function buildCategoryTabs(t: CompareTranslator): Array<{
       label: t('catHomestays'),
       unitLabel: t('catHomestaysUnit'),
     },
+    {
+      slug: 'dental-clinics',
+      label: t('catDentalClinics'),
+      unitLabel: t('catDentalClinicsUnit'),
+    },
+    {
+      slug: 'gyms-fitness',
+      label: t('catGymsFitness'),
+      unitLabel: t('catGymsFitnessUnit'),
+    },
   ];
 }
 

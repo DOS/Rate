@@ -230,6 +230,8 @@ const LEGACY_CRITERION_MAP: Readonly<
   cafes: {},
   hotels: {},
   homestays: {},
+  'dental-clinics': {},
+  'gyms-fitness': {},
 };
 
 const CRITERION_KEY_RE = /^[a-z_]{2,32}$/;

@@ -24,8 +24,10 @@ import { contentLang } from '@/lib/content-lang';
 import { computeJReviewsUserScores } from '@/lib/jreviews-user-score';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
+  addReviewStarCounts,
   computeCombinedDualScore,
   computeJReviewsWeight,
+  computeReviewStarCounts,
   computeWilsonLowerBound,
   detectStarDistributionAnomaly,
   evaluateReviewTrustAssessment,
@@ -33,6 +35,8 @@ import {
   type ReviewAnalysisSummary,
   type ReviewItem,
   type ReviewReportReason,
+  type ReviewStarCounts,
+  type ReviewStarTier,
 } from '@/lib/rate-domain';
 import type { CanonicalCategorySlug } from '@/lib/rate-domain-core';
 import {
@@ -90,6 +94,7 @@ import {
 } from '@/lib/review-value-display';
 import {
   formatDecimal,
+  formatNumber,
   formatPercent,
   formatPlainNumber,
 } from '@/lib/locale-format';
@@ -98,6 +103,16 @@ import { formatRatingValue, roundScore } from '@/lib/rating-display';
 type VoteChoice = 'up' | 'down' | 'report';
 type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
 type SortMode = 'weight_desc' | 'newest' | 'rating_desc' | 'rating_asc';
+type StarFilter = 'all' | ReviewStarTier;
+
+interface StarSliceState {
+  reviews: ReviewItem[];
+  nextCursor: string | null;
+  totalCount: number | null;
+  loaded: boolean;
+}
+
+const STAR_TIERS_DESC: readonly ReviewStarTier[] = [5, 4, 3, 2, 1];
 
 export interface JReviewsSectionProps {
   masterProductId?: string;
@@ -119,6 +134,8 @@ export interface JReviewsSectionProps {
   authenticReviewCount: number;
   ignoredReviewCount: number;
   reviews: ReviewItem[];
+  /** DB-wide 1-5 star breakdown; falls back to `reviews` when omitted. */
+  starCounts?: ReviewStarCounts;
   initialNextCursor?: string | null;
   totalReviewCount?: number;
   summary: ReviewAnalysisSummary;
@@ -579,6 +596,7 @@ export default function JReviewsSection({
   authenticReviewCount,
   ignoredReviewCount,
   reviews: initialReviews,
+  starCounts: starCountsProp,
   initialNextCursor = null,
   totalReviewCount,
   summary,
@@ -667,17 +685,27 @@ export default function JReviewsSection({
     [t]
   );
 
-  const [reviews, setReviews] = useState<ReviewItem[]>(initialReviews);
-  const [nextCursor, setNextCursor] = useState<string | null>(
+  const [allReviews, setAllReviews] = useState<ReviewItem[]>(initialReviews);
+  const [allNextCursor, setAllNextCursor] = useState<string | null>(
     initialNextCursor ?? null
   );
-  const [knownTotalCount, setKnownTotalCount] = useState<number | null>(
+  const [allKnownTotalCount, setAllKnownTotalCount] = useState<number | null>(
     typeof totalReviewCount === 'number' &&
       Number.isFinite(totalReviewCount) &&
       totalReviewCount >= 0
       ? totalReviewCount
       : null
   );
+  const [sessionAddedReviews, setSessionAddedReviews] = useState<ReviewItem[]>(
+    []
+  );
+  const [starSlices, setStarSlices] = useState<
+    Partial<Record<ReviewStarTier, StarSliceState>>
+  >({});
+  const [starFilterLoading, setStarFilterLoading] = useState(false);
+  const [starFilterError, setStarFilterError] = useState<string | null>(null);
+  const starFetchControllerRef = useRef<AbortController | null>(null);
+  const loadMoreControllerRef = useRef<AbortController | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [userVotes, setUserVotes] = useState<Record<string, VoteChoice>>({});
@@ -693,7 +721,7 @@ export default function JReviewsSection({
   // The signed-in writer's own value scores, by review id (DOS/Rate#1547).
   const [myValues, setMyValues] = useState<Record<string, MyReviewValue>>({});
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [starFilter, setStarFilter] = useState<'all' | 5 | 4 | 3>('all');
+  const [starFilter, setStarFilter] = useState<StarFilter>('all');
   const [selectedPointCriterion, setSelectedPointCriterion] = useState<
     string | null
   >(null);
@@ -776,7 +804,7 @@ export default function JReviewsSection({
       if (savedLocal) {
         const parsedLocal = JSON.parse(savedLocal);
         if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
-          setReviews((prev) => {
+          setAllReviews((prev) => {
             const existingIds = new Set(prev.map((x) => x.id));
             const uniqueNew = parsedLocal.filter(
               (x: ReviewItem) => x && x.id && !existingIds.has(x.id)
@@ -790,29 +818,52 @@ export default function JReviewsSection({
     }
   }, [masterProductId, productSlug, productName]);
 
+  useEffect(
+    () => () => {
+      starFetchControllerRef.current?.abort();
+      loadMoreControllerRef.current?.abort();
+    },
+    []
+  );
+
+  const effectiveStarCounts = useMemo(() => {
+    if (starCountsProp) {
+      if (sessionAddedReviews.length === 0) {
+        return starCountsProp;
+      }
+      return addReviewStarCounts(
+        starCountsProp,
+        computeReviewStarCounts(sessionAddedReviews)
+      );
+    }
+    return computeReviewStarCounts(allReviews);
+  }, [starCountsProp, sessionAddedReviews, allReviews]);
+
   const counts = useMemo(() => {
-    const authentic = reviews.filter(
+    const authentic = allReviews.filter(
       (r) => r.include_in_rating && r.helpfulness_weight > 0
     ).length;
-    const ignored = reviews.filter(isFilteredOutReview).length;
-    const expert = reviews.filter((r) => r.reviewer_type === 'expert').length;
+    const ignored = allReviews.filter(isFilteredOutReview).length;
+    const expert = allReviews.filter(
+      (r) => r.reviewer_type === 'expert'
+    ).length;
     return {
-      all: reviews.length,
+      all: allReviews.length,
       authentic: authentic || authenticReviewCount,
       ignored: ignored || ignoredReviewCount,
       expert,
     };
-  }, [reviews, authenticReviewCount, ignoredReviewCount]);
+  }, [allReviews, authenticReviewCount, ignoredReviewCount]);
 
   // Live JReviews weighted scores based on current review weights
   const liveScores = useMemo(() => {
-    const validUserReviews = reviews.filter(
+    const validUserReviews = allReviews.filter(
       (r) =>
         r.reviewer_type !== 'expert' &&
         r.include_in_rating &&
         r.helpfulness_weight > 0
     );
-    const validExpertReviews = reviews.filter(
+    const validExpertReviews = allReviews.filter(
       (r) => r.reviewer_type === 'expert' && r.helpfulness_weight > 0
     );
 
@@ -821,7 +872,11 @@ export default function JReviewsSection({
       bayesianUser: bayesianUserScore,
       bayesianConfidence,
       userWeightSum,
-    } = computeJReviewsUserScores(reviews, userRatingWeighted, averageRating);
+    } = computeJReviewsUserScores(
+      allReviews,
+      userRatingWeighted,
+      averageRating
+    );
     // The buyer score is the stored rating every page shows (D3); the list
     // only gives the weight and the confidence.
     const shownUserScore =
@@ -866,7 +921,7 @@ export default function JReviewsSection({
       userConfidence: bayesianConfidence,
       fallbackAverage: averageRating,
     });
-    const starAnomaly = detectStarDistributionAnomaly(reviews);
+    const starAnomaly = detectStarDistributionAnomaly(allReviews);
 
     const normalizedUserCriteria = validUserReviews.map((r) => ({
       weight: r.helpfulness_weight,
@@ -914,7 +969,7 @@ export default function JReviewsSection({
       criteriaAverages,
     };
   }, [
-    reviews,
+    allReviews,
     averageRating,
     userRatingWeighted,
     ratingScore,
@@ -924,9 +979,39 @@ export default function JReviewsSection({
     t,
   ]);
 
+  const activeStarSlice =
+    starFilter !== 'all' ? starSlices[starFilter] : undefined;
+  const activeSourceReviews = useMemo(() => {
+    if (starFilter === 'all') {
+      return allReviews;
+    }
+    if (activeStarSlice?.loaded) {
+      const matchingSession = sessionAddedReviews.filter(
+        (r) => Math.round(r.rating_star) === starFilter
+      );
+      return matchingSession.length > 0
+        ? mergeLoadedReviews(matchingSession, activeStarSlice.reviews)
+        : activeStarSlice.reviews;
+    }
+    return allReviews;
+  }, [starFilter, activeStarSlice, allReviews, sessionAddedReviews]);
+
+  const activeNextCursor =
+    starFilter === 'all'
+      ? allNextCursor
+      : activeStarSlice?.loaded
+        ? activeStarSlice.nextCursor
+        : null;
+  const activeKnownTotalCount =
+    starFilter === 'all'
+      ? allKnownTotalCount
+      : activeStarSlice?.loaded
+        ? activeStarSlice.totalCount
+        : null;
+
   const filteredAndSortedReviews = useMemo(() => {
     const kw = searchKeyword.trim().toLowerCase();
-    const filtered = reviews.filter((r) => {
+    const filtered = activeSourceReviews.filter((r) => {
       if (activeTab === 'authentic') {
         if (!r.include_in_rating || r.helpfulness_weight <= 0) return false;
       } else if (activeTab === 'expert') {
@@ -935,9 +1020,12 @@ export default function JReviewsSection({
         if (!isFilteredOutReview(r)) return false;
       }
 
-      if (starFilter === 5 && Math.round(r.rating_star) !== 5) return false;
-      if (starFilter === 4 && Math.round(r.rating_star) !== 4) return false;
-      if (starFilter === 3 && Math.round(r.rating_star) > 3) return false;
+      if (
+        typeof starFilter === 'number' &&
+        Math.round(r.rating_star) !== starFilter
+      ) {
+        return false;
+      }
 
       if (kw) {
         const haystack = [
@@ -972,16 +1060,29 @@ export default function JReviewsSection({
         new Date(a.created_at || 0).getTime()
       );
     });
-  }, [reviews, activeTab, sortMode, searchKeyword, starFilter, tAnalyzer]);
+  }, [
+    activeSourceReviews,
+    activeTab,
+    sortMode,
+    searchKeyword,
+    starFilter,
+    tAnalyzer,
+  ]);
 
   // Ids of the reviews on the page, stable across votes, for the lookup below.
   const reviewIdsKey = useMemo(
     () =>
-      [...new Set(reviews.map((r) => r.id).filter(isReviewId))]
+      [
+        ...new Set(
+          [...allReviews, ...activeSourceReviews]
+            .map((r) => r.id)
+            .filter(isReviewId)
+        ),
+      ]
         .slice(0, MY_REVIEW_VALUES_MAX_IDS)
         .sort()
         .join(','),
-    [reviews]
+    [allReviews, activeSourceReviews]
   );
 
   // A signed-in writer sees the value score and gaps of their own reviews
@@ -1027,6 +1128,135 @@ export default function JReviewsSection({
     };
   }, [reviewIdsKey]);
 
+  function updateReviewAcrossLists(
+    reviewId: string,
+    updater: (r: ReviewItem) => ReviewItem
+  ) {
+    setAllReviews((prevList) =>
+      prevList.map((r) => (r.id === reviewId ? updater(r) : r))
+    );
+    setSessionAddedReviews((prevList) =>
+      prevList.map((r) => (r.id === reviewId ? updater(r) : r))
+    );
+    setStarSlices((prev) => {
+      let changed = false;
+      const next: Partial<Record<ReviewStarTier, StarSliceState>> = {};
+      for (const tier of STAR_TIERS_DESC) {
+        const slice = prev[tier];
+        if (!slice) continue;
+        if (slice.reviews.some((r) => r.id === reviewId)) {
+          changed = true;
+          next[tier] = {
+            ...slice,
+            reviews: slice.reviews.map((r) =>
+              r.id === reviewId ? updater(r) : r
+            ),
+          };
+        } else {
+          next[tier] = slice;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }
+
+  async function fetchStarSlice(star: ReviewStarTier) {
+    if (!masterProductId && !productSlug) return;
+    starFetchControllerRef.current?.abort();
+    const controller = new AbortController();
+    starFetchControllerRef.current = controller;
+    setStarFilterLoading(true);
+    setStarFilterError(null);
+    try {
+      const params = new URLSearchParams();
+      if (masterProductId) {
+        params.set('masterProductId', masterProductId);
+      } else if (productSlug) {
+        params.set('slug', productSlug);
+      }
+      params.set('star', String(star));
+      params.set('limit', '50');
+      const res = await fetch(`/api/v1/rate/reviews?${params.toString()}`, {
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      if (res.status === 429) {
+        setStarFilterError(t('loadMoreReviewsRateLimit'));
+        return;
+      }
+      if (!res.ok) {
+        setStarFilterError(t('starFilterLoadError'));
+        return;
+      }
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        data?: ReviewItem[];
+        nextCursor?: string | null;
+        totalCount?: number;
+      };
+      if (controller.signal.aborted) return;
+      if (!payload?.ok || !Array.isArray(payload.data)) {
+        setStarFilterError(t('starFilterLoadError'));
+        return;
+      }
+      const nextCursorVal =
+        typeof payload.nextCursor === 'string' && payload.nextCursor
+          ? payload.nextCursor
+          : null;
+      const nextTotalVal =
+        typeof payload.totalCount === 'number' &&
+        Number.isFinite(payload.totalCount) &&
+        payload.totalCount >= 0
+          ? payload.totalCount
+          : null;
+      setStarSlices((prev) => ({
+        ...prev,
+        [star]: {
+          reviews: payload.data ?? [],
+          nextCursor: nextCursorVal,
+          totalCount: nextTotalVal,
+          loaded: true,
+        },
+      }));
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (controller.signal.aborted) return;
+      setStarFilterError(t('starFilterLoadError'));
+    } finally {
+      if (starFetchControllerRef.current === controller) {
+        setStarFilterLoading(false);
+      }
+    }
+  }
+
+  function handleSelectStarFilter(nextFilter: StarFilter) {
+    loadMoreControllerRef.current?.abort();
+    loadMoreControllerRef.current = null;
+    setLoadingMore(false);
+    setLoadMoreError(null);
+    starFetchControllerRef.current?.abort();
+    starFetchControllerRef.current = null;
+    setStarFilterError(null);
+    setStarFilter(nextFilter);
+
+    if (nextFilter === 'all') {
+      setStarFilterLoading(false);
+      return;
+    }
+
+    if (
+      allNextCursor === null ||
+      (!masterProductId && !productSlug) ||
+      starSlices[nextFilter]?.loaded ||
+      (starCountsProp != null && effectiveStarCounts[nextFilter] === 0)
+    ) {
+      setStarFilterLoading(false);
+      return;
+    }
+
+    void fetchStarSlice(nextFilter);
+  }
+
   async function handleVote(
     reviewId: string,
     clickedVote: VoteChoice,
@@ -1060,12 +1290,12 @@ export default function JReviewsSection({
 
     // Kept to roll back the optimistic update when the server refuses the
     // vote for a signed-in reader (DOS/Rate#790).
-    const reviewBefore = reviews.find((r) => r.id === reviewId);
+    const reviewBefore =
+      allReviews.find((r) => r.id === reviewId) ??
+      activeSourceReviews.find((r) => r.id === reviewId);
     const rollBack = (notice: string) => {
       if (reviewBefore) {
-        setReviews((prevList) =>
-          prevList.map((r) => (r.id === reviewId ? reviewBefore : r))
-        );
+        updateReviewAcrossLists(reviewId, () => reviewBefore);
       }
       setVoteFor(prevVote);
       setAuthNotice(notice);
@@ -1073,38 +1303,35 @@ export default function JReviewsSection({
 
     // Optimistic state update using the canonical SQL/Importer JReviews weight formula
     setPendingIds((prev) => ({ ...prev, [reviewId]: true }));
-    setReviews((prevList) =>
-      prevList.map((r) => {
-        if (r.id !== reviewId) return r;
-        let u = r.upvotes;
-        let d = r.downvotes;
-        let rep = r.report_count;
+    updateReviewAcrossLists(reviewId, (r) => {
+      let u = r.upvotes;
+      let d = r.downvotes;
+      let rep = r.report_count;
 
-        if (prevVote === 'up') u = Math.max(0, u - 1);
-        if (prevVote === 'down') d = Math.max(0, d - 1);
-        if (prevVote === 'report') rep = Math.max(0, rep - 1);
+      if (prevVote === 'up') u = Math.max(0, u - 1);
+      if (prevVote === 'down') d = Math.max(0, d - 1);
+      if (prevVote === 'report') rep = Math.max(0, rep - 1);
 
-        if (nextAction === 'up') u += 1;
-        if (nextAction === 'down') d += 1;
-        if (nextAction === 'report') rep += 1;
+      if (nextAction === 'up') u += 1;
+      if (nextAction === 'down') d += 1;
+      if (nextAction === 'report') rep += 1;
 
-        const nextWeight = computeJReviewsWeight({
-          upvotes: u,
-          downvotes: d,
-          reports: rep,
-          flagCategory: r.flag_category,
-          verdict: r.verdict,
-          includeInRating: r.include_in_rating,
-        });
-        return {
-          ...r,
-          upvotes: u,
-          downvotes: d,
-          report_count: rep,
-          helpfulness_weight: nextWeight,
-        };
-      })
-    );
+      const nextWeight = computeJReviewsWeight({
+        upvotes: u,
+        downvotes: d,
+        reports: rep,
+        flagCategory: r.flag_category,
+        verdict: r.verdict,
+        includeInRating: r.include_in_rating,
+      });
+      return {
+        ...r,
+        upvotes: u,
+        downvotes: d,
+        report_count: rep,
+        helpfulness_weight: nextWeight,
+      };
+    });
 
     setVoteFor(nextAction === 'clear' ? null : nextAction);
 
@@ -1132,19 +1359,13 @@ export default function JReviewsSection({
         const payload = await res.json();
         setAuthNotice(null);
         if (payload && typeof payload.helpfulnessWeight === 'number') {
-          setReviews((prevList) =>
-            prevList.map((r) =>
-              r.id === reviewId
-                ? {
-                    ...r,
-                    upvotes: Number(payload.upvotes ?? r.upvotes),
-                    downvotes: Number(payload.downvotes ?? r.downvotes),
-                    report_count: Number(payload.reports ?? r.report_count),
-                    helpfulness_weight: Number(payload.helpfulnessWeight),
-                  }
-                : r
-            )
-          );
+          updateReviewAcrossLists(reviewId, (r) => ({
+            ...r,
+            upvotes: Number(payload.upvotes ?? r.upvotes),
+            downvotes: Number(payload.downvotes ?? r.downvotes),
+            report_count: Number(payload.reports ?? r.report_count),
+            helpfulness_weight: Number(payload.helpfulnessWeight),
+          }));
         }
       } else if (res.status === 401) {
         // Signed out: the vote stays as a browser-only simulation.
@@ -1170,9 +1391,14 @@ export default function JReviewsSection({
   }
 
   async function handleLoadMoreReviews() {
-    if (!nextCursor || loadingMore || (!masterProductId && !productSlug)) {
+    const cursorToFetch = activeNextCursor;
+    const targetFilter = starFilter;
+    if (!cursorToFetch || loadingMore || (!masterProductId && !productSlug)) {
       return;
     }
+    loadMoreControllerRef.current?.abort();
+    const controller = new AbortController();
+    loadMoreControllerRef.current = controller;
     setLoadingMore(true);
     setLoadMoreError(null);
     try {
@@ -1182,9 +1408,15 @@ export default function JReviewsSection({
       } else if (productSlug) {
         params.set('slug', productSlug);
       }
+      if (targetFilter !== 'all') {
+        params.set('star', String(targetFilter));
+      }
       params.set('limit', '50');
-      params.set('cursor', nextCursor);
-      const res = await fetch(`/api/v1/rate/reviews?${params.toString()}`);
+      params.set('cursor', cursorToFetch);
+      const res = await fetch(`/api/v1/rate/reviews?${params.toString()}`, {
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
       if (res.status === 429) {
         setLoadMoreError(t('loadMoreReviewsRateLimit'));
         return;
@@ -1199,27 +1431,52 @@ export default function JReviewsSection({
         nextCursor?: string | null;
         totalCount?: number;
       };
+      if (controller.signal.aborted) return;
       if (!payload?.ok || !Array.isArray(payload.data)) {
         setLoadMoreError(t('loadMoreReviewsError'));
         return;
       }
-      setReviews((prev) => mergeLoadedReviews(prev, payload.data ?? []));
-      setNextCursor(
+      const nextCursorVal =
         typeof payload.nextCursor === 'string' && payload.nextCursor
           ? payload.nextCursor
-          : null
-      );
-      if (
+          : null;
+      const nextTotalVal =
         typeof payload.totalCount === 'number' &&
         Number.isFinite(payload.totalCount) &&
         payload.totalCount >= 0
-      ) {
-        setKnownTotalCount(payload.totalCount);
+          ? payload.totalCount
+          : null;
+      if (targetFilter === 'all') {
+        setAllReviews((prev) => mergeLoadedReviews(prev, payload.data ?? []));
+        setAllNextCursor(nextCursorVal);
+        if (nextTotalVal !== null) {
+          setAllKnownTotalCount(nextTotalVal);
+        }
+      } else {
+        setStarSlices((prev) => {
+          const existing = prev[targetFilter];
+          return {
+            ...prev,
+            [targetFilter]: {
+              reviews: mergeLoadedReviews(
+                existing?.reviews ?? [],
+                payload.data ?? []
+              ),
+              nextCursor: nextCursorVal,
+              totalCount: nextTotalVal ?? existing?.totalCount ?? null,
+              loaded: true,
+            },
+          };
+        });
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (controller.signal.aborted) return;
       setLoadMoreError(t('loadMoreReviewsError'));
     } finally {
-      setLoadingMore(false);
+      if (loadMoreControllerRef.current === controller) {
+        setLoadingMore(false);
+      }
     }
   }
 
@@ -1279,7 +1536,9 @@ export default function JReviewsSection({
 
   /** Shows a stored review at the top and says how it was classified. */
   function handleReviewStored(newRev: ReviewItem) {
-    setReviews((prev) => [newRev, ...prev]);
+    setAllReviews((prev) => mergeLoadedReviews([newRev], prev));
+    setSessionAddedReviews((prev) => mergeLoadedReviews([newRev], prev));
+    setAllKnownTotalCount((prev) => (prev !== null ? prev + 1 : null));
 
     try {
       const cacheKey = `${LOCAL_REVIEWS_PREFIX}${masterProductId || productSlug || productName}`;
@@ -1832,6 +2091,64 @@ export default function JReviewsSection({
         </div>
       </div>
 
+      {/* 1a. 5-to-1 Star Rating Histogram */}
+      <div
+        className="rounded-4 p-md-4 mb-4 border bg-white p-3"
+        data-testid="review-star-histogram"
+        role="group"
+        aria-label={t('starHistogramHeading')}
+      >
+        <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <span className="small fw-bold text-uppercase text-secondary">
+            {t('starHistogramHeading')}
+          </span>
+          <span className="small text-muted">
+            {t('starHistogramTotal', {
+              count: formatNumber(effectiveStarCounts.total, locale),
+            })}
+          </span>
+        </div>
+        <div className="d-flex flex-column gap-2">
+          {STAR_TIERS_DESC.map((star) => {
+            const count = effectiveStarCounts[star];
+            const total = effectiveStarCounts.total;
+            const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+            const isSelected = starFilter === star;
+            const isZero = count === 0;
+            return (
+              <button
+                key={star}
+                type="button"
+                aria-pressed={isSelected}
+                data-testid={`review-star-histogram-btn-${star}`}
+                onClick={() =>
+                  handleSelectStarFilter(isSelected ? 'all' : star)
+                }
+                className={`rate-star-hist-btn${isSelected ? ' is-selected' : ''}${isZero ? ' is-empty' : ''}`}
+              >
+                <span className="rate-star-hist-label">
+                  {star} <span className="rate-star-hist-star">★</span>
+                </span>
+                <span className="rate-star-hist-track" aria-hidden="true">
+                  <span
+                    className="rate-star-hist-fill"
+                    style={{ width: `${pct}%` }}
+                  />
+                </span>
+                <span className="rate-star-hist-meta">
+                  <span className="fw-semibold font-monospace">
+                    {formatNumber(count, locale)}
+                  </span>{' '}
+                  <span className="rate-star-hist-pct">
+                    ({formatPercent(pct, locale)})
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* 1b. JReviews 5-Criteria Aggregated Breakdown */}
       <div className="rounded-4 p-md-4 mb-4 border bg-white p-3">
         <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -2204,15 +2521,25 @@ export default function JReviewsSection({
                   { id: 'all', label: t('starFilterAll') },
                   { id: 5, label: '5 ★' },
                   { id: 4, label: '4 ★' },
-                  { id: 3, label: '≤ 3 ★' },
+                  { id: 3, label: '3 ★' },
+                  { id: 2, label: '2 ★' },
+                  { id: 1, label: '1 ★' },
                 ] as const
               ).map((tier) => (
                 <button
                   key={String(tier.id)}
                   type="button"
                   aria-pressed={starFilter === tier.id}
-                  onClick={() => setStarFilter(tier.id)}
-                  className={`btn btn-sm rounded-pill px-3 py-1 ${
+                  onClick={() =>
+                    handleSelectStarFilter(
+                      tier.id === 'all'
+                        ? 'all'
+                        : starFilter === tier.id
+                          ? 'all'
+                          : tier.id
+                    )
+                  }
+                  className={`btn btn-sm rounded-pill rate-star-chip-btn px-3 py-1 ${
                     starFilter === tier.id
                       ? 'btn-warning text-dark fw-semibold'
                       : 'btn-outline-secondary bg-white'
@@ -2228,7 +2555,7 @@ export default function JReviewsSection({
                 type="button"
                 onClick={() => {
                   setSearchKeyword('');
-                  setStarFilter('all');
+                  handleSelectStarFilter('all');
                 }}
                 className="btn btn-sm btn-link text-danger text-decoration-none small px-2"
               >
@@ -2238,25 +2565,59 @@ export default function JReviewsSection({
           </div>
         </div>
 
-        {nextCursor && (
+        {activeNextCursor && (
           <p
             className="text-muted small mb-0"
             data-testid="reviews-loaded-scope-note"
           >
-            {knownTotalCount != null && knownTotalCount > reviews.length
+            {activeKnownTotalCount != null &&
+            activeKnownTotalCount > activeSourceReviews.length
               ? t('loadedReviewsScopeWithTotal', {
-                  loaded: formatPlainNumber(reviews.length, locale),
-                  total: formatPlainNumber(knownTotalCount, locale),
+                  loaded: formatPlainNumber(activeSourceReviews.length, locale),
+                  total: formatPlainNumber(activeKnownTotalCount, locale),
                 })
               : t('loadedReviewsScope', {
-                  loaded: formatPlainNumber(reviews.length, locale),
+                  loaded: formatPlainNumber(activeSourceReviews.length, locale),
                 })}
           </p>
         )}
       </div>
 
+      {starFilterLoading && (
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="star-filter-loading"
+          className="rounded-4 bg-light small text-secondary mb-3 d-flex align-items-center justify-content-center gap-2 border px-3 py-3"
+        >
+          <span
+            className="spinner-border spinner-border-sm"
+            aria-hidden="true"
+          />
+          <span>{t('loadingStarReviews')}</span>
+        </div>
+      )}
+
+      {starFilterError && typeof starFilter === 'number' && (
+        <div
+          role="alert"
+          data-testid="star-filter-error"
+          className="alert alert-warning small rounded-3 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 px-3 py-2"
+        >
+          <span>{starFilterError}</span>
+          <button
+            type="button"
+            onClick={() => void fetchStarSlice(starFilter)}
+            className="btn btn-sm btn-outline-dark rounded-pill px-3"
+            data-testid="star-filter-retry-btn"
+          >
+            {t('retryStarFilterBtn')}
+          </button>
+        </div>
+      )}
+
       {/* 4. Review Cards List */}
-      {filteredAndSortedReviews.length === 0 ? (
+      {starFilterLoading ? null : filteredAndSortedReviews.length === 0 ? (
         <div className="bg-light rounded-4 py-5 text-center">
           <p className="text-muted mb-0">{t('noMatchingReviews')}</p>
         </div>
@@ -2613,7 +2974,7 @@ export default function JReviewsSection({
         </PhoneCollapsible>
       )}
 
-      {(nextCursor || loadMoreError) && (
+      {(activeNextCursor || loadMoreError) && (
         <div className="d-flex flex-column align-items-center mt-4 gap-2">
           {loadMoreError && (
             <div
@@ -2623,7 +2984,7 @@ export default function JReviewsSection({
               {loadMoreError}
             </div>
           )}
-          {nextCursor && (
+          {activeNextCursor && (
             <button
               type="button"
               disabled={loadingMore}
@@ -2634,9 +2995,11 @@ export default function JReviewsSection({
             >
               {loadingMore
                 ? t('loadingMoreReviewsBtn')
-                : knownTotalCount != null && knownTotalCount > reviews.length
+                : activeKnownTotalCount != null &&
+                    activeKnownTotalCount > activeSourceReviews.length
                   ? t('loadMoreReviewsRemainingBtn', {
-                      remaining: knownTotalCount - reviews.length,
+                      remaining:
+                        activeKnownTotalCount - activeSourceReviews.length,
                     })
                   : t('loadMoreReviewsBtn')}
             </button>

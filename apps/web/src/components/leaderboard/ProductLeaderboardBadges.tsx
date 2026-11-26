@@ -29,6 +29,8 @@ const VALID_BADGE_CATEGORIES = new Set<CanonicalCategorySlug>([
   'cafes',
   'hotels',
   'homestays',
+  'dental-clinics',
+  'gyms-fitness',
 ]);
 
 const VALID_BADGE_CRITERIA = new Set<LeaderboardCriterionKey>([
@@ -127,6 +129,8 @@ export default async function ProductLeaderboardBadges({
     cafes: t('catCafes'),
     hotels: t('catHotels'),
     homestays: t('catHomestays'),
+    'dental-clinics': t('catDentalClinics'),
+    'gyms-fitness': t('catGymsFitness'),
   };
 
   const critLabels: Record<LeaderboardCriterionKey, string> = {

@@ -25,6 +25,8 @@ export const RATE_ROUTES = {
   CAFES: '/cafes',
   HOTELS: '/hotels',
   HOMESTAYS: '/homestays',
+  DENTAL_CLINICS: '/dental-clinics',
+  GYMS_FITNESS: '/gyms-fitness',
   DEALS: '/deals',
   LEADERBOARD: '/leaderboard',
   MERCHANTS: '/merchants',

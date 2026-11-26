@@ -148,7 +148,9 @@ export default function ProductCard({
     !hasMinPrice &&
     safeMaxPrice > 0 &&
     (Boolean(priceUnit) ||
-      /^\/(?:restaurants|cafes|hotels|homestays)(?:\/|$)/.test(categoryPath));
+      /^\/(?:restaurants|cafes|hotels|homestays|dental-clinics|gyms-fitness)(?:\/|$)/.test(
+        categoryPath
+      ));
   const safeUserScore = sanitizeProductCardScore(userScore, 5);
   const safeExpertScore = sanitizeProductCardScore(expertScore, 10);
   const safeReviewCount = sanitizeProductCardCount(reviewCount);

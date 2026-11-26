@@ -25,6 +25,8 @@
       "cafes": "Kavárny",
       "hotels": "Hotely",
       "homestays": "Homestaye",
+      "dental-clinics": "Zubní kliniky",
+      "gyms-fitness": "Posilovny a fitness",
       "leaderboard": "Žebříček",
       "merchants": "Obchody",
       "inspect": "Ověřit odkaz",
@@ -74,6 +76,8 @@
         "cafes": "Kavárny a čajovny",
         "hotels": "Hotely a resorty",
         "homestays": "Homestaye a vily",
+        "dental-clinics": "Zubní kliniky",
+        "gyms-fitness": "Posilovny a fitness",
         "leaderboard": "Žebříček produktů",
         "inspect": "Ověřit odkaz na produkt",
         "compare": "Porovnat parametry",
@@ -266,6 +270,10 @@
     "catHotelsUnit": "hotelů",
     "catHomestays": "Homestaye",
     "catHomestaysUnit": "homestayů",
+    "catDentalClinics": "Zubní kliniky",
+    "catDentalClinicsUnit": "zubních klinik",
+    "catGymsFitness": "Posilovny a fitness",
+    "catGymsFitnessUnit": "posiloven",
     "boolYes": "Ano",
     "boolNo": "Ne",
     "group0Title": "Hodnocení a důvěryhodnost",
@@ -485,6 +493,8 @@
     "catCafes": "Kavárny",
     "catHotels": "Hotely",
     "catHomestays": "Homestaye",
+    "catDentalClinics": "Zubní kliniky",
+    "catGymsFitness": "Posilovny a fitness",
     "badgeCombined": "Celkové skóre",
     "badgeUser": "Ověření uživatelé",
     "badgeExpert": "Experti Lab",
@@ -512,6 +522,8 @@
     "tabCafes": "Kavárny",
     "tabHotels": "Hotely",
     "tabHomestays": "Homestaye",
+    "tabDentalClinics": "Zubní kliniky",
+    "tabGymsFitness": "Posilovny a fitness",
     "dirLabel": "Technologie a elektronika",
     "chooseCategory": "1. Vyberte kategorii (Uzamčeno v rámci kategorie):",
     "chooseCriterion": "2. Řadit podle kritéria:",
@@ -710,6 +722,11 @@
     "searchReviewsPlaceholder": "Hledat v recenzích (např. teplota, baterie, fotoaparát, displej)...",
     "searchReviewsAria": "Hledat v obsahu recenzí",
     "starFilterAll": "Všechny hvězdičky",
+    "starHistogramHeading": "Rozložení hodnocení podle hvězdiček",
+    "starHistogramTotal": "Celkem: {count}",
+    "loadingStarReviews": "Načítání recenzí podle hvězdiček...",
+    "starFilterLoadError": "Nepodařilo se načíst recenze pro toto hodnocení.",
+    "retryStarFilterBtn": "Zkusit znovu",
     "clearFilterBtn": "Zrušit filtr",
     "noMatchingReviews": "Žádné recenze neodpovídají zvolenému filtru.",
     "roleExpertBadge": "Expert Rate",
@@ -1699,6 +1716,8 @@
     "catDescCafes": "Hodnocení kaváren pro kvalitu nápojů, prostředí, obsluhu a útratu na osobu",
     "catDescHotels": "Recenze hotelů a resortů: kvalita pokojů, čistota, poloha a cena za noc",
     "catDescHomestays": "Porovnejte homestaye a vily podle čistoty, přístupu hostitele, polohy a ceny za noc",
+    "catDescDentalClinics": "Hodnocení zubních klinik pro kvalitu ošetření, hygienu, přístup personálu a ceny",
+    "catDescGymsFitness": "Hodnocení posiloven pro vybavení, lekce, hygienu, trenéry a cenu členství",
     "popularBattlesBadge": "Souboje 1v1",
     "popularBattlesTitle": "Nejčastěji porovnávané vlajkové modely",
     "leaderboard5CatsBtn": "Žebříček",
@@ -2177,6 +2196,16 @@
         "titleCount": "Hodnocení homestayů a vil ({count, plural, one {# ubytování} few {# ubytování} other {# ubytování}}) | Rate.vn",
         "titleDefault": "Hodnocení homestayů, vil a cen za noc | Rate.vn",
         "description": "Objevte recenze homestayů a vil podle čistoty, služeb, polohy a orientační ceny za noc na Rate.vn."
+      },
+      "dental-clinics": {
+        "titleCount": "Hodnocení zubních klinik ({count, plural, one {# klinika} few {# kliniky} other {# klinik}}) | Rate.vn",
+        "titleDefault": "Hodnocení zubních klinik, kvality ošetření a cen | Rate.vn",
+        "description": "Prohlédněte si recenze kvality ošetření, hygieny, přístupu personálu a orientačních cen zubních klinik na Rate.vn."
+      },
+      "gyms-fitness": {
+        "titleCount": "Hodnocení posiloven a fitness ({count, plural, one {# posilovna} few {# posilovny} other {# posiloven}}) | Rate.vn",
+        "titleDefault": "Hodnocení posiloven, lekcí a cen členství | Rate.vn",
+        "description": "Prohlédněte si recenze vybavení, lekcí, hygieny, trenérů a orientačních cen členství v posilovnách na Rate.vn."
       }
     },
     "sortOptions": {
@@ -2462,6 +2491,28 @@
           "under-800k": "Pod 800K/noc",
           "800k-2m": "800K - 2M/noc",
           "over-2m": "Nad 2M/noc"
+        },
+        "features": {}
+      },
+      "dental-clinics": {
+        "title": "Zubní kliniky",
+        "subtitle": "Hodnocení kvality ošetření, sterilizace, přístupu personálu a orientačních cen zubních klinik",
+        "searchPlaceholder": "Hledat zubní kliniku, rovnátka, implantát, lokalitu...",
+        "presets": {
+          "under-500k": "Pod 500K",
+          "500k-5m": "500K - 5M",
+          "over-5m": "Nad 5M"
+        },
+        "features": {}
+      },
+      "gyms-fitness": {
+        "title": "Posilovny a fitness",
+        "subtitle": "Hodnocení vybavení, lekcí, hygieny, trenérů a orientačních cen členství",
+        "searchPlaceholder": "Hledat posilovnu, jógu, fitness, lokalitu...",
+        "presets": {
+          "under-500k": "Pod 500K",
+          "500k-2m": "500K - 2M",
+          "over-2m": "Nad 2M"
         },
         "features": {}
       }

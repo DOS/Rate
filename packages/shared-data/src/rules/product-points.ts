@@ -481,6 +481,23 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
+// Extra keywords scoped strictly to a single category, merged on top of
+// CRITERION_KEYWORDS only for that category so existing categories stay
+// byte-for-byte unchanged (DOS/Rate#1937).
+const CATEGORY_CRITERION_EXTRA_KEYWORDS: Readonly<
+  Record<string, Readonly<Record<string, readonly string[]>>>
+> = {
+  'dental-clinics': {
+    service_quality: ['điều trị', 'tay nghề'],
+    service_attitude: ['bác sĩ'],
+    hygiene: ['vô trùng', 'khử trùng'],
+  },
+  'gyms-fitness': {
+    quality: ['máy tập', 'thiết bị', 'lớp tập'],
+    service_attitude: ['huấn luyện viên'],
+  },
+};
+
 /**
  * Whether a keyword's words appear in a line's words, in order. A line typed
  * without any diacritics ("pin trau, sac nhanh") matches the plain keyword;
@@ -529,15 +546,29 @@ export function assignPointCriterion(
   const criteria = getRatingCriteria(categorySlug);
   if (criterionKey && criteria.some((cr) => cr.key === criterionKey))
     return criterionKey;
+  const categoryExtras =
+    typeof categorySlug === 'string' &&
+    Object.prototype.hasOwnProperty.call(
+      CATEGORY_CRITERION_EXTRA_KEYWORDS,
+      categorySlug
+    )
+      ? CATEGORY_CRITERION_EXTRA_KEYWORDS[categorySlug]
+      : undefined;
   const words = comparablePoint(body).split(SPACE);
   const plainLine = words.every((word) => word === plainWord(word));
   const perCriterion = criteria.map((criterion) => {
-    const keywords = Object.prototype.hasOwnProperty.call(
+    const base = Object.prototype.hasOwnProperty.call(
       CRITERION_KEYWORDS,
       criterion.key
     )
       ? CRITERION_KEYWORDS[criterion.key]!
       : [];
+    const extra =
+      categoryExtras &&
+      Object.prototype.hasOwnProperty.call(categoryExtras, criterion.key)
+        ? categoryExtras[criterion.key]!
+        : [];
+    const keywords = extra.length > 0 ? [...base, ...extra] : base;
     return {
       key: criterion.key,
       matched: matchedKeywords(words, keywords, plainLine),

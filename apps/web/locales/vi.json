@@ -25,6 +25,8 @@
       "cafes": "Cà phê",
       "hotels": "Khách sạn",
       "homestays": "Homestay",
+      "dental-clinics": "Nha khoa",
+      "gyms-fitness": "Phòng gym",
       "leaderboard": "Xếp hạng",
       "merchants": "Gian hàng",
       "inspect": "Kiểm tra link",
@@ -74,6 +76,8 @@
         "cafes": "Quán cà phê & trà",
         "hotels": "Khách sạn & resort",
         "homestays": "Homestay & villa",
+        "dental-clinics": "Nha khoa",
+        "gyms-fitness": "Phòng tập gym & fitness",
         "leaderboard": "Bảng xếp hạng sản phẩm",
         "inspect": "Kiểm tra link sản phẩm",
         "compare": "So sánh thông số",
@@ -266,6 +270,10 @@
     "catHotelsUnit": "khách sạn",
     "catHomestays": "Homestay",
     "catHomestaysUnit": "homestay",
+    "catDentalClinics": "Nha khoa",
+    "catDentalClinicsUnit": "phòng khám nha khoa",
+    "catGymsFitness": "Phòng tập gym",
+    "catGymsFitnessUnit": "phòng tập",
     "boolYes": "Có",
     "boolNo": "Không",
     "group0Title": "Điểm đánh giá và độ tin cậy",
@@ -485,6 +493,8 @@
     "catCafes": "Quán cà phê",
     "catHotels": "Khách sạn",
     "catHomestays": "Homestay",
+    "catDentalClinics": "Nha khoa",
+    "catGymsFitness": "Phòng tập gym",
     "badgeCombined": "Điểm tổng hợp",
     "badgeUser": "Người dùng thật",
     "badgeExpert": "Chuyên gia Rate Lab",
@@ -512,6 +522,8 @@
     "tabCafes": "Quán cà phê",
     "tabHotels": "Khách sạn",
     "tabHomestays": "Homestay",
+    "tabDentalClinics": "Nha khoa",
+    "tabGymsFitness": "Phòng tập gym",
     "dirLabel": "Công nghệ & điện tử",
     "chooseCategory": "1. Chọn danh mục ngành hàng (khóa xếp hạng cùng ngành):",
     "chooseCriterion": "2. Xếp hạng theo tiêu chí:",
@@ -710,6 +722,11 @@
     "searchReviewsPlaceholder": "Tìm trong bình luận (VD: nhiệt độ, pin, camera, màn hình, đóng gói)...",
     "searchReviewsAria": "Tìm kiếm nội dung đánh giá",
     "starFilterAll": "Mọi mức sao",
+    "starHistogramHeading": "Phân bố đánh giá theo sao",
+    "starHistogramTotal": "Tổng: {count}",
+    "loadingStarReviews": "Đang tải đánh giá theo mức sao...",
+    "starFilterLoadError": "Không thể tải đánh giá cho mức sao này.",
+    "retryStarFilterBtn": "Thử lại",
     "clearFilterBtn": "Xóa lọc",
     "noMatchingReviews": "Không có đánh giá nào khớp với bộ lọc hiện tại.",
     "roleExpertBadge": "Chuyên gia Rate",
@@ -1699,6 +1716,8 @@
     "catDescCafes": "Khám phá đánh giá đồ uống, không gian làm việc, phục vụ & mức chi mỗi người",
     "catDescHotels": "Tra cứu đánh giá chất lượng phòng, độ sạch sẽ, vị trí & giá phòng tham khảo theo đêm",
     "catDescHomestays": "So sánh homestay và villa theo độ sạch sẽ, phục vụ, vị trí & giá tham khảo mỗi đêm",
+    "catDescDentalClinics": "Khám phá đánh giá chất lượng điều trị, vô trùng, thái độ bác sĩ & chi phí nha khoa",
+    "catDescGymsFitness": "Khám phá đánh giá máy tập, lớp tập, vệ sinh, huấn luyện viên & giá gói tập",
     "popularBattlesBadge": "So sánh đối đầu 1v1",
     "popularBattlesTitle": "Các flagship đang được so kè nhiều nhất",
     "leaderboard5CatsBtn": "Bảng xếp hạng",
@@ -2177,6 +2196,16 @@
         "titleCount": "Đánh giá homestay & villa ({count} chỗ ở) | Rate.vn",
         "titleDefault": "Đánh giá homestay, villa và giá tham khảo mỗi đêm | Rate.vn",
         "description": "Khám phá đánh giá homestay và villa về độ sạch sẽ, phục vụ, vị trí và giá tham khảo mỗi đêm trên Rate.vn."
+      },
+      "dental-clinics": {
+        "titleCount": "Đánh giá nha khoa ({count} phòng khám) | Rate.vn",
+        "titleDefault": "Đánh giá phòng khám nha khoa, chất lượng và chi phí | Rate.vn",
+        "description": "Xem đánh giá chất lượng điều trị, vô trùng, thái độ bác sĩ và chi phí tham khảo tại các phòng khám nha khoa trên Rate.vn."
+      },
+      "gyms-fitness": {
+        "titleCount": "Đánh giá phòng tập gym & fitness ({count} phòng tập) | Rate.vn",
+        "titleDefault": "Đánh giá phòng tập gym, lớp tập và giá gói tập | Rate.vn",
+        "description": "Xem đánh giá máy tập, lớp tập, vệ sinh, huấn luyện viên và giá gói tập tham khảo tại các phòng gym và fitness trên Rate.vn."
       }
     },
     "sortOptions": {
@@ -2462,6 +2491,28 @@
           "under-800k": "Dưới 800K/đêm",
           "800k-2m": "800K - 2 triệu/đêm",
           "over-2m": "Trên 2 triệu/đêm"
+        },
+        "features": {}
+      },
+      "dental-clinics": {
+        "title": "Nha khoa",
+        "subtitle": "Đánh giá chất lượng điều trị, vô trùng, thái độ bác sĩ và chi phí tham khảo tại phòng khám nha khoa",
+        "searchPlaceholder": "Tìm nha khoa, dịch vụ niềng, implant, khu vực...",
+        "presets": {
+          "under-500k": "Dưới 500K",
+          "500k-5m": "500K - 5 triệu",
+          "over-5m": "Trên 5 triệu"
+        },
+        "features": {}
+      },
+      "gyms-fitness": {
+        "title": "Phòng tập gym & fitness",
+        "subtitle": "Đánh giá máy tập, lớp tập, vệ sinh, huấn luyện viên và giá gói tập tham khảo",
+        "searchPlaceholder": "Tìm phòng gym, yoga, fitness, khu vực...",
+        "presets": {
+          "under-500k": "Dưới 500K",
+          "500k-2m": "500K - 2 triệu",
+          "over-2m": "Trên 2 triệu"
         },
         "features": {}
       }

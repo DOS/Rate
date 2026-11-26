@@ -161,7 +161,7 @@ const nextConfig = {
       // dynamic page slugs stay with the proxy (DOS/Rate#1807).
       {
         source:
-          "/:path((?:_next|_vercel|api|monitoring|sitemap|(?!(?:(?:cs|en|vi)/)?(?:merchants|compare|smartphones|laptops|tablets|smartwatches|earbuds|tvs|air-conditioners|refrigerators|washing-machines|air-purifiers|bank-savings|internet-telecom|supplements|cosmetics|mother-baby|restaurants|cafes|hotels|homestays)/[a-zA-Z0-9][a-zA-Z0-9_-]*(?:[.][a-zA-Z0-9_-]+)*/?$)[^.]*\\.).*)",
+          "/:path((?:_next|_vercel|api|monitoring|sitemap|(?!(?:(?:cs|en|vi)/)?(?:merchants|compare|smartphones|laptops|tablets|smartwatches|earbuds|tvs|air-conditioners|refrigerators|washing-machines|air-purifiers|bank-savings|internet-telecom|supplements|cosmetics|mother-baby|restaurants|cafes|hotels|homestays|dental-clinics|gyms-fitness)/[a-zA-Z0-9][a-zA-Z0-9_-]*(?:[.][a-zA-Z0-9_-]+)*/?$)[^.]*\\.).*)",
         headers: [
           {
             key: "Content-Security-Policy",
@@ -207,7 +207,7 @@ const nextConfig = {
       // "/a.b/smartphones" still lands on [locale] and gets the shell (status 404).
       {
         source:
-          "/:path((?!_next/|_vercel/|api/|(?:(?:cs|en|vi)/)?(?:merchants|compare|smartphones|laptops|tablets|smartwatches|earbuds|tvs|air-conditioners|refrigerators|washing-machines|air-purifiers|bank-savings|internet-telecom|supplements|cosmetics|mother-baby|restaurants|cafes|hotels|homestays)/[a-zA-Z0-9][a-zA-Z0-9_-]*(?:[.][a-zA-Z0-9_-]+)*/?$)(?:[^/]*/)*[^/.]*[.][^/]*)",
+          "/:path((?!_next/|_vercel/|api/|(?:(?:cs|en|vi)/)?(?:merchants|compare|smartphones|laptops|tablets|smartwatches|earbuds|tvs|air-conditioners|refrigerators|washing-machines|air-purifiers|bank-savings|internet-telecom|supplements|cosmetics|mother-baby|restaurants|cafes|hotels|homestays|dental-clinics|gyms-fitness)/[a-zA-Z0-9][a-zA-Z0-9_-]*(?:[.][a-zA-Z0-9_-]+)*/?$)(?:[^/]*/)*[^/.]*[.][^/]*)",
         destination: "/vi/__not-found",
       },
     ]

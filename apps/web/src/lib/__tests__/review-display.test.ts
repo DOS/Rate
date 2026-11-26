@@ -632,7 +632,7 @@ function main() {
           `aria-pressed="true"[^>]*>${escapeRe(dict.starFilterAll)}</button>`
         )
       );
-      for (const tierLabel of ['5 ★', '4 ★', '≤ 3 ★']) {
+      for (const tierLabel of ['5 ★', '4 ★', '3 ★', '2 ★', '1 ★']) {
         assert.match(
           closedHtml,
           new RegExp(

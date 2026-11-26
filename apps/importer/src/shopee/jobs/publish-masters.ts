@@ -50,6 +50,8 @@ import {
   WAVE_E2_SERVICE_CATEGORY_SLUGS,
   WAVE_E3_CATEGORY_SLUGS,
   WAVE_E4_PLACE_CATEGORY_SLUGS,
+  WAVE_E5_PLACE_CATEGORY_SLUGS,
+  PLACE_CATEGORY_SLUGS,
   type CanonicalCategorySlug,
 } from '../product-normalizer.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
@@ -76,6 +78,7 @@ export const WAVE_E_ALL_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   ...WAVE_E2_SERVICE_CATEGORY_SLUGS,
   ...WAVE_E3_CATEGORY_SLUGS,
   ...WAVE_E4_PLACE_CATEGORY_SLUGS,
+  ...WAVE_E5_PLACE_CATEGORY_SLUGS,
 ];
 
 export const WAVE_E_CATEGORY_SLUGS: ReadonlySet<string> = new Set(WAVE_E_ALL_CATEGORY_SLUGS);
@@ -535,7 +538,7 @@ export interface CrawledPublishOptions {
   readonly expect?: number;
 }
 
-export type CrawledWave = 'wave_e1' | 'wave_e2' | 'wave_e3' | 'wave_e4';
+export type CrawledWave = 'wave_e1' | 'wave_e2' | 'wave_e3' | 'wave_e4' | 'wave_e5';
 
 export interface CrawledEligibleMaster {
   readonly id: string;
@@ -744,6 +747,7 @@ function resolveWaveForCategory(categorySlug: string): CrawledWave | null {
   if (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e2';
   if (WAVE_E3_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e3';
   if (WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e4';
+  if (WAVE_E5_PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e5';
   return null;
 }
 
@@ -829,7 +833,7 @@ function collectWaveCrawledBlockers(
     return;
   }
 
-  if (WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) {
+  if (PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) {
     if (row.entity_type !== 'place') {
       problems.push(
         `entity_type ${JSON.stringify(row.entity_type)} must be "place" for ${categorySlug}`
@@ -1108,7 +1112,7 @@ export async function runCrawledPublish(
       c =>
         c.row.status === 'draft' &&
         c.categorySlug !== null &&
-        WAVE_E4_PLACE_CATEGORY_SLUGS.has(c.categorySlug as CanonicalCategorySlug)
+        PLACE_CATEGORY_SLUGS.has(c.categorySlug as CanonicalCategorySlug)
     )
     .map(c => c.id);
 

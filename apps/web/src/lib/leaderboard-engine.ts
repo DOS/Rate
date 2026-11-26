@@ -124,6 +124,8 @@ export const VALID_LEADERBOARD_CATEGORIES: readonly CanonicalCategorySlug[] = [
   'cafes',
   'hotels',
   'homestays',
+  'dental-clinics',
+  'gyms-fitness',
 ] as const;
 
 export function normalizeLeaderboardCategory(
@@ -297,7 +299,9 @@ export function leaderboardCriteriaForCategory(
     categorySlug === 'restaurants' ||
     categorySlug === 'cafes' ||
     categorySlug === 'hotels' ||
-    categorySlug === 'homestays'
+    categorySlug === 'homestays' ||
+    categorySlug === 'dental-clinics' ||
+    categorySlug === 'gyms-fitness'
   ) {
     return ['value'];
   }
