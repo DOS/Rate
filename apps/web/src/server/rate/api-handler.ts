@@ -21,6 +21,23 @@ import {
   isOfferUnavailable,
   type OfferAvailability,
 } from '@/lib/product-market-stats';
+import {
+  REVIEW_REPORT_REASONS,
+  type ReviewReportReason,
+} from '@/lib/rate-domain-core';
+import {
+  encodeReviewCursor,
+  parseReviewCursor,
+  type ReviewKeysetCursor,
+} from '@/lib/review-cursor';
+
+export {
+  REVIEW_REPORT_REASONS,
+  encodeReviewCursor,
+  parseReviewCursor,
+  type ReviewKeysetCursor,
+  type ReviewReportReason,
+};
 
 /**
  * A merchant as public payloads carry it: `review_risk_score` is null when
@@ -1017,8 +1034,6 @@ export function inspectRateLimitResponse(
 }
 
 export type ReviewVoteAction = 'up' | 'down' | 'report' | 'clear';
-export type ReviewReportReason =
-  'spam' | 'fake' | 'offensive' | 'off_topic' | 'other';
 
 const VALID_REVIEW_VOTE_ACTIONS = new Set<ReviewVoteAction>([
   'up',
@@ -1027,13 +1042,9 @@ const VALID_REVIEW_VOTE_ACTIONS = new Set<ReviewVoteAction>([
   'clear',
 ]);
 
-const VALID_REVIEW_REPORT_REASONS = new Set<ReviewReportReason>([
-  'spam',
-  'fake',
-  'offensive',
-  'off_topic',
-  'other',
-]);
+const VALID_REVIEW_REPORT_REASONS = new Set<ReviewReportReason>(
+  REVIEW_REPORT_REASONS
+);
 
 /**
  * Validates and normalizes the request body for `POST /api/reviews/[id]/vote`.
@@ -1174,6 +1185,7 @@ export function parseReviewsQueryParams(
   slug: string | null;
   hideFake: boolean;
   limit: number;
+  cursor: ReviewKeysetCursor | null;
 } | null {
   const hideFakeRaw = searchParams.get('hideFake');
   const cleanedHideFake =
@@ -1196,6 +1208,16 @@ export function parseReviewsQueryParams(
     limit = parsedLimit;
   }
 
+  const rawCursor = searchParams.get('cursor');
+  let cursor: ReviewKeysetCursor | null = null;
+  if (rawCursor != null && trimEdgeControlAndWhitespace(rawCursor) !== '') {
+    const parsedCursor = parseReviewCursor(rawCursor);
+    if (!parsedCursor) {
+      return null;
+    }
+    cursor = parsedCursor;
+  }
+
   const rawMasterId =
     searchParams.get('masterProductId') ?? searchParams.get('productId');
   const trimmedId =
@@ -1207,7 +1229,7 @@ export function parseReviewsQueryParams(
     ) {
       return null;
     }
-    return { masterProductId: trimmedId, slug: null, hideFake, limit };
+    return { masterProductId: trimmedId, slug: null, hideFake, limit, cursor };
   }
 
   const rawSlug = searchParams.get('slug');
@@ -1220,7 +1242,13 @@ export function parseReviewsQueryParams(
     ) {
       return null;
     }
-    return { masterProductId: null, slug: trimmedSlug, hideFake, limit };
+    return {
+      masterProductId: null,
+      slug: trimmedSlug,
+      hideFake,
+      limit,
+      cursor,
+    };
   }
 
   return null;
