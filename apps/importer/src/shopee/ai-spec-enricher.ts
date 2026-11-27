@@ -21,6 +21,7 @@ import {
   sanitizeCustomFields,
 } from '@repo/shared-data/rules';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
+import { withBluetoothVersionOnly } from './spec-bluetooth.js';
 import { computeRetryDelayMs, createImporterLogger, sanitizeAiGeneratedText } from './logger.js';
 
 export type SupportedAiProvider =
@@ -493,7 +494,10 @@ export function mergeProductSpecifications(
     };
   }
 
-  return sanitizeSpecifications(mergedRaw);
+  // Bluetooth as the version only, so no writer puts profile names back (DOS/Rate#1955).
+  return withBluetoothVersionOnly(
+    sanitizeSpecifications(mergedRaw) as Record<string, unknown>
+  ) as ProductSpecifications;
 }
 
 export const MAX_SPEC_CACHE_ENTRIES = 250;
