@@ -1909,7 +1909,7 @@ describe('DOS/Rate#1923 retail platforms, typed custom_fields, and Wave E3 brand
                         description: 'Multivitamin supplement',
                         colors: [],
                         specifications: {
-                          category_slug: 'supplements',
+                          category_slug: 'air-purifiers',
                           custom_fields: {
                             dosage_form: 'capsule',
                             pack_count: 30,
@@ -1936,6 +1936,8 @@ describe('DOS/Rate#1923 retail platforms, typed custom_fields, and Wave E3 brand
       },
     } as unknown as RateSupabaseClient;
 
+    // A device category: a supplement master gets no AI call since DOS/Rate#1956, and this
+    // case tests that an AI answer never overwrites stored custom_fields.
     const stubEnricher = new AiSpecEnricher({ apiKey: '' });
     stubEnricher.fetchSpecsFromAi = async () => ({
       ram_gb: null,
@@ -1944,7 +1946,7 @@ describe('DOS/Rate#1923 retail platforms, typed custom_fields, and Wave E3 brand
       battery_mah: null,
       has_5g: false,
       specifications: {
-        category_slug: 'supplements',
+        category_slug: 'air-purifiers',
         availability: { status: 'Available' },
       },
       key_specs: {},
