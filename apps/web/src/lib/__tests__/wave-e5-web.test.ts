@@ -548,6 +548,25 @@ for (const [name, expected] of phase2KeywordSamples) {
   );
 }
 
+// Realistic hyphenated slugs must not trigger cosmetics skincare shadowing (#1968).
+for (const [slug, name, expected] of [
+  [
+    'hasaki-skincare-clinic-quan-1',
+    'Hasaki Skincare Clinic Quận 1',
+    'spas-aesthetics',
+  ],
+  ['skincare-spa-quan-1', 'Skincare Spa Quận 1', 'spas-aesthetics'],
+  ['skincare-salon-quan-3', 'Skincare Salon Quận 3', 'spas-aesthetics'],
+  ['serum-skincare-spa', 'Serum skincare spa 30ml', 'cosmetics'],
+  ['bo-skincare-duong-am', 'Bộ skincare dưỡng ẩm 5 món', 'cosmetics'],
+] as const) {
+  assert.equal(
+    getMasterProductCategorySlug({ slug, name }),
+    expected,
+    `hyphenated slug "${slug}" ("${name}") must classify as ${expected}`
+  );
+}
+
 const phase2NegativeGuards: Array<[string, string]> = [
   ['Thẻ quà tặng Gift Card 500k', 'smartphones'],
   ['Thẻ nhớ SanDisk MicroSD 128GB', 'smartphones'],

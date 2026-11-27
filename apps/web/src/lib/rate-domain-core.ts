@@ -1641,7 +1641,7 @@ export function getMasterProductCategorySlug(
     return 'earbuds';
   }
   if (
-    /(?<![\p{L}\d])(?:mỹ phẩm|kem chống nắng|sữa rửa mặt|nước tẩy trang|kem dưỡng|son môi|tinh chất|serum|toner|retinol|niacinamide|miếng dán (?:mụn|lột mụn|trắng răng)|cosmetics?|skincare(?!\s*(?:spa|clinic|salon)(?![\p{L}\d]))|la roche-posay|bioderma|cerave)(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:mỹ phẩm|kem chống nắng|sữa rửa mặt|nước tẩy trang|kem dưỡng|son môi|tinh chất|serum|toner|retinol|niacinamide|miếng dán (?:mụn|lột mụn|trắng răng)|cosmetics?|skincare(?![\s-]*(?:spa|clinic|salon)(?![\p{L}\d]))|la roche-posay|bioderma|cerave)(?![\p{L}\d])/iu.test(
       haystack
     )
   ) {
@@ -1726,7 +1726,7 @@ export function getMasterProductCategorySlug(
   }
   if (
     !isWaveE5RetailProduct &&
-    (/(?<![\p{L}\d])(?:thẩm\s*mỹ\s*viện|tham\s*my\s*vien|viện\s*thẩm\s*mỹ|vien\s*tham\s*my|bệnh\s*viện\s*thẩm\s*mỹ|benh\s*vien\s*tham\s*my|trung\s*tâm\s*thẩm\s*mỹ|trung\s*tam\s*tham\s*my|hệ\s*thống\s*(?:thẩm\s*mỹ|spa)|he\s*thong\s*(?:tham\s*my|spa)|phòng\s*khám\s*(?:da\s*liễu\s*thẩm\s*mỹ|thẩm\s*mỹ)|tmv\s*(?:thu\s*c[uú]c|kangnam|ng[oọ]c\s*dung|mailisa)|spa\s*(?:chăm\s*sóc\s*da|làm\s*đẹp|trị\s*mụn|massage|thư\s*giãn|dưỡng\s*sinh|thẩm\s*mỹ|clinic)|(?:beauty|aesthetic|skincare|day)\s*(?:spa|clinic|salon)|thu\s*c[uú]c\s*(?:clinic|spa|thẩm\s*mỹ)|thẩm\s*mỹ\s*(?:thu\s*c[uú]c|kangnam|ng[oọ]c\s*dung|mailisa)|ng[oọ]c\s*dung\s*(?:clinic|spa|beauty)|seoul\s*center|g[aà]\s*spa|hasaki\s*clinic(?:\s*(?:&|and|và)\s*spa)?|hasaki\s*spa|shynh\s*house|menard\s*(?:facial\s*salon|spa|beauty)|(?:(?:thẩm\s*mỹ|tham\s*my|viện|vien|spa|clinic)\s*mailisa|mailisa\s*(?:thẩm\s*mỹ|tham\s*my|spa|clinic|viện|vien))|kangnam\s*(?:clinic|spa|hospital|thẩm\s*mỹ))(?![\p{L}\d])/iu.test(
+    (/(?<![\p{L}\d])(?:thẩm\s*mỹ\s*viện|tham\s*my\s*vien|viện\s*thẩm\s*mỹ|vien\s*tham\s*my|bệnh\s*viện\s*thẩm\s*mỹ|benh\s*vien\s*tham\s*my|trung\s*tâm\s*thẩm\s*mỹ|trung\s*tam\s*tham\s*my|hệ\s*thống\s*(?:thẩm\s*mỹ|spa)|he\s*thong\s*(?:tham\s*my|spa)|phòng\s*khám\s*(?:da\s*liễu\s*thẩm\s*mỹ|thẩm\s*mỹ)|tmv\s*(?:thu\s*c[uú]c|kangnam|ng[oọ]c\s*dung|mailisa)|spa\s*(?:chăm\s*sóc\s*da|làm\s*đẹp|trị\s*mụn|massage|thư\s*giãn|dưỡng\s*sinh|thẩm\s*mỹ|clinic)|(?:beauty|aesthetic|skincare|day)[\s-]*(?:spa|clinic|salon)|thu\s*c[uú]c\s*(?:clinic|spa|thẩm\s*mỹ)|thẩm\s*mỹ\s*(?:thu\s*c[uú]c|kangnam|ng[oọ]c\s*dung|mailisa)|ng[oọ]c\s*dung\s*(?:clinic|spa|beauty)|seoul\s*center|g[aà]\s*spa|hasaki\s*clinic(?:\s*(?:&|and|và)\s*spa)?|hasaki\s*spa|shynh\s*house|menard\s*(?:facial\s*salon|spa|beauty)|(?:(?:thẩm\s*mỹ|tham\s*my|viện|vien|spa|clinic)\s*mailisa|mailisa\s*(?:thẩm\s*mỹ|tham\s*my|spa|clinic|viện|vien))|kangnam\s*(?:clinic|spa|hospital|thẩm\s*mỹ))(?![\p{L}\d])/iu.test(
       haystack
     ) ||
       /^\s*(?:spa|thẩm\s*mỹ\s*viện|viện\s*thẩm\s*mỹ)(?![\p{L}\d])/iu.test(
