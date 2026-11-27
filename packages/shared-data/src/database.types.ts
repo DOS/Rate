@@ -267,6 +267,133 @@ export type Database = {
         };
         Relationships: [];
       };
+      items: {
+        Row: {
+          authentic_review_count: number;
+          average_rating: number;
+          brand: string;
+          category_id: string | null;
+          created_at: string;
+          criteria_scores: Json;
+          default_variant_id: string | null;
+          description: string | null;
+          entity_type: string;
+          expert_criteria_scores: Json;
+          expert_rating: number | null;
+          expert_review_summary: string | null;
+          id: string;
+          images: string[];
+          item_key: string;
+          key_specs: Json;
+          listing_count: number;
+          max_price: number;
+          merchant_count: number;
+          metadata: Json;
+          min_price: number;
+          model: string;
+          name: string;
+          price_variant_count: number;
+          rating_score: number | null;
+          rating_weight_sum: number;
+          slug: string;
+          spec_provenance: Json;
+          specifications: Json;
+          status: string;
+          thumbnail: string | null;
+          total_reviews: number;
+          unknown_variant_listing_count: number;
+          updated_at: string;
+          user_rating_weighted: number | null;
+        };
+        Insert: {
+          authentic_review_count?: number;
+          average_rating?: number;
+          brand: string;
+          category_id?: string | null;
+          created_at?: string;
+          criteria_scores?: Json;
+          default_variant_id?: string | null;
+          description?: string | null;
+          entity_type?: string;
+          expert_criteria_scores?: Json;
+          expert_rating?: number | null;
+          expert_review_summary?: string | null;
+          id?: string;
+          images?: string[];
+          item_key: string;
+          key_specs?: Json;
+          listing_count?: number;
+          max_price?: number;
+          merchant_count?: number;
+          metadata?: Json;
+          min_price?: number;
+          model: string;
+          name: string;
+          price_variant_count?: number;
+          rating_score?: number | null;
+          rating_weight_sum?: number;
+          slug: string;
+          spec_provenance?: Json;
+          specifications?: Json;
+          status?: string;
+          thumbnail?: string | null;
+          total_reviews?: number;
+          unknown_variant_listing_count?: number;
+          updated_at?: string;
+          user_rating_weighted?: number | null;
+        };
+        Update: {
+          authentic_review_count?: number;
+          average_rating?: number;
+          brand?: string;
+          category_id?: string | null;
+          created_at?: string;
+          criteria_scores?: Json;
+          default_variant_id?: string | null;
+          description?: string | null;
+          entity_type?: string;
+          expert_criteria_scores?: Json;
+          expert_rating?: number | null;
+          expert_review_summary?: string | null;
+          id?: string;
+          images?: string[];
+          item_key?: string;
+          key_specs?: Json;
+          listing_count?: number;
+          max_price?: number;
+          merchant_count?: number;
+          metadata?: Json;
+          min_price?: number;
+          model?: string;
+          name?: string;
+          price_variant_count?: number;
+          rating_score?: number | null;
+          rating_weight_sum?: number;
+          slug?: string;
+          spec_provenance?: Json;
+          specifications?: Json;
+          status?: string;
+          thumbnail?: string | null;
+          total_reviews?: number;
+          unknown_variant_listing_count?: number;
+          updated_at?: string;
+          user_rating_weighted?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'fk_items_default_variant';
+            columns: ['default_variant_id'];
+            referencedRelation: 'master_products';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'items_category_id_fkey';
+            columns: ['category_id'];
+            referencedRelation: 'categories';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       master_products: {
         Row: {
           authentic_review_count: number | null;
@@ -285,6 +412,7 @@ export type Database = {
           has_5g: boolean | null;
           id: string;
           images: string[] | null;
+          item_id: string | null;
           key_specs: Json;
           max_price: number | null;
           merchant_count: number | null;
@@ -298,6 +426,7 @@ export type Database = {
           rating_weight_sum: number;
           screen_size_inch: number | null;
           slug: string;
+          sort_order: number | null;
           spec_provenance: Json;
           specifications: Json;
           status: string | null;
@@ -306,6 +435,7 @@ export type Database = {
           total_reviews: number | null;
           updated_at: string | null;
           user_rating_weighted: number | null;
+          variant_key: string | null;
           variant_name: string | null;
         };
         Insert: {
@@ -325,6 +455,7 @@ export type Database = {
           has_5g?: boolean | null;
           id?: string;
           images?: string[] | null;
+          item_id?: string | null;
           key_specs?: Json;
           max_price?: number | null;
           merchant_count?: number | null;
@@ -338,6 +469,7 @@ export type Database = {
           rating_weight_sum?: number;
           screen_size_inch?: number | null;
           slug: string;
+          sort_order?: number | null;
           spec_provenance?: Json;
           specifications?: Json;
           status?: string | null;
@@ -346,6 +478,7 @@ export type Database = {
           total_reviews?: number | null;
           updated_at?: string | null;
           user_rating_weighted?: number | null;
+          variant_key?: string | null;
           variant_name?: string | null;
         };
         Update: {
@@ -365,6 +498,7 @@ export type Database = {
           has_5g?: boolean | null;
           id?: string;
           images?: string[] | null;
+          item_id?: string | null;
           key_specs?: Json;
           max_price?: number | null;
           merchant_count?: number | null;
@@ -378,6 +512,7 @@ export type Database = {
           rating_weight_sum?: number;
           screen_size_inch?: number | null;
           slug?: string;
+          sort_order?: number | null;
           spec_provenance?: Json;
           specifications?: Json;
           status?: string | null;
@@ -386,9 +521,16 @@ export type Database = {
           total_reviews?: number | null;
           updated_at?: string | null;
           user_rating_weighted?: number | null;
+          variant_key?: string | null;
           variant_name?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: 'fk_master_products_item';
+            columns: ['item_id'];
+            referencedRelation: 'items';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'master_products_category_id_fkey';
             columns: ['category_id'];
@@ -771,6 +913,7 @@ export type Database = {
           historical_sold_display: string | null;
           id: string;
           images: string[] | null;
+          item_id: string | null;
           last_crawl_job_id: string | null;
           last_crawled_at: string | null;
           merchant_id: string;
@@ -789,6 +932,7 @@ export type Database = {
           title: string;
           updated_at: string | null;
           url: string;
+          variant_source: string | null;
         };
         Insert: {
           attributes?: Json | null;
@@ -804,6 +948,7 @@ export type Database = {
           historical_sold_display?: string | null;
           id?: string;
           images?: string[] | null;
+          item_id?: string | null;
           last_crawl_job_id?: string | null;
           last_crawled_at?: string | null;
           merchant_id: string;
@@ -822,6 +967,7 @@ export type Database = {
           title: string;
           updated_at?: string | null;
           url: string;
+          variant_source?: string | null;
         };
         Update: {
           attributes?: Json | null;
@@ -837,6 +983,7 @@ export type Database = {
           historical_sold_display?: string | null;
           id?: string;
           images?: string[] | null;
+          item_id?: string | null;
           last_crawl_job_id?: string | null;
           last_crawled_at?: string | null;
           merchant_id?: string;
@@ -855,12 +1002,19 @@ export type Database = {
           title?: string;
           updated_at?: string | null;
           url?: string;
+          variant_source?: string | null;
         };
         Relationships: [
           {
             foreignKeyName: 'fk_products_cluster_id';
             columns: ['cluster_id'];
             referencedRelation: 'master_products';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'fk_products_item';
+            columns: ['item_id'];
+            referencedRelation: 'items';
             referencedColumns: ['id'];
           },
           {
@@ -1182,6 +1336,27 @@ export type Database = {
           },
         ];
       };
+      review_deleted_submissions: {
+        Row: {
+          author_user_id: string;
+          deleted_at: string;
+          review_id: string;
+          submitted_at: string;
+        };
+        Insert: {
+          author_user_id: string;
+          deleted_at?: string;
+          review_id: string;
+          submitted_at: string;
+        };
+        Update: {
+          author_user_id?: string;
+          deleted_at?: string;
+          review_id?: string;
+          submitted_at?: string;
+        };
+        Relationships: [];
+      };
       review_flags: {
         Row: {
           analyzed_at: string;
@@ -1351,6 +1526,7 @@ export type Database = {
           criteria_ratings: Json | null;
           criteria_version: number | null;
           downvotes: number | null;
+          edited_at: string | null;
           first_seen_job_id: string | null;
           helpfulness_weight: number | null;
           id: string;
@@ -1365,6 +1541,8 @@ export type Database = {
           rating_star: number;
           report_count: number | null;
           reviewer_type: string | null;
+          seller_reply: string | null;
+          seller_reply_at: string | null;
           upvotes: number | null;
           value_breakdown: Json | null;
           value_score: number | null;
@@ -1380,6 +1558,7 @@ export type Database = {
           criteria_ratings?: Json | null;
           criteria_version?: number | null;
           downvotes?: number | null;
+          edited_at?: string | null;
           first_seen_job_id?: string | null;
           helpfulness_weight?: number | null;
           id?: string;
@@ -1394,6 +1573,8 @@ export type Database = {
           rating_star: number;
           report_count?: number | null;
           reviewer_type?: string | null;
+          seller_reply?: string | null;
+          seller_reply_at?: string | null;
           upvotes?: number | null;
           value_breakdown?: Json | null;
           value_score?: number | null;
@@ -1409,6 +1590,7 @@ export type Database = {
           criteria_ratings?: Json | null;
           criteria_version?: number | null;
           downvotes?: number | null;
+          edited_at?: string | null;
           first_seen_job_id?: string | null;
           helpfulness_weight?: number | null;
           id?: string;
@@ -1423,6 +1605,8 @@ export type Database = {
           rating_star?: number;
           report_count?: number | null;
           reviewer_type?: string | null;
+          seller_reply?: string | null;
+          seller_reply_at?: string | null;
           upvotes?: number | null;
           value_breakdown?: Json | null;
           value_score?: number | null;
@@ -1579,6 +1763,7 @@ export type Database = {
         }[];
       };
       current_user_can_vote_reviews: { Args: never; Returns: boolean };
+      delete_community_review: { Args: { p_review_id: string }; Returns: Json };
       delete_extension_submitter: {
         Args: { p_submitter_id: string };
         Returns: number;
@@ -1615,6 +1800,20 @@ export type Database = {
           isOneToOne: false;
           isSetofReturn: true;
         };
+      };
+      edit_community_review: {
+        Args: {
+          p_comment?: string;
+          p_cons?: Json;
+          p_criteria_ratings?: Json;
+          p_criterion_points?: Json;
+          p_pros?: Json;
+          p_rating_star?: number;
+          p_review_id: string;
+          p_variation?: string;
+          p_verdict?: string;
+        };
+        Returns: Json;
       };
       enqueue_crawl_job: {
         Args: {
@@ -1660,9 +1859,30 @@ export type Database = {
           count: number;
         }[];
       };
+      get_category_brand_facets_v2: {
+        Args: { p_category_id: string };
+        Returns: {
+          brand: string;
+          count: number;
+        }[];
+      };
       heartbeat_crawl_job: {
         Args: { p_claim_token: string; p_extend?: string; p_id: string };
         Returns: boolean;
+      };
+      is_sizeless_category_slug: { Args: { p_slug: string }; Returns: boolean };
+      item_criteria_summary: {
+        Args: { p_item_id: string };
+        Returns: {
+          criteria_scores: Json;
+          rating_score: number;
+          rating_weight_sum: number;
+        }[];
+      };
+      item_name_from_master: { Args: { p_name: string }; Returns: string };
+      item_slug_from_master: {
+        Args: { p_model_key: string; p_slug: string };
+        Returns: string;
       };
       listing_price_context: {
         Args: {
@@ -1704,6 +1924,20 @@ export type Database = {
         }[];
       };
       master_rating_item: { Args: { p_master_id: string }; Returns: string };
+      match_item: {
+        Args: {
+          p_brand?: string;
+          p_model?: string;
+          p_threshold?: number;
+          search_title: string;
+        };
+        Returns: {
+          item_id: string;
+          item_key: string;
+          name: string;
+          similarity: number;
+        }[];
+      };
       match_master_product: {
         Args: {
           p_brand?: string;
@@ -1732,6 +1966,12 @@ export type Database = {
           total_reviews: number;
         }[];
       };
+      my_review_ids: {
+        Args: { p_review_ids: string[] };
+        Returns: {
+          review_id: string;
+        }[];
+      };
       my_review_values: {
         Args: { p_review_ids: string[] };
         Returns: {
@@ -1742,6 +1982,10 @@ export type Database = {
       };
       purge_completed_crawl_jobs: {
         Args: { p_retention_days?: number };
+        Returns: number;
+      };
+      purge_deleted_review_submissions: {
+        Args: { p_batch_limit?: number; p_older_than?: string };
         Returns: number;
       };
       purge_extension_observations: {
@@ -1767,6 +2011,12 @@ export type Database = {
         };
         Returns: string;
       };
+      refresh_item_criteria_summary: {
+        Args: { p_item_id: string; p_skip_item_lock?: boolean };
+        Returns: undefined;
+      };
+      refresh_item_rating: { Args: { p_item_id: string }; Returns: undefined };
+      refresh_item_stats: { Args: { p_item_id: string }; Returns: undefined };
       refresh_master_market_stats: {
         Args: { p_master_id: string };
         Returns: undefined;
@@ -1801,6 +2051,10 @@ export type Database = {
           generation: number;
           input_hash: string;
         }[];
+      };
+      retire_item_unknown_variant: {
+        Args: { p_item_id: string };
+        Returns: number;
       };
       review_ai_text_hash: { Args: { p_text: string }; Returns: string };
       review_completeness_factor: {
@@ -1847,6 +2101,74 @@ export type Database = {
           title: string;
         }[];
       };
+      search_catalog_autocomplete_v2: {
+        Args: { p_limit?: number; p_query: string };
+        Returns: {
+          brand_or_platform: string;
+          entity_kind: string;
+          id: string;
+          max_price: number;
+          merchant_or_official_count: number;
+          min_price: number;
+          rating: number;
+          review_count: number;
+          similarity_score: number;
+          slug: string;
+          subtitle: string;
+          thumbnail: string;
+          title: string;
+        }[];
+      };
+      search_items_v1: {
+        Args: {
+          p_brands?: string[];
+          p_category_id?: string;
+          p_entity_type?: string;
+          p_has_5g?: boolean;
+          p_limit?: number;
+          p_max_price?: number;
+          p_min_price?: number;
+          p_min_rating?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_sort?: string;
+          p_storage_gb?: number[];
+        };
+        Returns: {
+          authentic_review_count: number;
+          average_rating: number;
+          brand: string;
+          category_id: string;
+          chips: Json;
+          created_at: string;
+          criteria_scores: Json;
+          default_variant_id: string;
+          entity_type: string;
+          expert_rating: number;
+          item_id: string;
+          item_key: string;
+          listing_count: number;
+          matching_max_price: number;
+          matching_min_price: number;
+          matching_variant_keys: string[];
+          max_price: number;
+          merchant_count: number;
+          min_price: number;
+          model: string;
+          name: string;
+          price_variant_count: number;
+          rating_score: number;
+          rating_weight_sum: number;
+          representative_variant_id: string;
+          representative_variant_slug: string;
+          slug: string;
+          thumbnail: string;
+          total_count: number;
+          total_reviews: number;
+          user_rating_weighted: number;
+          variant_keys: string[];
+        }[];
+      };
       search_master_products: {
         Args: {
           p_brands?: string[];
@@ -1884,6 +2206,7 @@ export type Database = {
           has_5g: boolean | null;
           id: string;
           images: string[] | null;
+          item_id: string | null;
           key_specs: Json;
           max_price: number | null;
           merchant_count: number | null;
@@ -1897,6 +2220,7 @@ export type Database = {
           rating_weight_sum: number;
           screen_size_inch: number | null;
           slug: string;
+          sort_order: number | null;
           spec_provenance: Json;
           specifications: Json;
           status: string | null;
@@ -1905,6 +2229,7 @@ export type Database = {
           total_reviews: number | null;
           updated_at: string | null;
           user_rating_weighted: number | null;
+          variant_key: string | null;
           variant_name: string | null;
         }[];
         SetofOptions: {

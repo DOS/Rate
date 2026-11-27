@@ -16,7 +16,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-import { repoRoot, startRateDb } from './lib/rate-db.mjs';
+import { readMigrations, repoRoot, startRateDb } from './lib/rate-db.mjs';
 
 const rules = await import(
   pathToFileURL(
@@ -138,7 +138,11 @@ const expectedScore = (lifted) => {
 };
 
 try {
-  const { sql, asRole } = startRateDb({ name: container });
+  // Replay historical proposals on the pre-Item-Model stack (< 20261212180000); full-stack Item Model replay runs in test-migration-replay.mjs and DOS/DOS.Me.
+  const { sql, asRole } = startRateDb({
+    name: container,
+    migrations: readMigrations().filter((m) => m.name < '20261212180000_'),
+  });
   // The reference stack has P6 (20261102233000): roll it back, with the CHECK the rollback
   // keeps, so the proposal replays on the stack before it.
   sql(rollback);
