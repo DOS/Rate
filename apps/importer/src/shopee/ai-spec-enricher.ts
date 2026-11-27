@@ -25,6 +25,7 @@ import {
 } from '@repo/shared-data/rules';
 import { categoryNeedsAiSpecs } from './ai-enrich-guards.js';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
+import { withBluetoothVersionOnly } from './spec-bluetooth.js';
 import { computeRetryDelayMs, createImporterLogger, sanitizeAiGeneratedText } from './logger.js';
 
 export type SupportedAiProvider =
@@ -507,7 +508,10 @@ export function mergeProductSpecifications(
     };
   }
 
-  return sanitizeSpecifications(mergedRaw);
+  // Bluetooth as the version only, so no writer puts profile names back (DOS/Rate#1955).
+  return withBluetoothVersionOnly(
+    sanitizeSpecifications(mergedRaw) as Record<string, unknown>
+  ) as ProductSpecifications;
 }
 
 const SPEC_GROUP_SCHEMA_HINTS: Readonly<Record<SpecGroupKey, string>> = {
