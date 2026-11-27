@@ -23,7 +23,7 @@ import {
   NonNewListingError,
   ProductNormalizer,
   UnkeyableProductTitleError,
-  WAVE_E2_SERVICE_CATEGORY_SLUGS,
+  SERVICE_CATEGORY_SLUGS,
   WAVE_E3_CATEGORY_SLUGS,
   PLACE_CATEGORY_SLUGS,
 } from './product-normalizer.js';
@@ -660,7 +660,7 @@ export class ShopeeIngestionPipeline {
     const candidate = this.normalizer.normalize(product);
     const resolvedEntityType: 'product' | 'service' | 'place' =
       candidate.entity_type ??
-      (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(candidate.category_slug)
+      (SERVICE_CATEGORY_SLUGS.has(candidate.category_slug)
         ? 'service'
         : PLACE_CATEGORY_SLUGS.has(candidate.category_slug)
           ? 'place'

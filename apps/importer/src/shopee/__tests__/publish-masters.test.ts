@@ -330,6 +330,11 @@ const CATEGORY_ID_BY_SLUG: Record<string, string> = {
   cafes: 'cat-cafes',
   hotels: 'cat-hotels',
   homestays: 'cat-homestays',
+  'dental-clinics': 'cat-dental-clinics',
+  'gyms-fitness': 'cat-gyms-fitness',
+  'spas-aesthetics': 'cat-spas-aesthetics',
+  'english-centers': 'cat-english-centers',
+  'credit-cards': 'cat-credit-cards',
 };
 
 function makeCrawledMaster(
@@ -838,6 +843,37 @@ test('crawledPublishBlockers validates Wave E2 services with PCT/VND and no imag
     crawledPublishBlockers(internetRow, {
       categorySlug: 'internet-telecom',
       listings: [{ price_current: 10, currency: 'USD', availability: 'in_stock', origin: 'crawl' }],
+    }).some(r => r.includes('currency VND'))
+  );
+
+  // Wave E5 Phase 2 service: credit-cards requires entity_type='service' and VND currency.
+  const creditCardRow = makeCrawledMaster(
+    {
+      model_key: 'vpbank:stepup-cashback:unknown',
+      slug: 'vpbank-stepup-cashback',
+      name: 'VPBank StepUP Cashback',
+      brand: 'VPBank',
+      category_id: 'cat-credit-cards',
+      entity_type: 'service',
+      images: [],
+      thumbnail: null,
+      specifications: { category_slug: 'credit-cards', availability: { status: 'Available' } },
+    },
+    'credit-cards'
+  );
+  assert.deepEqual(
+    crawledPublishBlockers(creditCardRow, {
+      categorySlug: 'credit-cards',
+      listings: [
+        { price_current: 499_000, currency: 'VND', availability: 'in_stock', origin: 'crawl' },
+      ],
+    }),
+    []
+  );
+  assert.ok(
+    crawledPublishBlockers(creditCardRow, {
+      categorySlug: 'credit-cards',
+      listings: [{ price_current: 5, currency: 'PCT', availability: 'in_stock', origin: 'crawl' }],
     }).some(r => r.includes('currency VND'))
   );
   assert.ok(

@@ -79,6 +79,7 @@ import {
   BsCameraFill,
   BsCapsule,
   BsCpu,
+  BsCreditCard2Front,
   BsCupHot,
   BsDisplay,
   BsDroplet,
@@ -92,6 +93,7 @@ import {
   BsHouseHeart,
   BsLaptop,
   BsLightningCharge,
+  BsMortarboard,
   BsPersonArmsUp,
   BsPhone,
   BsSearch,
@@ -815,6 +817,21 @@ function buildCategoryTabs(t: TranslateFn): ReadonlyArray<{
       slug: 'gyms-fitness',
       icon: BsPersonArmsUp,
       label: t('tabGymsFitness'),
+    },
+    {
+      slug: 'spas-aesthetics',
+      icon: BsStars,
+      label: t('tabSpasAesthetics'),
+    },
+    {
+      slug: 'english-centers',
+      icon: BsMortarboard,
+      label: t('tabEnglishCenters'),
+    },
+    {
+      slug: 'credit-cards',
+      icon: BsCreditCard2Front,
+      label: t('tabCreditCards'),
     },
   ];
 }

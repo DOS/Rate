@@ -15,7 +15,7 @@ import {
   getMasterProductCategorySlug,
   isCategoryVisibleInDirectory,
   isPlaceCategorySlug,
-  isWaveE2ServiceCategorySlug,
+  isServiceCategorySlug,
   MAX_VALID_VND_PRICE,
   resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
@@ -169,7 +169,7 @@ export function availableDealPersonas(
   categoryFilter: CanonicalCategorySlug | 'all'
 ): PersonaKey[] {
   const isServiceCategory =
-    categoryFilter !== 'all' && isWaveE2ServiceCategorySlug(categoryFilter);
+    categoryFilter !== 'all' && isServiceCategorySlug(categoryFilter);
   const scored = new Set<string>();
   if (Array.isArray(products)) {
     for (const p of products) {
@@ -339,9 +339,35 @@ export function buildDealJsonItem(
     minPrice: d.minPrice,
     minPriceVnd: d.minPrice,
     spreadSavingsVnd: d.spreadSavingsVnd,
-    costPerPointVnd: d.costPerPointVnd,
+    costPerPointVnd: isServiceCategorySlug(d.categorySlug)
+      ? null
+      : d.costPerPointVnd,
     href: d.productHref,
   };
+}
+
+export function buildDealCsvRow(
+  d: ReturnType<typeof rankProductsForDealFinder>[number],
+  persona: PersonaKey,
+  origin: string,
+  signal: RadarSignal | null | undefined
+): Array<string | number> {
+  return [
+    d.rank,
+    d.name,
+    d.brand,
+    d.categorySlug,
+    formatDealPersonaScore(d.personaScore5, persona) ?? '',
+    d.userScore5 > 0 ? formatScoreFixed(displayedScore5(d.userScore5), 1) : '',
+    d.expertScore10 != null ? formatScoreFixed(d.expertScore10, 1) : '',
+    d.minPrice,
+    d.spreadSavingsVnd,
+    d.costPerPointVnd > 0 && !isServiceCategorySlug(d.categorySlug)
+      ? d.costPerPointVnd
+      : '',
+    `${origin}${d.productHref}`,
+    ...radarCsvCells(signal),
+  ];
 }
 
 export function filterValidRadarDeals(
@@ -745,6 +771,7 @@ export default function DealFinderWorkspace({
       { slug: 'air-purifiers', label: t('catAirPurifiers') },
       { slug: 'bank-savings', label: t('catBankSavings') },
       { slug: 'internet-telecom', label: t('catInternetTelecom') },
+      { slug: 'credit-cards', label: t('catCreditCards') },
       { slug: 'supplements', label: t('catSupplements') },
       { slug: 'cosmetics', label: t('catCosmetics') },
       { slug: 'mother-baby', label: t('catMotherBaby') },
@@ -964,22 +991,14 @@ export default function DealFinderWorkspace({
       'URL',
       ...RADAR_CSV_HEADERS,
     ];
-    const rows = rankedDeals.map((d) => [
-      d.rank,
-      d.name,
-      d.brand,
-      d.categorySlug,
-      formatDealPersonaScore(d.personaScore5, persona) ?? '',
-      d.userScore5 > 0
-        ? formatScoreFixed(displayedScore5(d.userScore5), 1)
-        : '',
-      d.expertScore10 != null ? formatScoreFixed(d.expertScore10, 1) : '',
-      d.minPrice,
-      d.spreadSavingsVnd,
-      d.costPerPointVnd > 0 ? d.costPerPointVnd : '',
-      `${window.location.origin}${d.productHref}`,
-      ...radarCsvCells(getRadarSignal(radarIndex, d.slug)),
-    ]);
+    const rows = rankedDeals.map((d) =>
+      buildDealCsvRow(
+        d,
+        persona,
+        window.location.origin,
+        getRadarSignal(radarIndex, d.slug)
+      )
+    );
     const csvContent = `\uFEFF${[
       headers.map(escapeCsv).join(','),
       ...rows.map((r) => r.map(escapeCsv).join(',')),
@@ -1649,7 +1668,7 @@ export default function DealFinderWorkspace({
                               { categorySlug: deal.categorySlug }
                             )}{' '}
                             {dealCurrency !== 'PCT' &&
-                              !isWaveE2ServiceCategorySlug(deal.categorySlug) &&
+                              !isServiceCategorySlug(deal.categorySlug) &&
                               deal.costPerPointVnd > 0 && (
                                 <span className="text-secondary small fw-normal">
                                   {t('costPerPointSub', {

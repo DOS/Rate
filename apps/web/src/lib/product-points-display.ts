@@ -232,6 +232,9 @@ const LEGACY_CRITERION_MAP: Readonly<
   homestays: {},
   'dental-clinics': {},
   'gyms-fitness': {},
+  'spas-aesthetics': {},
+  'english-centers': {},
+  'credit-cards': {},
 };
 
 const CRITERION_KEY_RE = /^[a-z_]{2,32}$/;

@@ -1299,6 +1299,9 @@ const VALID_PRODUCT_CATEGORY_SLUGS = new Set([
   'homestays',
   'dental-clinics',
   'gyms-fitness',
+  'spas-aesthetics',
+  'english-centers',
+  'credit-cards',
 ]);
 
 const VALID_BRAND_TOKEN_REGEX =

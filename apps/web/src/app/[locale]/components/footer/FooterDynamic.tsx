@@ -72,6 +72,9 @@ export default async function FooterDynamic({
     'homestays',
     'dental-clinics',
     'gyms-fitness',
+    'spas-aesthetics',
+    'english-centers',
+    'credit-cards',
   ]
     .filter((slug) => populatedCategorySlugs?.includes(slug))
     .map((slug) => ({

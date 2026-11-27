@@ -52,6 +52,7 @@ import {
   BsCapsule,
   BsCheckCircleFill,
   BsCpu,
+  BsCreditCard2Front,
   BsCupHot,
   BsDroplet,
   BsForkKnife,
@@ -60,6 +61,7 @@ import {
   BsHeartPulse,
   BsHouseHeart,
   BsHospital,
+  BsMortarboard,
   BsPersonArmsUp,
   BsLaptop,
   BsPhone,
@@ -159,6 +161,9 @@ const CATEGORY_DESC_KEYS = {
   homestays: 'catDescHomestays',
   'dental-clinics': 'catDescDentalClinics',
   'gyms-fitness': 'catDescGymsFitness',
+  'spas-aesthetics': 'catDescSpasAesthetics',
+  'english-centers': 'catDescEnglishCenters',
+  'credit-cards': 'catDescCreditCards',
 } as const;
 
 type KnownCategorySlug = keyof typeof CATEGORY_DESC_KEYS;
@@ -215,6 +220,12 @@ function getCategoryIcon(slug: string) {
       return <BsHospital />;
     case 'gyms-fitness':
       return <BsPersonArmsUp />;
+    case 'spas-aesthetics':
+      return <BsStars />;
+    case 'english-centers':
+      return <BsMortarboard />;
+    case 'credit-cards':
+      return <BsCreditCard2Front />;
     default:
       return <BsCpu />;
   }

@@ -174,10 +174,15 @@ export function resolveListingUnitSuffix(
   }
   const normalizedCategory =
     typeof categorySlug === 'string'
-      ? categorySlug.trim().replace(/^\/+/, '').toLowerCase()
+      ? (
+          categorySlug.trim().replace(/^\/+/, '').split('/')[0] ?? ''
+        ).toLowerCase()
       : '';
   if (normalizedCategory === 'internet-telecom') {
     return MONTHLY_VND_UNIT_SUFFIX[loc];
+  }
+  if (normalizedCategory === 'credit-cards') {
+    return YEARLY_PCT_UNIT_SUFFIX[loc];
   }
   if (normalizedCategory === 'restaurants' || normalizedCategory === 'cafes') {
     return PER_PERSON_VND_UNIT_SUFFIX[loc];

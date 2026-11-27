@@ -27,6 +27,9 @@
       "homestays": "Homestays",
       "dental-clinics": "Dental clinics",
       "gyms-fitness": "Gyms & fitness",
+      "spas-aesthetics": "Spas & aesthetics",
+      "english-centers": "English centers",
+      "credit-cards": "Credit cards",
       "leaderboard": "Leaderboard",
       "merchants": "Merchants",
       "inspect": "Check a link",
@@ -78,6 +81,9 @@
         "homestays": "Homestays",
         "dental-clinics": "Dental clinics",
         "gyms-fitness": "Gyms & fitness",
+        "spas-aesthetics": "Spas & aesthetics",
+        "english-centers": "English centers",
+        "credit-cards": "Credit cards",
         "leaderboard": "Product rankings",
         "inspect": "Check a product link",
         "compare": "Compare specs",
@@ -274,6 +280,12 @@
     "catDentalClinicsUnit": "dental clinics",
     "catGymsFitness": "Gyms & fitness",
     "catGymsFitnessUnit": "gyms",
+    "catSpasAesthetics": "Spas & aesthetics",
+    "catSpasAestheticsUnit": "spas & clinics",
+    "catEnglishCenters": "English centers",
+    "catEnglishCentersUnit": "centers",
+    "catCreditCards": "Credit cards",
+    "catCreditCardsUnit": "credit cards",
     "boolYes": "Yes",
     "boolNo": "No",
     "group0Title": "Review scores and trust",
@@ -495,6 +507,9 @@
     "catHomestays": "Homestays",
     "catDentalClinics": "Dental clinics",
     "catGymsFitness": "Gyms & fitness",
+    "catSpasAesthetics": "Spas & aesthetics",
+    "catEnglishCenters": "English centers",
+    "catCreditCards": "Credit cards",
     "badgeCombined": "Overall score",
     "badgeUser": "Verified users",
     "badgeExpert": "Lab experts",
@@ -524,6 +539,9 @@
     "tabHomestays": "Homestays",
     "tabDentalClinics": "Dental clinics",
     "tabGymsFitness": "Gyms & fitness",
+    "tabSpasAesthetics": "Spas & aesthetics",
+    "tabEnglishCenters": "English centers",
+    "tabCreditCards": "Credit cards",
     "dirLabel": "Tech & electronics",
     "chooseCategory": "1. Select category (same-category ranking lock):",
     "chooseCriterion": "2. Rank by criterion:",
@@ -1074,6 +1092,7 @@
     "catAirPurifiers": "Air purifiers",
     "catBankSavings": "Bank savings",
     "catInternetTelecom": "Internet & telecom",
+    "catCreditCards": "Credit cards",
     "catSupplements": "Supplements",
     "catCosmetics": "Cosmetics",
     "catMotherBaby": "Mother & baby",
@@ -1720,6 +1739,9 @@
     "catDescHomestays": "Compare homestays and villas by cleanliness, host service, location & nightly rate",
     "catDescDentalClinics": "Explore dental clinic ratings for treatment quality, hygiene, staff attitude & costs",
     "catDescGymsFitness": "Explore gym ratings for equipment, classes, hygiene, trainers & membership value",
+    "catDescSpasAesthetics": "Explore spa & aesthetic ratings for treatment skill, hygiene, no hard-sell & price transparency",
+    "catDescEnglishCenters": "Explore English center ratings for teaching quality, teachers, curriculum, schedule & tuition value",
+    "catDescCreditCards": "Compare credit card cashback, rewards, annual fees, interest rates & bank app experience",
     "popularBattlesBadge": "1v1 showdowns",
     "popularBattlesTitle": "Most compared flagships right now",
     "leaderboard5CatsBtn": "Leaderboard",
@@ -2208,6 +2230,21 @@
         "titleCount": "Gym & fitness ratings ({count, plural, one {# gym} other {# gyms}}) | Rate.vn",
         "titleDefault": "Gym & fitness ratings, classes & membership price guide | Rate.vn",
         "description": "Browse verified reviews on equipment, classes, hygiene, trainers and reference membership prices at gyms on Rate.vn."
+      },
+      "spas-aesthetics": {
+        "titleCount": "Spa & aesthetic clinic ratings ({count, plural, one {# place} other {# places}}) | Rate.vn",
+        "titleDefault": "Spa & aesthetic clinic ratings, hygiene & transparent pricing | Rate.vn",
+        "description": "Browse verified reviews on treatment effectiveness, hygiene, no hard-sell consultation and price transparency at spas and aesthetic clinics on Rate.vn."
+      },
+      "english-centers": {
+        "titleCount": "English center ratings ({count, plural, one {# center} other {# centers}}) | Rate.vn",
+        "titleDefault": "English center ratings, IELTS, teachers & tuition value | Rate.vn",
+        "description": "Browse verified reviews on teaching quality, teachers, curriculum, schedule and tuition value at English centers on Rate.vn."
+      },
+      "credit-cards": {
+        "titleCount": "Credit card comparison ({count, plural, one {# card} other {# cards}}) | Rate.vn",
+        "titleDefault": "Credit card comparison, cashback & annual fees | Rate.vn",
+        "description": "Compare credit card cashback, rewards, annual fees, interest rates, approval speed and bank app management on Rate.vn."
       }
     },
     "sortOptions": {
@@ -2515,6 +2552,39 @@
           "under-500k": "Under 500K",
           "500k-2m": "500K - 2M",
           "over-2m": "Over 2M"
+        },
+        "features": {}
+      },
+      "spas-aesthetics": {
+        "title": "Spas & aesthetics",
+        "subtitle": "Browse ratings for treatment effectiveness, hygiene, no hard-sell consultation and transparent pricing",
+        "searchPlaceholder": "Search spa, aesthetic clinic, skincare, area...",
+        "presets": {
+          "under-500k": "Under 500K",
+          "500k-3m": "500K - 3M",
+          "over-3m": "Over 3M"
+        },
+        "features": {}
+      },
+      "english-centers": {
+        "title": "English centers",
+        "subtitle": "Browse ratings for teaching quality, teachers, curriculum, schedule and tuition value",
+        "searchPlaceholder": "Search English center, IELTS, TOEIC, area...",
+        "presets": {
+          "under-5m": "Under 5M",
+          "5m-15m": "5M - 15M",
+          "over-15m": "Over 15M"
+        },
+        "features": {}
+      },
+      "credit-cards": {
+        "title": "Credit cards",
+        "subtitle": "Compare cashback, rewards, annual fees, interest rates, approval speed and card app management",
+        "searchPlaceholder": "Search VPBank, VIB, Techcombank, HSBC credit cards...",
+        "presets": {
+          "under-500k": "Under 500K/yr",
+          "500k-1500k": "500K - 1.5M/yr",
+          "over-1500k": "Over 1.5M/yr"
         },
         "features": {}
       }

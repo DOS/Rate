@@ -126,6 +126,9 @@ export const VALID_LEADERBOARD_CATEGORIES: readonly CanonicalCategorySlug[] = [
   'homestays',
   'dental-clinics',
   'gyms-fitness',
+  'spas-aesthetics',
+  'english-centers',
+  'credit-cards',
 ] as const;
 
 export function normalizeLeaderboardCategory(
@@ -301,7 +304,10 @@ export function leaderboardCriteriaForCategory(
     categorySlug === 'hotels' ||
     categorySlug === 'homestays' ||
     categorySlug === 'dental-clinics' ||
-    categorySlug === 'gyms-fitness'
+    categorySlug === 'gyms-fitness' ||
+    categorySlug === 'spas-aesthetics' ||
+    categorySlug === 'english-centers' ||
+    categorySlug === 'credit-cards'
   ) {
     return ['value'];
   }

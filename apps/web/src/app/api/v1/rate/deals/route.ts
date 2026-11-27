@@ -23,6 +23,7 @@ const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
   'air-purifiers',
   'bank-savings',
   'internet-telecom',
+  'credit-cards',
   'supplements',
   'cosmetics',
   'mother-baby',

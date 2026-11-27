@@ -27,6 +27,9 @@
       "homestays": "Homestaye",
       "dental-clinics": "Zubní kliniky",
       "gyms-fitness": "Posilovny a fitness",
+      "spas-aesthetics": "Spa a estetika",
+      "english-centers": "Jazykové školy",
+      "credit-cards": "Kreditní karty",
       "leaderboard": "Žebříček",
       "merchants": "Obchody",
       "inspect": "Ověřit odkaz",
@@ -78,6 +81,9 @@
         "homestays": "Homestaye a vily",
         "dental-clinics": "Zubní kliniky",
         "gyms-fitness": "Posilovny a fitness",
+        "spas-aesthetics": "Spa a estetické kliniky",
+        "english-centers": "Jazykové školy angličtiny",
+        "credit-cards": "Kreditní karty",
         "leaderboard": "Žebříček produktů",
         "inspect": "Ověřit odkaz na produkt",
         "compare": "Porovnat parametry",
@@ -274,6 +280,12 @@
     "catDentalClinicsUnit": "zubních klinik",
     "catGymsFitness": "Posilovny a fitness",
     "catGymsFitnessUnit": "posiloven",
+    "catSpasAesthetics": "Spa a estetika",
+    "catSpasAestheticsUnit": "spa a klinik",
+    "catEnglishCenters": "Jazykové školy",
+    "catEnglishCentersUnit": "jazykových škol",
+    "catCreditCards": "Kreditní karty",
+    "catCreditCardsUnit": "kreditních karet",
     "boolYes": "Ano",
     "boolNo": "Ne",
     "group0Title": "Hodnocení a důvěryhodnost",
@@ -495,6 +507,9 @@
     "catHomestays": "Homestaye",
     "catDentalClinics": "Zubní kliniky",
     "catGymsFitness": "Posilovny a fitness",
+    "catSpasAesthetics": "Spa a estetika",
+    "catEnglishCenters": "Jazykové školy",
+    "catCreditCards": "Kreditní karty",
     "badgeCombined": "Celkové skóre",
     "badgeUser": "Ověření uživatelé",
     "badgeExpert": "Experti Lab",
@@ -524,6 +539,9 @@
     "tabHomestays": "Homestaye",
     "tabDentalClinics": "Zubní kliniky",
     "tabGymsFitness": "Posilovny a fitness",
+    "tabSpasAesthetics": "Spa a estetika",
+    "tabEnglishCenters": "Jazykové školy",
+    "tabCreditCards": "Kreditní karty",
     "dirLabel": "Technologie a elektronika",
     "chooseCategory": "1. Vyberte kategorii (Uzamčeno v rámci kategorie):",
     "chooseCriterion": "2. Řadit podle kritéria:",
@@ -1074,6 +1092,7 @@
     "catAirPurifiers": "Čističky vzduchu",
     "catBankSavings": "Spořicí účty",
     "catInternetTelecom": "Internet a telekomunikace",
+    "catCreditCards": "Kreditní karty",
     "catSupplements": "Doplňky stravy",
     "catCosmetics": "Kosmetika",
     "catMotherBaby": "Matka a dítě",
@@ -1720,6 +1739,9 @@
     "catDescHomestays": "Porovnejte homestaye a vily podle čistoty, přístupu hostitele, polohy a ceny za noc",
     "catDescDentalClinics": "Hodnocení zubních klinik pro kvalitu ošetření, hygienu, přístup personálu a ceny",
     "catDescGymsFitness": "Hodnocení posiloven pro vybavení, lekce, hygienu, trenéry a cenu členství",
+    "catDescSpasAesthetics": "Hodnocení spa a estetických klinik pro účinnost, hygienu, konzultace bez nátlaku a ceny",
+    "catDescEnglishCenters": "Hodnocení jazykových škol angličtiny pro kvalitu výuky, lektory, osnovy, rozvrh a školné",
+    "catDescCreditCards": "Porovnání cashbacku, výhod, ročních poplatků, úroků a správy kreditních karet v aplikaci",
     "popularBattlesBadge": "Souboje 1v1",
     "popularBattlesTitle": "Nejčastěji porovnávané vlajkové modely",
     "leaderboard5CatsBtn": "Žebříček",
@@ -2208,6 +2230,21 @@
         "titleCount": "Hodnocení posiloven a fitness ({count, plural, one {# posilovna} few {# posilovny} other {# posiloven}}) | Rate.vn",
         "titleDefault": "Hodnocení posiloven, lekcí a cen členství | Rate.vn",
         "description": "Prohlédněte si recenze vybavení, lekcí, hygieny, trenérů a orientačních cen členství v posilovnách na Rate.vn."
+      },
+      "spas-aesthetics": {
+        "titleCount": "Hodnocení spa a estetických klinik ({count, plural, one {# místo} few {# místa} other {# míst}}) | Rate.vn",
+        "titleDefault": "Hodnocení spa, estetických klinik, hygieny a cen | Rate.vn",
+        "description": "Prohlédněte si ověřené recenze účinnosti, hygieny, konzultací bez nátlaku a transparentnosti cen ve spa a estetických klinikách na Rate.vn."
+      },
+      "english-centers": {
+        "titleCount": "Hodnocení jazykových škol angličtiny ({count, plural, one {# škola} few {# školy} other {# škol}}) | Rate.vn",
+        "titleDefault": "Hodnocení jazykových škol angličtiny, IELTS, lektorů a školného | Rate.vn",
+        "description": "Prohlédněte si ověřené recenze kvality výuky, lektorů, osnov, rozvrhu a poměru ceny a přínosu v jazykových školách na Rate.vn."
+      },
+      "credit-cards": {
+        "titleCount": "Srovnání kreditních karet ({count, plural, one {# karta} few {# karty} other {# karet}}) | Rate.vn",
+        "titleDefault": "Srovnání kreditních karet, cashbacku a ročních poplatků | Rate.vn",
+        "description": "Porovnejte cashback, výhody, roční poplatky, úroky, rychlost schválení a mobilní správu kreditních karet na Rate.vn."
       }
     },
     "sortOptions": {
@@ -2515,6 +2552,39 @@
           "under-500k": "Pod 500K",
           "500k-2m": "500K - 2M",
           "over-2m": "Nad 2M"
+        },
+        "features": {}
+      },
+      "spas-aesthetics": {
+        "title": "Spa a estetika",
+        "subtitle": "Hodnocení účinnosti ošetření, hygieny, konzultací bez nátlaku a transparentnosti cen",
+        "searchPlaceholder": "Hledat spa, estetickou kliniku, péči o pleť, lokalitu...",
+        "presets": {
+          "under-500k": "Pod 500K",
+          "500k-3m": "500K - 3M",
+          "over-3m": "Nad 3M"
+        },
+        "features": {}
+      },
+      "english-centers": {
+        "title": "Jazykové školy angličtiny",
+        "subtitle": "Hodnocení kvality výuky, lektorů, osnov, rozvrhu a poměru ceny a přínosu",
+        "searchPlaceholder": "Hledat jazykovou školu, IELTS, TOEIC, lokalitu...",
+        "presets": {
+          "under-5m": "Pod 5M",
+          "5m-15m": "5M - 15M",
+          "over-15m": "Nad 15M"
+        },
+        "features": {}
+      },
+      "credit-cards": {
+        "title": "Kreditní karty",
+        "subtitle": "Porovnání cashbacku, výhod, ročních poplatků, úroků, rychlosti schválení a správy v aplikaci",
+        "searchPlaceholder": "Hledat kreditní karty VPBank, VIB, Techcombank, HSBC...",
+        "presets": {
+          "under-500k": "Pod 500K/rok",
+          "500k-1500k": "500K - 1,5M/rok",
+          "over-1500k": "Nad 1,5M/rok"
         },
         "features": {}
       }

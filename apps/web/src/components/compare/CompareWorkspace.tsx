@@ -68,7 +68,7 @@ import {
   getMasterProductHref,
   isCategoryVisibleInDirectory,
   isPlaceCategorySlug,
-  isWaveE2ServiceCategorySlug,
+  isServiceCategorySlug,
   isWaveE3CategorySlug,
   rankMasterProductsForLeaderboard,
   resolveCompareBatteryMah,
@@ -1307,6 +1307,21 @@ function buildCategoryTabs(t: CompareTranslator): Array<{
       label: t('catGymsFitness'),
       unitLabel: t('catGymsFitnessUnit'),
     },
+    {
+      slug: 'spas-aesthetics',
+      label: t('catSpasAesthetics'),
+      unitLabel: t('catSpasAestheticsUnit'),
+    },
+    {
+      slug: 'english-centers',
+      label: t('catEnglishCenters'),
+      unitLabel: t('catEnglishCentersUnit'),
+    },
+    {
+      slug: 'credit-cards',
+      label: t('catCreditCards'),
+      unitLabel: t('catCreditCardsUnit'),
+    },
   ];
 }
 
@@ -1441,7 +1456,7 @@ export function buildSpecGroups(
             });
             if (
               pCurrency === 'PCT' ||
-              isWaveE2ServiceCategorySlug(catSlug) ||
+              isServiceCategorySlug(catSlug) ||
               isPlaceCategorySlug(catSlug)
             ) {
               return '-';
@@ -1471,7 +1486,7 @@ export function buildSpecGroups(
             });
             if (
               pCurrency === 'PCT' ||
-              isWaveE2ServiceCategorySlug(catSlug) ||
+              isServiceCategorySlug(catSlug) ||
               isPlaceCategorySlug(catSlug)
             ) {
               return null;
@@ -1502,7 +1517,7 @@ export function buildSpecGroups(
             });
             if (
               pCurrency === 'PCT' ||
-              isWaveE2ServiceCategorySlug(catSlug) ||
+              isServiceCategorySlug(catSlug) ||
               isWaveE3CategorySlug(catSlug) ||
               isPlaceCategorySlug(catSlug)
             ) {
@@ -1521,7 +1536,7 @@ export function buildSpecGroups(
             });
             if (
               pCurrency === 'PCT' ||
-              isWaveE2ServiceCategorySlug(catSlug) ||
+              isServiceCategorySlug(catSlug) ||
               isWaveE3CategorySlug(catSlug) ||
               isPlaceCategorySlug(catSlug)
             ) {

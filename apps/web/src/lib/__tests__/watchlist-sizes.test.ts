@@ -578,6 +578,85 @@ function main() {
     );
   }
 
+  // 2b. PriceWatchButton propagates credit-cards yearly suffix & explicit priceUnit override (#1968)
+  {
+    const fullViMessages = JSON.parse(
+      fs.readFileSync(path.join(webRoot, 'locales/vi.json'), 'utf8')
+    );
+    const pdvViMessages = {
+      watchlist: fullViMessages.watchlist,
+    };
+    const renderOpen = (props: {
+      slug: string;
+      name: string;
+      brand: string;
+      categoryPath: string;
+      currentMinPrice: number;
+      priceUnit?: string | null;
+    }) =>
+      renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: mockRouter },
+          React.createElement(
+            IntlProvider,
+            {
+              locale: 'vi',
+              messages: pdvViMessages,
+              timeZone: 'Asia/Ho_Chi_Minh',
+            },
+            React.createElement(PriceWatchButton, {
+              ...props,
+              thumbnail: null,
+              currency: 'VND',
+              defaultOpen: true,
+            })
+          )
+        )
+      );
+
+    const cardHtml = renderOpen({
+      slug: 'vpbank-stepup-cashback',
+      name: 'VPBank StepUP Cashback',
+      brand: 'VPBank',
+      categoryPath: '/credit-cards',
+      currentMinPrice: 499_000,
+    });
+    assert.match(
+      cardHtml,
+      /499\.000.*\/năm/,
+      'credit-cards PriceWatchButton formats current best price with /năm suffix'
+    );
+
+    const spaOverrideHtml = renderOpen({
+      slug: 'spa-an-nhien-q1',
+      name: 'Spa An Nhiên Quận 1',
+      brand: 'Spa An Nhiên',
+      categoryPath: '/spas-aesthetics',
+      currentMinPrice: 350_000,
+      priceUnit: 'vnd_per_person',
+    });
+    assert.match(
+      spaOverrideHtml,
+      /350\.000.*\/người/,
+      'PriceWatchButton respects explicit vnd_per_person priceUnit override'
+    );
+
+    const nightOverrideHtml = renderOpen({
+      slug: 'hotel-sample',
+      name: 'Sample Hotel',
+      brand: 'Sample',
+      categoryPath: '/spas-aesthetics',
+      currentMinPrice: 1_200_000,
+      priceUnit: 'vnd_per_night_ref',
+    });
+    assert.match(
+      nightOverrideHtml,
+      /1\.200\.000.*\/đêm/,
+      'PriceWatchButton respects explicit vnd_per_night_ref priceUnit override'
+    );
+  }
+
   // 3. WatchlistWorkspace inline editor a11y, WCAG 2.5.3, Escape/Enter,
   //    categoryPath wiring, and canonical Item product_href (#1693, #1836)
   {
