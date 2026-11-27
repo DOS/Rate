@@ -18,6 +18,7 @@ import {
   type NormalizedProductCandidate,
 } from './product-normalizer.js';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
+import { categoryNeedsAiSpecs, specificationsCompleteForCategory } from './ai-enrich-guards.js';
 import { AiSpecEnricher, mergeProductSpecifications } from './ai-spec-enricher.js';
 import { mergeKeySpecs } from './jobs/backfill-specs.js';
 import { createImporterLogger, errorDetail } from './logger.js';
@@ -1022,6 +1023,29 @@ export class EntityMatcher {
             .slice(0, 4_000)
         : undefined;
 
+    // No call when it cannot add a value (DOS/Rate#1956): the category has no device
+    // spec groups, or the stored specifications already hold a value in every group it has.
+    // Only a stored category decides: a guess from the title must not suppress a call.
+    if (existingCategorySlug && !categoryNeedsAiSpecs(existingCategorySlug)) {
+      logger.info(
+        'entity_match.enrich_skipped',
+        `Master ${safeMasterId}: category "${existingCategorySlug}" has no device spec groups, no AI call`,
+        { masterId: safeMasterId, reason: 'not_applicable', category: existingCategorySlug }
+      );
+      return false;
+    }
+    if (
+      existingCategorySlug &&
+      specificationsCompleteForCategory(existingSpecsRecord, existingCategorySlug)
+    ) {
+      logger.info(
+        'entity_match.enrich_skipped',
+        `Master ${safeMasterId}: every key spec of "${existingCategorySlug}" is already stored, no AI call`,
+        { masterId: safeMasterId, reason: 'complete', category: existingCategorySlug }
+      );
+      return false;
+    }
+
     const aiResult = await this.enricher.fetchSpecsFromAi({
       brand: safeRowBrand,
       model: safeRowModel,
@@ -1030,6 +1054,7 @@ export class EntityMatcher {
       rawTitle: safeRowName,
       rawDescription: safeRowDescription,
       categorySlug: inferredCategorySlug,
+      categoryGuessed: !existingCategorySlug,
     });
 
     if (!aiResult) {
