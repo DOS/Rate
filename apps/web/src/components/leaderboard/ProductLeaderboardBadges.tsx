@@ -31,6 +31,9 @@ const VALID_BADGE_CATEGORIES = new Set<CanonicalCategorySlug>([
   'homestays',
   'dental-clinics',
   'gyms-fitness',
+  'spas-aesthetics',
+  'english-centers',
+  'credit-cards',
 ]);
 
 const VALID_BADGE_CRITERIA = new Set<LeaderboardCriterionKey>([
@@ -131,6 +134,9 @@ export default async function ProductLeaderboardBadges({
     homestays: t('catHomestays'),
     'dental-clinics': t('catDentalClinics'),
     'gyms-fitness': t('catGymsFitness'),
+    'spas-aesthetics': t('catSpasAesthetics'),
+    'english-centers': t('catEnglishCenters'),
+    'credit-cards': t('catCreditCards'),
   };
 
   const critLabels: Record<LeaderboardCriterionKey, string> = {

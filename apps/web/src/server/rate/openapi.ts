@@ -317,6 +317,9 @@ function buildBaseRateOpenApiSpec(
     'homestays',
     'dental-clinics',
     'gyms-fitness',
+    'spas-aesthetics',
+    'english-centers',
+    'credit-cards',
   ];
   const supportedPlatforms = Object.keys(EXTENSION_CAPABILITY_MATRIX);
 
@@ -2507,7 +2510,7 @@ function buildBaseRateOpenApiSpec(
           type: 'string',
           enum: categorySlugs,
           description:
-            '21 canonical product, service, and place categories on Rate.vn.',
+            '24 canonical product, service, and place categories on Rate.vn.',
         },
         PriceVerdictLevel: {
           type: 'string',

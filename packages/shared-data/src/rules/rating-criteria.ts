@@ -54,6 +54,19 @@ const V4_RATING_CRITERIA_CATEGORIES_SET = new Set<string>([
 export const V4_RATING_CRITERIA_CATEGORIES: ReadonlySet<string> =
   V4_RATING_CRITERIA_CATEGORIES_SET;
 
+/** Schema version for Wave E5 Phase 2 spa, English center, and credit card criteria. */
+export const RATING_CRITERIA_V5_VERSION = 5;
+
+const V5_RATING_CRITERIA_CATEGORIES_SET = new Set<string>([
+  'spas-aesthetics',
+  'english-centers',
+  'credit-cards',
+]);
+
+// Exported as an identifier so the rules-isolation check does not read the strings as module imports.
+export const V5_RATING_CRITERIA_CATEGORIES: ReadonlySet<string> =
+  V5_RATING_CRITERIA_CATEGORIES_SET;
+
 const CRITERION_KEYS = [
   'performance',
   'camera',
@@ -721,21 +734,153 @@ const RATING_CRITERIA: Readonly<Record<string, readonly RatingCriterion[]>> = {
       true
     ),
   ],
+  'spas-aesthetics': [
+    c(
+      'service_quality',
+      'Hiệu quả & tay nghề',
+      'Treatment effectiveness & skill',
+      'Účinnost a odbornost',
+      30,
+      null
+    ),
+    c(
+      'hygiene',
+      'Vệ sinh & an toàn',
+      'Hygiene & safety',
+      'Hygiena a bezpečnost',
+      25,
+      null
+    ),
+    c(
+      'service_attitude',
+      'Tư vấn & không chèo kéo',
+      'Consultation & no hard-sell',
+      'Konzultace bez nátlaku',
+      20,
+      null
+    ),
+    c(
+      'price',
+      'Chi phí minh bạch',
+      'Price transparency',
+      'Transparentnost cen',
+      15,
+      null,
+      true
+    ),
+    c(
+      'ambiance',
+      'Không gian & thư giãn',
+      'Ambiance & comfort',
+      'Prostředí a pohodlí',
+      10,
+      null
+    ),
+  ],
+  'english-centers': [
+    c(
+      'service_quality',
+      'Chất lượng giảng dạy',
+      'Teaching quality',
+      'Kvalita výuky',
+      35,
+      null
+    ),
+    c(
+      'service_attitude',
+      'Giáo viên & hỗ trợ',
+      'Teachers & support',
+      'Lektoři a podpora',
+      20,
+      null
+    ),
+    c(
+      'quality',
+      'Giáo trình & cơ sở vật chất',
+      'Curriculum & facilities',
+      'Osnovy a zázemí',
+      15,
+      null
+    ),
+    c(
+      'location',
+      'Vị trí & lịch học',
+      'Location & schedule',
+      'Poloha a rozvrh',
+      10,
+      null
+    ),
+    c(
+      'value',
+      'Học phí xứng đáng',
+      'Value for tuition',
+      'Poměr ceny a přínosu',
+      20,
+      null,
+      true
+    ),
+  ],
+  'credit-cards': [
+    c(
+      'features',
+      'Hoàn tiền & ưu đãi',
+      'Cashback & rewards',
+      'Cashback a výhody',
+      30,
+      null
+    ),
+    c(
+      'price',
+      'Phí thường niên & lãi suất',
+      'Annual fee & interest',
+      'Roční poplatek a úroky',
+      25,
+      null,
+      true
+    ),
+    c(
+      'service_quality',
+      'Hỗ trợ & khiếu nại',
+      'Support & dispute handling',
+      'Podpora a reklamace',
+      20,
+      null
+    ),
+    c(
+      'speed',
+      'Tốc độ duyệt & mở thẻ',
+      'Approval & issuance speed',
+      'Rychlost schválení',
+      15,
+      null
+    ),
+    c(
+      'ease_of_use',
+      'Ứng dụng & quản lý thẻ',
+      'App & card management',
+      'Aplikace a správa karty',
+      10,
+      null
+    ),
+  ],
 };
 
 /**
  * Criteria schema version for a category slug.
- * Existing v1 categories stay pinned at 1 while Wave E1/E2 use v2, Wave E3/E4 use v3
- * and Wave E5 uses v4.
+ * Existing v1 categories stay pinned at 1 while Wave E1/E2 use v2, Wave E3/E4 use v3,
+ * Wave E5 Phase 1 uses v4, and Wave E5 Phase 2 uses v5.
  */
 export function getRatingCriteriaVersion(
   categorySlug: string | null | undefined
-): 1 | 2 | 3 | 4 {
+): 1 | 2 | 3 | 4 | 5 {
   const raw = categorySlug;
   const normalized =
     typeof raw === 'string'
       ? raw.replace(LOCALE_CONTROL_CHARS_RE, '').trim().toLowerCase()
       : '';
+  if (V5_RATING_CRITERIA_CATEGORIES.has(normalized)) {
+    return RATING_CRITERIA_V5_VERSION;
+  }
   if (V4_RATING_CRITERIA_CATEGORIES.has(normalized)) {
     return RATING_CRITERIA_V4_VERSION;
   }
@@ -753,7 +898,7 @@ export const RATING_CRITERIA_CATEGORIES: readonly string[] = Object.keys(
   RATING_CRITERIA
 ).filter((slug) => getRatingCriteriaVersion(slug) === RATING_CRITERIA_VERSION);
 
-/** All categories (v1 + Wave E1/E2 v2 + Wave E3/E4 v3 + Wave E5 v4) with their own criteria list. */
+/** All categories (v1 + Wave E1/E2 v2 + Wave E3/E4 v3 + Wave E5 Phase 1 v4 + Phase 2 v5) with their own criteria list. */
 export const RATING_CRITERIA_ALL_CATEGORIES: readonly string[] =
   Object.keys(RATING_CRITERIA);
 
@@ -929,6 +1074,9 @@ const LEGACY_MAP: Readonly<
   homestays: {},
   'dental-clinics': {},
   'gyms-fitness': {},
+  'spas-aesthetics': {},
+  'english-centers': {},
+  'credit-cards': {},
 };
 
 /**
@@ -1402,20 +1550,22 @@ const RATING_USE_CASE_PRESETS: Readonly<
     ),
   ],
   ...Object.fromEntries(
-    [...V3_RATING_CRITERIA_CATEGORIES, ...V4_RATING_CRITERIA_CATEGORIES].map(
-      (slug) => [
-        slug,
-        [
-          p(
-            'default',
-            'Cân bằng mặc định',
-            'Balanced default',
-            'Vyvážený výchozí',
-            defaultPresetWeights(slug)
-          ),
-        ],
-      ]
-    )
+    [
+      ...V3_RATING_CRITERIA_CATEGORIES,
+      ...V4_RATING_CRITERIA_CATEGORIES,
+      ...V5_RATING_CRITERIA_CATEGORIES,
+    ].map((slug) => [
+      slug,
+      [
+        p(
+          'default',
+          'Cân bằng mặc định',
+          'Balanced default',
+          'Vyvážený výchozí',
+          defaultPresetWeights(slug)
+        ),
+      ],
+    ])
   ),
 };
 

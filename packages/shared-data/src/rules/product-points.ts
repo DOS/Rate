@@ -496,6 +496,60 @@ const CATEGORY_CRITERION_EXTRA_KEYWORDS: Readonly<
     quality: ['máy tập', 'thiết bị', 'lớp tập'],
     service_attitude: ['huấn luyện viên'],
   },
+  'spas-aesthetics': {
+    service_quality: [
+      'liệu trình',
+      'tay nghề',
+      'chăm sóc da',
+      'nặn mụn',
+      'triệt lông',
+    ],
+    hygiene: ['vô trùng', 'khử trùng', 'dụng cụ sạch', 'khăn sạch'],
+    service_attitude: ['chèo kéo', 'ép mua', 'tư vấn', 'upsell'],
+    price: ['chi phí', 'minh bạch', 'phát sinh', 'bảng giá'],
+    ambiance: ['thư giãn', 'tinh dầu', 'riêng tư'],
+  },
+  'english-centers': {
+    service_quality: [
+      'giảng dạy',
+      'phát âm',
+      'lộ trình',
+      'tiến bộ',
+      'ielts',
+      'đầu ra',
+    ],
+    service_attitude: [
+      'giáo viên',
+      'giảng viên',
+      'trợ giảng',
+      'bản ngữ',
+      'tận tâm',
+    ],
+    quality: ['giáo trình', 'tài liệu', 'cơ sở vật chất', 'phòng học', 'sĩ số'],
+    location: ['lịch học', 'ca học', 'cơ sở'],
+    value: ['học phí', 'xứng đáng'],
+  },
+  'credit-cards': {
+    features: [
+      'hoàn tiền',
+      'cashback',
+      'tích điểm',
+      'ưu đãi',
+      'phòng chờ',
+      'miễn lãi',
+      'trả góp',
+    ],
+    price: ['phí thường niên', 'lãi suất', 'phí chuyển đổi', 'phí rút tiền'],
+    service_quality: ['tổng đài', 'khiếu nại', 'tra soát', 'hỗ trợ'],
+    speed: ['duyệt thẻ', 'mở thẻ', 'phát hành', 'nhận thẻ', 'phê duyệt'],
+    ease_of_use: [
+      'ứng dụng',
+      'app ngân hàng',
+      'quản lý thẻ',
+      'sao kê',
+      'khóa thẻ',
+    ],
+  },
 };
 
 /**

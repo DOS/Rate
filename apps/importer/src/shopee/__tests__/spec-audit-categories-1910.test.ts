@@ -40,6 +40,9 @@ const KNOWN_NON_DEVICE_TEMPLATES = [
   'homestays',
   'dental-clinics',
   'gyms-fitness',
+  'spas-aesthetics',
+  'english-centers',
+  'credit-cards',
 ];
 
 /** A keyset-paged stand-in for the audit's master_products read. */

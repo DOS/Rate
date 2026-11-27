@@ -382,6 +382,13 @@ export const SUPPORTED_SERVICE_PLATFORMS = [
   'acb',
   'vnpt',
   'fpttelecom',
+  'vpbank',
+  'vib',
+  'techcombank',
+  'sacombank',
+  'tpbank',
+  'hsbc',
+  'shinhan',
 ] as const;
 
 export const SupportedServicePlatformSchema = z.enum(

@@ -1034,6 +1034,130 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     ],
     featureCheckboxes: [],
   },
+  'spas-aesthetics': {
+    categorySlug: 'spas-aesthetics',
+    directorySlug: 'places',
+    directoryName: 'Địa điểm & lưu trú',
+    categoryTitle: 'Spa & Thẩm mỹ',
+    categorySubtitle:
+      'Đánh giá hiệu quả liệu trình, tay nghề, vệ sinh, độ minh bạch chi phí và không gian tại spa & thẩm mỹ viện',
+    searchPlaceholder: 'Tìm spa, thẩm mỹ viện, chăm sóc da, khu vực...',
+    defaultBrands: [],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 50,
+      step: 0.5,
+    },
+    pricePresets: [
+      {
+        id: 'under-500k',
+        label: 'Dưới 500K',
+        minVnd: 0,
+        maxVnd: 500_000,
+      },
+      {
+        id: '500k-3m',
+        label: '500K - 3 triệu',
+        minVnd: 500_000,
+        maxVnd: 3_000_000,
+      },
+      {
+        id: 'over-3m',
+        label: 'Trên 3 triệu',
+        minVnd: 3_000_000,
+        maxVnd: 50_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  'english-centers': {
+    categorySlug: 'english-centers',
+    directorySlug: 'places',
+    directoryName: 'Địa điểm & lưu trú',
+    categoryTitle: 'Trung tâm tiếng Anh',
+    categorySubtitle:
+      'Đánh giá chất lượng giảng dạy, giáo viên, giáo trình, lịch học và học phí tại trung tâm tiếng Anh',
+    searchPlaceholder: 'Tìm trung tâm tiếng Anh, IELTS, TOEIC, khu vực...',
+    defaultBrands: [],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 50,
+      step: 0.5,
+    },
+    pricePresets: [
+      {
+        id: 'under-5m',
+        label: 'Dưới 5 triệu',
+        minVnd: 0,
+        maxVnd: 5_000_000,
+      },
+      {
+        id: '5m-15m',
+        label: '5 - 15 triệu',
+        minVnd: 5_000_000,
+        maxVnd: 15_000_000,
+      },
+      {
+        id: 'over-15m',
+        label: 'Trên 15 triệu',
+        minVnd: 15_000_000,
+        maxVnd: 50_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  'credit-cards': {
+    categorySlug: 'credit-cards',
+    directorySlug: 'services',
+    directoryName: 'Dịch vụ công & tài chính',
+    categoryTitle: 'Thẻ tín dụng',
+    categorySubtitle:
+      'So sánh ưu đãi hoàn tiền, phí thường niên, lãi suất, tốc độ duyệt thẻ và ứng dụng quản lý thẻ',
+    searchPlaceholder: 'Tìm thẻ tín dụng VPBank, VIB, Techcombank, HSBC...',
+    defaultBrands: [
+      'VPBank',
+      'VIB',
+      'Techcombank',
+      'Vietcombank',
+      'ACB',
+      'Sacombank',
+      'TPBank',
+      'HSBC',
+      'Shinhan Bank',
+    ],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 10,
+      step: 0.1,
+    },
+    pricePresets: [
+      {
+        id: 'under-500k',
+        label: 'Dưới 500K',
+        minVnd: 0,
+        maxVnd: 500_000,
+      },
+      {
+        id: '500k-1500k',
+        label: '500K - 1,5 triệu',
+        minVnd: 500_000,
+        maxVnd: 1_500_000,
+      },
+      {
+        id: 'over-1500k',
+        label: 'Trên 1,5 triệu',
+        minVnd: 1_500_000,
+        maxVnd: 10_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
 };
 
 const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {

@@ -1,5 +1,5 @@
 /**
- * Publishes named seed masters or wave-validated crawled Wave E1-E4 drafts in
+ * Publishes named seed masters or wave-validated crawled Wave E1-E5 drafts in
  * `rate.master_products` (DOS/Rate#1756, DOS/Rate#1918).
  *
  * Seed mode (default, unchanged):
@@ -11,13 +11,13 @@
  *   pnpm exec tsx src/shopee/jobs/publish-masters.ts --only <model_key,...>                     (Dry-run)
  *   pnpm exec tsx src/shopee/jobs/publish-masters.ts --only <model_key,...> --apply --expect <n>
  *
- * Crawled Wave E1-E4 mode (explicit opt-in via `--crawled`):
+ * Crawled Wave E1-E5 mode (explicit opt-in via `--crawled`):
  *   pnpm exec tsx src/shopee/jobs/publish-masters.ts --crawled [--category <slug[,slug2]>] [--only <model_key,...>] [--limit <n>] [--allow-unknown-brand]
  *   pnpm exec tsx src/shopee/jobs/publish-masters.ts --crawled [--category <slug[,slug2]>] --apply --expect <n>
  *
  * Flags:
- *   --crawled              Explicit opt-in for crawled Wave E1-E4 master audit/publish mode.
- *   --category <slugs>     Wave E1-E4 category slug(s), comma-separated. Core 5 tech device
+ *   --crawled              Explicit opt-in for crawled Wave E1-E5 master audit/publish mode.
+ *   --category <slugs>     Wave E1-E5 category slug(s), comma-separated. Core 5 tech device
  *                          categories are rejected (use strict seed `--only` mode instead).
  *   --only <keys>          In seed mode: required seed model_keys. In --crawled mode: optional
  *                          filter to specific model_keys.
@@ -51,7 +51,9 @@ import {
   WAVE_E3_CATEGORY_SLUGS,
   WAVE_E4_PLACE_CATEGORY_SLUGS,
   WAVE_E5_PLACE_CATEGORY_SLUGS,
+  WAVE_E5_SERVICE_CATEGORY_SLUGS,
   PLACE_CATEGORY_SLUGS,
+  SERVICE_CATEGORY_SLUGS,
   type CanonicalCategorySlug,
 } from '../product-normalizer.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
@@ -79,13 +81,15 @@ export const WAVE_E_ALL_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   ...WAVE_E3_CATEGORY_SLUGS,
   ...WAVE_E4_PLACE_CATEGORY_SLUGS,
   ...WAVE_E5_PLACE_CATEGORY_SLUGS,
+  ...WAVE_E5_SERVICE_CATEGORY_SLUGS,
 ];
 
 export const WAVE_E_CATEGORY_SLUGS: ReadonlySet<string> = new Set(WAVE_E_ALL_CATEGORY_SLUGS);
 
-const WAVE_E2_EXPECTED_CURRENCY: Readonly<Record<string, 'PCT' | 'VND'>> = {
+const SERVICE_EXPECTED_CURRENCY: Readonly<Record<string, 'PCT' | 'VND'>> = {
   'bank-savings': 'PCT',
   'internet-telecom': 'VND',
+  'credit-cards': 'VND',
 };
 
 const PLACEHOLDER_IDENTITY_SEGMENTS: ReadonlySet<string> = new Set([
@@ -641,7 +645,7 @@ function collectCommonCrawledBlockers(
       `category ${JSON.stringify(categorySlug)} is a core tech category and must use strict seed mode`
     );
   } else if (!WAVE_E_CATEGORY_SLUGS.has(categorySlug)) {
-    problems.push(`category ${JSON.stringify(categorySlug)} is not a Wave E1-E4 category`);
+    problems.push(`category ${JSON.stringify(categorySlug)} is not a Wave E1-E5 category`);
   }
 
   const modelKey = typeof row.model_key === 'string' ? row.model_key.trim() : '';
@@ -748,7 +752,11 @@ function resolveWaveForCategory(categorySlug: string): CrawledWave | null {
   if (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e2';
   if (WAVE_E3_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e3';
   if (WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e4';
-  if (WAVE_E5_PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e5';
+  if (
+    WAVE_E5_PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug) ||
+    WAVE_E5_SERVICE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)
+  )
+    return 'wave_e5';
   return null;
 }
 
@@ -822,13 +830,13 @@ function collectWaveCrawledBlockers(
     return;
   }
 
-  if (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) {
+  if (SERVICE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) {
     if (row.entity_type !== 'service') {
       problems.push(
         `entity_type ${JSON.stringify(row.entity_type)} must be "service" for ${categorySlug}`
       );
     }
-    checkActiveCrawledListing(context, WAVE_E2_EXPECTED_CURRENCY[categorySlug] ?? 'VND', problems, {
+    checkActiveCrawledListing(context, SERVICE_EXPECTED_CURRENCY[categorySlug] ?? 'VND', problems, {
       requireListingsArray: true,
     });
     return;
@@ -858,7 +866,7 @@ function collectWaveCrawledBlockers(
 }
 
 /**
- * Pure wave-aware predicate returning publish blockers for a crawled Wave E1-E4 master;
+ * Pure wave-aware predicate returning publish blockers for a crawled Wave E1-E5 master;
  * returns an empty array when the draft master is eligible to publish.
  */
 export function crawledPublishBlockers(
@@ -965,7 +973,7 @@ const CRAWLED_MASTER_COLUMNS =
   'id, model_key, slug, name, brand, status, category_id, entity_type, images, thumbnail, specifications';
 
 /**
- * Audits and optionally publishes Wave E1-E4 crawled draft masters in `rate.master_products`.
+ * Audits and optionally publishes Wave E1-E5 crawled draft masters in `rate.master_products`.
  * Dry-run by default; requires both `apply: true` and matching `expect` before any write.
  */
 export async function runCrawledPublish(
@@ -1113,7 +1121,7 @@ export async function runCrawledPublish(
         c.row.status === 'draft' &&
         c.categorySlug !== null &&
         (WAVE_E1_CATEGORY_SLUGS.has(c.categorySlug as CanonicalCategorySlug) ||
-          WAVE_E2_SERVICE_CATEGORY_SLUGS.has(c.categorySlug as CanonicalCategorySlug) ||
+          SERVICE_CATEGORY_SLUGS.has(c.categorySlug as CanonicalCategorySlug) ||
           WAVE_E3_CATEGORY_SLUGS.has(c.categorySlug as CanonicalCategorySlug))
     )
     .map(c => c.id);

@@ -25,6 +25,7 @@ import {
   RATING_CRITERIA_V2_VERSION,
   RATING_CRITERIA_V3_VERSION,
   RATING_CRITERIA_V4_VERSION,
+  RATING_CRITERIA_V5_VERSION,
   REVIEW_POINT_MAX,
   REVIEW_POINT_MIN,
 } from '@repo/shared-data/rules';
@@ -36,6 +37,7 @@ export {
   RATING_CRITERIA_V2_VERSION,
   RATING_CRITERIA_V3_VERSION,
   RATING_CRITERIA_V4_VERSION,
+  RATING_CRITERIA_V5_VERSION,
   getRatingCriteriaVersion,
 };
 
@@ -89,6 +91,7 @@ export function aiCategoryOpen(slug: string | null | undefined): slug is string 
     slug !== 'services' &&
     slug !== 'bank-savings' &&
     slug !== 'internet-telecom' &&
+    slug !== 'credit-cards' &&
     hasRatingCriteria(slug)
   );
 }
@@ -205,6 +208,22 @@ const CATEGORY_CRITERION_HINTS: Readonly<Record<string, Readonly<Record<string, 
     location: 'vị trí phòng tập, chỗ gửi xe, sự thuận tiện đi lại',
     value: 'giá gói tập, phí PT, đáng tiền so với chất lượng',
   },
+  'spas-aesthetics': {
+    service_quality:
+      'hiệu quả liệu trình, tay nghề kỹ thuật viên và bác sĩ da liễu, kết quả sau làm',
+    hygiene: 'vô trùng dụng cụ, khăn ga sạch sẽ, an toàn da liễu, phòng trị liệu',
+    service_attitude: 'thái độ tư vấn, mức độ tận tâm, có chèo kéo hay ép mua gói liệu trình không',
+    price: 'bảng giá công khai, chi phí minh bạch, không phát sinh phụ phí',
+    ambiance: 'không gian thư giãn, mùi tinh dầu, ánh sáng, độ riêng tư và yên tĩnh',
+  },
+  'english-centers': {
+    service_quality:
+      'chất lượng giảng dạy, lộ trình học, mức độ tiến bộ phát âm, giao tiếp và điểm IELTS/TOEIC',
+    service_attitude: 'thái độ giáo viên bản ngữ, giáo viên Việt Nam, trợ giảng và bộ phận học vụ',
+    quality: 'giáo trình, tài liệu học, sĩ số lớp, phòng học và trang thiết bị cơ sở vật chất',
+    location: 'vị trí cơ sở, bãi gửi xe, lịch học và độ linh hoạt ca học',
+    value: 'học phí có xứng đáng với chất lượng giảng dạy và cam kết đầu ra không',
+  },
 };
 
 function criterionHint(categorySlug: string, key: string): string | undefined {
@@ -224,6 +243,8 @@ const PLACE_CATEGORY_SLUGS = new Set([
   'homestays',
   'dental-clinics',
   'gyms-fitness',
+  'spas-aesthetics',
+  'english-centers',
 ]);
 const E3_RETAIL_CATEGORY_SLUGS = new Set(['supplements', 'cosmetics', 'mother-baby']);
 
@@ -273,6 +294,32 @@ Kết quả: {"ref": 3, "points": [
   {"kind": "pro", "criterion_key": "value", "body": "Gói tập đáng tiền so với thiết bị", "evidence": "gói tập giá hợp lý so với thiết bị"},
   {"kind": "pro", "criterion_key": "location", "body": "Vị trí gần nhà, tiện đi lại", "evidence": "gần nhà tiện đi làm về"},
   {"kind": "con", "criterion_key": "location", "body": "Không có chỗ đậu xe hơi", "evidence": "không có chỗ đậu xe hơi"}]}`,
+  'spas-aesthetics': `Ví dụ (minh hoạ, không phải review thật):
+Review ref 1: "kỹ thuật viên tay nghề tốt, làm da sạch mụn hẳn, phòng riêng tư thơm mùi tinh dầu, nhưng cuối buổi tư vấn chèo kéo mua thêm gói liệu trình"
+Kết quả: {"ref": 1, "points": [
+  {"kind": "pro", "criterion_key": "service_quality", "body": "Tay nghề tốt, làm da sạch mụn rõ", "evidence": "kỹ thuật viên tay nghề tốt, làm da sạch mụn hẳn"},
+  {"kind": "pro", "criterion_key": "ambiance", "body": "Phòng riêng tư, thơm mùi tinh dầu", "evidence": "phòng riêng tư thơm mùi tinh dầu"},
+  {"kind": "con", "criterion_key": "service_attitude", "body": "Cuối buổi chèo kéo mua thêm gói", "evidence": "tư vấn chèo kéo mua thêm gói liệu trình"}]}
+Review ref 2: "sẽ giới thiệu bạn bè tới spa nha mọi người ơi"
+Kết quả: {"ref": 2, "points": []}
+Review ref 3: "dụng cụ vô trùng sạch sẽ, bảng giá công khai rõ ràng không phát sinh, nhưng cuối tuần hơi đông phải chờ lâu"
+Kết quả: {"ref": 3, "points": [
+  {"kind": "pro", "criterion_key": "hygiene", "body": "Dụng cụ vô trùng sạch sẽ", "evidence": "dụng cụ vô trùng sạch sẽ"},
+  {"kind": "pro", "criterion_key": "price", "body": "Bảng giá rõ ràng, không phát sinh", "evidence": "bảng giá công khai rõ ràng không phát sinh"},
+  {"kind": "con", "criterion_key": "service_attitude", "body": "Cuối tuần đông, phải chờ lâu", "evidence": "cuối tuần hơi đông phải chờ lâu"}]}`,
+  'english-centers': `Ví dụ (minh hoạ, không phải review thật):
+Review ref 1: "giảng dạy dễ hiểu, sau 3 tháng phát âm tiến bộ rõ, giáo viên bản ngữ nhiệt tình sửa lỗi, nhưng học phí hơi cao so với mặt bằng"
+Kết quả: {"ref": 1, "points": [
+  {"kind": "pro", "criterion_key": "service_quality", "body": "Giảng dạy dễ hiểu, phát âm tiến bộ rõ", "evidence": "giảng dạy dễ hiểu, sau 3 tháng phát âm tiến bộ rõ"},
+  {"kind": "pro", "criterion_key": "service_attitude", "body": "Giáo viên bản ngữ nhiệt tình sửa lỗi", "evidence": "giáo viên bản ngữ nhiệt tình sửa lỗi"},
+  {"kind": "con", "criterion_key": "value", "body": "Học phí hơi cao so với mặt bằng", "evidence": "học phí hơi cao so với mặt bằng"}]}
+Review ref 2: "sẽ giới thiệu bạn bè qua trung tâm học nha mọi người ơi"
+Kết quả: {"ref": 2, "points": []}
+Review ref 3: "giáo trình bài bản, phòng học rộng và mát, lịch học buổi tối linh hoạt nhưng bãi giữ xe hơi chật"
+Kết quả: {"ref": 3, "points": [
+  {"kind": "pro", "criterion_key": "quality", "body": "Giáo trình bài bản, phòng học rộng mát", "evidence": "giáo trình bài bản, phòng học rộng và mát"},
+  {"kind": "pro", "criterion_key": "location", "body": "Lịch học buổi tối linh hoạt", "evidence": "lịch học buổi tối linh hoạt"},
+  {"kind": "con", "criterion_key": "location", "body": "Bãi giữ xe hơi chật", "evidence": "bãi giữ xe hơi chật"}]}`,
 };
 
 const EXAMPLES = `Ví dụ (minh hoạ, không phải review thật):
