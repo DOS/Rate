@@ -11,9 +11,9 @@
 //
 // Usage: node scripts/e2e/run.mjs [--skip-build] [--serve] [--item-model] [-- <playwright args>]
 //   --serve keeps the stack up for manual debugging instead of running the specs.
-//   --item-model (DOS/Rate#1159) also applies the DOS-Me M0 + M1+M2 proposals and
-//     apps/web/e2e/item-model/seed.sql, serves the app with RATE_ITEM_MODEL=nullable_variant
-//     and runs only the specs in apps/web/e2e/item-model.
+//   --item-model (DOS/Rate#1159) applies apps/web/e2e/item-model/seed.sql on top of the
+//     mirrored Item-model migrations from startRateDb, serves the app with
+//     RATE_ITEM_MODEL=nullable_variant, and runs only the specs in apps/web/e2e/item-model.
 // Needs Docker and a Playwright Chromium (`pnpm exec playwright install chromium`).
 
 import { spawn, spawnSync } from 'node:child_process';
@@ -357,14 +357,14 @@ try {
     readFileSync(path.join(repoRoot, 'apps', 'web', 'e2e', 'seed.sql'), 'utf8')
   );
   if (itemModel) {
-    // The proposals in the order JOY applies them, then the Item fixture.
-    for (const file of [
-      ['Docs', 'Proposals', '2026-10-29-dos-me-m0-seed-rekey.sql'],
-      ['Docs', 'Proposals', '2026-10-28-dos-me-m1-m2-items.sql'],
-      ['apps', 'web', 'e2e', 'item-model', 'seed.sql'],
-    ]) {
-      db.sql(readFileSync(path.join(repoRoot, ...file), 'utf8'));
-    }
+    // startRateDb() already applied the mirrored M0, M1+M2, and Item RPC migrations;
+    // load only the Item-model E2E fixture on top.
+    db.sql(
+      readFileSync(
+        path.join(repoRoot, 'apps', 'web', 'e2e', 'item-model', 'seed.sql'),
+        'utf8'
+      )
+    );
   }
 
   docker(
