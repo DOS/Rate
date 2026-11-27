@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { repoRoot, startRateDb } from './lib/rate-db.mjs';
+import { readMigrations, repoRoot, startRateDb } from './lib/rate-db.mjs';
 
 const read = (name) =>
   readFileSync(path.join(repoRoot, 'Docs', 'Proposals', name), 'utf8');
@@ -53,7 +53,11 @@ const listing256 = 'b0000000-0000-4000-8000-000000000256';
 const review = (n) => `d0000000-0000-4000-8000-00000000000${n}`;
 
 try {
-  const { sql, asRole } = startRateDb({ name: container });
+  // Replay historical proposals on the pre-Item-Model stack (< 20261212180000); full-stack Item Model replay runs in test-migration-replay.mjs and DOS/DOS.Me.
+  const { sql, asRole } = startRateDb({
+    name: container,
+    migrations: readMigrations().filter((m) => m.name < '20261212180000_'),
+  });
   // The reference stack has P6 (20261102233000), which sits on P2: roll it back first, as
   // production would before a P2 rollback.
   sql(read('2026-11-02-dos-me-review-value-score-rollback.sql'));

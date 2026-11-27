@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { repoRoot, startRateDb } from './lib/rate-db.mjs';
+import { readMigrations, repoRoot, startRateDb } from './lib/rate-db.mjs';
 
 const read = (name) =>
   readFileSync(path.join(repoRoot, 'Docs', 'Proposals', name), 'utf8');
@@ -61,7 +61,11 @@ const m = {
 };
 
 try {
-  const { sql, asRole } = startRateDb({ name: container });
+  // Replay historical proposals on the pre-Item-Model stack (< 20261212180000); full-stack Item Model replay runs in test-migration-replay.mjs and DOS/DOS.Me.
+  const { sql, asRole } = startRateDb({
+    name: container,
+    migrations: readMigrations().filter((m) => m.name < '20261212180000_'),
+  });
   const checkAll = (checks, when) => {
     for (const { id, query } of checks)
       assert.equal(sql(query), '0', `${id} after ${when}`);
