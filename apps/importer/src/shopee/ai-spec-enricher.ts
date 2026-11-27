@@ -17,9 +17,13 @@ import {
 } from '@repo/shared-data';
 import {
   applyCategorySpecTemplate,
+  getCategorySpecTemplate,
   mergeCustomFields,
   sanitizeCustomFields,
+  type KeySpecKey,
+  type SpecGroupKey,
 } from '@repo/shared-data/rules';
+import { categoryNeedsAiSpecs } from './ai-enrich-guards.js';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
 import { withBluetoothVersionOnly } from './spec-bluetooth.js';
 import { computeRetryDelayMs, createImporterLogger, sanitizeAiGeneratedText } from './logger.js';
@@ -44,6 +48,16 @@ export interface AiEnrichmentResponse {
   has_5g?: boolean;
   specifications: ProductSpecifications;
   key_specs: KeySpecs;
+}
+
+/** What one enricher spent and saved (DOS/Rate#1956); token counts are what the provider reports. */
+export interface AiEnrichmentUsage {
+  calls: number;
+  cacheHits: number;
+  sharedInflight: number;
+  skippedNotApplicable: number;
+  promptTokens: number;
+  completionTokens: number;
 }
 
 export const AiSpecEnrichmentPayloadSchema = z.object({
@@ -500,6 +514,160 @@ export function mergeProductSpecifications(
   ) as ProductSpecifications;
 }
 
+const SPEC_GROUP_SCHEMA_HINTS: Readonly<Record<SpecGroupKey, string>> = {
+  availability: `    "availability": {
+      "announced": "string (month and year the maker announced it)",
+      "status": "string (market status the source states)",
+      "prices_msrp": "string (launch prices with currency, as the source states them)"
+    }`,
+  design: `    "design": {
+      "dimensions": "string (height x width x depth in mm)",
+      "weight_g": number,
+      "materials": "string (front, back and frame materials)",
+      "build": "string",
+      "resistance": "string (IP or water rating with its depth and duration)",
+      "biometrics": "string (fingerprint or face unlock type)",
+      "keys": "string (physical buttons)",
+      "colors": ["string"]
+    }`,
+  display: `    "display": {
+      "size_inch": number,
+      "type": "string (panel technology, refresh rate, HDR formats, peak brightness)",
+      "resolution": "string (width x height in pixels, aspect ratio)",
+      "refresh_rate_hz": number,
+      "ppi": number,
+      "protection": "string (cover glass name)",
+      "features": "string (display features)"
+    }`,
+  hardware: `    "hardware": {
+      "chipset": "string (chip name and process node)",
+      "cpu": "string (core count, clocks and core types)",
+      "gpu": "string (GPU name)",
+      "ram_gb": number,
+      "storage_gb": number,
+      "storage_expansion": "string (memory card slot type and maximum size, or that the maker states it has none)",
+      "os": "string (operating system and version the model ships with, and the maker's interface)"
+    }`,
+  battery: `    "battery": {
+      "capacity_mah": number,
+      "type": "string (battery chemistry and capacity)",
+      "charging": "string (wired, wireless and reverse charging wattages and standards)",
+      "fast_charging_w": number,
+      "reverse_charging": boolean
+    }`,
+  camera: `    "camera": {
+      "rear_setup": "string (number of rear cameras, e.g. 'Triple Camera')",
+      "main_camera": "string (megapixels, aperture, focal length, focus and stabilization)",
+      "second_camera": "string (megapixels, aperture, focal length, field of view)",
+      "third_camera": "string (megapixels, aperture, focal length, optical zoom)",
+      "fourth_camera": "string (only when the model has one: megapixels, aperture, focal length, optical zoom)",
+      "flash": "string (flash type)",
+      "video_recording": "string (resolutions with frame rates, video HDR formats)",
+      "front_camera": "string (megapixels, aperture, focal length, focus)"
+    }`,
+  connectivity: `    "connectivity": {
+      "bluetooth": "string (Bluetooth version and profiles or codecs)",
+      "wlan": "string (Wi-Fi standards and bands)",
+      "usb": "string (port type, USB version, video out)",
+      "sensors": "string (sensors the maker lists)",
+      "location": "string (satellite systems the maker lists)",
+      "nfc": boolean,
+      "other": "string (other connectivity features)"
+    }`,
+  cellular: `    "cellular": {
+      "has_5g": boolean,
+      "bands_5g": "string (the 5G NR bands the maker lists for this model)",
+      "bands_4g": "string (the LTE bands or category the maker lists for this model)",
+      "technology": "string (network technologies the maker lists)",
+      "data_speed": "string (data standards the maker lists)",
+      "sim_type": "string (SIM slots and eSIM support)",
+      "volte": boolean,
+      "vowifi": boolean
+    }`,
+  multimedia: `    "multimedia": {
+      "loudspeaker": "string (speaker setup)",
+      "headphone_jack_35mm": boolean,
+      "audio_features": "string (audio formats and features)"
+    }`,
+  regulatory: `    "regulatory": {
+      "fcc_approval": "string",
+      "sar_head": "string (head SAR in W/kg)",
+      "sar_body": "string (body SAR in W/kg)",
+      "certifications": "string (certifications the source lists for this model)"
+    }`,
+};
+
+/** Order of the groups in the prompt schema (the order the original single schema used). */
+const SPEC_GROUP_SCHEMA_ORDER: readonly SpecGroupKey[] = [
+  'availability',
+  'design',
+  'display',
+  'hardware',
+  'battery',
+  'camera',
+  'connectivity',
+  'cellular',
+  'multimedia',
+  'regulatory',
+];
+
+const KEY_SPEC_SCHEMA_HINTS: Readonly<Record<KeySpecKey, string>> = {
+  screen: '    "screen": "string (short summary: size in inches and panel type)"',
+  chip: '    "chip": "string (short summary: chip name)"',
+  camera: `    "camera": "string (short summary: rear camera megapixels joined by ' + ')"`,
+  battery: '    "battery": "string (short summary: capacity in mAh and wired wattage)"',
+  storage: '    "storage": "string (storage with unit)"',
+  ram: '    "ram": "string (RAM with unit)"',
+};
+
+const KEY_SPEC_SCHEMA_ORDER: readonly KeySpecKey[] = [
+  'screen',
+  'chip',
+  'camera',
+  'battery',
+  'storage',
+  'ram',
+];
+
+/** A group hint without the field lines the category does not have (earbuds: no RAM or GPU). */
+function withoutHiddenFields(block: string, hidden: readonly string[]): string {
+  if (hidden.length === 0) return block;
+  const lines = block.split('\n');
+  const head = lines[0]!;
+  const tail = lines[lines.length - 1]!;
+  const fields = lines
+    .slice(1, -1)
+    .filter(line => !hidden.some(field => line.trimStart().startsWith(`"${field}":`)))
+    .map(line => line.replace(/,$/, ''));
+  return [head, fields.join(',\n'), tail].filter(Boolean).join('\n');
+}
+
+/**
+ * The schema the prompt asks for, narrowed to what the category has. The old prompt asked
+ * every category for all ten groups plus phone-only flat fields, and the importer dropped
+ * the groups the category lacks afterwards, so the model wrote (and was billed for)
+ * answers that were thrown away (DOS/Rate#1956). A phone, tablet or laptop (and an unknown
+ * category) still gets the full schema, byte for byte.
+ */
+export function buildSchemaHint(categorySlug: string | null | undefined): string {
+  const template = getCategorySpecTemplate(categorySlug);
+  const flat: string[] = [];
+  if (template.ram) flat.push('  "ram_gb": number');
+  if (template.storage) flat.push('  "storage_gb": number');
+  if (template.screen) flat.push('  "screen_size_inch": number');
+  if (template.groups.includes('battery')) flat.push('  "battery_mah": number');
+  if (template.has5g) flat.push('  "has_5g": boolean');
+  const groups = SPEC_GROUP_SCHEMA_ORDER.filter(g => template.groups.includes(g)).map(g =>
+    withoutHiddenFields(SPEC_GROUP_SCHEMA_HINTS[g], template.hiddenFields[g] ?? [])
+  );
+  const parts = [...flat, `  "specifications": {\n${groups.join(',\n')}\n  }`];
+  const keySpecs = KEY_SPEC_SCHEMA_ORDER.filter(k => template.keySpecs.includes(k)).map(
+    k => KEY_SPEC_SCHEMA_HINTS[k]
+  );
+  if (keySpecs.length > 0) parts.push(`  "key_specs": {\n${keySpecs.join(',\n')}\n  }`);
+  return `{\n${parts.join(',\n')}\n}`;
+}
+
 export const MAX_SPEC_CACHE_ENTRIES = 250;
 
 export function cloneAiEnrichmentResponse(res: AiEnrichmentResponse): AiEnrichmentResponse {
@@ -582,6 +750,16 @@ export class AiSpecEnricher {
   private timeoutMs: number;
   private temperature: number;
   private memoryCache = new Map<string, AiEnrichmentResponse>();
+  /** Calls in flight by cache key, so a concurrent identical request shares one call. */
+  private inflight = new Map<string, Promise<AiEnrichmentResponse | null>>();
+  private usage: AiEnrichmentUsage = {
+    calls: 0,
+    cacheHits: 0,
+    sharedInflight: 0,
+    skippedNotApplicable: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+  };
 
   constructor(config: AiSpecEnricherConfig = {}) {
     const safeConfig = config && typeof config === 'object' && !Array.isArray(config) ? config : {};
@@ -679,6 +857,11 @@ export class AiSpecEnricher {
     };
   }
 
+  /** Provider calls, avoided calls and reported tokens since this enricher was created. */
+  public getUsage(): AiEnrichmentUsage {
+    return { ...this.usage };
+  }
+
   public getCacheSize(): number {
     return this.memoryCache.size;
   }
@@ -698,8 +881,9 @@ export class AiSpecEnricher {
     rawDescription?: string,
     categorySlug: string = 'smartphones'
   ): { systemPrompt: string; userPrompt: string } {
+    const groupCount = getCategorySpecTemplate(categorySlug).groups.length;
     const systemPrompt = `You are a hardware specification database expert with authoritative knowledge of PhoneArena and GSMArena device specifications.
-Your job is to return accurate technical specifications for a consumer tech device, only as sources state them, structured into the 10 standard PhoneArena Field Groups (with GSMArena technical precision).
+Your job is to return accurate technical specifications for a consumer tech device, only as sources state them, structured into the ${groupCount} standard PhoneArena Field Groups (with GSMArena technical precision).
 
 RULES:
 1. Return ONLY a valid JSON object matching the exact schema below. Do not wrap in markdown code fences.
@@ -712,103 +896,7 @@ RULES:
 8. The schema hints below describe the format of each value. They are not values to copy.
 
 REQUIRED JSON SCHEMA:
-{
-  "ram_gb": number,
-  "storage_gb": number,
-  "screen_size_inch": number,
-  "battery_mah": number,
-  "has_5g": boolean,
-  "specifications": {
-    "availability": {
-      "announced": "string (month and year the maker announced it)",
-      "status": "string (market status the source states)",
-      "prices_msrp": "string (launch prices with currency, as the source states them)"
-    },
-    "design": {
-      "dimensions": "string (height x width x depth in mm)",
-      "weight_g": number,
-      "materials": "string (front, back and frame materials)",
-      "build": "string",
-      "resistance": "string (IP or water rating with its depth and duration)",
-      "biometrics": "string (fingerprint or face unlock type)",
-      "keys": "string (physical buttons)",
-      "colors": ["string"]
-    },
-    "display": {
-      "size_inch": number,
-      "type": "string (panel technology, refresh rate, HDR formats, peak brightness)",
-      "resolution": "string (width x height in pixels, aspect ratio)",
-      "refresh_rate_hz": number,
-      "ppi": number,
-      "protection": "string (cover glass name)",
-      "features": "string (display features)"
-    },
-    "hardware": {
-      "chipset": "string (chip name and process node)",
-      "cpu": "string (core count, clocks and core types)",
-      "gpu": "string (GPU name)",
-      "ram_gb": number,
-      "storage_gb": number,
-      "storage_expansion": "string (memory card slot type and maximum size, or that the maker states it has none)",
-      "os": "string (operating system and version the model ships with, and the maker's interface)"
-    },
-    "battery": {
-      "capacity_mah": number,
-      "type": "string (battery chemistry and capacity)",
-      "charging": "string (wired, wireless and reverse charging wattages and standards)",
-      "fast_charging_w": number,
-      "reverse_charging": boolean
-    },
-    "camera": {
-      "rear_setup": "string (number of rear cameras, e.g. 'Triple Camera')",
-      "main_camera": "string (megapixels, aperture, focal length, focus and stabilization)",
-      "second_camera": "string (megapixels, aperture, focal length, field of view)",
-      "third_camera": "string (megapixels, aperture, focal length, optical zoom)",
-      "fourth_camera": "string (only when the model has one: megapixels, aperture, focal length, optical zoom)",
-      "flash": "string (flash type)",
-      "video_recording": "string (resolutions with frame rates, video HDR formats)",
-      "front_camera": "string (megapixels, aperture, focal length, focus)"
-    },
-    "connectivity": {
-      "bluetooth": "string (Bluetooth version and profiles or codecs)",
-      "wlan": "string (Wi-Fi standards and bands)",
-      "usb": "string (port type, USB version, video out)",
-      "sensors": "string (sensors the maker lists)",
-      "location": "string (satellite systems the maker lists)",
-      "nfc": boolean,
-      "other": "string (other connectivity features)"
-    },
-    "cellular": {
-      "has_5g": boolean,
-      "bands_5g": "string (the 5G NR bands the maker lists for this model)",
-      "bands_4g": "string (the LTE bands or category the maker lists for this model)",
-      "technology": "string (network technologies the maker lists)",
-      "data_speed": "string (data standards the maker lists)",
-      "sim_type": "string (SIM slots and eSIM support)",
-      "volte": boolean,
-      "vowifi": boolean
-    },
-    "multimedia": {
-      "loudspeaker": "string (speaker setup)",
-      "headphone_jack_35mm": boolean,
-      "audio_features": "string (audio formats and features)"
-    },
-    "regulatory": {
-      "fcc_approval": "string",
-      "sar_head": "string (head SAR in W/kg)",
-      "sar_body": "string (body SAR in W/kg)",
-      "certifications": "string (certifications the source lists for this model)"
-    }
-  },
-  "key_specs": {
-    "screen": "string (short summary: size in inches and panel type)",
-    "chip": "string (short summary: chip name)",
-    "camera": "string (short summary: rear camera megapixels joined by ' + ')",
-    "battery": "string (short summary: capacity in mAh and wired wattage)",
-    "storage": "string (storage with unit)",
-    "ram": "string (RAM with unit)"
-  }
-}`;
+${buildSchemaHint(categorySlug)}`;
 
     const safeCat = (categorySlug || 'smartphones').trim().toLowerCase() || 'smartphones';
     const userPrompt = [
@@ -821,7 +909,7 @@ REQUIRED JSON SCHEMA:
       rawTitle ? `- Crawled Listing Title: ${rawTitle}` : null,
       rawDescription ? `- Crawled Description Excerpt: ${rawDescription.slice(0, 500)}` : null,
       ``,
-      `Return the 10 Field Groups JSON specification for "${brand} ${model}" (${storageGb ? `${storageGb}GB` : 'Standard'}), with only the values a source states for this exact model and every other field left out.`,
+      `Return the ${groupCount} Field Groups JSON specification for "${brand} ${model}" (${storageGb ? `${storageGb}GB` : 'Standard'}), with only the values a source states for this exact model and every other field left out.`,
     ]
       .filter(Boolean)
       .join('\n');
@@ -852,6 +940,8 @@ REQUIRED JSON SCHEMA:
     rawTitle?: string;
     rawDescription?: string;
     categorySlug?: string;
+    /** The category came from the title, not a stored value: never skip on it. */
+    categoryGuessed?: boolean;
   }): Promise<AiEnrichmentResponse | null> {
     if (!params || typeof params !== 'object' || Array.isArray(params)) return null;
     const cleanBrand =
@@ -897,6 +987,18 @@ REQUIRED JSON SCHEMA:
       return null;
     }
 
+    // A category whose template keeps no device group gets an answer the importer then
+    // drops whole: no call (DOS/Rate#1956).
+    if (params.categoryGuessed !== true && !categoryNeedsAiSpecs(params.categorySlug)) {
+      this.usage.skippedNotApplicable += 1;
+      logger.info(
+        'spec_enrich.skipped_not_applicable',
+        `Skipped AI call for "${params.brand} ${params.model}": category "${params.categorySlug}" has no device spec groups.`,
+        { brand: params.brand, deviceModel: params.model, category: params.categorySlug ?? null }
+      );
+      return null;
+    }
+
     const safeParamStorageGb = toBoundedIntOrUndefined(params.storageGb, 65536) ?? null;
     const safeParamRamGb = toBoundedIntOrUndefined(params.ramGb, 2048) ?? null;
     const catKey = (params.categorySlug || 'smartphones').trim().toLowerCase() || 'smartphones';
@@ -905,12 +1007,42 @@ REQUIRED JSON SCHEMA:
     if (cached) {
       this.memoryCache.delete(cacheKey);
       this.memoryCache.set(cacheKey, cached);
+      this.usage.cacheHits += 1;
       logger.info('spec_enrich.cache_hit', `Cache hit for "${cacheKey}"`, {
         cacheKey,
       });
       return cloneAiEnrichmentResponse(cached);
     }
 
+    const pending = this.inflight.get(cacheKey);
+    if (pending) {
+      this.usage.sharedInflight += 1;
+      const shared = await pending;
+      return shared ? cloneAiEnrichmentResponse(shared) : null;
+    }
+    const run = this.requestSpecs(params, catKey, safeParamStorageGb, safeParamRamGb, cacheKey);
+    this.inflight.set(cacheKey, run);
+    try {
+      const fresh = await run;
+      return fresh ? cloneAiEnrichmentResponse(fresh) : null;
+    } finally {
+      this.inflight.delete(cacheKey);
+    }
+  }
+
+  /** One provider call for a cache miss; the caller clones what it returns. */
+  private async requestSpecs(
+    params: {
+      brand: string;
+      model: string;
+      rawTitle?: string;
+      rawDescription?: string;
+    },
+    catKey: string,
+    safeParamStorageGb: number | null,
+    safeParamRamGb: number | null,
+    cacheKey: string
+  ): Promise<AiEnrichmentResponse | null> {
     const { systemPrompt, userPrompt } = this.buildPrompts(
       params.brand,
       params.model,
@@ -953,6 +1085,7 @@ REQUIRED JSON SCHEMA:
 
       let response: Response | null = null;
       for (let attempt = 0; attempt < 2; attempt++) {
+        this.usage.calls += 1;
         const reqController = new AbortController();
         const reqTimer = setTimeout(() => reqController.abort(), this.timeoutMs);
         try {
@@ -987,7 +1120,16 @@ REQUIRED JSON SCHEMA:
 
       const data = (await response.json()) as {
         choices?: Array<{ message?: { content?: string } }>;
+        usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
       };
+      const promptTokens = toBoundedIntOrUndefined(data?.usage?.prompt_tokens, 10_000_000, true);
+      const completionTokens = toBoundedIntOrUndefined(
+        data?.usage?.completion_tokens,
+        10_000_000,
+        true
+      );
+      this.usage.promptTokens += promptTokens ?? 0;
+      this.usage.completionTokens += completionTokens ?? 0;
       const rawContent: string | undefined = data?.choices?.[0]?.message?.content;
       if (!rawContent) {
         logger.warn('spec_enrich.empty_response', `Empty message content from ${this.provider}`, {
@@ -1097,9 +1239,12 @@ REQUIRED JSON SCHEMA:
           chip: keySpecs.chip ?? null,
           screen: keySpecs.screen ?? null,
           battery: keySpecs.battery ?? null,
+          category: catKey,
+          usagePromptTok: promptTokens ?? null,
+          usageCompletionTok: completionTokens ?? null,
         }
       );
-      return cloneAiEnrichmentResponse(result);
+      return result;
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.warn(

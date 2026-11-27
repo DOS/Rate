@@ -8,7 +8,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
+import { applyCategorySpecTemplate, getCategorySpecTemplate } from '@repo/shared-data/rules';
 import { AiSpecEnricher, mergeProductSpecifications } from '../ai-spec-enricher.js';
 import {
   REQUIRED_10_SPEC_GROUPS,
@@ -94,7 +94,12 @@ test('the AI prompt suggests no generic value and asks for empty fields', () => 
     }
     // Only a label format is still shown as an example.
     const examples = [...systemPrompt.matchAll(/e\.g\. '([^'\n]*)'/g)].map(m => m[1]);
-    assert.deepEqual(examples, ['Triple Camera'], category);
+    // A category with no camera group (watches, earbuds) no longer gets the camera hints (#1956).
+    assert.deepEqual(
+      examples,
+      getCategorySpecTemplate(category).groups.includes('camera') ? ['Triple Camera'] : [],
+      category
+    );
     assert.ok(systemPrompt.includes('Leave a field out when'), category);
     assert.ok(systemPrompt.includes('They are not values to copy.'), category);
     assert.ok(userPrompt.includes('every other field left out'), category);
