@@ -701,7 +701,7 @@ export function isAccessoryTitle(
 
 /**
  * Detect canonical category slug from product title (or optional upstream hint)
- * across all 12 canonical categories.
+ * across all 24 canonical categories.
  */
 export function detectCategorySlug(
   title: string,
@@ -739,7 +739,7 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
   // as credit-cards, while excluding gift/memory/SIM/scratch/flash/name cards, card
   // holders/readers, and retail installment promos paid via credit card (DOS/Rate#1968).
   const isNonCreditCardItem =
-    /(?<![\p{L}\d])(?:thẻ\s*(?:quà\s*tặng|nhớ|sim|cào|điện\s*thoại|nạp|game|garena|zing|học|tên|nhân\s*viên|từ|thang\s*máy|giữ\s*xe|bảo\s*hành|thành\s*viên|hội\s*viên|tập|bài|đồ\s*chơi)|the\s*(?:qua\s*tang|nho|sim|cao|dien\s*thoai|nap|game|hoc|ten|nhan\s*vien|tu|bao\s*hanh|thanh\s*vien|hoi\s*vien|tap|bai)|gift\s*cards?|memory\s*cards?|micro\s*sd|sd(?:xc|hc)?\s*cards?|tf\s*cards?|cfexpress|sim\s*cards?|card\s*readers?|đầu\s*đọc\s*thẻ|dau\s*doc\s*the|ví\s*(?:đựng\s*thẻ|da|nam|nữ|card)|vi\s*(?:dung\s*the|da|nam|nu|card)|(?:bao|hộp|túi|ngăn|kẹp|dây\s*đeo)\s*(?:đựng\s*|bảo\s*vệ\s*|da\s*đựng\s*)?thẻ|(?:bao|hop|tui|kep|day\s*deo)\s*(?:dung\s*|bao\s*ve\s*)?the|card\s*holders?|rfid\s*(?:wallet|sleeve|blocker|holder)|chống\s*rfid|flash\s*cards?|bộ\s*thẻ|bo\s*the|(?:trả\s*góp|tra\s*gop|thanh\s*toán|thanh\s*toan|giảm\s*giá|giam\s*gia)\s*(?:\d+%\s*)?(?:qua|bằng|bang|với|voi)\s*(?:thẻ\s*tín\s*dụng|the\s*tin\s*dung)|iphone|ipad|macbook|galaxy\s*(?:s\d|z\s*|a\d|tab|watch|buds)|điện\s*thoại|laptop|máy\s*tính|tivi|tủ\s*lạnh|máy\s*giặt|điều\s*hòa)(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:thẻ\s*(?:quà\s*tặng|nhớ|sim|cào|điện\s*thoại|nạp|game|garena|zing|học|tên|nhân\s*viên|từ|thang\s*máy|giữ\s*xe|bảo\s*hành|thành\s*viên|hội\s*viên|tập|bài|đồ\s*chơi)|the\s*(?:qua\s*tang|nho|sim|cao|dien\s*thoai|nap|game|hoc|ten|nhan\s*vien|tu|bao\s*hanh|thanh\s*vien|hoi\s*vien|tap|bai)|gift\s*cards?|memory\s*cards?|micro\s*sd|sd(?:xc|hc)?\s*cards?|tf\s*cards?|cfexpress|sim\s*cards?|card\s*readers?|đầu\s*đọc\s*thẻ|dau\s*doc\s*the|ví\s*(?:đựng\s*thẻ|da|nam|nữ|card)|vi\s*(?:dung\s*the|da|nam|nu|card)|(?:bao|hộp|túi|ngăn|kẹp|dây\s*đeo)\s*(?:đựng\s*|bảo\s*vệ\s*|da\s*đựng\s*)?thẻ|(?:bao|hop|tui|kep|day\s*deo)\s*(?:dung\s*|bao\s*ve\s*)?the|ốp\s*lưng|op\s*lung|bóp|bop|miếng\s*dán|mieng\s*dan|sticker|skin\s*dán|máy\s*quẹt\s*thẻ|may\s*quet\s*the|card\s*holders?|rfid\s*(?:wallet|sleeve|blocker|holder)|chống\s*rfid|flash\s*cards?|bộ\s*thẻ|bo\s*the|(?:trả\s*góp|tra\s*gop|thanh\s*toán|thanh\s*toan|giảm\s*giá|giam\s*gia)\s*(?:\d+%\s*)?(?:(?:qua|bằng|bang|với|voi)\s+)?(?:thẻ\s*tín\s*dụng|the\s*tin\s*dung)|iphone|ipad|macbook|galaxy\s*(?:s\d|z\s*|a\d|tab|watch|buds)|điện\s*thoại|laptop|máy\s*tính|tivi|tủ\s*lạnh|máy\s*giặt|điều\s*hòa|điều\s*hoà|máy\s*lạnh|máy\s*lọc\s*(?:không\s*)?khí|tai\s*nghe|airpods|apple\s*watch|smartwatch|đồng\s*hồ|smart\s*tv|oled\s*tv|qled\s*tv|xiaomi|redmi|poco|oppo|vivo|realme)(?![\p{L}\d])/iu.test(
       t
     );
   if (
@@ -881,8 +881,15 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
   // exercise machines, spa skincare/beauty devices, English textbooks/flashcards/pens/toys)
   // while keeping Vietnamese district names like Tan Binh / Binh Thanh unblocked
   // (DOS/Rate#1937, DOS/Rate#1943, DOS/Rate#1968).
+  const hasRetailEssentialOil =
+    /(?<![\p{L}\d])(?:tinh\s*dầu|tinh\s*dau)(?![\p{L}\d])/iu.test(t) &&
+    (/(?<![\p{L}\d])(?:chai|lọ|(?:\d+\s*)?(?:ml|lít|lit)|máy\s*xông|may\s*xong|đèn\s*xông|den\s*xong)(?![\p{L}\d])/iu.test(
+      t
+    ) ||
+      !/(?<![\p{L}\d])(?:spa|massage|mát\s*xa|thẩm\s*mỹ|tham\s*my|clinic)(?![\p{L}\d])/iu.test(t));
   const isWaveE5RetailProduct =
-    /(?<![\p{L}\d])(?:túi|thảm|găng|bình\s*(?:lắc|nước|giữ\s*nhiệt|thể\s*thao|uống|xịt|đựng|tập)|shaker|dây|whey|creatine|protein|bcaa|bàn\s*chải|máy\s*tăm|tăm\s*nước|miếng\s*dán|kem|gel|nước\s*súc\s*miệng|chỉ\s*nha\s*khoa|tăm\s*chỉ|sáp\s*(?:nha\s*khoa|wax)|xịt\s*(?:thơm\s*miệng|khoáng)|xit\s*khoang|bột\s*(?:tẩy\s*trắng|trắng\s*răng|đánh\s*răng|protein|whey)|máng\s*(?:tẩy\s*trắng|chống\s*nghiến)|tạ\s*(?:tay|đơn|đòn|ấm|bánh|chân|tập)|đai\s*(?:lưng|tập|kháng\s*lực|quấn)|khăn\s*(?:tập|gym|lau)|(?:quần|áo|giày)\s*(?:tập|gym|yoga|thể\s*thao)|bóng\s*(?:tập|yoga)|gạch\s*yoga|xà\s*đơn|máy\s*(?:chạy\s*bộ|tập|massage|mát\s*xa|triệt\s*lông|rửa\s*mặt|xông\s*(?:mặt|hơi)|hút\s*mụn|nâng\s*cơ|đẩy\s*tinh\s*chất|làm\s*đẹp|chăm\s*sóc\s*da|cạo\s*râu|sấy\s*tóc|uốn\s*tóc|phiên\s*dịch|học\s*tiếng\s*anh|đọc\s*sách|nghe\s*tiếng\s*anh)|may\s*(?:chay\s*bo|tap|massage|mat\s*xa|triet\s*long|rua\s*mat|xong\s*(?:mat|hoi)|hut\s*mun|nang\s*co|lam\s*dep|phien\s*dich|hoc\s*tieng\s*anh)|giàn\s*(?:tạ|tập)|(?<!khong\s)(?<!thoi\s)(?<!không\s)(?<!thời\s)gian\s*(?:ta|tap)|xe\s*đạp\s*tập|xe\s*dap\s*tap|ghế\s*(?:tập|đẩy\s*tạ|massage)|ghe\s*(?:tap|day\s*ta|massage)|giường\s*(?:spa|massage|gội)|giuong\s*(?:spa|massage|goi)|serum|lotion|toner|essence|ampoule|tinh\s*dầu|tinh\s*dau|dầu\s*(?:massage|gội|xả|dưỡng)|dau\s*(?:massage|goi|xa|duong)|mặt\s*nạ|mat\s*na|sữa\s*(?:dưỡng|tắm|rửa\s*mặt)|sua\s*(?:duong|tam|rua\s*mat)|tẩy\s*tế\s*bào\s*chết|tay\s*te\s*bao\s*chet|nước\s*hoa|nuoc\s*hoa|ủ\s*trắng|u\s*trang|tắm\s*trắng\s*(?:tại\s*nhà|body)|đèn\s*(?:led\s*spa|chiếu\s*sinh\s*học|xông\s*tinh\s*dầu)|bồn\s*(?:ngâm\s*chân|tắm\s*spa)|(?:cây|thanh)\s*lăn|miếng\s*lột|wax\s*lông|bộ\s*dụng\s*cụ\s*(?:nặn\s*mụn|spa|làm\s*đẹp)|nến\s*thơm|muối\s*tắm|đá\s*massage|facial\s*(?:steamer|device|roller|brush|mask)|massage\s*(?:gun|chair|oil|machine)|epilator|ipl\s*device|sách|sach|giáo\s*trình|giao\s*trinh|từ\s*điển|tu\s*dien|flash\s*cards?|thẻ\s*(?:học|từ\s*vựng|flashcard)|the\s*(?:hoc|tu\s*vung)|bút\s*(?:chấm\s*đọc|thông\s*minh|dịch|scan|từ\s*điển)|but\s*(?:cham\s*doc|thong\s*minh|dich|scan)|bảng\s*(?:chữ\s*cái|học\s*tiếng\s*anh)|đồ\s*chơi|do\s*choi|truyện\s*(?:song\s*ngữ|tiếng\s*anh|tranh)|truyen\s*(?:song\s*ngu|tieng\s*anh)|vở\s*(?:tập\s*viết|bài\s*tập|ghi\s*chép)|vo\s*(?:tap\s*viet|bai\s*tap)|bộ\s*(?:sách|đề\s*thi|thẻ\s*học|tài\s*liệu)|bo\s*(?:sach|de\s*thi|the\s*hoc)|textbooks?|workbooks?|dictionar(?:y|ies)|(?:talking|speaking)\s*pen|learning\s*toys?|toothbrush|flosser|mouthwash|toothpaste|gym\s*bag|yoga\s*mat)(?![\p{L}\d])/iu.test(
+    hasRetailEssentialOil ||
+    /(?<![\p{L}\d])(?:túi|thảm|găng|bình\s*(?:lắc|nước|giữ\s*nhiệt|thể\s*thao|uống|xịt|đựng|tập)|shaker|dây|whey|creatine|protein|bcaa|bàn\s*chải|máy\s*tăm|tăm\s*nước|miếng\s*dán|kem|gel|nước\s*súc\s*miệng|chỉ\s*nha\s*khoa|tăm\s*chỉ|sáp\s*(?:nha\s*khoa|wax)|xịt\s*(?:thơm\s*miệng|khoáng)|xit\s*khoang|bột\s*(?:tẩy\s*trắng|trắng\s*răng|đánh\s*răng|protein|whey)|máng\s*(?:tẩy\s*trắng|chống\s*nghiến)|tạ\s*(?:tay|đơn|đòn|ấm|bánh|chân|tập)|đai\s*(?:lưng|tập|kháng\s*lực|quấn)|khăn\s*(?:tập|gym|lau)|(?:quần|áo|giày)\s*(?:tập|gym|yoga|thể\s*thao)|bóng\s*(?:tập|yoga)|gạch\s*yoga|xà\s*đơn|máy\s*(?:chạy\s*bộ|tập|massage|mát\s*xa|triệt\s*lông|rửa\s*mặt|xông\s*(?:mặt|hơi)|hút\s*mụn|nâng\s*cơ|đẩy\s*tinh\s*chất|làm\s*đẹp|chăm\s*sóc\s*da|cạo\s*râu|sấy\s*tóc|uốn\s*tóc|phiên\s*dịch|học\s*tiếng\s*anh|đọc\s*sách|nghe\s*tiếng\s*anh)|may\s*(?:chay\s*bo|tap|massage|mat\s*xa|triet\s*long|rua\s*mat|xong\s*(?:mat|hoi)|hut\s*mun|nang\s*co|lam\s*dep|phien\s*dich|hoc\s*tieng\s*anh)|giàn\s*(?:tạ|tập)|(?<!khong\s)(?<!thoi\s)(?<!không\s)(?<!thời\s)gian\s*(?:ta|tap)|xe\s*đạp\s*tập|xe\s*dap\s*tap|ghế\s*(?:tập|đẩy\s*tạ|massage)|ghe\s*(?:tap|day\s*ta|massage)|giường\s*(?:spa|massage|gội)|giuong\s*(?:spa|massage|goi)|serum|lotion|toner|essence|ampoule|dầu\s*(?:massage|gội|xả|dưỡng)|dau\s*(?:massage|goi|xa|duong)|mặt\s*nạ|mat\s*na|sữa\s*(?:dưỡng|tắm|rửa\s*mặt)|sua\s*(?:duong|tam|rua\s*mat)|tẩy\s*tế\s*bào\s*chết|tay\s*te\s*bao\s*chet|nước\s*hoa|nuoc\s*hoa|(?:kem|bột|bot|sữa|sua|set|hũ|hu|tuýp|tuyp|chai)\s*(?:ủ\s*trắng|u\s*trang)|tắm\s*trắng\s*(?:tại\s*nhà|body)|đèn\s*(?:led\s*spa|chiếu\s*sinh\s*học|xông\s*tinh\s*dầu)|bồn\s*(?:ngâm\s*chân|tắm\s*spa)|(?:cây|thanh)\s*lăn|miếng\s*lột|wax\s*lông|bộ\s*dụng\s*cụ\s*(?:nặn\s*mụn|spa|làm\s*đẹp)|nến\s*thơm|muối\s*tắm|đá\s*massage|facial\s*(?:steamer|device|roller|brush|mask)|(?:eye|sheet|face)\s*mask|massage\s*(?:gun|chair|oil|machine)|epilator|ipl\s*device|sách|sach|(?:sách|sach|bộ|bo|cuốn|cuon|tập|tap|combo)\s*(?:giáo\s*trình|giao\s*trinh)|^\s*(?:giáo\s*trình|giao\s*trinh)|tài\s*liệu\s*(?:luyện\s*thi|ôn\s*thi|học|tiếng\s*anh|ielts|toeic)|tai\s*lieu\s*(?:luyen\s*thi|on\s*thi|hoc|tieng\s*anh|ielts|toeic)|từ\s*điển|tu\s*dien|flash\s*cards?|thẻ\s*(?:học|từ\s*vựng|flashcard)|the\s*(?:hoc|tu\s*vung)|bút\s*(?:chấm\s*đọc|thông\s*minh|dịch|scan|từ\s*điển)|but\s*(?:cham\s*doc|thong\s*minh|dich|scan)|bảng\s*(?:chữ\s*cái|học\s*tiếng\s*anh)|đồ\s*chơi|do\s*choi|truyện\s*(?:song\s*ngữ|tiếng\s*anh|tranh)|truyen\s*(?:song\s*ngu|tieng\s*anh)|vở\s*(?:tập\s*viết|bài\s*tập|ghi\s*chép)|vo\s*(?:tap\s*viet|bai\s*tap)|bộ\s*(?:sách|đề\s*thi|thẻ\s*học|tài\s*liệu)|bo\s*(?:sach|de\s*thi|the\s*hoc)|textbooks?|workbooks?|dictionar(?:y|ies)|(?:talking|speaking)\s*pen|learning\s*toys?|toothbrush|flosser|mouthwash|toothpaste|gym\s*bag|yoga\s*mat)(?![\p{L}\d])/iu.test(
       t
     );
   if (
@@ -904,16 +911,24 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
   }
   if (
     !isWaveE5RetailProduct &&
-    (/(?<![\p{L}\d])(?:thẩm\s*mỹ\s*viện|tham\s*my\s*vien|viện\s*thẩm\s*mỹ|vien\s*tham\s*my|bệnh\s*viện\s*thẩm\s*mỹ|benh\s*vien\s*tham\s*my|trung\s*tâm\s*thẩm\s*mỹ|trung\s*tam\s*tham\s*my|hệ\s*thống\s*(?:thẩm\s*mỹ|spa)|he\s*thong\s*(?:tham\s*my|spa)|phòng\s*khám\s*(?:da\s*liễu\s*thẩm\s*mỹ|thẩm\s*mỹ)|tmv\s*(?:thu\s*c[uú]c|kangnam|ng[oọ]c\s*dung|mailisa)|spa\s*(?:chăm\s*sóc\s*da|làm\s*đẹp|trị\s*mụn|massage|thư\s*giãn|dưỡng\s*sinh|thẩm\s*mỹ|clinic)|(?:beauty|aesthetic|skincare|day)\s*(?:spa|clinic|salon)|thu\s*c[uú]c\s*(?:clinic|spa|thẩm\s*mỹ)|thẩm\s*mỹ\s*(?:thu\s*c[uú]c|kangnam|ng[oọ]c\s*dung|mailisa)|ng[oọ]c\s*dung\s*(?:clinic|spa|beauty)|seoul\s*center|g[aà]\s*spa|hasaki\s*clinic(?:\s*(?:&|and|và)\s*spa)?|hasaki\s*spa|shynh\s*house|menard\s*(?:facial\s*salon|spa|beauty)|mailisa|kangnam\s*(?:clinic|spa|hospital|thẩm\s*mỹ))(?![\p{L}\d])/iu.test(
+    (/(?<![\p{L}\d])(?:thẩm\s*mỹ\s*viện|tham\s*my\s*vien|viện\s*thẩm\s*mỹ|vien\s*tham\s*my|bệnh\s*viện\s*thẩm\s*mỹ|benh\s*vien\s*tham\s*my|trung\s*tâm\s*thẩm\s*mỹ|trung\s*tam\s*tham\s*my|hệ\s*thống\s*(?:thẩm\s*mỹ|spa)|he\s*thong\s*(?:tham\s*my|spa)|phòng\s*khám\s*(?:da\s*liễu\s*thẩm\s*mỹ|thẩm\s*mỹ)|tmv\s*(?:thu\s*c[uú]c|kangnam|ng[oọ]c\s*dung|mailisa)|spa\s*(?:chăm\s*sóc\s*da|làm\s*đẹp|trị\s*mụn|massage|thư\s*giãn|dưỡng\s*sinh|thẩm\s*mỹ|clinic)|(?:beauty|aesthetic|skincare|day)\s*(?:spa|clinic|salon)|thu\s*c[uú]c\s*(?:clinic|spa|thẩm\s*mỹ)|thẩm\s*mỹ\s*(?:thu\s*c[uú]c|kangnam|ng[oọ]c\s*dung|mailisa)|ng[oọ]c\s*dung\s*(?:clinic|spa|beauty)|seoul\s*center|g[aà]\s*spa|hasaki\s*clinic(?:\s*(?:&|and|và)\s*spa)?|hasaki\s*spa|shynh\s*house|menard\s*(?:facial\s*salon|spa|beauty)|(?:(?:thẩm\s*mỹ|tham\s*my|viện|vien|spa|clinic)\s*mailisa|mailisa\s*(?:thẩm\s*mỹ|tham\s*my|spa|clinic|viện|vien))|kangnam\s*(?:clinic|spa|hospital|thẩm\s*mỹ))(?![\p{L}\d])/iu.test(
       t
     ) ||
       /^\s*(?:spa|thẩm\s*mỹ\s*viện|viện\s*thẩm\s*mỹ)(?![\p{L}\d])/iu.test(t))
   ) {
     return 'spas-aesthetics';
   }
+  const isNonEnglishLanguageCenter =
+    /(?<![\p{L}\d])(?:tiếng\s*(?:nhật|hàn|trung|pháp|đức|nga)|tieng\s*(?:nhat|han|trung|phap|duc|nga)|nhật\s*ngữ|nhat\s*ngu|hàn\s*ngữ|han\s*ngu|hoa\s*ngữ|hoa\s*ngu|jlpt|topik|hsk|tin\s*học|tin\s*hoc|japanese|korean|chinese|french|german)(?![\p{L}\d])/iu.test(
+      t
+    ) &&
+    !/(?<![\p{L}\d])(?:tiếng\s*anh|tieng\s*anh|anh\s*ngữ|anh\s*ngu|anh\s*văn|anh\s*van|english|ielts|toeic|toefl)(?![\p{L}\d])/iu.test(
+      t
+    );
   if (
     !isWaveE5RetailProduct &&
-    (/(?<![\p{L}\d])(?:trung\s*tâm\s*(?:tiếng\s*anh|anh\s*ngữ|ngoại\s*ngữ|luyện\s*thi\s*(?:ielts|toeic))|trung\s*tam\s*(?:tieng\s*anh|anh\s*ngu|ngoai\s*ngu|luyen\s*thi\s*(?:ielts|toeic))|hệ\s*thống\s*(?:anh\s*ngữ|tiếng\s*anh)|he\s*thong\s*(?:anh\s*ngu|tieng\s*anh)|học\s*viện\s*(?:anh\s*ngữ|tiếng\s*anh|ielts)|anh\s*ngữ\s*(?:quốc\s*tế|hội\s*việt\s*mỹ|ila|vus|yola|zim|acet|ames|ms\.?\s*hoa|apollo|apax)|anh\s*văn\s*hội\s*việt\s*mỹ|english\s*(?:center|centre|academy|school|institute)|vus|apollo\s*english|british\s*council|wall\s*street\s*english|yola|ielts\s*fighter|dol\s*english|zim\s*(?:academy|english|ielts)|apax\s*(?:english|leaders?)|language\s*link|ames\s*english|(?:anh\s*ngữ\s*)?ms\.?\s*hoa(?:\s*(?:toeic|giao\s*tiếp|junior|english))?|ila\s*(?:vietnam|việt\s*nam|english|anh\s*ngữ)|acet\s*(?:vietnam|việt\s*nam|english|ielts|anh\s*ngữ))(?![\p{L}\d])/iu.test(
+    !isNonEnglishLanguageCenter &&
+    (/(?<![\p{L}\d])(?:trung\s*tâm\s*(?:tiếng\s*anh|anh\s*ngữ|luyện\s*thi\s*(?:ielts|toeic))|trung\s*tam\s*(?:tieng\s*anh|anh\s*ngu|luyen\s*thi\s*(?:ielts|toeic))|hệ\s*thống\s*(?:anh\s*ngữ|tiếng\s*anh)|he\s*thong\s*(?:anh\s*ngu|tieng\s*anh)|học\s*viện\s*(?:anh\s*ngữ|tiếng\s*anh|ielts)|anh\s*ngữ\s*(?:quốc\s*tế|hội\s*việt\s*mỹ|ila|vus|yola|zim|acet|ames|ms\.?\s*hoa|apollo|apax)|anh\s*văn\s*hội\s*việt\s*mỹ|english\s*(?:center|centre|academy|school|institute)|vus|apollo\s*english|british\s*council|wall\s*street\s*english|yola|ielts\s*fighter|dol\s*english|zim\s*(?:academy|english|ielts)|apax\s*(?:english|leaders?)|language\s*link|ames\s*english|(?:anh\s*ngữ|anh\s*ngu)\s*ms\.?\s*hoa|ms\.?\s*hoa\s*(?:toeic|giao\s*tiếp|giao\s*tiep|junior|english|ielts)|ila\s*(?:vietnam|việt\s*nam|english|anh\s*ngữ)|acet\s*(?:vietnam|việt\s*nam|english|ielts|anh\s*ngữ))(?![\p{L}\d])/iu.test(
       t
     ) ||
       /^\s*(?:anh\s*ngữ|ila|acet)(?![\p{L}\d])/iu.test(t) ||
@@ -2745,6 +2760,21 @@ const RETAIL_INGESTION_DEFAULT_CATEGORY: Readonly<Record<string, CanonicalCatego
   concung: 'mother-baby',
   pharmacity: 'supplements',
 };
+
+/**
+ * Bank service platforms added in Wave E5 Phase 2 (DOS/Rate#1968). When no explicit
+ * category hint is passed and the title falls through to the phone default, fall back
+ * to `credit-cards` while still allowing explicit titles (e.g. bank savings) to win.
+ */
+const CREDIT_CARD_BANK_PLATFORMS: ReadonlySet<string> = new Set([
+  'vpbank',
+  'vib',
+  'techcombank',
+  'sacombank',
+  'tpbank',
+  'hsbc',
+  'shinhan',
+]);
 /**
  * First-party Vietnamese electronics and appliance retail chain platforms whose catalog
  * brand attributes are curated (not third-party seller text) (DOS/Rate#1953).
@@ -3531,16 +3561,27 @@ export class ProductNormalizer {
             .trim()
             .slice(0, 1000)
         : '';
-    const platformSlugHint =
+    const hasExplicitCategorySlug =
+      typeof explicitCategorySlug === 'string' &&
+      CANONICAL_CATEGORY_SLUGS.has(
+        stripControlChars(explicitCategorySlug).trim().toLowerCase() as CanonicalCategorySlug
+      );
+    const titleDetectedSlug = hasExplicitCategorySlug ? null : detectCategorySlug(title);
+    const platformSlugHint: CanonicalCategorySlug | null =
       safeRaw.platform === 'vietcombank' || safeRaw.platform === 'acb'
-        ? 'bank-savings'
+        ? titleDetectedSlug === 'credit-cards'
+          ? 'credit-cards'
+          : 'bank-savings'
         : safeRaw.platform === 'vnpt' || safeRaw.platform === 'fpttelecom'
           ? 'internet-telecom'
-          : null;
-    const detectedCategorySlug = detectCategorySlug(
-      title,
-      explicitCategorySlug ?? platformSlugHint
-    );
+          : typeof safeRaw.platform === 'string' && CREDIT_CARD_BANK_PLATFORMS.has(safeRaw.platform)
+            ? titleDetectedSlug === 'smartphones'
+              ? 'credit-cards'
+              : null
+            : null;
+    const detectedCategorySlug = hasExplicitCategorySlug
+      ? detectCategorySlug(title, explicitCategorySlug)
+      : (platformSlugHint ?? titleDetectedSlug ?? 'smartphones');
     const retailDefaultCategory =
       typeof safeRaw.platform === 'string' &&
       Object.hasOwn(RETAIL_INGESTION_DEFAULT_CATEGORY, safeRaw.platform)
@@ -4322,7 +4363,13 @@ export class ProductNormalizer {
       if (brand === 'Thu Cúc') brandAliases.push('Thu Cuc');
       if (brand === 'Ngọc Dung') brandAliases.push('Ngoc Dung');
       if (brand === 'Gà Spa') brandAliases.push('Ga Spa');
-      if (brand === 'Hasaki Clinic & Spa') brandAliases.push('Hasaki Clinic', 'Hasaki Spa');
+      if (brand === 'Hasaki Clinic & Spa')
+        brandAliases.push(
+          'Hasaki Clinic and Spa',
+          'Hasaki Clinic và Spa',
+          'Hasaki Clinic',
+          'Hasaki Spa'
+        );
       if (brand === 'Ms Hoa') brandAliases.push('Ms. Hoa');
       const brandRe =
         brand !== 'Khác'

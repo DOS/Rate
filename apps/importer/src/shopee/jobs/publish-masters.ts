@@ -1,5 +1,5 @@
 /**
- * Publishes named seed masters or wave-validated crawled Wave E1-E4 drafts in
+ * Publishes named seed masters or wave-validated crawled Wave E1-E5 drafts in
  * `rate.master_products` (DOS/Rate#1756, DOS/Rate#1918).
  *
  * Seed mode (default, unchanged):
@@ -11,13 +11,13 @@
  *   pnpm exec tsx src/shopee/jobs/publish-masters.ts --only <model_key,...>                     (Dry-run)
  *   pnpm exec tsx src/shopee/jobs/publish-masters.ts --only <model_key,...> --apply --expect <n>
  *
- * Crawled Wave E1-E4 mode (explicit opt-in via `--crawled`):
+ * Crawled Wave E1-E5 mode (explicit opt-in via `--crawled`):
  *   pnpm exec tsx src/shopee/jobs/publish-masters.ts --crawled [--category <slug[,slug2]>] [--only <model_key,...>] [--limit <n>] [--allow-unknown-brand]
  *   pnpm exec tsx src/shopee/jobs/publish-masters.ts --crawled [--category <slug[,slug2]>] --apply --expect <n>
  *
  * Flags:
- *   --crawled              Explicit opt-in for crawled Wave E1-E4 master audit/publish mode.
- *   --category <slugs>     Wave E1-E4 category slug(s), comma-separated. Core 5 tech device
+ *   --crawled              Explicit opt-in for crawled Wave E1-E5 master audit/publish mode.
+ *   --category <slugs>     Wave E1-E5 category slug(s), comma-separated. Core 5 tech device
  *                          categories are rejected (use strict seed `--only` mode instead).
  *   --only <keys>          In seed mode: required seed model_keys. In --crawled mode: optional
  *                          filter to specific model_keys.
@@ -645,7 +645,7 @@ function collectCommonCrawledBlockers(
       `category ${JSON.stringify(categorySlug)} is a core tech category and must use strict seed mode`
     );
   } else if (!WAVE_E_CATEGORY_SLUGS.has(categorySlug)) {
-    problems.push(`category ${JSON.stringify(categorySlug)} is not a Wave E1-E4 category`);
+    problems.push(`category ${JSON.stringify(categorySlug)} is not a Wave E1-E5 category`);
   }
 
   const modelKey = typeof row.model_key === 'string' ? row.model_key.trim() : '';
@@ -866,7 +866,7 @@ function collectWaveCrawledBlockers(
 }
 
 /**
- * Pure wave-aware predicate returning publish blockers for a crawled Wave E1-E4 master;
+ * Pure wave-aware predicate returning publish blockers for a crawled Wave E1-E5 master;
  * returns an empty array when the draft master is eligible to publish.
  */
 export function crawledPublishBlockers(
@@ -973,7 +973,7 @@ const CRAWLED_MASTER_COLUMNS =
   'id, model_key, slug, name, brand, status, category_id, entity_type, images, thumbnail, specifications';
 
 /**
- * Audits and optionally publishes Wave E1-E4 crawled draft masters in `rate.master_products`.
+ * Audits and optionally publishes Wave E1-E5 crawled draft masters in `rate.master_products`.
  * Dry-run by default; requires both `apply: true` and matching `expect` before any write.
  */
 export async function runCrawledPublish(

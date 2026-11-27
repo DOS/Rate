@@ -1081,6 +1081,7 @@ export async function ProductDetailView({
                 thumbnail={productImageUrl(v.product)}
                 currentMinPrice={v.stats.minPrice}
                 currency={effectiveCurrency}
+                priceUnit={effectivePriceUnit}
                 size="sm"
               />
             )}
@@ -1794,6 +1795,7 @@ export async function ProductDetailView({
                           : heroStats.minPrice
                       }
                       currency={effectiveCurrency}
+                      priceUnit={effectivePriceUnit}
                       size="sm"
                     />
                   )}

@@ -593,6 +593,8 @@ describe('Wave E5 Phase 2 (spas-aesthetics, english-centers, credit-cards) readi
       ['Thẩm mỹ viện Mailisa TP.HCM', 'Mailisa'],
       ['Gà Spa Quận 10', 'Gà Spa'],
       ['Hasaki Clinic & Spa Quận 3', 'Hasaki Clinic & Spa'],
+      ['Hasaki Clinic and Spa - Quận 1', 'Hasaki Clinic & Spa'],
+      ['Hasaki Clinic và Spa - Quận 3', 'Hasaki Clinic & Spa'],
       ['Shynh House Quận 1', 'Shynh House'],
       ['Menard Facial Salon Quận 1', 'Menard'],
     ];
@@ -605,6 +607,15 @@ describe('Wave E5 Phase 2 (spas-aesthetics, english-centers, credit-cards) readi
       assert.deepEqual(out.key_specs, {}, title);
       assert.equal(out.storage_gb, null, title);
     }
+    // Hasaki Clinic and/và Spa alias stripping removes the full chain name cleanly.
+    const hasakiAnd = normalizer.normalize(
+      createPlace({ title: 'Hasaki Clinic and Spa - Quận 1' })
+    );
+    assert.equal(hasakiAnd.brand, 'Hasaki Clinic & Spa');
+    assert.equal(hasakiAnd.model, 'Quận 1');
+    const hasakiVa = normalizer.normalize(createPlace({ title: 'Hasaki Clinic và Spa - Quận 3' }));
+    assert.equal(hasakiVa.brand, 'Hasaki Clinic & Spa');
+    assert.equal(hasakiVa.model, 'Quận 3');
 
     const engCases: Array<[string, string]> = [
       ['ILA Vietnam - Cơ sở Quận 1', 'ILA'],
@@ -658,6 +669,78 @@ describe('Wave E5 Phase 2 (spas-aesthetics, english-centers, credit-cards) readi
       assert.deepEqual(out.key_specs, {}, title);
       assert.equal(out.storage_gb, null, title);
     }
+
+    // Platform hint precedence (DOS/Rate#1968 Round 1):
+    // 1. Vietcombank / ACB credit cards resolve to credit-cards instead of bank-savings default.
+    const vcbCard = normalizer.normalize(
+      createPlace({
+        platform: 'vietcombank',
+        title: 'Thẻ tín dụng Vietcombank Visa Signature',
+        priceMin: 1_000_000,
+        priceMax: 1_000_000,
+      })
+    );
+    assert.equal(vcbCard.category_slug, 'credit-cards');
+    assert.equal(vcbCard.entity_type, 'service');
+    assert.equal(vcbCard.brand, 'Vietcombank');
+
+    const acbCard = normalizer.normalize(
+      createPlace({
+        platform: 'acb',
+        title: 'Thẻ tín dụng ACB Visa Infinite',
+        priceMin: 999_000,
+        priceMax: 999_000,
+      })
+    );
+    assert.equal(acbCard.category_slug, 'credit-cards');
+    assert.equal(acbCard.entity_type, 'service');
+    assert.equal(acbCard.brand, 'ACB');
+
+    // Non-credit-card Vietcombank/ACB titles still default to bank-savings, and explicit hint wins.
+    const vcbDeposit = normalizer.normalize(
+      createPlace({ platform: 'vietcombank', title: 'Kỳ hạn 6 tháng tại quầy' })
+    );
+    assert.equal(vcbDeposit.category_slug, 'bank-savings');
+    assert.equal(vcbDeposit.brand, 'Vietcombank');
+    const vcbExplicit = normalizer.normalize(
+      createPlace({
+        platform: 'vietcombank',
+        title: 'Thẻ tín dụng Vietcombank Visa Signature',
+        categorySlug: 'bank-savings',
+      })
+    );
+    assert.equal(vcbExplicit.category_slug, 'bank-savings');
+
+    // 2. Untagged titles on the 7 new bank platforms fall back to credit-cards when title names no category.
+    const untaggedVpbank = normalizer.normalize(
+      createPlace({
+        platform: 'vpbank',
+        title: 'VPBank StepUP Cashback',
+        priceMin: 499_000,
+        priceMax: 499_000,
+      })
+    );
+    assert.equal(untaggedVpbank.category_slug, 'credit-cards');
+    assert.equal(untaggedVpbank.entity_type, 'service');
+    assert.equal(untaggedVpbank.brand, 'VPBank');
+
+    const untaggedVib = normalizer.normalize(
+      createPlace({
+        platform: 'vib',
+        title: 'VIB Cash Back 2.0',
+        priceMin: 999_000,
+        priceMax: 999_000,
+      })
+    );
+    assert.equal(untaggedVib.category_slug, 'credit-cards');
+    assert.equal(untaggedVib.brand, 'VIB');
+
+    // Explicit bank-savings title on a new bank platform still resolves to bank-savings.
+    const vpbankSavings = normalizer.normalize(
+      createPlace({ platform: 'vpbank', title: 'Gửi tiết kiệm online VPBank 12 tháng' })
+    );
+    assert.equal(vpbankSavings.category_slug, 'bank-savings');
+    assert.equal(vpbankSavings.brand, 'VPBank');
   });
 
   it('guards credit-cards order before bank-savings and blocks retail products from Phase 2 categories', () => {
@@ -667,6 +750,25 @@ describe('Wave E5 Phase 2 (spas-aesthetics, english-centers, credit-cards) readi
       'credit-cards'
     );
     assert.equal(detectCategorySlug('Gửi tiết kiệm online VPBank 12 tháng'), 'bank-savings');
+
+    // Legitimate Phase 2 place descriptions must stay in their place categories.
+    const legitimatePhase2Places: Array<[string, string]> = [
+      ['Hasaki Skincare Clinic Quận 1', 'spas-aesthetics'],
+      ['Skincare Spa Quận 1', 'spas-aesthetics'],
+      ['Spa An Nhiên - ủ trắng toàn thân', 'spas-aesthetics'],
+      ['Spa Massage Tinh Dầu Thảo Mộc Quận 1', 'spas-aesthetics'],
+      ['Mailisa Spa Quận 1', 'spas-aesthetics'],
+      ['Trung tâm tiếng Anh ABC - giáo trình quốc tế', 'english-centers'],
+      ['Anh ngữ Ms Hoa - Cầu Giấy', 'english-centers'],
+      ['Ms Hoa Giao Tiếp - Ba Đình', 'english-centers'],
+      ['Ms. Hoa IELTS - Quận 1', 'english-centers'],
+      ['Trung tâm tiếng Anh & tiếng Nhật ABC', 'english-centers'],
+    ];
+    for (const [title, expected] of legitimatePhase2Places) {
+      for (const candidate of [title, title.normalize('NFD')]) {
+        assert.equal(detectCategorySlug(candidate), expected, title);
+      }
+    }
 
     // Non-credit-card items must never detect as credit-cards.
     const nonCreditCards: Array<[string, string]> = [
@@ -679,8 +781,19 @@ describe('Wave E5 Phase 2 (spas-aesthetics, english-centers, credit-cards) readi
       ['Thẻ game Garena 200k', 'smartphones'],
       ['Thẻ tên nhân viên mica có dây đeo', 'smartphones'],
       ['Ví đựng thẻ tín dụng da bò chống RFID', 'smartphones'],
+      ['Ốp lưng đựng thẻ tín dụng iPhone 16', 'smartphones'],
+      ['Bóp da đựng thẻ tín dụng nam', 'smartphones'],
+      ['Miếng dán thẻ tín dụng ATM sticker dễ thương', 'smartphones'],
+      ['Skin dán thẻ tín dụng ngân hàng', 'smartphones'],
+      ['Máy quẹt thẻ tín dụng POS cầm tay', 'smartphones'],
       ['iPhone 16 Pro Max 256GB trả góp 0% qua thẻ tín dụng', 'smartphones'],
+      ['Xiaomi 15 Ultra 512GB trả góp 0% thẻ tín dụng', 'smartphones'],
       ['MacBook Air M3 trả góp 0% qua thẻ tín dụng', 'laptops'],
+      ['Máy lạnh Daikin Inverter trả góp 0% thẻ tín dụng', 'air-conditioners'],
+      ['AirPods Pro 2 trả góp 0% thẻ tín dụng', 'earbuds'],
+      ['Smart TV Samsung 55 inch trả góp 0% thẻ tín dụng', 'tvs'],
+      ['Apple Watch Series 10 trả góp 0% thẻ tín dụng', 'smartwatches'],
+      ['Máy lọc không khí Sharp trả góp 0% thẻ tín dụng', 'air-purifiers'],
     ];
     for (const [title, expected] of nonCreditCards) {
       const actual = detectCategorySlug(title);
@@ -688,22 +801,38 @@ describe('Wave E5 Phase 2 (spas-aesthetics, english-centers, credit-cards) readi
       assert.notEqual(actual, 'credit-cards', title);
     }
 
-    // Retail skincare/devices and English books/flashcards/pens/toys must stay out of Phase 2 places.
+    // Retail skincare/devices, non-English language schools, bare Ms Hoa, and English books/docs
+    // must stay out of Phase 2 places.
     const phase2RetailGuards: Array<[string, string]> = [
       ['Kem dưỡng da chuẩn spa Thu Cúc', 'cosmetics'],
       ['Serum trị mụn Hasaki Clinic & Spa', 'cosmetics'],
+      ['Serum skincare spa', 'cosmetics'],
       ['Mặt nạ dưỡng ẩm spa Hàn Quốc', 'cosmetics'],
       ['Lotion dưỡng thể Menard Embellir 130ml', 'smartphones'],
+      ['Kem ủ trắng toàn thân Spa', 'smartphones'],
+      ['Set ủ trắng body Spa', 'smartphones'],
       ['Máy massage mặt nâng cơ chuẩn spa', 'smartphones'],
       ['Máy triệt lông cầm tay chuẩn thẩm mỹ viện', 'smartphones'],
       ['Tinh dầu massage thư giãn spa 100ml', 'smartphones'],
+      ['Chai tinh dầu spa thư giãn', 'smartphones'],
+      ['Máy xông tinh dầu spa', 'smartphones'],
+      ['Tinh dầu oải hương nguyên chất', 'smartphones'],
+      ['Combo làm đẹp da Doctor Magic Mailisa', 'smartphones'],
+      ['Spa Treatment HAS Stretch iSheet Eye Mask', 'smartphones'],
       ['Sách luyện thi IELTS Fighter 4 kỹ năng', 'smartphones'],
+      ['Sách giáo trình IELTS Fighter', 'smartphones'],
       ['Giáo trình tiếng Anh British Council', 'smartphones'],
+      ['Tài liệu luyện thi IELTS Fighter', 'smartphones'],
       ['Bộ thẻ học tiếng Anh Flashcard 500 từ cho bé', 'smartphones'],
       ['Từ điển Anh Việt Oxford cho trung tâm tiếng Anh', 'smartphones'],
       ['Bút chấm đọc tiếng Anh thông minh cho bé', 'smartphones'],
       ['Đồ chơi học tiếng Anh cho trẻ em', 'smartphones'],
       ['Workbook English Academy Grade 5', 'smartphones'],
+      ['Trung tâm Ngoại ngữ Tiếng Nhật Sakura JLPT', 'smartphones'],
+      ['Trung tâm Ngoại ngữ Tin học ABC', 'smartphones'],
+      ['Trung tâm tiếng Hàn TOPIK Seoul', 'smartphones'],
+      ['ILA Tiếng Nhật Quận 1', 'smartphones'],
+      ['Tiệm hoa Ms Hoa Quận 1', 'smartphones'],
     ];
     for (const [title, expected] of phase2RetailGuards) {
       for (const candidate of [title, title.normalize('NFD')]) {

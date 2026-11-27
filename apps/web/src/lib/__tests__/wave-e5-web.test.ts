@@ -34,6 +34,11 @@ import {
 } from '../place-details';
 import { leaderboardCriteriaForCategory } from '../leaderboard-engine';
 import { isCanonicalTrayCategorySlug } from '../../components/compare/compare-tray';
+import {
+  buildDealCsvRow,
+  buildDealJsonItem,
+  rankProductsForDealFinder,
+} from '../../components/deals/DealFinderWorkspace';
 import { parseProductsFilterBounds } from '../../server/rate/api-handler';
 import { buildRateOpenApiSpec } from '../../server/rate/openapi';
 import {
@@ -459,11 +464,25 @@ assert.equal(isServiceCategorySlug('bank-savings'), true);
 assert.equal(isServiceCategorySlug('internet-telecom'), true);
 assert.equal(isPlaceCategorySlug('credit-cards'), false);
 
-// Credit cards use yearly fee suffixes (/năm, /yr, /rok) on VND prices.
+// Credit cards use yearly fee suffixes (/năm, /yr, /rok) on VND prices, including nested paths.
 assert.equal(resolveListingUnitSuffix('VND', 'credit-cards', 'vi'), '/năm');
+assert.equal(resolveListingUnitSuffix('VND', '/credit-cards/', 'vi'), '/năm');
+assert.equal(
+  resolveListingUnitSuffix('VND', '/credit-cards/vib-cash-back', 'vi'),
+  '/năm'
+);
+assert.equal(
+  resolveListingUnitSuffix('VND', '/credit-cards/vib-cash-back', 'en'),
+  '/yr'
+);
+assert.equal(
+  resolveListingUnitSuffix('VND', '/credit-cards/vib-cash-back', 'cs'),
+  '/rok'
+);
 assert.equal(resolveListingUnitSuffix('VND', 'credit-cards', 'en'), '/yr');
 assert.equal(resolveListingUnitSuffix('VND', 'credit-cards', 'cs'), '/rok');
 assert.equal(hasListingUnitSuffix('VND', 'credit-cards'), true);
+assert.equal(hasListingUnitSuffix('VND', '/credit-cards/vib-cash-back'), true);
 assert.match(
   formatListingPrice(499_000, 'VND', 'vi', { categorySlug: 'credit-cards' }),
   /499\.000.*\/năm$/
@@ -495,6 +514,11 @@ const phase2KeywordSamples: Array<[string, string]> = [
   ['Thẩm mỹ viện Thu Cúc Quận 1', 'spas-aesthetics'],
   ['Bệnh viện Thẩm mỹ Kangnam TP.HCM', 'spas-aesthetics'],
   ['Hasaki Clinic & Spa Quận 3', 'spas-aesthetics'],
+  ['Hasaki Skincare Clinic Quận 1', 'spas-aesthetics'],
+  ['Skincare Spa Quận 1', 'spas-aesthetics'],
+  ['Spa An Nhiên - ủ trắng toàn thân', 'spas-aesthetics'],
+  ['Spa Massage Tinh Dầu Thảo Mộc Quận 1', 'spas-aesthetics'],
+  ['Mailisa Spa Quận 1', 'spas-aesthetics'],
   ['Gà Spa Quận 10', 'spas-aesthetics'],
   ['Seoul Center Bình Thạnh', 'spas-aesthetics'],
   ['ILA Vietnam Cơ sở Quận 1', 'english-centers'],
@@ -502,7 +526,11 @@ const phase2KeywordSamples: Array<[string, string]> = [
   ['British Council Hà Nội', 'english-centers'],
   ['IELTS Fighter Cầu Giấy', 'english-centers'],
   ['DOL English Quận 10', 'english-centers'],
+  ['Trung tâm tiếng Anh ABC - giáo trình quốc tế', 'english-centers'],
+  ['Anh ngữ Ms Hoa - Cầu Giấy', 'english-centers'],
   ['Ms Hoa TOEIC Quận 3', 'english-centers'],
+  ['Ms Hoa Giao Tiếp - Ba Đình', 'english-centers'],
+  ['Trung tâm tiếng Anh & tiếng Nhật ABC', 'english-centers'],
 ];
 for (const [name, expected] of phase2KeywordSamples) {
   assert.equal(
@@ -527,16 +555,45 @@ const phase2NegativeGuards: Array<[string, string]> = [
   ['Thẻ cào điện thoại Viettel 100k', 'smartphones'],
   ['Thẻ game Garena 200k', 'smartphones'],
   ['Ví đựng thẻ tín dụng da bò chống RFID', 'smartphones'],
+  ['Ốp lưng đựng thẻ tín dụng iPhone 16', 'smartphones'],
+  ['Bóp da đựng thẻ tín dụng nam', 'smartphones'],
+  ['Miếng dán thẻ tín dụng ATM sticker dễ thương', 'smartphones'],
+  ['Skin dán thẻ tín dụng ngân hàng', 'smartphones'],
+  ['Máy quẹt thẻ tín dụng POS cầm tay', 'smartphones'],
   ['iPhone 16 Pro Max 256GB trả góp 0% qua thẻ tín dụng', 'smartphones'],
+  ['Xiaomi 15 Ultra 512GB trả góp 0% thẻ tín dụng', 'smartphones'],
+  ['Máy lạnh Daikin Inverter trả góp 0% thẻ tín dụng', 'air-conditioners'],
+  ['AirPods Pro 2 trả góp 0% thẻ tín dụng', 'earbuds'],
+  ['Smart TV Samsung 55 inch trả góp 0% thẻ tín dụng', 'tvs'],
+  ['Apple Watch Series 10 trả góp 0% thẻ tín dụng', 'smartwatches'],
+  ['Máy lọc không khí Sharp trả góp 0% thẻ tín dụng', 'air-purifiers'],
   ['Kem dưỡng da chuẩn spa Thu Cúc', 'cosmetics'],
   ['Serum trị mụn Hasaki Clinic & Spa', 'cosmetics'],
+  ['Serum skincare spa', 'cosmetics'],
+  ['Bộ skincare dưỡng ẩm', 'cosmetics'],
+  ['Kem ủ trắng toàn thân Spa', 'smartphones'],
+  ['Set ủ trắng body Spa', 'smartphones'],
   ['Máy massage mặt nâng cơ chuẩn spa', 'smartphones'],
   ['Máy triệt lông cầm tay chuẩn thẩm mỹ viện', 'smartphones'],
+  ['Tinh dầu massage thư giãn spa 100ml', 'smartphones'],
+  ['Chai tinh dầu spa thư giãn', 'smartphones'],
+  ['Máy xông tinh dầu spa', 'smartphones'],
+  ['Tinh dầu oải hương nguyên chất', 'smartphones'],
+  ['Combo làm đẹp da Doctor Magic Mailisa', 'smartphones'],
+  ['Spa Treatment HAS Stretch iSheet Eye Mask', 'smartphones'],
   ['Sách luyện thi IELTS Fighter 4 kỹ năng', 'smartphones'],
+  ['Sách giáo trình IELTS Fighter', 'smartphones'],
+  ['Giáo trình tiếng Anh British Council', 'smartphones'],
+  ['Tài liệu luyện thi IELTS Fighter', 'smartphones'],
   ['Bộ thẻ học tiếng Anh Flashcard 500 từ', 'smartphones'],
   ['Bút chấm đọc tiếng Anh thông minh cho bé', 'smartphones'],
   ['Từ điển Anh Việt Oxford cho trung tâm tiếng Anh', 'smartphones'],
   ['Đồ chơi học tiếng Anh cho trẻ em', 'smartphones'],
+  ['Trung tâm Ngoại ngữ Tiếng Nhật Sakura JLPT', 'smartphones'],
+  ['Trung tâm Ngoại ngữ Tin học ABC', 'smartphones'],
+  ['Trung tâm tiếng Hàn TOPIK Seoul', 'smartphones'],
+  ['ILA Tiếng Nhật Quận 1', 'smartphones'],
+  ['Tiệm hoa Ms Hoa Quận 1', 'smartphones'],
 ];
 for (const [name, expected] of phase2NegativeGuards) {
   for (const candidate of [name, name.normalize('NFD')]) {
@@ -605,6 +662,128 @@ for (const slug of E5_PHASE2_ALL) {
       return value as string;
     });
     assert.ok(localized.categoryTitle.length > 0);
+  }
+}
+
+// 9. Deal Radar CSV & JSON exports omit costPerPointVnd for service categories (DOS/Rate#1968).
+{
+  const rankedDeals = rankProductsForDealFinder(
+    [
+      {
+        id: 'card-1',
+        model_key: 'vpbank:stepup-cashback:unknown',
+        slug: 'vpbank-stepup-cashback',
+        name: 'VPBank StepUP Cashback',
+        brand: 'VPBank',
+        model: 'StepUP Cashback',
+        status: 'published',
+        min_price: 499_000,
+        max_price: 499_000,
+        rating_score: 4.5,
+        total_reviews: 20,
+        specifications: { category_slug: 'credit-cards' },
+        metadata: { price_currency: 'VND' },
+      },
+      {
+        id: 'isp-1',
+        model_key: 'vnpt:home-1:unknown',
+        slug: 'vnpt-home-1',
+        name: 'VNPT Home 1',
+        brand: 'VNPT',
+        model: 'Home 1',
+        status: 'published',
+        min_price: 180_000,
+        max_price: 220_000,
+        rating_score: 4.3,
+        total_reviews: 15,
+        specifications: { category_slug: 'internet-telecom' },
+        metadata: { price_currency: 'VND' },
+      },
+      {
+        id: 'savings-1',
+        model_key: 'vietcombank:online-12m:unknown',
+        slug: 'vietcombank-12m',
+        name: 'Gửi tiết kiệm online Vietcombank 12 tháng',
+        brand: 'Vietcombank',
+        model: 'Online 12m',
+        status: 'published',
+        min_price: 4.7,
+        max_price: 5.0,
+        rating_score: 4.4,
+        total_reviews: 18,
+        specifications: { category_slug: 'bank-savings' },
+        metadata: { price_currency: 'PCT' },
+      },
+      {
+        id: 'phone-1',
+        model_key: 'apple:iphone-16:256gb',
+        slug: 'iphone-16-256gb',
+        name: 'Apple iPhone 16 256GB',
+        brand: 'Apple',
+        model: 'iPhone 16',
+        status: 'published',
+        min_price: 22_000_000,
+        max_price: 24_000_000,
+        rating_score: 4.6,
+        total_reviews: 40,
+        specifications: { category_slug: 'smartphones' },
+        metadata: { price_currency: 'VND' },
+      },
+    ] as unknown as Parameters<typeof rankProductsForDealFinder>[0],
+    {
+      categoryFilter: 'all',
+      persona: 'default',
+      maxBudgetVnd: 0,
+      searchQuery: '',
+    }
+  );
+  const bySlug = new Map(rankedDeals.map((d) => [d.slug, d]));
+  const card = bySlug.get('vpbank-stepup-cashback')!;
+  const isp = bySlug.get('vnpt-home-1')!;
+  const savings = bySlug.get('vietcombank-12m')!;
+  const phone = bySlug.get('iphone-16-256gb')!;
+  assert.ok(card && isp && savings && phone);
+
+  assert.equal(buildDealJsonItem(card, null).costPerPointVnd, null);
+  assert.equal(buildDealJsonItem(isp, null).costPerPointVnd, null);
+  assert.equal(buildDealJsonItem(savings, null).costPerPointVnd, null);
+  assert.ok((buildDealJsonItem(phone, null).costPerPointVnd ?? 0) > 0);
+
+  const cardCsv = buildDealCsvRow(card, 'default', 'https://rate.vn', null);
+  const ispCsv = buildDealCsvRow(isp, 'default', 'https://rate.vn', null);
+  const savingsCsv = buildDealCsvRow(
+    savings,
+    'default',
+    'https://rate.vn',
+    null
+  );
+  const phoneCsv = buildDealCsvRow(phone, 'default', 'https://rate.vn', null);
+  assert.equal(cardCsv[9], '');
+  assert.equal(ispCsv[9], '');
+  assert.equal(savingsCsv[9], '');
+  assert.equal(typeof phoneCsv[9], 'number');
+  assert.ok((phoneCsv[9] as number) > 0);
+}
+
+// 10. Detail page passes effectivePriceUnit to both PriceWatchButton call sites.
+{
+  const detailSource = readFileSync(
+    join(webRoot, 'src/app/[locale]/smartphones/[slug]/page.tsx'),
+    'utf8'
+  );
+  const watchButtons =
+    detailSource.match(/<PriceWatchButton[\s\S]*?\/>/g) ?? [];
+  assert.equal(
+    watchButtons.length,
+    2,
+    'expected 2 PriceWatchButton call sites'
+  );
+  for (const snippet of watchButtons) {
+    assert.match(
+      snippet,
+      /priceUnit=\{effectivePriceUnit\}/,
+      'PriceWatchButton must receive effectivePriceUnit'
+    );
   }
 }
 

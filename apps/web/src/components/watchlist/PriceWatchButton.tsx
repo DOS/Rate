@@ -155,6 +155,7 @@ interface PriceWatchButtonProps {
   thumbnail: string | null;
   currentMinPrice: number;
   currency?: 'VND' | 'PCT';
+  priceUnit?: string | null;
   size?: 'sm' | 'md';
   /** SSR/unit-test fixture override to render the disclosure open (#1693). */
   defaultOpen?: boolean;
@@ -168,6 +169,7 @@ export default function PriceWatchButton({
   thumbnail,
   currentMinPrice,
   currency,
+  priceUnit,
   size = 'md',
   defaultOpen = false,
 }: PriceWatchButtonProps) {
@@ -284,7 +286,7 @@ export default function PriceWatchButton({
       >
         {watchedItem
           ? isPercentCurrency ||
-            hasListingUnitSuffix(resolvedCurrency, categoryPath)
+            hasListingUnitSuffix(resolvedCurrency, categoryPath, priceUnit)
             ? t('btnWatchingCurrency', {
                 price: formatListingPrice(
                   sanitizeWatchlistPrice(
@@ -293,7 +295,7 @@ export default function PriceWatchButton({
                   ),
                   resolvedCurrency,
                   locale,
-                  { categorySlug: categoryPath }
+                  { categorySlug: categoryPath, priceUnit }
                 ),
               })
             : t('btnWatching', {
@@ -333,12 +335,12 @@ export default function PriceWatchButton({
             {t('currentBestPrice')}{' '}
             <strong className="text-danger">
               {isPercentCurrency ||
-              hasListingUnitSuffix(resolvedCurrency, categoryPath)
+              hasListingUnitSuffix(resolvedCurrency, categoryPath, priceUnit)
                 ? formatListingPrice(
                     safeCurrentMinPrice,
                     resolvedCurrency,
                     locale,
-                    { categorySlug: categoryPath }
+                    { categorySlug: categoryPath, priceUnit }
                   )
                 : formatPriceVnd(safeCurrentMinPrice, locale)}
             </strong>
