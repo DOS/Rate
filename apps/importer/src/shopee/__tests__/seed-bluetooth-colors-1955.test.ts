@@ -37,6 +37,16 @@ test('bluetoothVersionOnly cuts a version list to the version and leaves anythin
     ['5.4 Wireless Card', '5.4 Wireless Card'],
     ['Bluetooth Smart (BLE) & ANT+', 'Bluetooth Smart (BLE) & ANT+'],
     ['LE Audio, 5.3', 'LE Audio, 5.3'],
+    // A decimal comma is not a list separator.
+    ['5,3', '5,3'],
+    ['6,0', '6,0'],
+    ['5 - 6', '5 - 6'],
+    // Other shapes the AI enricher states.
+    ['Bluetooth 5.3, A2DP', '5.3'],
+    ['5.3 LE', '5.3'],
+    ['5.3/LE Audio', '5.3'],
+    ['5.3 / A2DP', '5.3'],
+    ['5.3 A2DP', '5.3'],
     ['', ''],
   ] as const) {
     assert.equal(bluetoothVersionOnly(value), expected, JSON.stringify(value));
@@ -71,11 +81,27 @@ test('earbuds keep their codecs in the Bluetooth field (#1955)', () => {
   const codecs = '5.4, A2DP, AVRCP, HFP (SBC, AAC, LDAC, LC3)';
   assert.equal(keepsBluetoothCodecs({ category_slug: 'earbuds' }), true);
   assert.equal(keepsBluetoothCodecs({ category_slug: 'smartphones' }), false);
-  // The seeds' earbud shape: no category_slug in the specs, empty display and cellular.
+  // The seeds' earbud shape: no category_slug in the specs, an empty display group.
   assert.equal(keepsBluetoothCodecs({ display: {}, hardware: { chipset: 'H3' } }), true);
+  assert.equal(keepsBluetoothCodecs({ display: {}, cellular: { has_5g: false } }), true);
   for (const base of [{ category_slug: 'earbuds' }, { display: {}, cellular: {} }]) {
     const merged = mergeProductSpecifications(base, { connectivity: { bluetooth: codecs } });
     assert.equal(bluetoothOf(merged), codecs);
+  }
+});
+
+test('a master with no category_slug and a display value or no display group is cut (#1955)', () => {
+  const list = '5.4, A2DP, AVRCP, HFP (SBC, AAC, LDAC, LC3)';
+  assert.equal(keepsBluetoothCodecs({ display: { features: 'touch' } }), false);
+  assert.equal(keepsBluetoothCodecs({ connectivity: { bluetooth: list } }), false);
+  assert.equal(keepsBluetoothCodecs({}), false);
+  for (const specs of [
+    {},
+    { display: { features: 'touch' } },
+    { connectivity: { bluetooth: '5.3, A2DP' } },
+  ]) {
+    const merged = mergeProductSpecifications(specs, { connectivity: { bluetooth: list } });
+    assert.equal(bluetoothOf(merged), '5.4');
   }
 });
 
@@ -100,7 +126,8 @@ test('no non-earbud seed update leaves a profile list in Bluetooth, even over a 
     ) as { specifications: ProductSpecifications };
     const bluetooth = bluetoothOf(update.specifications);
     assert.ok(
-      bluetooth === undefined || (typeof bluetooth === 'string' && !bluetooth.includes(',')),
+      bluetooth === undefined ||
+        (typeof bluetooth === 'string' && bluetoothVersionOnly(bluetooth) === bluetooth),
       `${seed.model_key}: ${JSON.stringify(bluetooth)}`
     );
   }
