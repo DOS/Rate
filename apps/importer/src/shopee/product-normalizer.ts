@@ -2276,8 +2276,6 @@ const withoutLeadingPromoWords = (title: string, brand: string): string => {
 
 const HOA_PHAT_BRAND_RE =
   /(?<![\p{L}\d])(?<!điều\s)(?<!dieu\s)h(?:òa|oà|oa)\s*ph[aá]t(?![\p{L}\d])/iu;
-const HOA_PHAT_BRAND_STRIP_RE =
-  /(?<![\p{L}\d])(?<!điều\s)(?<!dieu\s)h(?:òa|oà|oa)\s*ph[aá]t(?![\p{L}\d])/giu;
 const BLUESTONE_BRAND_RE = /\bblue\s*stone\b/i;
 
 const APPLIANCE_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
@@ -2329,23 +2327,18 @@ const APPLIANCE_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bhaier\b/i, 'Haier'],
   [/(?<![\p{L}\d])h[aä]fele(?![\p{L}\d])/iu, 'Hafele'],
   [/(?<![\p{L}\d])kool\s?man(?![\p{L}\d])/iu, 'KoolMan'],
-  [/(?<![\p{L}\d])doux(?![\p{L}\d])/iu, 'DOUX'],
   [/\bdreame\b/i, 'Dreame'],
   [/\btineco\b/i, 'Tineco'],
-  [/(?<![\p{L}\d])bear(?![\p{L}\d])/iu, 'Bear'],
   [/(?<![\p{L}\d])k[aä]rcher(?![\p{L}\d])/iu, 'Karcher'],
-  [/(?<![\p{L}\d])carrier(?![\p{L}\d])/iu, 'Carrier'],
   [/\bdeerma\b/i, 'Deerma'],
   [/\bsanyo\b/i, 'Sanyo'],
   [/\bsanden\b/i, 'Sanden'],
-  [/(?<![\p{L}\d])darling(?![\p{L}\d])/iu, 'Darling'],
   [/\bariston\b/i, 'Ariston'],
   [/\bferroli\b/i, 'Ferroli'],
   [/\bhoneywell\b/i, 'Honeywell'],
   [/\bboneco\b/i, 'Boneco'],
   [/(?<![\p{L}\d])stadler\s?form(?![\p{L}\d])/iu, 'Stadler Form'],
   [/\bbeurer\b/i, 'Beurer'],
-  [/(?<![\p{L}\d])chung\s?ho(?![\p{L}\d])/iu, 'Chungho'],
   [/(?<![\p{L}\d])lock[\s-]?(?:&|and|n|['’]n['’])[\s-]?lock(?![\p{L}\d])/iu, 'LocknLock'],
   [/\bmutosi\b/i, 'Mutosi'],
   [/\bskyworth\b/i, 'Skyworth'],
@@ -2367,22 +2360,69 @@ const APPLIANCE_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
 ];
 
 /**
+ * Wave E1 appliance brands whose tokens collide with common non-appliance words
+ * (e.g. "Carrier Unlocked" phones, "Bear" earbud themes, "Darling Pink" colors,
+ * or unaccented "dung chung ho gia dinh"). Never applied in the core-tech fallback
+ * (DOS/Rate#1953).
+ */
+const WAVE_E1_ONLY_APPLIANCE_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/(?<![\p{L}\d])doux(?![\p{L}\d])/iu, 'DOUX'],
+  [/(?<![\p{L}\d])bear(?![\p{L}\d])/iu, 'Bear'],
+  [/(?<![\p{L}\d])carrier(?![\p{L}\d])/iu, 'Carrier'],
+  [/(?<![\p{L}\d])darling(?![\p{L}\d])/iu, 'Darling'],
+  [/(?<![\p{L}\d])(?<!dùng\s)(?<!dung\s)chung\s?ho(?!\s+gia\s+d[iì]nh)(?![\p{L}\d])/iu, 'Chungho'],
+];
+
+const ALL_APPLIANCE_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  ...APPLIANCE_BRAND_PATTERNS,
+  ...WAVE_E1_ONLY_APPLIANCE_BRAND_PATTERNS,
+];
+
+/**
+ * Global strip patterns keyed by canonical appliance brand name, derived directly from the
+ * detection patterns so every spelling variant accepted by detection strips identically
+ * during Wave E1 model cleanup (DOS/Rate#1953).
+ */
+const APPLIANCE_BRAND_STRIP_PATTERNS: ReadonlyMap<string, RegExp> = new Map(
+  ALL_APPLIANCE_BRAND_PATTERNS.map(([pattern, name]) => [
+    name,
+    new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`),
+  ])
+);
+
+export interface DetectApplianceBrandOptions {
+  /**
+   * Include Wave E1-only brands that can collide with non-appliance titles
+   * (`DOUX`, `Bear`, `Carrier`, `Darling`, `Chungho`). Defaults to true.
+   */
+  readonly includeAmbiguousWaveE1Brands?: boolean;
+}
+
+/**
  * Shared appliance brand detector used for Wave E1 categories and as the appliance fallback
  * after tech/phone/laptop brands (DOS/Rate#1911, DOS/Rate#1953).
  */
-export function detectApplianceBrand(identityTitle: string): string | null {
+export function detectApplianceBrand(
+  identityTitle: string,
+  options: DetectApplianceBrandOptions = {}
+): string | null {
   if (typeof identityTitle !== 'string') return null;
   const normalized = stripControlChars(identityTitle).normalize('NFC').replace(/\s+/g, ' ').trim();
   if (!normalized) return null;
   for (const [pattern, name] of APPLIANCE_BRAND_PATTERNS) {
     if (pattern.test(normalized)) return name;
   }
+  if (options.includeAmbiguousWaveE1Brands !== false) {
+    for (const [pattern, name] of WAVE_E1_ONLY_APPLIANCE_BRAND_PATTERNS) {
+      if (pattern.test(normalized)) return name;
+    }
+  }
   return null;
 }
 
 /**
- * Canonical Wave E1 brand detector (Samsung/Sony/Xiaomi plus the shared appliance allowlist)
- * used on both titles and structured brand hints so casing variants map deterministically.
+ * Canonical Wave E1 brand detector (Samsung/Sony/Xiaomi plus the full appliance allowlist)
+ * used on Wave E1 titles so spelling and casing variants map deterministically.
  */
 function detectWaveE1AllowlistBrand(text: string): string | null {
   if (typeof text !== 'string') return null;
@@ -2391,7 +2431,7 @@ function detectWaveE1AllowlistBrand(text: string): string | null {
   if (/\bsamsung\b/i.test(normalized)) return 'Samsung';
   if (/\bsony\b/i.test(normalized)) return 'Sony';
   if (/\bxiaomi\b|\bredmi\b/i.test(normalized)) return 'Xiaomi';
-  return detectApplianceBrand(normalized);
+  return detectApplianceBrand(normalized, { includeAmbiguousWaveE1Brands: true });
 }
 
 const WAVE_E3_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
@@ -2539,14 +2579,22 @@ const STRUCTURED_BRAND_DISALLOWED_SLUGS = new Set([
   'khong-co',
   'khong-ro',
   'khong-thuong-hieu',
+  'khong-co-thuong-hieu',
+  'khong-ro-thuong-hieu',
+  'thuong-hieu-khac',
+  'hang-khac',
   'khong-xac-dinh',
   'dang-cap-nhat',
   'chua-cap-nhat',
   'chinh-hang',
   'hang-chinh-hang',
+  'hang-nhap-khau',
+  'hang-noi-dia',
   'viet-nam',
   'vietnam',
   'noi-dia',
+  'noi-dia-trung',
+  'noi-dia-nhat',
   'han-quoc',
   'nhat-ban',
   'trung-quoc',
@@ -2667,6 +2715,8 @@ const CURATED_RETAIL_CHAIN_PLATFORMS: ReadonlySet<string> = new Set([
 ]);
 const WAVE_E3_RETAIL_SHOP_PREFIX_RE =
   /^(?:shop|cua hang|nha thuoc|sieu thi|tong kho|dai ly|tiem|dien may|trung tam dien may)(?:\s|$)/;
+const STRUCTURED_BRAND_COMPAT_SPAM_RE =
+  /(?<![\p{L}\d])(?:tuong thich|dung cho|phu kien|thay the|compatible|replacement|for)(?![\p{L}\d])/u;
 
 export interface WaveE3BrandSanitizeContext {
   identityTitle: string;
@@ -2728,6 +2778,18 @@ function stripTrailingRetailShopSuffixes(text: string): string {
     if (isShortDisallowedTokenSequence(tokens)) return '';
     const lastIdx = tokens.length - 1;
     const lastFolded = trimTrailingChars(foldAccentsLower(tokens[lastIdx]!), ',.:;-');
+    if (tokens.length >= 3) {
+      const prev2Folded = trimTrailingChars(foldAccentsLower(tokens[lastIdx - 2]!), ',.:;-');
+      const prevFolded = trimTrailingChars(foldAccentsLower(tokens[lastIdx - 1]!), ',.:;-');
+      const triple = `${prev2Folded} ${prevFolded} ${lastFolded}`;
+      if (triple === 'hang chinh hang' || triple === 'hang nhap khau') {
+        tokens.pop();
+        tokens.pop();
+        tokens.pop();
+        strippedAny = true;
+        continue;
+      }
+    }
     if (tokens.length >= 2) {
       const prevFolded = trimTrailingChars(foldAccentsLower(tokens[lastIdx - 1]!), ',.:;-');
       const pair = `${prevFolded} ${lastFolded}`;
@@ -2805,6 +2867,7 @@ function isDisallowedStructuredBrandHintNoise(cleaned: string): boolean {
   const folded = foldAccentsLower(cleaned);
   if (
     WAVE_E3_RETAIL_SHOP_PREFIX_RE.test(folded) ||
+    STRUCTURED_BRAND_COMPAT_SPAM_RE.test(folded) ||
     STRUCTURED_BRAND_DISALLOWED_SLUGS.has(slugify(cleaned))
   ) {
     return true;
@@ -2814,10 +2877,38 @@ function isDisallowedStructuredBrandHintNoise(cleaned: string): boolean {
   const foldedStripped = foldAccentsLower(stripped);
   return (
     WAVE_E3_RETAIL_SHOP_PREFIX_RE.test(foldedStripped) ||
+    STRUCTURED_BRAND_COMPAT_SPAM_RE.test(foldedStripped) ||
     (stripped.length <= 80 && STRUCTURED_BRAND_DISALLOWED_SLUGS.has(slugify(stripped))) ||
     foldedStripped === 'trading' ||
     foldedStripped.endsWith(' trading')
   );
+}
+
+function matchesWholeNormalizedHint(pattern: RegExp, normalized: string): boolean {
+  const match = pattern.exec(normalized);
+  return match !== null && match.index === 0 && match[0].length === normalized.length;
+}
+
+/**
+ * Strict whole-hint canonical allowlist matcher for Wave E1 structured hints.
+ * Strips retail/official suffixes first and requires the allowlist brand to cover
+ * the entire bounded hint so compatibility/accessory spam phrases cannot inject brands.
+ */
+function detectExactWaveE1StructuredAllowlistBrand(hint: string): string | null {
+  if (typeof hint !== 'string') return null;
+  const cleaned = stripControlChars(hint).normalize('NFC').replace(/\s+/g, ' ').trim();
+  if (!cleaned || isDisallowedStructuredBrandHintNoise(cleaned)) return null;
+  const stripped = stripTrailingRetailShopSuffixes(cleaned);
+  if (stripped.length < 2 || stripped.length > 48) return null;
+  const words = stripped.split(' ').filter(Boolean);
+  if (words.length < 1 || words.length > 5) return null;
+  if (matchesWholeNormalizedHint(/\bsamsung\b/i, stripped)) return 'Samsung';
+  if (matchesWholeNormalizedHint(/\bsony\b/i, stripped)) return 'Sony';
+  if (matchesWholeNormalizedHint(/\bxiaomi\b|\bredmi\b/i, stripped)) return 'Xiaomi';
+  for (const [pattern, name] of ALL_APPLIANCE_BRAND_PATTERNS) {
+    if (matchesWholeNormalizedHint(pattern, stripped)) return name;
+  }
+  return null;
 }
 
 /**
@@ -3447,14 +3538,14 @@ export class ProductNormalizer {
         };
         for (const hint of structuredHints) {
           if (isDisallowedStructuredBrandHintNoise(hint)) continue;
-          const canonical = detectWaveE1AllowlistBrand(hint);
+          const canonical = detectExactWaveE1StructuredAllowlistBrand(hint);
           if (canonical) {
             brand = canonical;
             break;
           }
           const sanitized = sanitizeWaveE3StructuredBrand(hint, brandContext);
           if (sanitized) {
-            brand = detectWaveE1AllowlistBrand(sanitized) ?? sanitized;
+            brand = detectExactWaveE1StructuredAllowlistBrand(sanitized) ?? sanitized;
             break;
           }
         }
@@ -3537,6 +3628,7 @@ export class ProductNormalizer {
     }
     if (
       brand === 'Khác' &&
+      !WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug) &&
       !WAVE_E3_CATEGORY_SLUGS.has(categorySlug) &&
       !PLACE_CATEGORY_SLUGS.has(categorySlug)
     ) {
@@ -3584,7 +3676,9 @@ export class ProductNormalizer {
       else if (NOTHING_BRAND.test(ownProductPart(identityTitle))) brand = 'Nothing';
       else if (/\bhonor\b|magicbook/i.test(identityTitle)) brand = 'Honor';
       else {
-        const applianceBrand = detectApplianceBrand(identityTitle);
+        const applianceBrand = detectApplianceBrand(identityTitle, {
+          includeAmbiguousWaveE1Brands: false,
+        });
         if (applianceBrand) {
           brand = applianceBrand;
         } else if (
@@ -3960,31 +4054,13 @@ export class ProductNormalizer {
         model = extractedSku;
       } else {
         let cleanedAppliance: string;
-        if (brand === 'Hoa Phat') {
-          cleanedAppliance = ownModelTitle.replace(HOA_PHAT_BRAND_STRIP_RE, ' ');
+        const allowlistStripRe = APPLIANCE_BRAND_STRIP_PATTERNS.get(brand);
+        if (allowlistStripRe) {
+          cleanedAppliance = ownModelTitle.replace(allowlistStripRe, ' ');
         } else if (brand !== 'Khác') {
           const brandAliases: string[] = [brand];
           const foldedBrand = foldAccentsPreservingCase(brand);
           if (foldedBrand && foldedBrand !== brand) brandAliases.push(foldedBrand);
-          if (brand === 'Bluestone') brandAliases.push('Blue Stone');
-          if (brand === 'KoolMan') brandAliases.push('Kool Man');
-          if (brand === 'Chungho') brandAliases.push('Chung Ho');
-          if (brand === 'LocknLock') {
-            brandAliases.push(
-              'Lock&Lock',
-              'Lock & Lock',
-              'Lock and Lock',
-              "Lock'n'Lock",
-              'Lock’n’Lock',
-              'Lock n Lock',
-              'Lock-n-Lock',
-              'Lock-and-Lock'
-            );
-          }
-          if (brand === 'FFalcon') brandAliases.push('iFFALCON');
-          if (brand === 'A.O. Smith') {
-            brandAliases.push('AO Smith', 'A. O. Smith', 'A.O.Smith', 'AOSmith');
-          }
           cleanedAppliance = stripWordBoundedAliases(ownModelTitle, brandAliases);
         } else {
           cleanedAppliance = ownModelTitle;
@@ -4141,10 +4217,11 @@ export class ProductNormalizer {
         modelTitle.replace(LEADING_PROMO_GROUPS, '').trim(),
         brand
       );
+      const escapedBrand = escapeRegExp(brand);
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|(?:Máy|Thiết\\s+bị)\\s+định\\s+vị(?:\\s+GPS(?=\\s+(?:cầm\\s+tay\\s+)?(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${brand}\\b))?(?:\\s+cầm\\s+tay)?(?:\\s+GPS(?=\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${brand}\\b))?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|(?:Máy|Thiết\\s+bị)\\s+định\\s+vị(?:\\s+GPS(?=\\s+(?:cầm\\s+tay\\s+)?(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${escapedBrand}\\b))?(?:\\s+cầm\\s+tay)?(?:\\s+GPS(?=\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${escapedBrand}\\b))?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${escapedBrand}\\b\\s*)?`,
             'i'
           ),
           ''

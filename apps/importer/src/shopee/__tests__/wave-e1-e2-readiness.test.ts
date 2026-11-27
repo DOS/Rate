@@ -1383,3 +1383,371 @@ test('DOS/Rate#1953: Wave E1 structured brand fallback resolves genuine hints an
   );
   assert.ok(performance.now() - redosStart < 100, 'Expected linear runtime on repeated suffixes');
 });
+
+test('DOS/Rate#1953 Round 1 review: guards core-tech/Wave E2 brand hijacks, VN placeholders, spam injection, and variant stripping', () => {
+  const normalizer = new ProductNormalizer();
+
+  // 1. Ambiguous Wave E1 brands (Carrier, Bear, Darling, DOUX, Chungho) must never hijack
+  // core-tech categories or Wave E2 service plans.
+  const nonWaveE1NoHijackCases: Array<{
+    categorySlug: 'smartphones' | 'smartwatches' | 'earbuds' | 'internet-telecom';
+    title: string;
+  }> = [
+    {
+      categorySlug: 'smartphones',
+      title: 'Điện thoại Motorola Razr 50 Ultra Carrier Unlocked 256GB',
+    },
+    {
+      categorySlug: 'smartphones',
+      title: 'Điện thoại Nokia G42 5G Unlocked All Carrier 128GB',
+    },
+    {
+      categorySlug: 'smartwatches',
+      title: 'Đồng hồ thông minh Amazfit GTR 4 eSIM Carrier',
+    },
+    {
+      categorySlug: 'internet-telecom',
+      title: 'Gói cước Internet 5G Multi Carrier 100GB',
+    },
+    {
+      categorySlug: 'earbuds',
+      title: 'Tai nghe Bluetooth không dây hình gấu Bear đáng yêu',
+    },
+    {
+      categorySlug: 'earbuds',
+      title: 'Tai nghe True Wireless Moondrop Space Travel Bear',
+    },
+    {
+      categorySlug: 'smartwatches',
+      title: 'Đồng hồ thông minh trẻ em Bear 4G',
+    },
+    {
+      categorySlug: 'earbuds',
+      title: 'Tai nghe Bluetooth Darling Pink Edition',
+    },
+    {
+      categorySlug: 'earbuds',
+      title: 'Tai nghe Bluetooth Doux Edition',
+    },
+    {
+      categorySlug: 'smartphones',
+      title: 'Điện thoại dùng chung hộ gia đình 128GB',
+    },
+  ];
+  for (const tc of nonWaveE1NoHijackCases) {
+    const out = normalizer.normalize(
+      baseProduct({
+        categorySlug: tc.categorySlug,
+        title: tc.title,
+      })
+    );
+    assert.equal(out.brand, 'Khác', `${tc.categorySlug}: ${tc.title} must not be hijacked`);
+  }
+
+  // Wave E1 appliances still detect Carrier, Bear, Darling, DOUX cleanly while Chungho guards
+  // unaccented "dung chung ho gia dinh".
+  assert.equal(
+    normalizer.normalize(
+      baseProduct({
+        categorySlug: 'air-conditioners',
+        title: 'Máy lạnh Carrier Inverter 1HP',
+      })
+    ).brand,
+    'Carrier'
+  );
+  assert.equal(
+    normalizer.normalize(
+      baseProduct({
+        categorySlug: 'air-purifiers',
+        title: 'Máy lọc không khí Bear',
+      })
+    ).brand,
+    'Bear'
+  );
+  assert.equal(
+    normalizer.normalize(
+      baseProduct({
+        categorySlug: 'refrigerators',
+        title: 'Tủ đông Darling',
+      })
+    ).brand,
+    'Darling'
+  );
+  assert.equal(
+    normalizer.normalize(
+      baseProduct({
+        categorySlug: 'washing-machines',
+        title: 'Máy giặt mini DOUX DX-1335',
+      })
+    ).brand,
+    'DOUX'
+  );
+  for (const nonChunghoTitle of [
+    'Máy lọc không khí dùng chung hộ gia đình AP-100',
+    'May loc khong khi dung chung ho gia dinh AP-100',
+    'May loc khong khi chung ho gia dinh AP-100',
+  ]) {
+    assert.equal(
+      normalizer.normalize(
+        baseProduct({
+          categorySlug: 'air-purifiers',
+          title: nonChunghoTitle,
+        })
+      ).brand,
+      'Khác',
+      `${nonChunghoTitle} must not match Chungho`
+    );
+  }
+
+  // 2. Vietnamese placeholder brands and 3-token "Hàng Chính Hãng" / "Hàng Nhập Khẩu" suffixes.
+  for (const vnPlaceholder of [
+    'Không có thương hiệu',
+    'Không rõ thương hiệu',
+    'Thương hiệu khác',
+    'Hãng khác',
+    'Hàng nhập khẩu',
+    'Hàng nội địa',
+    'Nội địa Trung',
+    'Nội địa Nhật',
+    'FPT Shop - Hàng Chính Hãng',
+    'FPT Shop Hàng Chính Hãng',
+    'Nguyễn Kim - Hàng Chính Hãng',
+  ]) {
+    const out = normalizer.normalize(
+      baseProduct({
+        platform: 'dienmayxanh',
+        categorySlug: 'air-purifiers',
+        title: 'Máy lọc không khí HEPA AP-900',
+        brand: vnPlaceholder,
+        shop: { shopId: 'dmx', name: 'Điện Máy Xanh', isMall: true },
+      })
+    );
+    assert.equal(out.brand, 'Khác', `${vnPlaceholder} must be rejected`);
+  }
+
+  for (const genuineWithSuffix of [
+    'Kuvings Hàng Chính Hãng',
+    'Kuvings - Hàng Chính Hãng',
+    'Kuvings - Hàng Nhập Khẩu',
+  ]) {
+    const out = normalizer.normalize(
+      baseProduct({
+        platform: 'dienmayxanh',
+        categorySlug: 'air-purifiers',
+        title: 'Máy lọc không khí HEPA AP-900',
+        brand: genuineWithSuffix,
+        shop: { shopId: 'dmx', name: 'Điện Máy Xanh', isMall: false },
+      })
+    );
+    assert.equal(out.brand, 'Kuvings', `${genuineWithSuffix} must strip to Kuvings`);
+  }
+
+  // 3. Block allowlist brand injection via compatibility/accessory spam or multi-brand hints.
+  for (const spamBrand of [
+    'Phụ kiện tương thích Dyson Sharp',
+    'Dùng cho Sharp',
+    'Compatible for Dyson',
+    'Replacement filter LG',
+    'Dyson Sharp',
+    'Máy lọc không khí Sharp',
+  ]) {
+    const out = normalizer.normalize(
+      baseProduct({
+        platform: 'shopee',
+        categorySlug: 'air-purifiers',
+        title: 'Máy lọc không khí mini giá rẻ AP-900',
+        brand: spamBrand,
+        shop: { shopId: 'shop-1', name: 'Cửa Hàng Phụ Kiện', isMall: false },
+      })
+    );
+    assert.equal(out.brand, 'Khác', `Spam structured hint ${JSON.stringify(spamBrand)} rejected`);
+  }
+
+  // 4. Every accepted spelling variant strips identically in Wave E1 model cleanup.
+  const stadlerCanonical = normalizer.normalize(
+    baseProduct({
+      categorySlug: 'air-purifiers',
+      title: 'Máy lọc không khí Stadler Form Roger Little',
+    })
+  );
+  const stadlerGlued = normalizer.normalize(
+    baseProduct({
+      categorySlug: 'air-purifiers',
+      title: 'Máy lọc không khí StadlerForm Roger Little',
+    })
+  );
+  assert.equal(stadlerCanonical.model_key, 'stadler-form:roger-little:unknown');
+  assert.equal(stadlerGlued.model_key, stadlerCanonical.model_key);
+
+  for (const aoVariant of [
+    'Máy lọc không khí A.O. Smith Pure Air',
+    'Máy lọc không khí A O Smith Pure Air',
+    'Máy lọc không khí A.O Smith Pure Air',
+    'Máy lọc không khí AO. Smith Pure Air',
+    'Máy lọc không khí A. O.Smith Pure Air',
+  ]) {
+    const out = normalizer.normalize(
+      baseProduct({
+        categorySlug: 'air-purifiers',
+        title: aoVariant,
+      })
+    );
+    assert.equal(out.brand, 'A.O. Smith', aoVariant);
+    assert.equal(out.model_key, 'ao-smith:pure-air:unknown', aoVariant);
+  }
+
+  for (const lockVariant of [
+    'Máy lọc không khí LocknLock Pure Air',
+    "Máy lọc không khí Lock 'n' Lock Pure Air",
+    'Máy lọc không khí Lock& Lock Pure Air',
+    'Máy lọc không khí LockandLock Pure Air',
+    'Máy lọc không khí Lock-&-Lock Pure Air',
+  ]) {
+    const out = normalizer.normalize(
+      baseProduct({
+        categorySlug: 'air-purifiers',
+        title: lockVariant,
+      })
+    );
+    assert.equal(out.brand, 'LocknLock', lockVariant);
+    assert.equal(out.model_key, 'locknlock:pure-air:unknown', lockVariant);
+  }
+  assert.equal(
+    normalizer.normalize(
+      baseProduct({
+        categorySlug: 'air-purifiers',
+        title: 'Máy lọc không khí Lock& Lock Air Pure',
+      })
+    ).model_key,
+    'locknlock:air-pure:unknown'
+  );
+
+  // 5. Additional structured hint sources: brand_name, metadata.brand, and trailing-colon attrs.
+  const fromBrandName = normalizer.normalize({
+    ...baseProduct({
+      platform: 'dienmayxanh',
+      categorySlug: 'air-purifiers',
+      title: 'Máy lọc không khí UV-C AP-900',
+      shop: { shopId: 'dmx', name: 'Điện Máy Xanh', isMall: false },
+    }),
+    brand_name: 'Kuvings Official',
+  } as ShopeeProduct);
+  assert.equal(fromBrandName.brand, 'Kuvings');
+  assert.equal(fromBrandName.model_key, 'kuvings:ap-900:unknown');
+
+  const fromMetadataBrand = normalizer.normalize(
+    baseProduct({
+      platform: 'nguyenkim',
+      categorySlug: 'air-purifiers',
+      title: 'Máy lọc không khí HEPA AP-700',
+      metadata: { brand: 'Bionaire Hàng Chính Hãng' },
+      shop: { shopId: 'nk', name: 'Nguyễn Kim', isMall: false },
+    })
+  );
+  assert.equal(fromMetadataBrand.brand, 'Bionaire');
+  assert.equal(fromMetadataBrand.model_key, 'bionaire:ap-700:unknown');
+
+  const fromTrailingColonBrand = normalizer.normalize(
+    baseProduct({
+      platform: 'mediamart',
+      categorySlug: 'air-purifiers',
+      title: 'Máy lọc không khí HEPA AP-710',
+      attributes: [{ name: 'Thương hiệu:', value: 'KOOLMAN' }],
+      shop: { shopId: 'mm', name: 'MediaMart', isMall: false },
+    })
+  );
+  assert.equal(fromTrailingColonBrand.brand, 'KoolMan');
+  assert.equal(fromTrailingColonBrand.model_key, 'koolman:ap-710:unknown');
+
+  const fromTrailingColonMaker = normalizer.normalize(
+    baseProduct({
+      platform: 'pico',
+      categorySlug: 'air-purifiers',
+      title: 'Máy lọc không khí HEPA AP-720',
+      attributes: [{ name: 'Hãng sản xuất:', value: 'Kuvings' }],
+      shop: { shopId: 'pico', name: 'Pico', isMall: false },
+    })
+  );
+  assert.equal(fromTrailingColonMaker.brand, 'Kuvings');
+  assert.equal(fromTrailingColonMaker.model_key, 'kuvings:ap-720:unknown');
+
+  // 6. Explicit coverage for remaining newly added Wave E1 brands.
+  const remainingBrands = [
+    {
+      categorySlug: 'tvs' as const,
+      title: 'Smart Tivi Asanzo 43 inch 43SL900',
+      brand: 'Asanzo',
+      modelKey: 'asanzo:43sl900:unknown',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Nanoco NAP4521',
+      brand: 'Nanoco',
+      modelKey: 'nanoco:nap4521:unknown',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí FujiE AP500-VN',
+      brand: 'FujiE',
+      modelKey: 'fujie:ap500-vn:unknown',
+    },
+    {
+      categorySlug: 'air-purifiers' as const,
+      title: 'Máy lọc không khí Fujihome AP5-HEPA',
+      brand: 'Fujihome',
+      modelKey: 'fujihome:ap5-hepa:unknown',
+    },
+    {
+      categorySlug: 'washing-machines' as const,
+      title: 'Máy giặt Galanz Inverter 9 kg XQG90-M716',
+      brand: 'Galanz',
+      modelKey: 'galanz:xqg90-m716:unknown',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Tủ lạnh Teka Side By Side RMF-77960',
+      brand: 'Teka',
+      modelKey: 'teka:rmf-77960:unknown',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Tủ lạnh Malloca Side By Side MF-562SBS',
+      brand: 'Malloca',
+      modelKey: 'malloca:mf-562sbs:unknown',
+    },
+    {
+      categorySlug: 'refrigerators' as const,
+      title: 'Tủ lạnh Smeg Retro FAB28RCR5',
+      brand: 'Smeg',
+      modelKey: 'smeg:fab28rcr5:unknown',
+    },
+    {
+      categorySlug: 'washing-machines' as const,
+      title: 'Máy giặt Siemens Inverter 9 kg WG44G200GB',
+      brand: 'Siemens',
+      modelKey: 'siemens:wg44g200gb:unknown',
+    },
+    {
+      categorySlug: 'washing-machines' as const,
+      title: 'Máy giặt Miele W1 WCA030WCS',
+      brand: 'Miele',
+      modelKey: 'miele:wca030wcs:unknown',
+    },
+    {
+      categorySlug: 'air-conditioners' as const,
+      title: 'Điều hòa Dairry Inverter 1 HP I-DR09KH',
+      brand: 'Dairry',
+      modelKey: 'dairry:i-dr09kh:unknown',
+    },
+  ];
+  for (const tc of remainingBrands) {
+    const out = normalizer.normalize(
+      baseProduct({
+        categorySlug: tc.categorySlug,
+        title: tc.title,
+      })
+    );
+    assert.equal(out.brand, tc.brand, tc.title);
+    assert.equal(out.model_key, tc.modelKey, tc.title);
+  }
+});
