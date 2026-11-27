@@ -911,6 +911,8 @@ const PLACE_CATEGORIES = new Set<string>([
   'homestays',
   'dental-clinics',
   'gyms-fitness',
+  'spas-aesthetics',
+  'english-centers',
 ]);
 const WAVE_E3_RETAIL_CATEGORIES = new Set<string>(['supplements', 'cosmetics', 'mother-baby']);
 
@@ -925,6 +927,12 @@ const DENTAL_CLINIC_MENTION_RE =
 
 const GYM_FITNESS_MENTION_RE =
   /(?<![\p{L}\p{N}])(?:phòng\s*tập|gym|máy\s*tập|huấn\s*luyện\s*viên|personal\s*trainer|lớp\s*(?:tập|yoga|aerobic)|yoga|gói\s*tập|tủ\s*đồ|phòng\s*thay\s*đồ)(?![\p{L}\p{N}])/iu;
+
+const SPA_AESTHETICS_MENTION_RE =
+  /(?<![\p{L}\p{N}])(?:spa|thẩm\s*mỹ|liệu\s*trình|kỹ\s*thuật\s*viên|chăm\s*sóc\s*da|nặn\s*mụn|trị\s*mụn|triệt\s*lông|massage|mát\s*xa|gội\s*đầu\s*dưỡng\s*sinh|chèo\s*kéo|ép\s*mua\s*gói|tinh\s*dầu|thư\s*giãn|tiệt\s*trùng|vô\s*trùng)(?![\p{L}\p{N}])/iu;
+
+const ENGLISH_CENTER_MENTION_RE =
+  /(?<![\p{L}\p{N}])(?:trung\s*tâm|tiếng\s*anh|anh\s*ngữ|giáo\s*viên|giảng\s*viên|trợ\s*giảng|thầy|cô\s*giáo|bản\s*ngữ|giảng\s*dạy|giáo\s*trình|lộ\s*trình|lớp\s*học|phòng\s*học|sĩ\s*số|lịch\s*học|ca\s*học|học\s*phí|phát\s*âm|giao\s*tiếp|ielts|toeic|đầu\s*ra)(?![\p{L}\p{N}])/iu;
 
 // Intrinsic product/packaging feedback for Wave E3 consumables (keeps courier-only remarks excluded).
 const E3_CONSUMABLE_MENTION_RE =
@@ -948,6 +956,12 @@ function hasDomainSubstance(text: string, context?: ShippingCommentContext): boo
     return true;
   }
   if (category === 'gyms-fitness' && GYM_FITNESS_MENTION_RE.test(text)) {
+    return true;
+  }
+  if (category === 'spas-aesthetics' && SPA_AESTHETICS_MENTION_RE.test(text)) {
+    return true;
+  }
+  if (category === 'english-centers' && ENGLISH_CENTER_MENTION_RE.test(text)) {
     return true;
   }
   if (

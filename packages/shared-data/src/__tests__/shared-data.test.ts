@@ -3648,7 +3648,7 @@ function testWaveE1E2Readiness(): void {
   assert.equal(rules.RATING_CRITERIA_V2_VERSION, 2);
   assert.equal(rules.RATING_CRITERIA_V3_VERSION, 3);
   assert.equal(rules.RATING_CRITERIA_CATEGORIES.length, 6);
-  assert.equal(rules.RATING_CRITERIA_ALL_CATEGORIES.length, 22);
+  assert.equal(rules.RATING_CRITERIA_ALL_CATEGORIES.length, 25);
 
   const expectedWeights: Record<string, Record<string, number>> = {
     tvs: {
@@ -3761,14 +3761,49 @@ function testWaveE1E2Readiness(): void {
     'acb',
     'vnpt',
     'fpttelecom',
+    'vpbank',
+    'vib',
+    'techcombank',
+    'sacombank',
+    'tpbank',
+    'hsbc',
+    'shinhan',
   ]);
-  for (const p of ['shopee', 'vietcombank', 'acb', 'vnpt', 'fpttelecom']) {
+  for (const p of [
+    'shopee',
+    'vietcombank',
+    'acb',
+    'vnpt',
+    'fpttelecom',
+    'vpbank',
+    'vib',
+    'techcombank',
+    'sacombank',
+    'tpbank',
+    'hsbc',
+    'shinhan',
+  ]) {
     assert.equal(SupportedIngestionPlatformSchema.safeParse(p).success, true);
   }
   assert.equal(
     SupportedEcommercePlatformSchema.safeParse('vietcombank').success,
     false
   );
+  for (const bankPlatform of [
+    'vpbank',
+    'vib',
+    'techcombank',
+    'sacombank',
+    'tpbank',
+    'hsbc',
+    'shinhan',
+  ]) {
+    assert.equal(
+      SupportedEcommercePlatformSchema.safeParse(bankPlatform).success,
+      false,
+      `${bankPlatform} must stay out of SupportedEcommercePlatformSchema`
+    );
+  }
 
   const serviceScraped = ScrapedProductSchema.parse({
     platform: 'vietcombank',
@@ -4037,6 +4072,313 @@ function testWaveE5Readiness(): void {
 
   assert.equal(RATE_ROUTES.DENTAL_CLINICS, '/dental-clinics');
   assert.equal(RATE_ROUTES.GYMS_FITNESS, '/gyms-fitness');
+}
+
+function testWaveE5Phase2Readiness(): void {
+  // Criteria v5 mirrors DOS/DOS.Me#2025 rows byte-for-byte (key, weight, required, position).
+  assert.equal(rules.RATING_CRITERIA_V5_VERSION, 5);
+  assert.deepEqual([...rules.V5_RATING_CRITERIA_CATEGORIES].sort(), [
+    'credit-cards',
+    'english-centers',
+    'spas-aesthetics',
+  ]);
+  const snap = (slug: string) =>
+    rules
+      .getRatingCriteria(slug)
+      .map(
+        (cr) =>
+          `${cr.key}:${cr.weight}:${cr.specGroup ?? '-'}:${cr.required ? 1 : 0}`
+      );
+  assert.deepEqual(snap('spas-aesthetics'), [
+    'service_quality:30:-:0',
+    'hygiene:25:-:0',
+    'service_attitude:20:-:0',
+    'price:15:-:1',
+    'ambiance:10:-:0',
+  ]);
+  assert.deepEqual(snap('english-centers'), [
+    'service_quality:35:-:0',
+    'service_attitude:20:-:0',
+    'quality:15:-:0',
+    'location:10:-:0',
+    'value:20:-:1',
+  ]);
+  assert.deepEqual(snap('credit-cards'), [
+    'features:30:-:0',
+    'price:25:-:1',
+    'service_quality:20:-:0',
+    'speed:15:-:0',
+    'ease_of_use:10:-:0',
+  ]);
+
+  // Verify exact vi/en/cs labels for all 15 v5 criteria.
+  const labels = (slug: string) =>
+    rules
+      .getRatingCriteria(slug)
+      .map((cr) => [cr.key, cr.label.vi, cr.label.en, cr.label.cs]);
+  assert.deepEqual(labels('spas-aesthetics'), [
+    [
+      'service_quality',
+      'Hiệu quả & tay nghề',
+      'Treatment effectiveness & skill',
+      'Účinnost a odbornost',
+    ],
+    [
+      'hygiene',
+      'Vệ sinh & an toàn',
+      'Hygiene & safety',
+      'Hygiena a bezpečnost',
+    ],
+    [
+      'service_attitude',
+      'Tư vấn & không chèo kéo',
+      'Consultation & no hard-sell',
+      'Konzultace bez nátlaku',
+    ],
+    ['price', 'Chi phí minh bạch', 'Price transparency', 'Transparentnost cen'],
+    [
+      'ambiance',
+      'Không gian & thư giãn',
+      'Ambiance & comfort',
+      'Prostředí a pohodlí',
+    ],
+  ]);
+  assert.deepEqual(labels('english-centers'), [
+    [
+      'service_quality',
+      'Chất lượng giảng dạy',
+      'Teaching quality',
+      'Kvalita výuky',
+    ],
+    [
+      'service_attitude',
+      'Giáo viên & hỗ trợ',
+      'Teachers & support',
+      'Lektoři a podpora',
+    ],
+    [
+      'quality',
+      'Giáo trình & cơ sở vật chất',
+      'Curriculum & facilities',
+      'Osnovy a zázemí',
+    ],
+    ['location', 'Vị trí & lịch học', 'Location & schedule', 'Poloha a rozvrh'],
+    ['value', 'Học phí xứng đáng', 'Value for tuition', 'Poměr ceny a přínosu'],
+  ]);
+  assert.deepEqual(labels('credit-cards'), [
+    [
+      'features',
+      'Hoàn tiền & ưu đãi',
+      'Cashback & rewards',
+      'Cashback a výhody',
+    ],
+    [
+      'price',
+      'Phí thường niên & lãi suất',
+      'Annual fee & interest',
+      'Roční poplatek a úroky',
+    ],
+    [
+      'service_quality',
+      'Hỗ trợ & khiếu nại',
+      'Support & dispute handling',
+      'Podpora a reklamace',
+    ],
+    [
+      'speed',
+      'Tốc độ duyệt & mở thẻ',
+      'Approval & issuance speed',
+      'Rychlost schválení',
+    ],
+    [
+      'ease_of_use',
+      'Ứng dụng & quản lý thẻ',
+      'App & card management',
+      'Aplikace a správa karty',
+    ],
+  ]);
+
+  for (const slug of ['spas-aesthetics', 'english-centers', 'credit-cards']) {
+    assert.equal(rules.getRatingCriteriaVersion(slug), 5, slug);
+    assert.equal(rules.getRatingCriteriaVersion(` ${slug.toUpperCase()} `), 5);
+    assert.equal(rules.hasRatingCriteria(slug), true);
+    assert.equal(rules.V4_RATING_CRITERIA_CATEGORIES.has(slug), false);
+    assert.equal(rules.V3_RATING_CRITERIA_CATEGORIES.has(slug), false);
+    assert.ok(rules.RATING_CRITERIA_ALL_CATEGORIES.includes(slug));
+    assert.equal(rules.RATING_CRITERIA_CATEGORIES.includes(slug), false);
+    const list = rules.getRatingCriteria(slug);
+    assert.equal(
+      list.reduce((acc, cr) => acc + cr.weight, 0),
+      100,
+      `Sum 100 for ${slug}`
+    );
+    assert.equal(
+      list.filter((cr) => cr.required).length,
+      1,
+      `1 required for ${slug}`
+    );
+    const presets = rules.getRatingUseCasePresets(slug);
+    assert.equal(presets.length, 1);
+    assert.equal(presets[0]!.id, 'default');
+    assert.deepEqual(
+      presets[0]!.weights,
+      Object.fromEntries(list.map((cr) => [cr.key, cr.weight]))
+    );
+    assert.deepEqual(rules.mapLegacyCriteriaRatings(slug, { value: 5 }), {});
+    const tmpl = rules.getCategorySpecTemplate(slug);
+    assert.deepEqual(tmpl.groups, ['availability', 'regulatory']);
+    assert.equal(tmpl.ram, false);
+    assert.equal(tmpl.storage, false);
+    assert.equal(tmpl.screen, false);
+    assert.equal(tmpl.has5g, false);
+    assert.equal(
+      rules.minimumListingPriceVnd(['Gói dịch vụ 500k'], {
+        categorySlug: slug,
+      }),
+      0,
+      `Expected 0 floor for ${slug}`
+    );
+  }
+  // Existing versions stay pinned.
+  assert.equal(rules.getRatingCriteriaVersion('dental-clinics'), 4);
+  assert.equal(rules.getRatingCriteriaVersion('gyms-fitness'), 4);
+  assert.equal(rules.getRatingCriteriaVersion('cafes'), 3);
+  assert.equal(rules.getRatingCriteriaVersion('bank-savings'), 2);
+  assert.equal(rules.getRatingCriteriaVersion('smartphones'), 1);
+
+  // Wave E5 Phase 2 extra keywords land on the right criterion and never leak.
+  assert.equal(
+    rules.assignPointCriterion(
+      'spas-aesthetics',
+      null,
+      'Liệu trình chăm sóc da tay nghề cao'
+    ),
+    'service_quality'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'spas-aesthetics',
+      null,
+      'Tư vấn rõ ràng không chèo kéo mua gói'
+    ),
+    'service_attitude'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'spas-aesthetics',
+      null,
+      'Dụng cụ vô trùng sạch sẽ'
+    ),
+    'hygiene'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'english-centers',
+      null,
+      'Lộ trình học IELTS rõ ràng tiến bộ nhanh'
+    ),
+    'service_quality'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'english-centers',
+      null,
+      'Giáo viên bản ngữ tận tâm'
+    ),
+    'service_attitude'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'english-centers',
+      null,
+      'Giáo trình dễ hiểu phòng học rộng'
+    ),
+    'quality'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'english-centers',
+      null,
+      'Học phí xứng đáng với kết quả'
+    ),
+    'value'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'credit-cards',
+      null,
+      'Hoàn tiền siêu thị 5% nhiều ưu đãi'
+    ),
+    'features'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'credit-cards',
+      null,
+      'Phí thường niên cao nhưng lãi suất ổn'
+    ),
+    'price'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'credit-cards',
+      null,
+      'Duyệt thẻ online mở thẻ rất gọn'
+    ),
+    'speed'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'credit-cards',
+      null,
+      'App ngân hàng xem sao kê khóa thẻ tiện'
+    ),
+    'ease_of_use'
+  );
+  // Strict category scoping: Phase 2 keywords do not leak into existing categories.
+  assert.equal(
+    rules.assignPointCriterion(
+      'restaurants',
+      null,
+      'Cashback phòng chờ trả góp'
+    ),
+    null
+  );
+  assert.equal(
+    rules.assignPointCriterion('cafes', null, 'Giáo trình phòng học'),
+    null
+  );
+  assert.equal(
+    rules.assignPointCriterion('dental-clinics', null, 'Không chèo kéo upsell'),
+    null
+  );
+
+  // Expanded service platforms accept credit-card bank issuers while keeping ecommerce at 22.
+  const cardScraped = ScrapedProductSchema.parse({
+    platform: 'vpbank',
+    itemId: 'vpbank-stepup',
+    shopId: 'vpbank',
+    url: 'https://www.vpbank.com.vn/the-tin-dung/stepup',
+    title: 'Thẻ tín dụng VPBank StepUP Cashback',
+    entity_type: 'service',
+    category_slug: 'credit-cards',
+    priceMin: 499_000,
+    priceMax: 499_000,
+    currency: 'VND',
+    shop: {
+      shopId: 'vpbank',
+      name: 'VPBank',
+      isMall: true,
+    },
+  });
+  assert.equal(cardScraped.platform, 'vpbank');
+  assert.equal(cardScraped.entity_type, 'service');
+  assert.equal(cardScraped.category_slug, 'credit-cards');
+  assert.equal(cardScraped.currency, 'VND');
+
+  assert.equal(RATE_ROUTES.SPAS_AESTHETICS, '/spas-aesthetics');
+  assert.equal(RATE_ROUTES.ENGLISH_CENTERS, '/english-centers');
+  assert.equal(RATE_ROUTES.CREDIT_CARDS, '/credit-cards');
 }
 
 function testWaveE3E4Readiness(): void {
@@ -4658,7 +5000,11 @@ function main(): void {
   );
   testWaveE5Readiness();
   console.log(
-    '  ✅ [18/18] Wave E5 dental-clinics and gyms-fitness criteria v4 (DOS/Rate#1937) verified'
+    '  ✅ [18/19] Wave E5 dental-clinics and gyms-fitness criteria v4 (DOS/Rate#1937) verified'
+  );
+  testWaveE5Phase2Readiness();
+  console.log(
+    '  ✅ [19/19] Wave E5 Phase 2 spas-aesthetics, english-centers, credit-cards criteria v5 (DOS/Rate#1968) verified'
   );
   console.log('🎉 All @repo/shared-data tests passed!');
 }

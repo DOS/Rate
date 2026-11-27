@@ -51,7 +51,9 @@ import {
   WAVE_E3_CATEGORY_SLUGS,
   WAVE_E4_PLACE_CATEGORY_SLUGS,
   WAVE_E5_PLACE_CATEGORY_SLUGS,
+  WAVE_E5_SERVICE_CATEGORY_SLUGS,
   PLACE_CATEGORY_SLUGS,
+  SERVICE_CATEGORY_SLUGS,
   type CanonicalCategorySlug,
 } from '../product-normalizer.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
@@ -79,13 +81,15 @@ export const WAVE_E_ALL_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   ...WAVE_E3_CATEGORY_SLUGS,
   ...WAVE_E4_PLACE_CATEGORY_SLUGS,
   ...WAVE_E5_PLACE_CATEGORY_SLUGS,
+  ...WAVE_E5_SERVICE_CATEGORY_SLUGS,
 ];
 
 export const WAVE_E_CATEGORY_SLUGS: ReadonlySet<string> = new Set(WAVE_E_ALL_CATEGORY_SLUGS);
 
-const WAVE_E2_EXPECTED_CURRENCY: Readonly<Record<string, 'PCT' | 'VND'>> = {
+const SERVICE_EXPECTED_CURRENCY: Readonly<Record<string, 'PCT' | 'VND'>> = {
   'bank-savings': 'PCT',
   'internet-telecom': 'VND',
+  'credit-cards': 'VND',
 };
 
 const PLACEHOLDER_IDENTITY_SEGMENTS: ReadonlySet<string> = new Set([
@@ -748,7 +752,11 @@ function resolveWaveForCategory(categorySlug: string): CrawledWave | null {
   if (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e2';
   if (WAVE_E3_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e3';
   if (WAVE_E4_PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e4';
-  if (WAVE_E5_PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) return 'wave_e5';
+  if (
+    WAVE_E5_PLACE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug) ||
+    WAVE_E5_SERVICE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)
+  )
+    return 'wave_e5';
   return null;
 }
 
@@ -822,13 +830,13 @@ function collectWaveCrawledBlockers(
     return;
   }
 
-  if (WAVE_E2_SERVICE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) {
+  if (SERVICE_CATEGORY_SLUGS.has(categorySlug as CanonicalCategorySlug)) {
     if (row.entity_type !== 'service') {
       problems.push(
         `entity_type ${JSON.stringify(row.entity_type)} must be "service" for ${categorySlug}`
       );
     }
-    checkActiveCrawledListing(context, WAVE_E2_EXPECTED_CURRENCY[categorySlug] ?? 'VND', problems, {
+    checkActiveCrawledListing(context, SERVICE_EXPECTED_CURRENCY[categorySlug] ?? 'VND', problems, {
       requireListingsArray: true,
     });
     return;
@@ -1113,7 +1121,7 @@ export async function runCrawledPublish(
         c.row.status === 'draft' &&
         c.categorySlug !== null &&
         (WAVE_E1_CATEGORY_SLUGS.has(c.categorySlug as CanonicalCategorySlug) ||
-          WAVE_E2_SERVICE_CATEGORY_SLUGS.has(c.categorySlug as CanonicalCategorySlug) ||
+          SERVICE_CATEGORY_SLUGS.has(c.categorySlug as CanonicalCategorySlug) ||
           WAVE_E3_CATEGORY_SLUGS.has(c.categorySlug as CanonicalCategorySlug))
     )
     .map(c => c.id);

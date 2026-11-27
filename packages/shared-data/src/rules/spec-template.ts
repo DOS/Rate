@@ -236,6 +236,9 @@ const SPEC_TEMPLATES: Readonly<Record<string, CategorySpecTemplate>> = {
   homestays: NON_HARDWARE_TEMPLATE,
   'dental-clinics': NON_HARDWARE_TEMPLATE,
   'gyms-fitness': NON_HARDWARE_TEMPLATE,
+  'spas-aesthetics': NON_HARDWARE_TEMPLATE,
+  'english-centers': NON_HARDWARE_TEMPLATE,
+  'credit-cards': NON_HARDWARE_TEMPLATE,
 };
 
 const normalizeSlug = (categorySlug: unknown): string =>

@@ -72,6 +72,7 @@ import {
   BsCapsule,
   BsCardChecklist,
   BsCheckCircleFill,
+  BsCreditCard2Front,
   BsCupHot,
   BsDroplet,
   BsEarbuds,
@@ -79,6 +80,7 @@ import {
   BsHeartPulse,
   BsHouseHeart,
   BsHospital,
+  BsMortarboard,
   BsPersonArmsUp,
   BsLaptop,
   BsPhone,
@@ -170,7 +172,7 @@ import {
   foreignCategoryProductHref,
   isCanonicalCategorySlug,
   isPlaceCategorySlug,
-  isWaveE2ServiceCategorySlug,
+  isServiceCategorySlug,
   isWaveE3CategorySlug,
   resolveListingPriceCurrency,
   usableImageUrls,
@@ -2033,7 +2035,7 @@ export async function ProductDetailView({
           {/* Interactive Value Efficiency & 2-Year Ownership Calculator (#62) */}
           {!isPlace &&
             effectiveCurrency !== 'PCT' &&
-            !isWaveE2ServiceCategorySlug(categorySlug) &&
+            !isServiceCategorySlug(categorySlug) &&
             !isWaveE3CategorySlug(categorySlug) &&
             (() => {
               const lbScored = scoreMasterProductForLeaderboard(
@@ -2142,7 +2144,7 @@ export async function ProductDetailView({
                   const isVndCompetitor =
                     effectiveCurrency === 'VND' &&
                     !isPlace &&
-                    !isWaveE2ServiceCategorySlug(categorySlug) &&
+                    !isServiceCategorySlug(categorySlug) &&
                     !isWaveE3CategorySlug(categorySlug) &&
                     !isPlaceCategorySlug(categorySlug);
                   const peerCostPerPoint =
@@ -2230,6 +2232,14 @@ export async function ProductDetailView({
                                     return <BsHospital {...iconProps} />;
                                   case 'gyms-fitness':
                                     return <BsPersonArmsUp {...iconProps} />;
+                                  case 'spas-aesthetics':
+                                    return <BsStars {...iconProps} />;
+                                  case 'english-centers':
+                                    return <BsMortarboard {...iconProps} />;
+                                  case 'credit-cards':
+                                    return (
+                                      <BsCreditCard2Front {...iconProps} />
+                                    );
                                   default:
                                     return <BsPhone {...iconProps} />;
                                 }

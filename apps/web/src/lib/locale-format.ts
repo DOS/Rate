@@ -179,6 +179,9 @@ export function resolveListingUnitSuffix(
   if (normalizedCategory === 'internet-telecom') {
     return MONTHLY_VND_UNIT_SUFFIX[loc];
   }
+  if (normalizedCategory === 'credit-cards') {
+    return YEARLY_PCT_UNIT_SUFFIX[loc];
+  }
   if (normalizedCategory === 'restaurants' || normalizedCategory === 'cafes') {
     return PER_PERSON_VND_UNIT_SUFFIX[loc];
   }

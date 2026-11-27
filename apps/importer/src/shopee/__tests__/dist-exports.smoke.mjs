@@ -42,6 +42,16 @@ assert.equal(
   'number',
   '@repo/crawlers is missing export MAX_SPEC_CACHE_ENTRIES'
 );
+assert.ok(
+  crawlers.SERVICE_CATEGORY_SLUGS instanceof Set &&
+    crawlers.SERVICE_CATEGORY_SLUGS.has('credit-cards'),
+  '@repo/crawlers is missing export SERVICE_CATEGORY_SLUGS'
+);
+assert.ok(
+  crawlers.WAVE_E5_SERVICE_CATEGORY_SLUGS instanceof Set &&
+    crawlers.WAVE_E5_SERVICE_CATEGORY_SLUGS.has('credit-cards'),
+  '@repo/crawlers is missing export WAVE_E5_SERVICE_CATEGORY_SLUGS'
+);
 
 const { createImporterLogger } = await import('@repo/crawlers/shopee/logger');
 assert.equal(typeof createImporterLogger, 'function', 'logger subpath export is broken');

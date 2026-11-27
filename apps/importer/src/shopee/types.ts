@@ -4,7 +4,7 @@
  * from private scraper implementations (see DOS/Rate-Services).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { SupportedPriceCurrency } from '@repo/shared-data';
+import type { SupportedPriceCurrency, SupportedServicePlatform } from '@repo/shared-data';
 export {
   MAX_VALID_VND_PRICE,
   EntityTypeSchema,
@@ -12,6 +12,7 @@ export {
   PlacePriceUnitSchema,
   PlaceDetailSchema,
   SupportedEcommercePlatformSchema,
+  SUPPORTED_SERVICE_PLATFORMS,
   SupportedServicePlatformSchema,
   SupportedIngestionPlatformSchema,
   SUPPORTED_RETAIL_INGESTION_PLATFORMS,
@@ -71,10 +72,7 @@ export type SupportedEcommercePlatform =
 
 export type SupportedPlatform =
   | SupportedEcommercePlatform
-  | 'vietcombank'
-  | 'acb'
-  | 'vnpt'
-  | 'fpttelecom'
+  | SupportedServicePlatform
   | 'avakids'
   | 'pharmacity'
   | 'kidsplaza'

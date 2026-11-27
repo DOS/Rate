@@ -21,6 +21,7 @@ import {
   formatListingPrice,
   formatNumber,
   formatPriceVnd,
+  hasListingUnitSuffix,
   normalizePriceCurrency,
   sanitizeCurrencyPriceValue,
 } from '@/lib/locale-format';
@@ -283,8 +284,7 @@ export default function PriceWatchButton({
       >
         {watchedItem
           ? isPercentCurrency ||
-            categoryPath.replace(/^\/+/, '').split('/')[0] ===
-              'internet-telecom'
+            hasListingUnitSuffix(resolvedCurrency, categoryPath)
             ? t('btnWatchingCurrency', {
                 price: formatListingPrice(
                   sanitizeWatchlistPrice(
@@ -333,8 +333,7 @@ export default function PriceWatchButton({
             {t('currentBestPrice')}{' '}
             <strong className="text-danger">
               {isPercentCurrency ||
-              categoryPath.replace(/^\/+/, '').split('/')[0] ===
-                'internet-telecom'
+              hasListingUnitSuffix(resolvedCurrency, categoryPath)
                 ? formatListingPrice(
                     safeCurrentMinPrice,
                     resolvedCurrency,

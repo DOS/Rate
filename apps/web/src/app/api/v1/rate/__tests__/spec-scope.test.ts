@@ -1270,6 +1270,9 @@ async function testSpecMatchesBodies() {
     'homestays',
     'dental-clinics',
     'gyms-fitness',
+    'spas-aesthetics',
+    'english-centers',
+    'credit-cards',
     'all',
   ]);
   assert.equal(productCategoryParam.schema.default, 'smartphones');

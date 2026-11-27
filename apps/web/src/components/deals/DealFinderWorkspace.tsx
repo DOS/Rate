@@ -15,7 +15,7 @@ import {
   getMasterProductCategorySlug,
   isCategoryVisibleInDirectory,
   isPlaceCategorySlug,
-  isWaveE2ServiceCategorySlug,
+  isServiceCategorySlug,
   MAX_VALID_VND_PRICE,
   resolveListingPriceCurrency,
 } from '@/lib/rate-domain';
@@ -169,7 +169,7 @@ export function availableDealPersonas(
   categoryFilter: CanonicalCategorySlug | 'all'
 ): PersonaKey[] {
   const isServiceCategory =
-    categoryFilter !== 'all' && isWaveE2ServiceCategorySlug(categoryFilter);
+    categoryFilter !== 'all' && isServiceCategorySlug(categoryFilter);
   const scored = new Set<string>();
   if (Array.isArray(products)) {
     for (const p of products) {
@@ -745,6 +745,7 @@ export default function DealFinderWorkspace({
       { slug: 'air-purifiers', label: t('catAirPurifiers') },
       { slug: 'bank-savings', label: t('catBankSavings') },
       { slug: 'internet-telecom', label: t('catInternetTelecom') },
+      { slug: 'credit-cards', label: t('catCreditCards') },
       { slug: 'supplements', label: t('catSupplements') },
       { slug: 'cosmetics', label: t('catCosmetics') },
       { slug: 'mother-baby', label: t('catMotherBaby') },
@@ -1649,7 +1650,7 @@ export default function DealFinderWorkspace({
                               { categorySlug: deal.categorySlug }
                             )}{' '}
                             {dealCurrency !== 'PCT' &&
-                              !isWaveE2ServiceCategorySlug(deal.categorySlug) &&
+                              !isServiceCategorySlug(deal.categorySlug) &&
                               deal.costPerPointVnd > 0 && (
                                 <span className="text-secondary small fw-normal">
                                   {t('costPerPointSub', {

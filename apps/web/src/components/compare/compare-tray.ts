@@ -45,6 +45,9 @@ const CANONICAL_TRAY_CATEGORIES = new Set<CanonicalCategorySlug>([
   'homestays',
   'dental-clinics',
   'gyms-fitness',
+  'spas-aesthetics',
+  'english-centers',
+  'credit-cards',
 ]);
 
 export const MAX_COMPARE_ITEMS = 4;
