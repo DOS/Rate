@@ -1179,6 +1179,7 @@ test('runCrawledPublish dry-run audits Wave E1-E4 cleanly with zero mutations', 
   assert.equal(result.published, 0);
   assert.equal(result.scanned, 6, 'core tech smartphones row must never be selected');
   assert.deepEqual(result.alreadyPublished, ['sony:xr-55x90l:unknown']);
+  assert.deepEqual(result.archived, []);
   assert.deepEqual(
     result.eligible.map(e => e.model_key),
     ['acb:tiet-kiem-6-thang:unknown', 'cong-ca-phe:hang-dieu:unknown', 'lg:oled55c4psa:unknown']
@@ -1503,4 +1504,123 @@ test('runCrawledPublish batches .in() queries at <= 150 IDs and supports --only 
     'apple:iphone-16:128gb',
     'missing:key:unknown',
   ]);
+});
+
+test('DOS/Rate#1953: runCrawledPublish skips Wave E status === archived rows cleanly without counting them as blocked', async () => {
+  const eligibleDraft = makeCrawledMaster(
+    {
+      id: 'm-draft',
+      model_key: 'whirlpool:wrn3020:unknown',
+      slug: 'whirlpool-wrn3020',
+      name: 'Whirlpool WRN3020',
+      brand: 'Whirlpool',
+      specifications: { category_slug: 'refrigerators', availability: { status: 'Available' } },
+    },
+    'refrigerators'
+  );
+  const publishedRow = makeCrawledMaster(
+    {
+      id: 'm-pub',
+      model_key: 'lg:oled55c4:unknown',
+      slug: 'lg-oled55c4',
+      status: 'published',
+    },
+    'tvs'
+  );
+  // Retired superseded khac: draft with missing images/listings must be archived-skipped, not blocked.
+  const archivedKhac = makeCrawledMaster(
+    {
+      id: 'm-arch-e1',
+      model_key: 'khac:wrn3020:unknown',
+      slug: 'khac-wrn3020',
+      name: 'Khác WRN3020',
+      brand: 'Khác',
+      status: 'archived',
+      images: [],
+      thumbnail: null,
+      specifications: { category_slug: 'refrigerators', availability: { status: 'Available' } },
+    },
+    'refrigerators'
+  );
+  const archivedE3 = makeCrawledMaster(
+    {
+      id: 'm-arch-e3',
+      model_key: 'khac:old-serum:unknown',
+      slug: 'khac-old-serum',
+      name: 'Khác Old Serum',
+      brand: 'Khác',
+      status: 'archived',
+      category_id: 'cat-cosmetics',
+      images: [],
+      thumbnail: null,
+      specifications: { category_slug: 'cosmetics', availability: { status: 'Available' } },
+    },
+    'cosmetics'
+  );
+  const archivedCoreTech = makeCrawledMaster(
+    {
+      id: 'm-arch-core',
+      model_key: 'apple:iphone-15:128gb',
+      slug: 'apple-iphone-15-128gb',
+      name: 'iPhone 15 128GB',
+      brand: 'Apple',
+      status: 'archived',
+      category_id: 'cat-smartphones',
+      specifications: { category_slug: 'smartphones', availability: { status: 'Available' } },
+    },
+    'smartphones'
+  );
+
+  const products = [
+    {
+      id: 'p-draft',
+      cluster_id: 'm-draft',
+      price_current: 11_490_000,
+      currency: 'VND',
+      availability: 'in_stock',
+      origin: 'crawl',
+    },
+  ];
+
+  // Dry-run across Wave E skips archived rows cleanly into result.archived with 0 blocked.
+  const dryDb = crawledMockDb({
+    masters: [eligibleDraft, publishedRow, archivedKhac, archivedE3, archivedCoreTech],
+    products,
+  });
+  const dryRes = await runCrawledPublish(dryDb.client);
+  assert.equal(dryRes.scanned, 4);
+  assert.deepEqual(dryRes.alreadyPublished, ['lg:oled55c4:unknown']);
+  assert.deepEqual(dryRes.archived, ['khac:old-serum:unknown', 'khac:wrn3020:unknown']);
+  assert.deepEqual(
+    dryRes.eligible.map(e => e.model_key),
+    ['whirlpool:wrn3020:unknown']
+  );
+  assert.deepEqual(dryRes.blocked, []);
+  assert.deepEqual(dryRes.skipped, []);
+  assert.deepEqual(dryDb.writes, []);
+
+  // --apply --expect 1 publishes only the eligible draft and leaves archived rows untouched.
+  const applyRes = await runCrawledPublish(dryDb.client, { apply: true, expect: 1 });
+  assert.equal(applyRes.published, 1);
+  assert.deepEqual(applyRes.archived, ['khac:old-serum:unknown', 'khac:wrn3020:unknown']);
+  assert.deepEqual(applyRes.blocked, []);
+  assert.equal(dryDb.masters.find(m => m.id === 'm-draft')!.status, 'published');
+  assert.equal(dryDb.masters.find(m => m.id === 'm-arch-e1')!.status, 'archived');
+  assert.equal(dryDb.masters.find(m => m.id === 'm-arch-e3')!.status, 'archived');
+
+  // --only with an archived Wave E row skips it into archived; an archived core tech row stays blocked.
+  const onlyDb = crawledMockDb({
+    masters: [archivedKhac, archivedCoreTech],
+    products: [],
+  });
+  const onlyRes = await runCrawledPublish(onlyDb.client, {
+    only: ['khac:wrn3020:unknown', 'apple:iphone-15:128gb'],
+  });
+  assert.deepEqual(onlyRes.archived, ['khac:wrn3020:unknown']);
+  assert.deepEqual(onlyRes.eligible, []);
+  assert.deepEqual(
+    onlyRes.blocked.map(b => b.model_key),
+    ['apple:iphone-15:128gb']
+  );
+  assert.ok(onlyRes.blocked[0]!.reasons.some(r => r.includes('core tech category')));
 });

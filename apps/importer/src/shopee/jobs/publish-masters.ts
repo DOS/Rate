@@ -573,6 +573,7 @@ export interface CrawledPublishResult {
   readonly expect?: number;
   readonly scanned: number;
   readonly alreadyPublished: readonly string[];
+  readonly archived: readonly string[];
   readonly eligible: readonly CrawledEligibleMaster[];
   readonly blocked: readonly CrawledBlockedMaster[];
   readonly skipped: readonly CrawledSkippedMaster[];
@@ -1028,6 +1029,7 @@ export async function runCrawledPublish(
 
   const foundModelKeys = new Set<string>();
   const alreadyPublished: string[] = [];
+  const archived: string[] = [];
   const skipped: CrawledSkippedMaster[] = [];
   const blocked: CrawledBlockedMaster[] = [];
   const draftCandidates: Array<{
@@ -1066,6 +1068,15 @@ export async function runCrawledPublish(
       WAVE_E_CATEGORY_SLUGS.has(categorySlug)
     ) {
       alreadyPublished.push(modelKey || id || '(unknown)');
+      continue;
+    }
+
+    if (
+      row.status === 'archived' &&
+      categorySlug !== null &&
+      WAVE_E_CATEGORY_SLUGS.has(categorySlug)
+    ) {
+      archived.push(modelKey || id || '(unknown)');
       continue;
     }
 
@@ -1194,7 +1205,7 @@ export async function runCrawledPublish(
   const expectMatches = cfg.expect === undefined ? undefined : eligible.length === cfg.expect;
   logger.info(
     'publish.crawled_plan',
-    `Crawled Plan [mode=${cfg.apply ? 'APPLY' : 'DRY-RUN'}]: scanned=${sortedRows.length}, eligible=${eligible.length}, alreadyPublished=${alreadyPublished.length}, blocked=${blocked.length}, skipped=${skipped.length}${cfg.expect === undefined ? '' : `, expected=${cfg.expect}${expectMatches ? '' : ' (MISMATCH)'}`}`,
+    `Crawled Plan [mode=${cfg.apply ? 'APPLY' : 'DRY-RUN'}]: scanned=${sortedRows.length}, eligible=${eligible.length}, alreadyPublished=${alreadyPublished.length}, archived=${archived.length}, blocked=${blocked.length}, skipped=${skipped.length}${cfg.expect === undefined ? '' : `, expected=${cfg.expect}${expectMatches ? '' : ' (MISMATCH)'}`}`,
     {
       mode: 'crawled',
       dryRun: !cfg.apply,
@@ -1205,6 +1216,7 @@ export async function runCrawledPublish(
       ...(cfg.expect !== undefined ? { expect: cfg.expect } : {}),
       scanned: sortedRows.length,
       alreadyPublished,
+      archived,
       eligible,
       blocked,
       skipped,
@@ -1231,6 +1243,7 @@ export async function runCrawledPublish(
       ...(cfg.expect !== undefined ? { expect: cfg.expect } : {}),
       scanned: sortedRows.length,
       alreadyPublished,
+      archived,
       eligible,
       blocked,
       skipped,
@@ -1277,6 +1290,7 @@ export async function runCrawledPublish(
     ...(cfg.expect !== undefined ? { expect: cfg.expect } : {}),
     scanned: sortedRows.length,
     alreadyPublished,
+    archived,
     eligible,
     blocked,
     skipped,
