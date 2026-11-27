@@ -84,6 +84,9 @@ test('earbuds keep their codecs in the Bluetooth field (#1955)', () => {
   // The seeds' earbud shape: no category_slug in the specs, an empty display group.
   assert.equal(keepsBluetoothCodecs({ display: {}, hardware: { chipset: 'H3' } }), true);
   assert.equal(keepsBluetoothCodecs({ display: {}, cellular: { has_5g: false } }), true);
+  // An incomplete phone: an empty display but a network field is not an earbud.
+  assert.equal(keepsBluetoothCodecs({ display: {}, cellular: { has_5g: true } }), false);
+  assert.equal(keepsBluetoothCodecs({ display: {}, cellular: { bands_5g: 'n78' } }), false);
   for (const base of [{ category_slug: 'earbuds' }, { display: {}, cellular: {} }]) {
     const merged = mergeProductSpecifications(base, { connectivity: { bluetooth: codecs } });
     assert.equal(bluetoothOf(merged), codecs);
@@ -99,6 +102,7 @@ test('a master with no category_slug and a display value or no display group is 
     {},
     { display: { features: 'touch' } },
     { connectivity: { bluetooth: '5.3, A2DP' } },
+    { display: {}, cellular: { has_5g: true } },
   ]) {
     const merged = mergeProductSpecifications(specs, { connectivity: { bluetooth: list } });
     assert.equal(bluetoothOf(merged), '5.4');
