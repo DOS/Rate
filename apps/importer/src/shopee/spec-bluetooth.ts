@@ -20,22 +20,28 @@ export function bluetoothVersionOnly(value: string): string {
   return match ? match[1]! : value;
 }
 
+const hasNoValue = (group: Record<string, unknown>): boolean =>
+  Object.values(group).every(v => v === undefined || v === null);
+
 /**
  * Earbuds keep their codecs in `connectivity.bluetooth` (the enricher prompt asks for them
- * there: "put their codecs in connectivity.bluetooth"), so only they are left alone. A master
- * with no `category_slug` in its specs is an earbud when it carries a `display` group with no
- * value, the seeds' earbud shape (DOS/Rate#1793). A master with no display group at all, or
- * with any display value, is not; its cellular group is not looked at.
+ * there: "put their codecs in connectivity.bluetooth"), so only they are left alone.
+ * `category_slug` is trusted first. A master with no slug is an earbud only in the seeds'
+ * earbud shape (DOS/Rate#1793): a `display` group with no value and a `cellular` group that
+ * states no network (nothing but `has_5g: false` or empty). A phone or tablet missing its
+ * display values but with a network field (`has_5g: true`, bands) is cut.
  */
 export function keepsBluetoothCodecs(specs: Record<string, unknown>): boolean {
   const slug = typeof specs.category_slug === 'string' ? specs.category_slug : '';
   if (slug) return slug === 'earbuds';
   const display = specs.display;
-  return (
-    !!display &&
-    typeof display === 'object' &&
-    !Array.isArray(display) &&
-    Object.values(display as Record<string, unknown>).every(v => v === undefined || v === null)
+  if (!display || typeof display !== 'object' || Array.isArray(display)) return false;
+  if (!hasNoValue(display as Record<string, unknown>)) return false;
+  const cellular = specs.cellular;
+  if (cellular === undefined || cellular === null) return true;
+  if (typeof cellular !== 'object' || Array.isArray(cellular)) return false;
+  return Object.values(cellular as Record<string, unknown>).every(
+    v => v === undefined || v === null || v === false
   );
 }
 
