@@ -24,6 +24,8 @@ import {
   getMasterProductPriceHistory as _getMasterProductPriceHistory,
   getMasterProductReviews as _getMasterProductReviews,
   getMasterProductReviewsPage as _getMasterProductReviewsPage,
+  HIDE_FAKE_CURSOR_MAX_BATCHES,
+  REVIEWS_PAGE_DEFAULT_LIMIT,
   getMasterProductReviewStarCounts as _getMasterProductReviewStarCounts,
   isPublishedMasterProduct as _isPublishedMasterProduct,
   getPublishedMasterProductCategorySlug as _getPublishedMasterProductCategorySlug,
@@ -550,7 +552,7 @@ export function getCachedMasterProductReviews(masterProductId: string) {
   return _getCachedMasterProductReviewsByKey(cleanId);
 }
 
-export function getCachedMasterProductReviewsPage(
+export async function getCachedMasterProductReviewsPage(
   masterProductId: string,
   options?: {
     limit?: number;
@@ -582,17 +584,28 @@ export function getCachedMasterProductReviewsPage(
     options?.star === 5
       ? options.star
       : null;
+  const starKey = star === null ? 'all' : String(star);
   if (options?.cursor) {
     // Cursor pages bypass Next.js Data Cache to prevent unbounded cursor cache keys,
     // while HTTP responses still carry public CDN Cache-Control headers.
+    // They stay cheap (DOS/Rate#1961): the total comes from the cached first page
+    // of the same filter instead of an exact count per listing chunk, and the
+    // `hideFake` scan is capped lower than for a first page.
+    const firstPage = await _getCachedMasterProductReviewsPageByKey(
+      cleanId,
+      REVIEWS_PAGE_DEFAULT_LIMIT,
+      hideFake,
+      starKey
+    );
     return _getMasterProductReviewsPage(cleanId, {
       limit,
       cursor: options.cursor,
       hideFake,
       star,
+      totalCountHint: firstPage.totalCount,
+      maxHideFakeBatches: HIDE_FAKE_CURSOR_MAX_BATCHES,
     });
   }
-  const starKey = star === null ? 'all' : String(star);
   return _getCachedMasterProductReviewsPageByKey(
     cleanId,
     limit,

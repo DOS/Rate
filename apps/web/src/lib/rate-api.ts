@@ -1885,12 +1885,26 @@ export async function getPublishedMasterProductCategorySlug(
 export const REVIEWS_PAGE_DEFAULT_LIMIT = 50;
 export const REVIEWS_PAGE_MAX_LIMIT = 200;
 const HIDE_FAKE_MAX_BATCHES = 10;
+/**
+ * `hideFake` batch cap for the uncached keyset (cursor) pages the public API
+ * serves, so a caller varying `?cursor=` cannot make each request run the full
+ * ten-batch loop (DOS/Rate#1961).
+ */
+export const HIDE_FAKE_CURSOR_MAX_BATCHES = 3;
 
 export interface GetMasterProductReviewsOptions {
   limit?: number;
   cursor?: ReviewKeysetCursor | null;
   hideFake?: boolean;
   star?: ReviewStarTier | null;
+  /**
+   * Total to report on a cursor page. When set, the exact-count query a cursor
+   * page otherwise runs per listing chunk is skipped (DOS/Rate#1961); the
+   * public API passes the cached first-page total.
+   */
+  totalCountHint?: number | null;
+  /** Overrides the `hideFake` batch cap (default 10), clamped to 1..10. */
+  maxHideFakeBatches?: number;
 }
 
 export interface MasterProductReviewsPage {
@@ -2117,6 +2131,18 @@ export async function getMasterProductReviewsPage(
     options?.star === 5
       ? options.star
       : null;
+  const rawMaxBatches = options?.maxHideFakeBatches;
+  const maxHideFakeBatches =
+    typeof rawMaxBatches === 'number' && Number.isFinite(rawMaxBatches)
+      ? Math.max(1, Math.min(HIDE_FAKE_MAX_BATCHES, Math.floor(rawMaxBatches)))
+      : HIDE_FAKE_MAX_BATCHES;
+  const rawTotalHint = options?.totalCountHint;
+  const totalCountHint =
+    typeof rawTotalHint === 'number' &&
+    Number.isFinite(rawTotalHint) &&
+    rawTotalHint >= 0
+      ? Math.floor(rawTotalHint)
+      : null;
 
   const productIds = await getListingIdsForMaster(
     masterId,
@@ -2155,7 +2181,8 @@ export async function getMasterProductReviewsPage(
         ? encodeReviewCursor(reviews[reviews.length - 1])
         : null;
     const totalCount = initialCursor
-      ? ((await countMasterProductReviews(supabase, productIds, label, star)) ??
+      ? (totalCountHint ??
+        (await countMasterProductReviews(supabase, productIds, label, star)) ??
         reviews.length)
       : (exactCount ?? filtered.length);
 
@@ -2180,7 +2207,7 @@ export async function getMasterProductReviewsPage(
   let moreDbRows = false;
   let batchesRun = 0;
 
-  while (batchesRun < HIDE_FAKE_MAX_BATCHES) {
+  while (batchesRun < maxHideFakeBatches) {
     const { rows, truncatedChunkLasts, exactCount } =
       await readReviewChunkBatch(
         supabase,
@@ -2243,11 +2270,12 @@ export async function getMasterProductReviewsPage(
     ? reviews.length > 0
       ? encodeReviewCursor(reviews[reviews.length - 1])
       : null
-    : batchesRun >= HIDE_FAKE_MAX_BATCHES && moreDbRows && lastFrontierRow
+    : batchesRun >= maxHideFakeBatches && moreDbRows && lastFrontierRow
       ? encodeReviewCursor(lastFrontierRow)
       : null;
   const totalCount = initialCursor
-    ? ((await countMasterProductReviews(supabase, productIds, label, star)) ??
+    ? (totalCountHint ??
+      (await countMasterProductReviews(supabase, productIds, label, star)) ??
       reviews.length)
     : (firstBatchExactCount ?? firstBatchRawCount);
 

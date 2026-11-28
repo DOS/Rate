@@ -789,6 +789,54 @@ async function main() {
   assert.equal(emptyStarRes.status, 200);
   assert.equal((await emptyStarRes.json()).totalCount, 14);
 
+  // 12. #1961: a cursor page runs no exact-count (HEAD) query, reports the cached
+  // first-page total, and the library caps the hideFake scan when asked.
+  const { parseReviewCursor: parseCursorForTest } =
+    await import('@/lib/review-cursor');
+  const firstBoundedBody = await (
+    await get(`slug=${MASTER_SLUG}&limit=25`, '198.51.100.90')
+  ).json();
+  recordedReviewCalls.length = 0;
+  const boundedCursorRes = await get(
+    `slug=${MASTER_SLUG}&limit=25&cursor=${encodeURIComponent(firstBoundedBody.nextCursor)}`,
+    '198.51.100.90'
+  );
+  assert.equal(boundedCursorRes.status, 200);
+  const boundedCursorBody = await boundedCursorRes.json();
+  assert.equal(boundedCursorBody.totalCount, 65);
+  assert.ok(
+    recordedReviewCalls.every((c) => c.method !== 'HEAD'),
+    'cursor pages skip the exact-count HEAD queries'
+  );
+
+  const hintedPage = await getMasterProductReviewsPage(MASTER_ID, {
+    limit: 25,
+    cursor: parseCursorForTest(boundedCursorBody.nextCursor),
+    totalCountHint: 4242,
+  });
+  assert.equal(hintedPage.totalCount, 4242, 'totalCountHint is reported as-is');
+
+  // The stub picks its review set from the last master-product lookup.
+  assert.equal(
+    (await get(`slug=${HIDE_FAKE_SLUG}&limit=5`, '198.51.100.91')).status,
+    200
+  );
+  const uncappedHf = await getMasterProductReviewsPage(HIDE_FAKE_MASTER, {
+    hideFake: true,
+    limit: 5,
+  });
+  const cappedHf = await getMasterProductReviewsPage(HIDE_FAKE_MASTER, {
+    hideFake: true,
+    limit: 5,
+    maxHideFakeBatches: 1,
+  });
+  assert.equal(uncappedHf.reviews.length, 5);
+  assert.ok(
+    cappedHf.reviews.length < uncappedHf.reviews.length,
+    'one hideFake batch finds fewer authentic reviews than the full scan'
+  );
+  assert.ok(cappedHf.nextCursor, 'a capped scan hands back a cursor to resume');
+
   console.warn(
     '✅ Reviews keyset pagination, star counts & ?star=1..5 API suite passed (#1924, #1926, #1940)'
   );
