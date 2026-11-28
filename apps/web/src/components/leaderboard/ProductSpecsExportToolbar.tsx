@@ -295,6 +295,26 @@ export function buildProductSpecExportRows(
   return baseRows;
 }
 
+export function formatSpecsMarkdownTable(
+  productName: string,
+  brand: string,
+  priceSignal: string,
+  rows: readonly SpecExportRow[]
+): string {
+  const escapePipe = (cell: string) => cell.replace(/\|/g, '/');
+  return [
+    `### 📋 Rate.vn Technical Specifications: ${productName} (${brand})`,
+    `- **Price signal:** ${priceSignal}`,
+    '',
+    '| Field Group | Attribute | Specification |',
+    '| --- | --- | --- |',
+    ...rows.map(
+      ([grp, attr, val]) =>
+        `| ${escapePipe(grp)} | ${escapePipe(attr)} | ${escapePipe(val)} |`
+    ),
+  ].join('\n');
+}
+
 interface ProductSpecsExportToolbarProps {
   readonly productName: string;
   readonly productSlug: string;
@@ -335,17 +355,12 @@ export default function ProductSpecsExportToolbar({
       customExportRows
     );
 
-    const md = [
-      `### 📋 Rate.vn Technical Specifications: ${safeProductName} (${safeBrand})`,
-      `- **Price signal:** ${radarMarkdownCell(radarSignal, locale)}`,
-      '',
-      '| Field Group | Attribute | Specification |',
-      '| --- | --- | --- |',
-      ...rows.map(
-        ([grp, attr, val]) =>
-          `| ${grp} | ${attr} | ${val.replace(/\|/g, '/')} |`
-      ),
-    ].join('\n');
+    const md = formatSpecsMarkdownTable(
+      safeProductName,
+      safeBrand,
+      radarMarkdownCell(radarSignal, locale),
+      rows
+    );
 
     try {
       await navigator.clipboard.writeText(md);

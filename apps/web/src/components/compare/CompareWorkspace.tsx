@@ -40,6 +40,7 @@ import {
   sanitizeCustomFields,
   specFieldApplies,
   type CategorySpecTemplate,
+  type CustomFields,
   type RatingCriterionKey,
   type SpecGroupKey,
   type UseCasePresetId,
@@ -122,6 +123,7 @@ import {
   customFieldsGroupHeading,
   formatCustomFieldEntry,
   orderCustomFieldKeys,
+  type CustomFieldDisplayRow,
 } from '@/lib/custom-fields-display';
 import ContentText from '@/components/elementary/ContentText';
 import {
@@ -182,6 +184,15 @@ interface SpecRowDef {
   renderValue: (p: MasterProduct) => string;
   /** The cell with its spec values marked (specPart), for the matrix. */
   renderCell?: (p: MasterProduct) => string;
+  /**
+   * Pre-localized cell text + optional language tag that bypasses phone-shaped
+   * `localizeSpecValue` rewrites so screen, diff-filter, and exports stay identical
+   * (DOS/Rate#1980).
+   */
+  renderLocalizedCell?: (p: MasterProduct) => {
+    text: string;
+    lang?: 'en' | 'vi';
+  };
   /** A screen-only cell text that differs from the export (DOS/Rate#1528). */
   screenValue?: (p: MasterProduct) => string;
   numericValue?: (p: MasterProduct) => number | null;
@@ -2114,6 +2125,11 @@ export function buildCustomFieldsCompareGroup(
   categorySlug: string,
   locale: string
 ): SpecGroupDef | null {
+  const sanitizedByProduct = new Map<MasterProduct, CustomFields>();
+  const entryCache = new Map<
+    MasterProduct,
+    Map<string, CustomFieldDisplayRow | null>
+  >();
   const allKeys = new Set<string>();
   for (const product of products) {
     const safe = sanitizeCustomFields(
@@ -2121,19 +2137,28 @@ export function buildCustomFieldsCompareGroup(
         ?.custom_fields
     );
     if (!safe) continue;
+    sanitizedByProduct.set(product, safe);
     for (const key of Object.keys(safe)) {
       allKeys.add(key);
     }
   }
   if (allKeys.size === 0) return null;
 
-  const readEntry = (p: MasterProduct, key: string) => {
-    const safe = sanitizeCustomFields(
-      (p.specifications as ProductSpecifications | null | undefined)
-        ?.custom_fields
-    );
-    const rawVal = safe && Object.hasOwn(safe, key) ? safe[key] : undefined;
-    return formatCustomFieldEntry(key, rawVal, locale);
+  const readEntry = (
+    p: MasterProduct,
+    key: string
+  ): CustomFieldDisplayRow | null => {
+    const safe = sanitizedByProduct.get(p);
+    if (!safe || !Object.hasOwn(safe, key)) return null;
+    let perProduct = entryCache.get(p);
+    if (!perProduct) {
+      perProduct = new Map();
+      entryCache.set(p, perProduct);
+    }
+    if (perProduct.has(key)) return perProduct.get(key) ?? null;
+    const entry = formatCustomFieldEntry(key, safe[key], locale);
+    perProduct.set(key, entry);
+    return entry;
   };
 
   const orderedKeys = orderCustomFieldKeys(allKeys, categorySlug);
@@ -2143,10 +2168,12 @@ export function buildCustomFieldsCompareGroup(
       id: `custom_${key}`,
       label: customFieldLabel(key, locale),
       renderValue: (p) => readEntry(p, key)?.value ?? '-',
-      renderCell: (p) => {
+      renderLocalizedCell: (p) => {
         const entry = readEntry(p, key);
-        if (!entry) return '-';
-        return entry.lang ? specPart(entry.value) : entry.value;
+        if (!entry) return { text: '-' };
+        return entry.lang
+          ? { text: entry.value, lang: entry.lang }
+          : { text: entry.value };
       },
       ...(higherIsBetter !== undefined
         ? {
@@ -2579,10 +2606,12 @@ export default function CompareWorkspace({
           // The text the cells show, where "N/A" becomes "-", localized
           // part by part as the cells do (DOS/Rate#1392).
           products.map((p) =>
-            compareCellShownText(
-              (row.screenValue ?? row.renderCell ?? row.renderValue)(p),
-              locale
-            )
+            row.renderLocalizedCell
+              ? row.renderLocalizedCell(p).text
+              : compareCellShownText(
+                  (row.screenValue ?? row.renderCell ?? row.renderValue)(p),
+                  locale
+                )
           ),
           showDiffOnly
         )
@@ -4782,6 +4811,18 @@ export default function CompareWorkspace({
                                       size="sm"
                                       emptyLabel={t('valNoReviews')}
                                     />
+                                  ) : row.renderLocalizedCell ? (
+                                    (() => {
+                                      const localized =
+                                        row.renderLocalizedCell(p);
+                                      return (
+                                        <ContentText
+                                          text={localized.text}
+                                          lang={localized.lang}
+                                          locale={locale}
+                                        />
+                                      );
+                                    })()
                                   ) : (
                                     <CompareCellText
                                       segments={segments}

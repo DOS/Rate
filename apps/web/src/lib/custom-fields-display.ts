@@ -482,6 +482,16 @@ const CAMERA_TYPE_ENUM: Readonly<Record<string, LocalizedText>> = {
     en: 'Vlogging camera',
     cs: 'Vlogovací kamera',
   },
+  vlog_camera: {
+    vi: 'Máy quay vlog',
+    en: 'Vlog camera',
+    cs: 'Vlogovací kamera',
+  },
+  '360_camera': {
+    vi: 'Camera 360',
+    en: '360 camera',
+    cs: '360° kamera',
+  },
   cinema: {
     vi: 'Máy quay điện ảnh',
     en: 'Cinema camera',
@@ -513,6 +523,7 @@ const SENSOR_FORMAT_ENUM: Readonly<Record<string, LocalizedText>> = {
     cs: 'Střední formát',
   },
   '1_inch': { vi: '1 inch', en: '1 inch', cs: '1 palec' },
+  '1_1_3_inch': { vi: '1/1.3-inch', en: '1/1.3-inch', cs: '1/1.3-inch' },
 };
 
 const BANDWIDTH_ENUM: Readonly<Record<string, LocalizedText>> = {
@@ -530,6 +541,11 @@ const BANDWIDTH_ENUM: Readonly<Record<string, LocalizedText>> = {
     vi: 'Không giới hạn',
     en: 'Unlimited',
     cs: 'Neomezený',
+  },
+  shared: {
+    vi: 'Chia sẻ',
+    en: 'Shared',
+    cs: 'Sdílená',
   },
 };
 
@@ -1223,8 +1239,8 @@ export const CUSTOM_FIELD_METADATA: Readonly<Record<string, CustomFieldMeta>> =
     volume_ml_g: {
       labels: {
         vi: 'Dung tích / Khối lượng',
-        en: 'Volume / Weight',
-        cs: 'Objem / Hmotnost',
+        en: 'Volume / weight',
+        cs: 'Objem / hmotnost',
       },
       kind: 'text',
     },
@@ -1661,8 +1677,12 @@ function ownRecord<T>(
   return record && Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
+const MAX_DISPLAY_REGEX_INPUT_LEN = 500;
+
 function normalizeLookupToken(raw: string): string {
   return raw
+    .trim()
+    .slice(0, MAX_DISPLAY_REGEX_INPUT_LEN)
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
@@ -1706,6 +1726,26 @@ function formatMonthsUnit(count: number | null, locale: RateLocale): string {
   return 'měsíců';
 }
 
+function formatDaysUnit(count: number | null, locale: RateLocale): string {
+  if (locale === 'vi') return 'ngày';
+  if (locale === 'en') return count === 1 ? 'day' : 'days';
+  if (count === 1) return 'den';
+  if (count !== null && count >= 2 && count <= 4 && Number.isInteger(count)) {
+    return 'dny';
+  }
+  return 'dní';
+}
+
+function formatWeeksUnit(count: number | null, locale: RateLocale): string {
+  if (locale === 'vi') return 'tuần';
+  if (locale === 'en') return count === 1 ? 'week' : 'weeks';
+  if (count === 1) return 'týden';
+  if (count !== null && count >= 2 && count <= 4 && Number.isInteger(count)) {
+    return 'týdny';
+  }
+  return 'týdnů';
+}
+
 function formatStarsValue(stars: number, locale: RateLocale): string {
   const num = formatLocaleNumber(stars, locale);
   const sep = locale === 'cs' ? NBSP : ' ';
@@ -1722,11 +1762,15 @@ function detectRawStringLang(
   text: string,
   pageLocale: RateLocale
 ): 'en' | 'vi' | undefined {
-  if (isVietnamese(text)) {
+  const bounded =
+    text.length > MAX_DISPLAY_REGEX_INPUT_LEN
+      ? text.slice(0, MAX_DISPLAY_REGEX_INPUT_LEN)
+      : text;
+  if (isVietnamese(bounded)) {
     return pageLocale === 'vi' ? undefined : 'vi';
   }
   if (pageLocale === 'en') return undefined;
-  const words = text.match(/\p{L}+/gu) ?? [];
+  const words = bounded.match(/\p{L}+/gu) ?? [];
   const hasLowerEnglishProse = words.some(
     (word) => /^[a-z]{2,}$/.test(word) && !NON_ENGLISH_PROSE_TOKENS.has(word)
   );
@@ -1828,6 +1872,21 @@ function formatEnumItem(
   return { text: rawItem, localized: false };
 }
 
+const ENERGY_RATING_RE =
+  /^(\d+(?:[.,]\d+)?)(?:\s{0,4}(?:sao|stars?|hv[eě]zdi[cč](?:ka|ky|ek)))?$/iu;
+const AGE_MONTHS_RANGE_RE =
+  /^(\d+(?:[.,]\d+)?)(?:\s{0,4}(?:-|đến|to)\s{0,4}(\d+(?:[.,]\d+)?)|(\+))(?:\s{0,4}(?:tháng|thang|months?|m|měsíc[ůe]?))?$/iu;
+const AGE_MONTHS_SINGLE_RE =
+  /^(\d+(?:[.,]\d+)?)(?:\s{0,4}(?:tháng|thang|months?|m|měsíc[ůe]?))?$/iu;
+const BANDWIDTH_UNLIMITED_PAREN_RE =
+  /^(unlimited|unmetered|kh[oô]ng\s{1,4}gi[oớ]i\s{1,4}h[aạ]n)\s{0,4}\(([^()]{1,80})\)$/iu;
+const TENOR_MONTHS_RE =
+  /^(\d+(?:[.,]\d+)?)(?:\s{0,4}-\s{0,4}(\d+(?:[.,]\d+)?))?\s{0,4}(?:tháng|thang|months?)$/iu;
+const TENOR_DAYS_RE =
+  /^(\d+(?:[.,]\d+)?)(?:\s{0,4}-\s{0,4}(\d+(?:[.,]\d+)?))?\s{0,4}(?:ngày|ngay|days?)$/iu;
+const TENOR_WEEKS_RE =
+  /^(\d+(?:[.,]\d+)?)(?:\s{0,4}-\s{0,4}(\d+(?:[.,]\d+)?))?\s{0,4}(?:tuần|tuan|weeks?)$/iu;
+
 function formatCustomFieldValue(
   key: string,
   raw: CustomFieldValue,
@@ -1843,16 +1902,20 @@ function formatCustomFieldValue(
     };
   }
 
+  const trimmedStr = typeof raw === 'string' ? raw.trim() : null;
+  if (trimmedStr !== null && trimmedStr.length === 0) return null;
+  const regexSafeStr =
+    trimmedStr !== null && trimmedStr.length <= MAX_DISPLAY_REGEX_INPUT_LEN
+      ? trimmedStr
+      : null;
+
   if (meta?.kind === 'energy_rating') {
     const numeric =
       typeof raw === 'number'
         ? raw
-        : typeof raw === 'string'
+        : regexSafeStr !== null
           ? (() => {
-              const m =
-                /^\s*(\d+(?:[.,]\d+)?)\s*(?:sao|stars?|hv[eě]zdi[cč](?:ka|ky|ek))?\s*$/iu.exec(
-                  raw
-                );
+              const m = ENERGY_RATING_RE.exec(regexSafeStr);
               return m ? Number(m[1]!.replace(',', '.')) : null;
             })()
           : null;
@@ -1906,11 +1969,8 @@ function formatCustomFieldValue(
         value: `${formatLocaleNumber(raw, locale)}${sep}${formatMonthsUnit(raw, locale)}`,
       };
     }
-    if (typeof raw === 'string') {
-      const rangeMatch =
-        /^\s*(\d+(?:[.,]\d+)?)\s*(?:(?:-|đến|to)\s*(\d+(?:[.,]\d+)?)|(\+))\s*(?:tháng|thang|months?|m|měsíc[ůe]?)?\s*$/iu.exec(
-          raw
-        );
+    if (regexSafeStr !== null) {
+      const rangeMatch = AGE_MONTHS_RANGE_RE.exec(regexSafeStr);
       if (rangeMatch) {
         const start = Number(rangeMatch[1]!.replace(',', '.'));
         const end = rangeMatch[2]
@@ -1928,12 +1988,15 @@ function formatCustomFieldValue(
           value: `${rangeText}${sep}${formatMonthsUnit(end ?? start, locale)}`,
         };
       }
-      const singleNum = parseFiniteNumericValue(raw);
-      if (singleNum !== null) {
-        const sep = locale === 'cs' ? NBSP : ' ';
-        return {
-          value: `${formatLocaleNumber(singleNum, locale)}${sep}${formatMonthsUnit(singleNum, locale)}`,
-        };
+      const singleMatch = AGE_MONTHS_SINGLE_RE.exec(regexSafeStr);
+      if (singleMatch) {
+        const singleNum = Number(singleMatch[1]!.replace(',', '.'));
+        if (Number.isFinite(singleNum)) {
+          const sep = locale === 'cs' ? NBSP : ' ';
+          return {
+            value: `${formatLocaleNumber(singleNum, locale)}${sep}${formatMonthsUnit(singleNum, locale)}`,
+          };
+        }
       }
     }
   }
@@ -1961,8 +2024,8 @@ function formatCustomFieldValue(
   }
 
   if (meta?.kind === 'country') {
-    if (typeof raw === 'string') {
-      const resolved = formatEnumItem(raw, ORIGIN_COUNTRY_ENUM, locale);
+    if (trimmedStr !== null) {
+      const resolved = formatEnumItem(trimmedStr, ORIGIN_COUNTRY_ENUM, locale);
       const lang = resolved.localized
         ? undefined
         : detectRawStringLang(resolved.text, locale);
@@ -1971,25 +2034,48 @@ function formatCustomFieldValue(
   }
 
   if (meta?.kind === 'enum' && meta.enumMap) {
-    if (typeof raw === 'string') {
-      const parts = raw
-        .split(/\s*[,;/]\s*/)
+    if (trimmedStr !== null) {
+      // Whole-string lookup first so fractions/rates like "1/1.3-inch" or
+      // "2GB/ngày" are never split or mangled.
+      const whole = formatEnumItem(trimmedStr, meta.enumMap, locale);
+      if (whole.localized) {
+        return { value: whole.text };
+      }
+
+      if (key === 'bandwidth' && regexSafeStr !== null) {
+        const bwMatch = BANDWIDTH_UNLIMITED_PAREN_RE.exec(regexSafeStr);
+        if (bwMatch) {
+          const prefixKey =
+            bwMatch[1]!.toLowerCase() === 'unmetered'
+              ? 'unmetered'
+              : 'unlimited';
+          const prefixText = BANDWIDTH_ENUM[prefixKey]![locale];
+          const inner = bwMatch[2]!.trim();
+          const text = inner ? `${prefixText} (${inner})` : prefixText;
+          return { value: text };
+        }
+      }
+
+      // Multi-value enums split strictly on comma/semicolon (never `/`), and
+      // only rewrite when at least one part matched the enum dictionary.
+      const parts = trimmedStr
+        .split(/[,;]/)
         .map((p) => p.trim())
         .filter(Boolean);
       if (parts.length > 1) {
         const resolvedParts = parts.map((p) =>
           formatEnumItem(p, meta.enumMap!, locale)
         );
-        const text = resolvedParts.map((p) => p.text).join(', ');
-        const anyRaw = resolvedParts.some((p) => !p.localized);
-        const lang = anyRaw ? detectRawStringLang(text, locale) : undefined;
-        return lang ? { value: text, lang } : { value: text };
+        if (resolvedParts.some((p) => p.localized)) {
+          const text = resolvedParts.map((p) => p.text).join(', ');
+          const anyRaw = resolvedParts.some((p) => !p.localized);
+          const lang = anyRaw ? detectRawStringLang(text, locale) : undefined;
+          return lang ? { value: text, lang } : { value: text };
+        }
       }
-      const resolved = formatEnumItem(raw, meta.enumMap, locale);
-      const lang = resolved.localized
-        ? undefined
-        : detectRawStringLang(resolved.text, locale);
-      return lang ? { value: resolved.text, lang } : { value: resolved.text };
+
+      const lang = detectRawStringLang(trimmedStr, locale);
+      return lang ? { value: trimmedStr, lang } : { value: trimmedStr };
     }
     if (Array.isArray(raw)) {
       const resolvedParts = raw.map((item) =>
@@ -2021,8 +2107,9 @@ function formatCustomFieldValue(
   }
 
   // Raw string fallback (including `tenor_label`, `annual_fee_waiver_rule`, `serving_size`, etc.)
-  if (key === 'tenor_label') {
-    const tenorNorm = normalizeLookupToken(raw);
+  const textOut = trimmedStr ?? raw;
+  if (key === 'tenor_label' && regexSafeStr !== null) {
+    const tenorNorm = normalizeLookupToken(regexSafeStr);
     if (tenorNorm === 'khong_ky_han' || tenorNorm === 'non_term') {
       const map: LocalizedText = {
         vi: 'Không kỳ hạn',
@@ -2031,21 +2118,34 @@ function formatCustomFieldValue(
       };
       return { value: map[locale] };
     }
-    const monthMatch =
-      /^\s*(\d+(?:[.,]\d+)?)\s*(?:tháng|thang|months?)\s*$/iu.exec(raw);
-    if (monthMatch) {
-      const num = Number(monthMatch[1]!.replace(',', '.'));
-      if (Number.isFinite(num)) {
-        const sep = locale === 'cs' ? NBSP : ' ';
-        return {
-          value: `${formatLocaleNumber(num, locale)}${sep}${formatMonthsUnit(num, locale)}`,
-        };
+    const formatTenorUnit = (
+      match: RegExpExecArray | null,
+      unitFn: (n: number | null, loc: RateLocale) => string
+    ): string | null => {
+      if (!match) return null;
+      const start = Number(match[1]!.replace(',', '.'));
+      const end = match[2] ? Number(match[2].replace(',', '.')) : null;
+      if (!Number.isFinite(start) || (end !== null && !Number.isFinite(end))) {
+        return null;
       }
+      const sep = locale === 'cs' ? NBSP : ' ';
+      const numText =
+        end !== null
+          ? `${formatLocaleNumber(start, locale)}-${formatLocaleNumber(end, locale)}`
+          : formatLocaleNumber(start, locale);
+      return `${numText}${sep}${unitFn(end ?? start, locale)}`;
+    };
+    const localizedTenor =
+      formatTenorUnit(TENOR_MONTHS_RE.exec(regexSafeStr), formatMonthsUnit) ??
+      formatTenorUnit(TENOR_WEEKS_RE.exec(regexSafeStr), formatWeeksUnit) ??
+      formatTenorUnit(TENOR_DAYS_RE.exec(regexSafeStr), formatDaysUnit);
+    if (localizedTenor) {
+      return { value: localizedTenor };
     }
   }
 
-  const lang = detectRawStringLang(raw, locale);
-  return lang ? { value: raw, lang } : { value: raw };
+  const lang = detectRawStringLang(textOut, locale);
+  return lang ? { value: textOut, lang } : { value: textOut };
 }
 
 /**

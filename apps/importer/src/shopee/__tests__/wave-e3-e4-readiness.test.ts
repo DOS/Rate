@@ -1070,6 +1070,38 @@ describe('ProductNormalizer Wave E3 retail SKU and Wave E4 places', () => {
       }),
       'Bio-Oil'
     );
+    // CodeRabbit #1959: "For Medela" must not hijack canonical allowlist shortcut when Medela
+    // is absent from the title, while grounded "For Baby" and plain canonical "Medela" still work.
+    const forMedelaUngrounded = normalizer.normalize(
+      createSampleProduct({
+        platform: 'avakids',
+        categorySlug: 'mother-baby',
+        title: 'Phụ kiện phễu hút sữa silicon 100ml',
+        brand: 'For Medela',
+        shop: { shopId: 's-ava', name: 'AVAKids', isMall: true },
+      })
+    );
+    assert.equal(forMedelaUngrounded.brand, 'Khác');
+    const plainMedelaCanonical = normalizer.normalize(
+      createSampleProduct({
+        platform: 'avakids',
+        categorySlug: 'mother-baby',
+        title: 'Bình trữ sữa cổ rộng 150ml',
+        brand: 'Medela',
+        shop: { shopId: 's-ava', name: 'AVAKids', isMall: true },
+      })
+    );
+    assert.equal(plainMedelaCanonical.brand, 'Medela');
+    const groundedForBaby = normalizer.normalize(
+      createSampleProduct({
+        platform: 'avakids',
+        categorySlug: 'mother-baby',
+        title: 'Kem dưỡng ẩm dịu nhẹ For Baby 50ml',
+        brand: 'For Baby',
+        shop: { shopId: 's-ava', name: 'AVAKids', isMall: true },
+      })
+    );
+    assert.equal(groundedForBaby.brand, 'For Baby');
 
     // 6. No HP tech hijack in E3 even when structured brand is absent or generic.
     const noHpHijack = normalizer.normalize(

@@ -9,13 +9,17 @@ import {
   customFieldLabel,
   customFieldsGroupHeading,
   customFieldsSectionEyebrow,
+  formatCustomFieldEntry,
   humanizeCustomFieldKey,
   orderCustomFieldKeys,
 } from '../custom-fields-display';
 import { NBSP } from '../locale-format';
 import { compareRowIsShown } from '../product-spec-rows';
-import { compareCellSegments, plainCompareCell } from '../compare-cell';
-import { buildProductSpecExportRows } from '../../components/leaderboard/ProductSpecsExportToolbar';
+import { getSpecUiDictionary, specSectionBadge } from '../spec-localizer';
+import {
+  buildProductSpecExportRows,
+  formatSpecsMarkdownTable,
+} from '../../components/leaderboard/ProductSpecsExportToolbar';
 import type { MasterProduct } from '@repo/shared-data';
 
 const ALL_14_CATEGORIES = [
@@ -801,18 +805,296 @@ async function main() {
     (r) => r.id === 'custom_annual_fee_waiver_rule'
   )!;
   assert.doesNotMatch(waiverRow.renderValue(cardA), /[\uE000\uE001]/);
-  const waiverSegments = compareCellSegments(waiverRow.renderCell!(cardA));
-  assert.equal(waiverSegments.length, 1);
+  assert.deepEqual(waiverRow.renderLocalizedCell!(cardA), {
+    text: 'Miễn phí trọn đời',
+    lang: 'vi',
+  });
+  assert.deepEqual(waiverRow.renderLocalizedCell!(cardB), { text: '-' });
+
+  // 13. Round 1 P1/P2/P3 regression checks (#1980):
+  // - Never split enum values on `/` ("2GB/ngày", "30GB/tháng", "1/1.3-inch")
   assert.equal(
-    waiverSegments[0]?.spec,
-    true,
-    'raw Vietnamese string wrapped with specPart on en'
+    buildCustomFieldDisplayRows(
+      { data_quota: '2GB/ngày' },
+      'internet-telecom',
+      'vi'
+    )[0]?.value,
+    '2GB/ngày'
   );
   assert.equal(
-    plainCompareCell(waiverRow.renderCell!(cardA)),
-    'Miễn phí trọn đời'
+    buildCustomFieldDisplayRows(
+      { data_quota: '2GB/ngày' },
+      'internet-telecom',
+      'en'
+    )[0]?.lang,
+    'vi'
   );
-  assert.equal(waiverRow.renderCell!(cardB), '-');
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { data_quota: '30GB/tháng' },
+      'internet-telecom',
+      'en'
+    )[0]?.value,
+    '30GB/tháng'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { sensor_format: '1/1.3-inch' },
+      'cameras',
+      'en'
+    )[0]?.value,
+    '1/1.3-inch'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { sensor_format: '1/1.7-inch' },
+      'cameras',
+      'en'
+    )[0]?.value,
+    '1/1.7-inch'
+  );
+  // Multi-value enums split on comma/semicolon only when at least one part matches
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { skin_type: 'da dau mun, da nhay cam' },
+      'cosmetics',
+      'vi'
+    )[0]?.value,
+    'Da dầu mụn, Da nhạy cảm'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { bandwidth: 'Custom plan, peak burst' },
+      'vps-hosting',
+      'en'
+    )[0]?.value,
+    'Custom plan, peak burst'
+  );
+
+  // - Linear ReDoS timing guard on exported formatCustomFieldEntry (< 20ms)
+  {
+    const t0 = performance.now();
+    formatCustomFieldEntry(
+      'energy_rating',
+      '5' + ' '.repeat(15_000) + 'x',
+      'en'
+    );
+    formatCustomFieldEntry(
+      'age_range_months',
+      '0-6' + ' '.repeat(15_000) + 'x',
+      'en'
+    );
+    formatCustomFieldEntry('bandwidth', ' '.repeat(15_000) + 'x', 'en');
+    formatCustomFieldEntry(
+      'tenor_label',
+      '12' + ' '.repeat(15_000) + 'x',
+      'vi'
+    );
+    const elapsed = performance.now() - t0;
+    assert.ok(
+      elapsed < 20,
+      `Expected linear formatCustomFieldEntry runtime (<20ms), got ${elapsed.toFixed(2)}ms`
+    );
+  }
+
+  // - Missing live camera_type & vps-hosting bandwidth entries
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { camera_type: '360_camera' },
+      'cameras',
+      'vi'
+    )[0]?.value,
+    'Camera 360'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { camera_type: '360_camera' },
+      'cameras',
+      'cs'
+    )[0]?.value,
+    '360° kamera'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { camera_type: 'vlog_camera' },
+      'cameras',
+      'en'
+    )[0]?.value,
+    'Vlog camera'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows({ bandwidth: 'shared' }, 'vps-hosting', 'vi')[0]
+      ?.value,
+    'Chia sẻ'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows({ bandwidth: 'shared' }, 'vps-hosting', 'cs')[0]
+      ?.value,
+    'Sdílená'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { bandwidth: 'Unlimited (100 Mbps)' },
+      'vps-hosting',
+      'vi'
+    )[0]?.value,
+    'Không giới hạn (100 Mbps)'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { bandwidth: 'Unlimited (100 Mbps)' },
+      'vps-hosting',
+      'en'
+    )[0]?.value,
+    'Unlimited (100 Mbps)'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { bandwidth: 'Unlimited (100 Mbps)' },
+      'vps-hosting',
+      'cs'
+    )[0]?.value,
+    'Neomezený (100 Mbps)'
+  );
+
+  // - Compare pre-localized cell bypasses phone localizeSpecValue (no half-translated mashup)
+  const cardMashup = {
+    id: 'cc3',
+    slug: 'card-mashup',
+    specifications: {
+      category_slug: 'credit-cards',
+      custom_fields: {
+        annual_fee_waiver_rule: 'Không hỗ trợ trả góp',
+      },
+    },
+  } as unknown as MasterProduct;
+  for (const loc of ['en', 'cs'] as const) {
+    const grp = buildCustomFieldsCompareGroup(
+      [cardMashup],
+      'credit-cards',
+      loc
+    )!;
+    const row = grp.rows[0]!;
+    assert.equal(row.renderValue(cardMashup), 'Không hỗ trợ trả góp');
+    assert.deepEqual(row.renderLocalizedCell!(cardMashup), {
+      text: 'Không hỗ trợ trả góp',
+      lang: 'vi',
+    });
+  }
+
+  // - Markdown export escapes pipes on all 3 cells (group, attribute, value)
+  const mdOut = formatSpecsMarkdownTable('Demo', 'Acme', 'Fair', [
+    ['Group | A', 'Attr | B', 'Val | C'],
+  ]);
+  assert.ok(
+    mdOut.includes('| Group / A | Attr / B | Val / C |'),
+    `Expected all 3 Markdown columns pipe-escaped, got:\n${mdOut}`
+  );
+
+  // - Singular/plural specSectionBadge across vi/en/cs
+  assert.equal(
+    specSectionBadge(getSpecUiDictionary('vi'), 1),
+    '1 nhóm thông số'
+  );
+  assert.equal(specSectionBadge(getSpecUiDictionary('en'), 1), '1 spec group');
+  assert.equal(specSectionBadge(getSpecUiDictionary('en'), 2), '2 spec groups');
+  assert.equal(specSectionBadge(getSpecUiDictionary('en'), 0), '0 spec groups');
+  assert.equal(
+    specSectionBadge(getSpecUiDictionary('cs'), 1),
+    '1 skupina parametrů'
+  );
+  assert.equal(
+    specSectionBadge(getSpecUiDictionary('cs'), 2),
+    '2 skupiny parametrů'
+  );
+  assert.equal(
+    specSectionBadge(getSpecUiDictionary('cs'), 4),
+    '4 skupiny parametrů'
+  );
+  assert.equal(
+    specSectionBadge(getSpecUiDictionary('cs'), 5),
+    '5 skupin parametrů'
+  );
+  assert.equal(
+    specSectionBadge(getSpecUiDictionary('cs'), 0),
+    '0 skupin parametrů'
+  );
+
+  // - P3 formatting polish: sentence-case volume_ml_g, single-value age_range_months, short tenor_label
+  assert.equal(customFieldLabel('volume_ml_g', 'en'), 'Volume / weight');
+  assert.equal(customFieldLabel('volume_ml_g', 'cs'), 'Objem / hmotnost');
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { age_range_months: '12 tháng' },
+      'mother-baby',
+      'vi'
+    )[0]?.value,
+    '12 tháng'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { age_range_months: '12 tháng' },
+      'mother-baby',
+      'en'
+    )[0]?.value,
+    '12 months'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { age_range_months: '12 tháng' },
+      'mother-baby',
+      'cs'
+    )[0]?.value,
+    `12${NBSP}měsíců`
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { tenor_label: '7 ngày' },
+      'bank-savings',
+      'en'
+    )[0]?.value,
+    '7 days'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { tenor_label: '7 ngày' },
+      'bank-savings',
+      'cs'
+    )[0]?.value,
+    `7${NBSP}dní`
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { tenor_label: '1 tuần' },
+      'bank-savings',
+      'en'
+    )[0]?.value,
+    '1 week'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { tenor_label: '1 tuần' },
+      'bank-savings',
+      'cs'
+    )[0]?.value,
+    `1${NBSP}týden`
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { tenor_label: '1-2 tuần' },
+      'bank-savings',
+      'en'
+    )[0]?.value,
+    '1-2 weeks'
+  );
+  assert.equal(
+    buildCustomFieldDisplayRows(
+      { tenor_label: '1-2 tuần' },
+      'bank-savings',
+      'cs'
+    )[0]?.value,
+    `1-2${NBSP}týdny`
+  );
 
   console.warn('✅ Category custom_fields display & compare suite passed');
 }

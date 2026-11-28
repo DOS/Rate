@@ -589,37 +589,64 @@ describe('Wave E6 normalization, publish gates, and shipping review guards', () 
   });
 
   it("closes DOS/Rate#1978 Wave E6 P2 regex polish items (lenses, kit lenses, monitors, LG 43UQ, 27'', Xiaomi 14T, Fujifilm X100VI)", () => {
-    // 1. Bare focal-length standalone lenses rejected by isAccessoryTitle(..., 'cameras')
+    // 1. Bare focal-length standalone lenses (including attached SKUs & retail prefixes) rejected
     for (const bareLens of [
       'Nikon Z 24-70mm f/2.8 S',
+      'Nikon Z 24-70mm f/4',
+      'Hàng chính hãng Nikon Z 24-70mm f/4',
       'Sony FE 24-70mm f/2.8 GM II',
+      'Sony FE50mm f/1.8',
       'Canon RF 50mm f/1.8 STM',
       'Fujifilm XF 35mm f/1.4 R',
+      'Fujifilm XF23mm f/1.4',
       'Sigma 24-70mm f/2.8 DG DN Art',
     ]) {
       assert.equal(isAccessoryTitle(bareLens, 'cameras'), true, `bare lens: ${bareLens}`);
       assert.notEqual(detectCategorySlug(bareLens), 'cameras', `bare lens detect: ${bareLens}`);
     }
+    const nikonBareLens = normalizer.normalize(
+      makeListing({
+        title: 'Nikon Z 24-70mm f/4',
+        categorySlug: 'cameras',
+        priceMin: 18_990_000,
+      })
+    );
+    assert.equal(nikonBareLens.keyable, false);
 
-    // 2. Camera body+kit titles without leading "Máy ảnh" containing "Kit Lens" or "+ Lens"
+    // 2. Camera body+kit titles without leading "Máy ảnh" (including retail prefixes) accepted
     for (const bodyKit of [
       'Canon EOS R50 Kit Lens 18-45mm Chính hãng',
       'Sony A7 IV + Lens 28-70mm',
       'Nikon Z6 III + Lens 24-70mm Chính hãng',
+      'Hàng chính hãng Nikon Z6 III Kit 24-70mm f/4',
+      '[Chính hãng] Combo Canon EOS R50 Kit Lens 18-45mm',
     ]) {
       assert.equal(detectCategorySlug(bodyKit), 'cameras', `body+kit detect: ${bodyKit}`);
       assert.equal(isAccessoryTitle(bodyKit, 'cameras'), false, `body+kit acc: ${bodyKit}`);
     }
+    const nikonPrefixedKit = normalizer.normalize(
+      makeListing({
+        title: 'Hàng chính hãng Nikon Z6 III Kit 24-70mm f/4',
+        priceMin: 68_990_000,
+      })
+    );
+    assert.equal(nikonPrefixedKit.category_slug, 'cameras');
+    assert.equal(nikonPrefixedKit.keyable, true);
     // Non-lens accessories prefixed with body model still rejected
     assert.equal(isAccessoryTitle('Sony A7 IV Pin rời NP-FZ100', 'cameras'), true);
     assert.equal(isAccessoryTitle('Canon EOS R50 Cage bảo vệ', 'cameras'), true);
 
-    // 3. Monitors with built-in camera, included HDMI cable ("Có cáp HDMI"), or portable "cho Laptop"
+    // 3. Monitors with built-in camera, included HDMI cable ("Có/Kèm theo cáp HDMI"), portable "cho Laptop", and Xiaomi 27/34" monitors
     for (const validMonitor of [
       'Apple Studio Display 27 inch 5K Camera 12MP',
       'Màn hình Dell U2724D 27 inch 2K IPS (Có cáp HDMI)',
+      'Màn hình Dell U2724D 27 inch (Kèm theo cáp HDMI)',
       'Màn hình di động ASUS ZenScreen MB166C 15.6 inch cho Laptop',
       'ASUS ZenScreen MB166C 15.6 inch cho Laptop',
+      'Màn hình Xiaomi 27 4K',
+      'Màn hình Xiaomi 34 WQHD 144Hz',
+      'Màn hình gaming Xiaomi 27 2K',
+      'Màn hình Xiaomi 27″ 2K',
     ]) {
       assert.equal(detectCategorySlug(validMonitor), 'monitors', `monitor: ${validMonitor}`);
       assert.equal(

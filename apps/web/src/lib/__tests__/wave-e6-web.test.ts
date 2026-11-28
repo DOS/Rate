@@ -455,6 +455,63 @@ const fallbackCases: Array<[{ slug: string; name?: string }, string]> = [
     },
     'monitors',
   ],
+  // Round 1 review & CodeRabbit regressions: shortened slug, "kèm theo cáp HDMI",
+  // Xiaomi 27/34 monitors, leading retail prefix on camera kit, attached XF23mm lens
+  [
+    {
+      slug: 'asus-zenscreen-mb166c-portable-monitor-laptop',
+      name: 'Màn hình di động ASUS ZenScreen MB166C 15.6 inch cho Laptop',
+    },
+    'monitors',
+  ],
+  [{ slug: 'asus-zenscreen-mb166c-portable-monitor-laptop' }, 'laptops'],
+  [
+    {
+      slug: 'dell-u2724d-27-inch-kem-theo-cap-hdmi',
+      name: 'Màn hình Dell U2724D 27 inch (Kèm theo cáp HDMI)',
+    },
+    'monitors',
+  ],
+  [
+    { slug: 'man-hinh-xiaomi-27-4k', name: 'Màn hình Xiaomi 27 4K' },
+    'monitors',
+  ],
+  [
+    {
+      slug: 'man-hinh-xiaomi-34-wqhd-144hz',
+      name: 'Màn hình Xiaomi 34 WQHD 144Hz',
+    },
+    'monitors',
+  ],
+  [
+    {
+      slug: 'man-hinh-gaming-xiaomi-27-2k',
+      name: 'Màn hình gaming Xiaomi 27 2K',
+    },
+    'monitors',
+  ],
+  [
+    { slug: 'man-hinh-xiaomi-27-2k', name: 'Màn hình Xiaomi 27″ 2K' },
+    'monitors',
+  ],
+  [
+    {
+      slug: 'hang-chinh-hang-nikon-z6-iii-kit-24-70mm-f4',
+      name: 'Hàng chính hãng Nikon Z6 III Kit 24-70mm f/4',
+    },
+    'cameras',
+  ],
+  [
+    {
+      slug: 'hang-chinh-hang-nikon-z-24-70mm-f4',
+      name: 'Hàng chính hãng Nikon Z 24-70mm f/4',
+    },
+    'smartphones',
+  ],
+  [
+    { slug: 'fujifilm-xf23mm-f1-4', name: 'Fujifilm XF23mm f/1.4' },
+    'smartphones',
+  ],
   [
     { slug: 'lg-43uq7550psf', name: 'LG 43UQ7550PSF 43 inch 4K' },
     'smartphones',
