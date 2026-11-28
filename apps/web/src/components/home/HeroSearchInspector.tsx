@@ -67,6 +67,9 @@ import {
   formatPriceVnd,
 } from '@/lib/locale-format';
 import StarRating from '@/components/elementary/StarRating';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 interface HeroSearchInspectorProps {
   initialProducts: HeroProductSuggestion[];
@@ -149,12 +152,11 @@ export function resolveHeroMerchantTrustBadge(
         risk_score?: number | string | null;
       }
     | null
-    | undefined,
-  variant: 'subtle' | 'solid' = 'solid'
+    | undefined
 ): {
   score: number;
   tone: MerchantRiskTone;
-  badgeClass: string;
+  variant: NonNullable<BadgeProps['variant']>;
 } | null {
   const rawTrust = toOptionalFiniteScore(merchant?.trust_score);
   if (rawTrust == null) return null;
@@ -163,22 +165,12 @@ export function resolveHeroMerchantTrustBadge(
   const riskScore =
     rawRisk == null ? null : Math.min(100, Math.max(0, rawRisk));
   const tone = merchantRiskTone(riskScore ?? 100 - clampedTrust);
-  const badgeClass =
-    variant === 'subtle'
-      ? tone === 'good'
-        ? 'bg-success-subtle text-success'
-        : tone === 'warn'
-          ? 'bg-warning-subtle text-warning-emphasis'
-          : 'bg-danger-subtle text-danger'
-      : tone === 'good'
-        ? 'bg-success text-white'
-        : tone === 'warn'
-          ? 'bg-warning text-dark'
-          : 'bg-danger text-white';
+  const variant: NonNullable<BadgeProps['variant']> =
+    tone === 'good' ? 'success' : tone === 'warn' ? 'warning' : 'danger';
   return {
     score: Math.round(clampedTrust),
     tone,
-    badgeClass,
+    variant,
   };
 }
 
@@ -707,34 +699,28 @@ export default function HeroSearchInspector({
 
   return (
     <div ref={containerRef} className="position-relative text-start">
-      {/* Mode Switcher Pills */}
+      {/* Mode Switcher */}
       <div className="d-flex justify-content-center mb-3 flex-wrap gap-2">
-        <button
+        <Button
           type="button"
+          variant={mode === 'search' ? 'primary' : 'outline'}
+          size="sm"
           aria-pressed={mode === 'search'}
           onClick={() => setMode('search')}
-          className={`btn btn-sm rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-4 py-2 ${
-            mode === 'search'
-              ? 'btn-primary shadow-sm'
-              : 'btn-dark bg-opacity-75 text-light border-secondary'
-          }`}
         >
           <BsSearch aria-hidden="true" />
           {t('modeSearchBtn')}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant={mode === 'inspect' ? 'primary' : 'outline'}
+          size="sm"
           aria-pressed={mode === 'inspect'}
           onClick={() => setMode('inspect')}
-          className={`btn btn-sm rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-4 py-2 ${
-            mode === 'inspect'
-              ? 'btn-danger shadow-sm'
-              : 'btn-dark bg-opacity-75 text-light border-secondary'
-          }`}
         >
           <BsShieldCheck aria-hidden="true" />
           {t('modeInspectBtn')}
-        </button>
+        </Button>
       </div>
 
       {/* Mode 1: Autocomplete Product & Spec Search */}
@@ -742,7 +728,7 @@ export default function HeroSearchInspector({
         <div className="position-relative">
           <form
             onSubmit={handleSearchSubmit}
-            className="search-wrap rounded-pill border bg-white p-2 shadow"
+            className="search-wrap border bg-white p-2 shadow"
           >
             <div className="row gx-2 align-items-center m-0">
               <div className="d-none d-sm-flex align-items-center col-auto ps-2">
@@ -759,7 +745,7 @@ export default function HeroSearchInspector({
                     setIsDropdownOpen(true);
                   }}
                   onKeyDown={handleSearchKeyDown}
-                  className="form-control fw-medium rounded-pill border-0 ps-2 shadow-none"
+                  className="form-control fw-medium rounded-3 border-0 ps-2 shadow-none"
                   placeholder={t(
                     narrowHint ? 'searchPlaceholderShort' : 'searchPlaceholder'
                   )}
@@ -769,53 +755,53 @@ export default function HeroSearchInspector({
               </div>
               {query && (
                 <div className="col-auto">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => {
                       setQuery('');
                       setActiveIndex(-1);
                     }}
-                    className="btn btn-sm btn-light rounded-circle text-muted"
                     aria-label={t('clearKeywordAria')}
                   >
                     <BsXLg aria-hidden="true" />
-                  </button>
+                  </Button>
                 </div>
               )}
               <div className="col-auto">
-                <button
-                  type="submit"
-                  className="btn btn-primary rounded-pill fw-semibold px-4 py-2"
-                >
+                <Button type="submit" variant="primary" size="default">
                   {t('searchSubmitBtn')}
-                </button>
+                </Button>
               </div>
             </div>
           </form>
 
           {/* Autocomplete Dropdown Panel */}
           {isDropdownOpen && (
-            <div
-              className="card rounded-4 position-absolute start-0 end-0 mt-2 overflow-hidden border shadow-lg"
+            <Card
+              className="position-absolute start-0 end-0 mt-2 overflow-hidden shadow-lg"
               style={{ zIndex: 1050 }}
             >
-              <div className="card-body p-3">
+              <CardContent>
                 {isLikelyEcommerceUrl(query) && (
                   <div className="alert alert-danger d-flex align-items-center justify-content-between rounded-3 mb-3 px-3 py-2">
                     <div className="small">
                       <strong>{t('urlDetectedStrong')}</strong>{' '}
                       {t('urlDetectedSub')}
                     </div>
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
+                      size="sm"
                       onClick={() => {
                         setIsDropdownOpen(false);
                         void runUrlInspection(query);
                       }}
-                      className="btn btn-sm btn-danger rounded-pill fw-semibold ms-2 flex-shrink-0"
+                      className="ms-2 flex-shrink-0"
                     >
                       {t('inspectLinkBtn')}
-                    </button>
+                    </Button>
                   </div>
                 )}
 
@@ -840,16 +826,18 @@ export default function HeroSearchInspector({
                 {filteredProducts.length === 0 ? (
                   <div className="text-muted small px-2 py-3">
                     {t('noMatchPrefix', { query })}{' '}
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => {
                         setIsDropdownOpen(false);
                         void runUrlInspection(query);
                       }}
-                      className="btn btn-link btn-sm p-0 align-baseline"
+                      className="align-baseline"
                     >
                       {t('inspectTabLinkBtn')}
-                    </button>
+                    </Button>
                     .
                   </div>
                 ) : (
@@ -912,9 +900,7 @@ export default function HeroSearchInspector({
                                 className="text-muted d-flex align-items-center flex-wrap gap-2"
                                 style={{ fontSize: '0.8125rem' }}
                               >
-                                <span className="badge bg-light text-secondary border">
-                                  {item.brand}
-                                </span>
+                                <Badge variant="secondary">{item.brand}</Badge>
                                 {keySpecs.chip && (
                                   <span>
                                     <BsCpu
@@ -996,10 +982,7 @@ export default function HeroSearchInspector({
                       </Link>
                     </div>
                     {filteredMerchants.map((m) => {
-                      const trustBadge = resolveHeroMerchantTrustBadge(
-                        m,
-                        'subtle'
-                      );
+                      const trustBadge = resolveHeroMerchantTrustBadge(m);
                       return (
                         <Link
                           key={m.id}
@@ -1008,29 +991,27 @@ export default function HeroSearchInspector({
                           className="d-flex align-items-center justify-content-between rounded-3 text-decoration-none text-dark hover-bg-light px-2 py-2"
                         >
                           <div className="d-flex align-items-center gap-2">
-                            <span className="badge bg-danger text-uppercase small">
+                            <Badge variant="brand" className="text-uppercase">
                               {m.platform}
-                            </span>
+                            </Badge>
                             <span className="fw-semibold small">
                               <ContentText text={m.name} locale={locale} />
                             </span>
                             {m.is_official && (
-                              <span className="badge bg-success-subtle text-success small">
+                              <Badge variant="success">
                                 {t('officialMallBadge')}
-                              </span>
+                              </Badge>
                             )}
                           </div>
                           <div className="d-flex align-items-center small gap-2">
                             {trustBadge == null ? (
-                              <span className="badge bg-light text-muted border rounded-pill">
+                              <Badge variant="secondary">
                                 {t('trustBadgeNoData')}
-                              </span>
+                              </Badge>
                             ) : (
-                              <span
-                                className={`badge ${trustBadge.badgeClass} rounded-pill`}
-                              >
+                              <Badge variant={trustBadge.variant}>
                                 {t('trustBadge', { score: trustBadge.score })}
-                              </span>
+                              </Badge>
                             )}
                             <span
                               className="text-muted"
@@ -1048,8 +1029,8 @@ export default function HeroSearchInspector({
                     })}
                   </div>
                 )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
         </div>
       ) : (
@@ -1057,7 +1038,7 @@ export default function HeroSearchInspector({
         <div>
           <form
             onSubmit={handleInspectSubmit}
-            className="search-wrap rounded-pill border-danger border bg-white p-2 shadow"
+            className="search-wrap border-danger border bg-white p-2 shadow"
           >
             <div className="row gx-2 align-items-center m-0">
               <div className="d-none d-sm-flex align-items-center col-auto ps-2">
@@ -1068,58 +1049,63 @@ export default function HeroSearchInspector({
                   type="text"
                   value={inspectQuery}
                   onChange={(e) => setInspectQuery(e.target.value)}
-                  className="form-control fw-medium rounded-pill border-0 ps-2 shadow-none"
+                  className="form-control fw-medium rounded-3 border-0 ps-2 shadow-none"
                   placeholder={t('inspectPlaceholder')}
                   aria-label={t('inspectAriaLabel')}
                 />
               </div>
               {inspectQuery && (
                 <div className="col-auto">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => {
                       setInspectQuery('');
                       setInspectResult(null);
                       setInspectError(null);
                     }}
-                    className="btn btn-sm btn-light rounded-circle text-muted"
                     aria-label={t('clearUrlAria')}
                   >
                     <BsXLg aria-hidden="true" />
-                  </button>
+                  </Button>
                 </div>
               )}
               <div className="col-auto">
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="default"
                   disabled={isInspecting}
-                  className="btn btn-danger rounded-pill fw-semibold px-4 py-2"
                 >
                   {isInspecting ? t('inspectingBtn') : t('inspectNowBtn')}
-                </button>
+                </Button>
               </div>
             </div>
           </form>
 
-          {/* Sample One-Click Inspection Pills */}
+          {/* Sample One-Click Inspection Chips */}
           <div className="d-flex align-items-center justify-content-center mt-2 flex-wrap gap-2">
-            <span className="text-light small opacity-75">
+            <span
+              className="small"
+              style={{ color: 'var(--rate-fg-secondary)' }}
+            >
               {t('sampleLinksLabel')}
             </span>
             {SAMPLE_INSPECT_LINKS.map((sample) => (
-              <button
+              <Button
                 key={sample.label}
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => void runUrlInspection(sample.value)}
-                className="badge bg-dark bg-opacity-75 text-light border-light border-opacity-25 rounded-pill fw-normal border px-3 py-2"
-                style={{ cursor: 'pointer' }}
               >
                 <BsLightningChargeFill
                   aria-hidden="true"
-                  className="text-warning me-1"
+                  className="text-warning"
                 />
                 {sample.label}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -1131,8 +1117,11 @@ export default function HeroSearchInspector({
 
           {/* Instant URL Inspection Result Card */}
           {inspectResult && (
-            <div className="card rounded-4 text-dark mt-3 overflow-hidden border-0 shadow-lg">
-              <div className="card-header bg-dark d-flex justify-content-between align-items-center flex-wrap gap-2 px-4 py-3 text-white">
+            <Card className="mt-3 overflow-hidden shadow-lg">
+              <div
+                className="border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2 px-4 py-3"
+                style={{ backgroundColor: 'var(--rate-bg-elevated)' }}
+              >
                 <div className="d-flex align-items-center gap-2">
                   <BsShieldCheck
                     aria-hidden="true"
@@ -1140,16 +1129,17 @@ export default function HeroSearchInspector({
                   />
                   <span className="fw-bold">{t('resultCardHeader')}</span>
                 </div>
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setInspectResult(null)}
-                  className="btn btn-sm btn-outline-light rounded-pill px-3"
                 >
                   {t('closeBtn')}
-                </button>
+                </Button>
               </div>
 
-              <div className="card-body p-4">
+              <div className="p-4">
                 {inspectResult.masterProduct ? (
                   <div className="row g-4 align-items-center">
                     <div className="col-lg-7">
@@ -1172,28 +1162,31 @@ export default function HeroSearchInspector({
                         )}
                         <div>
                           <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
-                            <span className="badge bg-primary-subtle text-primary rounded-pill">
+                            <Badge variant="brand">
                               {inspectResult.masterProduct.brand}
-                            </span>
+                            </Badge>
                             {inspectResult.parsedUrl.platform && (
-                              <span className="badge bg-danger text-uppercase rounded-pill">
+                              <Badge
+                                variant="danger"
+                                className="text-uppercase"
+                              >
                                 {inspectResult.parsedUrl.platform}
-                              </span>
+                              </Badge>
                             )}
                             {heroDiscountAnalysis && (
-                              <span
-                                className={`badge rounded-pill ${
+                              <Badge
+                                variant={
                                   heroDiscountAnalysis.verdict ===
                                   'fake_discount'
-                                    ? 'bg-danger text-white'
+                                    ? 'danger'
                                     : heroDiscountAnalysis.verdict ===
                                         'suspicious_discount'
-                                      ? 'bg-warning text-dark'
+                                      ? 'warning'
                                       : heroDiscountAnalysis.verdict ===
                                           'genuine_deal'
-                                        ? 'bg-success text-white'
-                                        : 'bg-secondary-subtle text-secondary'
-                                }`}
+                                        ? 'success'
+                                        : 'secondary'
+                                }
                               >
                                 {
                                   discountVerdictCopy(
@@ -1202,7 +1195,7 @@ export default function HeroSearchInspector({
                                     locale
                                   ).label
                                 }
-                              </span>
+                              </Badge>
                             )}
                             <RadarBadge
                               signal={
@@ -1276,12 +1269,11 @@ export default function HeroSearchInspector({
                     </div>
 
                     <div className="col-lg-5">
-                      <div className="rounded-4 bg-light border p-3">
+                      <Card tone="elevated" className="p-3">
                         {inspectResult.merchantProfile &&
                           (() => {
                             const trustBadge = resolveHeroMerchantTrustBadge(
-                              inspectResult.merchantProfile,
-                              'solid'
+                              inspectResult.merchantProfile
                             );
                             return (
                               <div className="d-flex justify-content-between align-items-center border-bottom mb-2 pb-2">
@@ -1308,17 +1300,15 @@ export default function HeroSearchInspector({
                                   )}
                                 </div>
                                 {trustBadge == null ? (
-                                  <span className="badge bg-light text-muted border rounded-pill">
+                                  <Badge variant="secondary">
                                     {t('trustBadgeNoData')}
-                                  </span>
+                                  </Badge>
                                 ) : (
-                                  <span
-                                    className={`badge ${trustBadge.badgeClass} rounded-pill`}
-                                  >
+                                  <Badge variant={trustBadge.variant}>
                                     {t('trustBadge', {
                                       score: trustBadge.score,
                                     })}
-                                  </span>
+                                  </Badge>
                                 )}
                               </div>
                             );
@@ -1350,60 +1340,65 @@ export default function HeroSearchInspector({
                           })()}
 
                         <div className="d-flex flex-wrap gap-2">
-                          <Link
-                            href={getMasterProductHref(
-                              inspectResult.masterProduct
-                            )}
-                            className="btn btn-primary btn-sm rounded-pill fw-semibold flex-grow-1 px-3"
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            asChild
+                            className="flex-grow-1"
                           >
-                            {t('viewSpecsAndHistoryBtn')}{' '}
-                            <BsArrowRight aria-hidden="true" className="ms-1" />
-                          </Link>
-                          <Link
-                            href={`/inspect?q=${encodeURIComponent(inspectQuery)}`}
-                            className="btn btn-outline-danger btn-sm rounded-pill fw-medium px-3"
-                          >
-                            {t('auditReportBtn')}
-                          </Link>
-                          {inspectResult.merchantProfile && (
                             <Link
-                              href={`/merchants/${inspectResult.merchantProfile.id}`}
-                              className="btn btn-outline-dark btn-sm rounded-pill px-3"
+                              href={getMasterProductHref(
+                                inspectResult.masterProduct
+                              )}
                             >
-                              {t('shopProfileBtn')}
+                              {t('viewSpecsAndHistoryBtn')}
+                              <BsArrowRight aria-hidden="true" />
                             </Link>
+                          </Button>
+                          <Button variant="outline-primary" size="sm" asChild>
+                            <Link
+                              href={`/inspect?q=${encodeURIComponent(inspectQuery)}`}
+                            >
+                              {t('auditReportBtn')}
+                            </Link>
+                          </Button>
+                          {inspectResult.merchantProfile && (
+                            <Button variant="outline" size="sm" asChild>
+                              <Link
+                                href={`/merchants/${inspectResult.merchantProfile.id}`}
+                              >
+                                {t('shopProfileBtn')}
+                              </Link>
+                            </Button>
                           )}
                         </div>
-                      </div>
+                      </Card>
                     </div>
                   </div>
                 ) : inspectResult.merchantProfile ? (
                   <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
                     <div>
                       <div className="d-flex align-items-center mb-1 gap-2">
-                        <span className="badge bg-danger text-uppercase">
+                        <Badge variant="brand" className="text-uppercase">
                           {inspectResult.merchantProfile.platform}
-                        </span>
+                        </Badge>
                         {inspectResult.merchantProfile.is_official && (
-                          <span className="badge bg-success-subtle text-success">
+                          <Badge variant="success">
                             {t('officialMallBadge')}
-                          </span>
+                          </Badge>
                         )}
                         {(() => {
                           const trustBadge = resolveHeroMerchantTrustBadge(
-                            inspectResult.merchantProfile,
-                            'solid'
+                            inspectResult.merchantProfile
                           );
                           return trustBadge == null ? (
-                            <span className="badge bg-light text-muted border rounded-pill">
+                            <Badge variant="secondary">
                               {t('trustBadgeNoData')}
-                            </span>
+                            </Badge>
                           ) : (
-                            <span
-                              className={`badge ${trustBadge.badgeClass} rounded-pill`}
-                            >
+                            <Badge variant={trustBadge.variant}>
                               {t('trustBadge', { score: trustBadge.score })}
-                            </span>
+                            </Badge>
                           );
                         })()}
                       </div>
@@ -1453,12 +1448,13 @@ export default function HeroSearchInspector({
                         </strong>
                       </div>
                     </div>
-                    <Link
-                      href={`/merchants/${inspectResult.merchantProfile.id}`}
-                      className="btn btn-primary rounded-pill fw-semibold px-4"
-                    >
-                      {t('openMerchantProfileBtn')}
-                    </Link>
+                    <Button variant="primary" size="default" asChild>
+                      <Link
+                        href={`/merchants/${inspectResult.merchantProfile.id}`}
+                      >
+                        {t('openMerchantProfileBtn')}
+                      </Link>
+                    </Button>
                   </div>
                 ) : (
                   <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
@@ -1474,16 +1470,17 @@ export default function HeroSearchInspector({
                         {t('unmatchedDesc')}
                       </p>
                     </div>
-                    <Link
-                      href={`/smartphones?q=${encodeURIComponent(inspectResult.query)}`}
-                      className="btn btn-outline-primary rounded-pill fw-semibold px-4"
-                    >
-                      {t('searchInSmartphonesBtn')}
-                    </Link>
+                    <Button variant="outline-primary" size="default" asChild>
+                      <Link
+                        href={`/smartphones?q=${encodeURIComponent(inspectResult.query)}`}
+                      >
+                        {t('searchInSmartphonesBtn')}
+                      </Link>
+                    </Button>
                   </div>
                 )}
               </div>
-            </div>
+            </Card>
           )}
         </div>
       )}

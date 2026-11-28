@@ -293,3 +293,144 @@ test('catalogue pages carry their own canonical URL', async ({ request }) => {
     'https://rate.vn/earbuds?page=2'
   );
 });
+
+// Phase 2B (DOS/Rate#2003): unified 36px/8px shadcn controls across Catalog
+// toolbar, sort dropdown, ProductCard CTAs, and Home HeroSearchInspector, plus
+// unbroken slash-separated title wrap on ProductCard.
+test('catalog toolbar, sort, product cards, and home hero search use unified 8px controls without title overflow (#2003)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expect((await page.goto('/smartphones'))?.status()).toBe(200);
+  await page.waitForLoadState('networkidle');
+
+  const catalogMetrics = await page.evaluate(() => {
+    const readBox = (el: Element | null) => {
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return {
+        height: Math.round(el.getBoundingClientRect().height),
+        radius: cs.borderRadius,
+        textTransform: cs.textTransform,
+      };
+    };
+    const toolbarCta = readBox(
+      document.querySelector('[data-testid="catalog-1v1-go-btn"]')
+    );
+    const exportBtn = readBox(
+      document.querySelector(
+        '.rate-catalog-toolbar details.rate-export-menu summary[data-slot="button"]'
+      )
+    );
+    const sortBtn = readBox(document.querySelector('#shortfilter'));
+    const cardCtas = Array.from(
+      document.querySelectorAll('.rate-product-card-cta [data-slot="button"]')
+    )
+      .slice(0, 4)
+      .map(readBox);
+
+    // Inject a long unbroken slash-separated product name into the first card.
+    const longSlashTitle =
+      'Samsung G3 G31H LS27HG310EEXXV 27 inch/FHD/IPS/144Hz/1ms/UltraLongUnbrokenSpecToken';
+    const card = document.querySelector<HTMLElement>('.rate-product-card');
+    const body = card?.querySelector<HTMLElement>('.rate-product-card-body');
+    const title = card?.querySelector<HTMLElement>('.rate-product-card-title');
+    const titleLink = title?.querySelector<HTMLElement>('a');
+    if (titleLink) titleLink.textContent = longSlashTitle;
+    const cardRect = card?.getBoundingClientRect() ?? null;
+    const titleRect = title?.getBoundingClientRect() ?? null;
+
+    return {
+      toolbarCta,
+      exportBtn,
+      sortBtn,
+      cardCtas,
+      overflow: {
+        hasCard: Boolean(card && body && title),
+        cardScrollDiff: card ? card.scrollWidth - card.clientWidth : 999,
+        bodyScrollDiff: body ? body.scrollWidth - body.clientWidth : 999,
+        titleOverflowRight:
+          cardRect && titleRect
+            ? Math.round(titleRect.right - cardRect.right)
+            : 999,
+        overflowWrap: title ? getComputedStyle(title).overflowWrap : '',
+        pageScrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+      },
+    };
+  });
+
+  expect(catalogMetrics.toolbarCta).toEqual({
+    height: 36,
+    radius: '8px',
+    textTransform: 'none',
+  });
+  expect(catalogMetrics.exportBtn).toEqual({
+    height: 36,
+    radius: '8px',
+    textTransform: 'none',
+  });
+  expect(catalogMetrics.sortBtn).toEqual({
+    height: 36,
+    radius: '8px',
+    textTransform: 'none',
+  });
+  expect(catalogMetrics.cardCtas.length).toBeGreaterThanOrEqual(2);
+  for (const cta of catalogMetrics.cardCtas) {
+    expect(cta).toEqual({
+      height: 36,
+      radius: '8px',
+      textTransform: 'none',
+    });
+  }
+  expect(catalogMetrics.overflow.hasCard).toBe(true);
+  expect(catalogMetrics.overflow.cardScrollDiff).toBeLessThanOrEqual(1);
+  expect(catalogMetrics.overflow.bodyScrollDiff).toBeLessThanOrEqual(1);
+  expect(catalogMetrics.overflow.titleOverflowRight).toBeLessThanOrEqual(1);
+  expect(catalogMetrics.overflow.overflowWrap).toBe('anywhere');
+  expect(catalogMetrics.overflow.pageScrollWidth).toBeLessThanOrEqual(
+    catalogMetrics.overflow.viewportWidth
+  );
+
+  // Home HeroSearchInspector: mode switcher and submit buttons use 8px radius,
+  // with zero pill (999px / 50px) buttons on Home.
+  expect((await page.goto('/'))?.status()).toBe(200);
+  await page.waitForLoadState('networkidle');
+  const homeMetrics = await page.evaluate(() => {
+    const hero = document.querySelector('.hero-header');
+    const modeButtons = Array.from(
+      hero?.querySelectorAll<HTMLElement>('button[aria-pressed]') ?? []
+    ).map((el) => ({
+      height: Math.round(el.getBoundingClientRect().height),
+      radius: getComputedStyle(el).borderRadius,
+    }));
+    const submitBtn = hero?.querySelector<HTMLElement>(
+      'form.search-wrap button[type="submit"]'
+    );
+    const pillButtons = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'button, a[data-slot="button"], a.btn'
+      )
+    )
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      })
+      .filter((el) => {
+        const radius = parseFloat(getComputedStyle(el).borderRadius);
+        return Number.isFinite(radius) && radius >= 24;
+      })
+      .map((el) => `${el.tagName}:${el.textContent?.trim().slice(0, 30)}`);
+    return {
+      modeButtons,
+      submitRadius: submitBtn ? getComputedStyle(submitBtn).borderRadius : null,
+      pillButtons,
+    };
+  });
+  expect(homeMetrics.modeButtons).toHaveLength(2);
+  for (const btn of homeMetrics.modeButtons) {
+    expect(btn).toEqual({ height: 36, radius: '8px' });
+  }
+  expect(homeMetrics.submitRadius).toBe('8px');
+  expect(homeMetrics.pillButtons).toEqual([]);
+});

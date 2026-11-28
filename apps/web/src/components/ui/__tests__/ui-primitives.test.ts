@@ -238,20 +238,28 @@ function main() {
   assert.match(tabsHtml, /\bh-9\b/);
   assert.doesNotMatch(tabsHtml, /rounded-full|999px/);
 
-  // 6. Zero em-dashes or en-dashes across UI primitives and Phase 2A migrated files.
+  // 6. Zero em-dashes or en-dashes across UI primitives and Phase 2A/2B migrated files.
   for (const rel of [
     '../button.tsx',
     '../badge.tsx',
     '../card.tsx',
     '../tabs.tsx',
+    '../../elementary/ExportMenu.tsx',
+    '../../home/HeroSearchInspector.tsx',
     '../../radar/RadarBadge.tsx',
     '../../product/PhoneCollapsible.tsx',
+    '../../product/ProductCard.tsx',
     '../../product/item/ItemLazySizePanel.tsx',
     '../../reviews/JReviewsSection.tsx',
     '../../reviews/ReviewFormV2.tsx',
     '../../price-history/PriceHistorySection.tsx',
+    '../../leaderboard/CategoryCatalogToolbar.tsx',
     '../../leaderboard/ProductOffersExplorer.tsx',
     '../../leaderboard/ProductValueCalculator.tsx',
+    '../../../app/[locale]/components/catalog-sort-dropdown.tsx',
+    '../../../app/[locale]/components/list-sidebar-one.tsx',
+    '../../../app/[locale]/smartphones/page.tsx',
+    '../../../app/[locale]/page.tsx',
     '../../../lib/utils.ts',
     '../../../app/style/tailwind.css',
   ] as const) {

@@ -23,6 +23,8 @@ import {
   isCanonicalCategorySlug,
   type RateCategoryItem,
 } from '@/lib/rate-domain';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 export interface ListSidebarOneProps {
   categorySlug?: string;
@@ -500,9 +502,9 @@ export default function ListSidebarOne({
                     >
                       {t('sidebar.keywordChipsetHeader')}
                     </h3>
-                    <span className="badge bg-light text-muted small mb-2 border">
+                    <Badge variant="secondary" className="mb-2">
                       {schema.directoryName}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="form-group form-border mb-0">
                     {/* Named by the heading above, not only by the
@@ -823,23 +825,27 @@ export default function ListSidebarOne({
 
                 {/* 9. Submit / Reset Actions */}
                 <div className="form-group filter_button d-grid mb-0 gap-2">
-                  <button
+                  <Button
                     type="submit"
-                    className="btn btn-primary fw-medium full-width"
+                    variant="primary"
+                    size="default"
+                    className="w-100"
                     disabled={isPending}
                   >
                     {isPending
                       ? t('sidebar.filteringBtn')
                       : t('sidebar.applyFiltersBtn')}
-                  </button>
+                  </Button>
                   {searchParams && searchParams.toString().length > 0 && (
-                    <button
+                    <Button
                       type="button"
+                      variant="outline"
+                      size="default"
                       onClick={handleResetAll}
-                      className="btn btn-light fw-medium full-width text-muted border"
+                      className="w-100"
                     >
                       {t('sidebar.clearAllFiltersBtn')}
-                    </button>
+                    </Button>
                   )}
                 </div>
               </form>
