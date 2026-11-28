@@ -680,11 +680,93 @@ const CAMERA_ACCESSORY_COMPAT_ITEM_RE =
   /(?<![\p{L}\d])(?:lens|ống[\s-]{0,2}kính|ong[\s-]{0,2}kinh|tripods?|chân[\s-]{0,2}máy|chan[\s-]{0,2}may|túi|tui|ba[\s-]{0,2}lô|balo|filters?|kính[\s-]{0,2}lọc|kinh[\s-]{0,2}loc|đèn[\s-]{0,2}flash|den[\s-]{0,2}flash|flash|gimbals?|cage|khung[\s-]{0,2}bảo[\s-]{0,2}vệ|khung[\s-]{0,2}bao[\s-]{0,2}ve|pin|sạc|sac|hoods?|ngàm[\s-]{0,2}chuyển|ngam[\s-]{0,2}chuyen|micro|mic)(?![\p{L}\d])/iu;
 const CAMERA_ACCESSORY_COMPAT_TARGET_RE =
   /(?<![\p{L}\d])(?:cho|for|dành[\s-]{0,2}cho|danh[\s-]{0,2}cho)[\s-]{1,2}(?:máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|mirrorless|dslr|sony|canon|nikon|fujifilm|gopro|dji|insta360)(?![\p{L}\d])/iu;
+const CAMERA_BODY_NOUN_OPENER_RE =
+  /^\s{0,4}(?:(?:\[[^\]]{0,40}\]|\([^)]{0,40}\)|【[^】]{0,40}】)\s{0,4}){0,3}(?:máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|camera[\s-]{0,2}hành[\s-]{0,2}động|camera[\s-]{0,2}hanh[\s-]{0,2}dong|action[\s-]{0,2}cam(?:era)?|máy[\s-]{0,2}quay|may[\s-]{0,2}quay|mirrorless|dslr|gopro[\s-]{0,2}(?:hero|max)|dji[\s-]{0,2}(?:osmo[\s-]{0,2}(?:action|pocket)|action[\s-]{0,2}\d|pocket[\s-]{0,2}\d)|insta360[\s-]{0,2}(?:x\d|ace|go[\s-]{0,2}\d|one))(?![\p{L}\d])/iu;
+const CAMERA_BODY_LINE_OPENER_RE =
+  /^\s{0,4}(?:(?:\[[^\]]{0,40}\]|\([^)]{0,40}\)|【[^】]{0,40}】)\s{0,4}){0,3}(?:sony[\s-]{0,2}(?:alpha|a(?!(?:80|90|95)[jklm](?![\p{L}\d]))\d[a-z0-9-]{0,10}|zv-[a-z0-9-]{1,12}|fx\d[a-z0-9-]{0,8}|rx\d[a-z0-9-]{0,8}|ilce-[a-z0-9-]{1,12}|dsc-[a-z0-9-]{1,12})|canon[\s-]{0,2}(?:eos|powershot|ixus)|fujifilm[\s-]{0,2}(?:x(?:-[a-z0-9-]{1,12}|(?![fc]\d{1,3}(?:[\s-]{0,2}-[\s-]{0,2}\d{1,3})?[\s-]{0,2}mm)[a-z]\d{1,3}[a-z0-9-]{0,8}|100[a-z0-9]{0,4})|gfx[\s-]{0,2}\d[a-z0-9-]{0,8}|instax)|nikon[\s-]{0,2}(?:z[\s-]{0,2}(?!(?:\d{1,3}[\s-]{0,2}-[\s-]{0,2})?\d{1,3}(?:[.,]\d)?[\s-]{0,2}mm(?![\p{L}\d]))\d[a-z0-9-]{0,8}|z[\s-]{0,2}fc?|d\d{3}[a-z0-9-]{0,8}|coolpix)|(?:panasonic[\s-]{0,2})?lumix[\s-]{0,2}(?:s|g|gh|gx|tz|lx)\d[a-z0-9-]{0,10}|om[\s-]{0,2}system[\s-]{0,2}om-\d[a-z0-9-]{0,8}|olympus[\s-]{0,2}(?:om-d|pen[\s-]{0,2}e-[a-z0-9-]{1,10}|tg-\d[a-z0-9-]{0,8})|leica[\s-]{0,2}(?:(?:q|m|sl)\d[a-z0-9-]{0,8}|d-lux|sofort)|ricoh[\s-]{0,2}gr[\s-]{0,2}(?:iii|ii|3|2)[a-z0-9-]{0,8})(?![\p{L}\d])/iu;
+const CAMERA_LENS_WORD_RE =
+  /(?<![\p{L}\d])(?:ống[\s-]{0,2}kính|ong[\s-]{0,2}kinh|lens)(?![\p{L}\d])/iu;
+const CAMERA_NON_LENS_ACCESSORY_RE =
+  /(?<![\p{L}\d])(?:đèn[\s-]{0,2}flash|den[\s-]{0,2}flash|gimbals?|cage|khung[\s-]{0,2}bảo[\s-]{0,2}vệ|khung[\s-]{0,2}bao[\s-]{0,2}ve|chân[\s-]{0,2}máy(?:[\s-]{0,2}ảnh)?|chan[\s-]{0,2}may(?:[\s-]{0,2}anh)?|tripods?|monopods?|túi[\s-]{0,2}(?:đựng[\s-]{0,2})?máy[\s-]{0,2}ảnh|tui[\s-]{0,2}(?:dung[\s-]{0,2})?may[\s-]{0,2}anh|túi[\s-]{0,2}đựng|tui[\s-]{0,2}dung|ba[\s-]{0,2}lô[\s-]{0,2}máy[\s-]{0,2}ảnh|balo[\s-]{0,2}máy[\s-]{0,2}ảnh|balo[\s-]{0,2}may[\s-]{0,2}anh|thẻ[\s-]{0,2}nhớ|the[\s-]{0,2}nho|memory[\s-]{0,2}cards?|kính[\s-]{0,2}lọc|kinh[\s-]{0,2}loc|filters?|lens[\s-]{0,2}hoods?|hood|loa[\s-]{0,2}che[\s-]{0,2}nắng|ngàm[\s-]{0,2}chuyển|ngam[\s-]{0,2}chuyen|mount[\s-]{0,2}adapters?|pin[\s-]{0,2}rời|pin[\s-]{0,2}roi|sạc[\s-]{0,2}rời|sac[\s-]{0,2}roi|tủ[\s-]{0,2}chống[\s-]{0,2}ẩm|tu[\s-]{0,2}chong[\s-]{0,2}am)(?![\p{L}\d])/iu;
+const BARE_FOCAL_LENGTH_RE =
+  /(?<![\p{L}\d])(?:(?:xf|xc|fe|rf-?s?|ef-?[sm]?|dx|fx|dg|dc)[\s-]{0,2})?(?:\d{1,3}[\s-]{0,2}-[\s-]{0,2}\d{1,3}|\d{1,3}(?:[.,]\d)?)[\s-]{0,2}mm(?![\p{L}\d])/iu;
+const BARE_LENS_APERTURE_OR_MOUNT_RE =
+  /(?<![\p{L}\d])(?:f[\s/:-]{0,2}\d(?:[.,]\d{1,2})?|sony[\s-]{0,2}(?:fe(?![a-z])|e(?![\p{L}\d]))|canon[\s-]{0,2}(?:rf-?s?|ef-?[sm]?)(?![a-z])|nikon[\s-]{0,2}(?:z(?![a-z])|nikkor|af-?[sp])(?![a-z])|fujifilm[\s-]{0,2}(?:xf|xc|gf)(?![a-z])|fujinon|nikkor|sigma|tamron|viltrox|samyang|tokina|laowa|ttartisan|7artisans|zeiss|voigtlander|sirui|meike)(?![\p{L}\d])/iu;
+const CAMERA_LEADING_PROMO_BRACKET_RE =
+  /^\s{0,4}(?:\[[^\]]{0,40}\]|\([^)]{0,40}\)|【[^】]{0,40}】)\s{0,4}/u;
+const CAMERA_LEADING_RETAIL_PREFIX_RE =
+  /^(?:(?:hàng|hang)[\s-]{1,2}(?:chính[\s-]{1,2}hãng|chinh[\s-]{1,2}hang|nhập[\s-]{1,2}khẩu|nhap[\s-]{1,2}khau|mới|moi|công[\s-]{1,2}ty|cong[\s-]{1,2}ty)|chính[\s-]{1,2}hãng|chinh[\s-]{1,2}hang|nhập[\s-]{1,2}khẩu|nhap[\s-]{1,2}khau|combo|bộ|bo|full[\s-]{0,2}box|new|mới|moi)(?![\p{L}\d])[\s:!|/-]{0,4}/iu;
+
+function stripCameraLeadingRetailPrefix(text: string): string {
+  let rest = text.trimStart();
+  for (let i = 0; i < 4; i++) {
+    const before = rest;
+    rest = rest.replace(CAMERA_LEADING_PROMO_BRACKET_RE, '');
+    rest = rest.replace(CAMERA_LEADING_RETAIL_PREFIX_RE, '').trimStart();
+    if (rest === before) break;
+  }
+  return rest;
+}
+
+const MONITOR_BUILT_IN_CAMERA_ALLOW_RE =
+  /^\s{0,4}(?:(?:\[[^\]]{0,40}\]|\([^)]{0,40}\)|【[^】]{0,40}】)\s{0,4}){0,3}(?:màn[\s-]{0,2}hình|man[\s-]{0,2}hinh)(?![\p{L}\d])|(?<![\p{L}\d])(?:apple[\s-]{0,2}(?:studio[\s-]{0,2}display|pro[\s-]{0,2}display[\s-]{0,2}xdr)|ultrasharp|ultragear|thinkvision|zenscreen|(?:gaming|ultrawide|computer|pc|curved|oled|4k|2k|portable|ips)[\s-]{0,2}monitors?)(?![\p{L}\d])/iu;
+const MONITOR_NON_BUILT_IN_CAMERA_RE =
+  /(?<![\p{L}\d])camera[\s-]{0,2}(?:hành[\s-]{0,2}trình|hanh[\s-]{0,2}trinh|an[\s-]{0,2}ninh|giám[\s-]{0,2}sát|giam[\s-]{0,2}sat|wifi|wi-fi|ip|quan[\s-]{0,2}sát|quan[\s-]{0,2}sat|ngoài[\s-]{0,2}trời|ngoai[\s-]{0,2}troi|trong[\s-]{0,2}nhà|trong[\s-]{0,2}nha|lùi|lui|ô[\s-]{0,2}tô|o[\s-]{0,2}to|nội[\s-]{0,2}soi|noi[\s-]{0,2}soi|hành[\s-]{0,2}động|hanh[\s-]{0,2}dong|thể[\s-]{0,2}thao|the[\s-]{0,2}thao|360)(?![\p{L}\d])/iu;
+const MONITOR_CABLE_RE =
+  /(?<![\p{L}\d])(?:cáp|cap)[\s-]{0,2}(?:hdmi|displayport|vga)(?![\p{L}\d])/giu;
+const INCLUDED_CABLE_PREFIX_RE =
+  /(?:^|[\s([/+,-])(?:có|co|kèm(?:[\s-]{1,2}theo)?|kem(?:[\s-]{1,2}theo)?|tặng|tang|hỗ[\s-]{0,2}trợ|ho[\s-]{0,2}tro|cổng|cong|gồm|gom|kết[\s-]{0,2}nối|ket[\s-]{0,2}noi)[\s-]{1,2}$/iu;
+const LAPTOP_WORD_RE = /(?<![\p{L}\d])laptop(?![\p{L}\d])/giu;
+const PORTABLE_MONITOR_CUE_RE =
+  /(?<![\p{L}\d])(?:màn[\s-]{0,2}hình[\s-]{0,2}(?:di[\s-]{0,2}động|rời)|man[\s-]{0,2}hinh[\s-]{0,2}(?:di[\s-]{0,2}dong|roi)|portable[\s-]{0,2}monitors?|zenscreen|gram[\s-]{0,2}\+view)(?![\p{L}\d])/iu;
+const PORTABLE_MONITOR_FOR_PREFIX_RE =
+  /(?:^|[\s([/+,-])(?:cho|dành[\s-]{0,2}cho|danh[\s-]{0,2}cho|for|kết[\s-]{0,2}nối|ket[\s-]{0,2}noi|tương[\s-]{0,2}thích|tuong[\s-]{0,2}thich)[\s-]{1,2}(?:(?:pc|mac|điện[\s-]{0,2}thoại|dien[\s-]{0,2}thoai)[\s/,&-]{1,3}){0,2}$/iu;
 
 function hasCameraAccessoryCompatibility(text: string): boolean {
   const targetMatch = CAMERA_ACCESSORY_COMPAT_TARGET_RE.exec(text);
   if (!targetMatch) return false;
   return CAMERA_ACCESSORY_COMPAT_ITEM_RE.test(text.slice(0, targetMatch.index));
+}
+
+function isBareStandaloneLens(text: string, opensWithCameraBody: boolean): boolean {
+  return (
+    !opensWithCameraBody &&
+    BARE_FOCAL_LENGTH_RE.test(text) &&
+    BARE_LENS_APERTURE_OR_MOUNT_RE.test(text)
+  );
+}
+
+function hasNonMonitorCameraMention(text: string): boolean {
+  if (!/(?<![\p{L}\d])camera(?![\p{L}\d])/iu.test(text)) return false;
+  if (MONITOR_NON_BUILT_IN_CAMERA_RE.test(text)) return true;
+  return !MONITOR_BUILT_IN_CAMERA_ALLOW_RE.test(text);
+}
+
+function hasStandaloneMonitorCable(text: string): boolean {
+  MONITOR_CABLE_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = MONITOR_CABLE_RE.exec(text)) !== null) {
+    const prefix = text.slice(Math.max(0, match.index - 24), match.index);
+    if (!INCLUDED_CABLE_PREFIX_RE.test(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasNonMonitorLaptopMention(text: string): boolean {
+  LAPTOP_WORD_RE.lastIndex = 0;
+  let match = LAPTOP_WORD_RE.exec(text);
+  if (!match) return false;
+  if (!PORTABLE_MONITOR_CUE_RE.test(text)) return true;
+  while (match !== null) {
+    const prefix = text.slice(Math.max(0, match.index - 32), match.index);
+    if (!PORTABLE_MONITOR_FOR_PREFIX_RE.test(prefix)) {
+      return true;
+    }
+    match = LAPTOP_WORD_RE.exec(text);
+  }
+  return false;
 }
 
 /**
@@ -723,15 +805,16 @@ export function isAccessoryTitle(
     if (hasCameraAccessoryCompatibility(ownPart)) {
       return true;
     }
+    const cameraOpening = stripCameraLeadingRetailPrefix(opening);
+    const opensWithCameraNoun = CAMERA_BODY_NOUN_OPENER_RE.test(cameraOpening);
     const opensWithCameraBody =
-      /^(?:máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|camera[\s-]{0,2}hành[\s-]{0,2}động|camera[\s-]{0,2}hanh[\s-]{0,2}dong|action[\s-]{0,2}cam|máy[\s-]{0,2}quay|may[\s-]{0,2}quay|gopro[\s-]{0,2}(?:hero|max)|dji[\s-]{0,2}osmo[\s-]{0,2}(?:action|pocket)|insta360[\s-]{0,2}(?:x\d|ace|go[\s-]{0,2}\d|one))(?![\p{L}\d])/iu.test(
-        opening
-      );
+      opensWithCameraNoun || CAMERA_BODY_LINE_OPENER_RE.test(cameraOpening);
+    if (!opensWithCameraNoun && CAMERA_NON_LENS_ACCESSORY_RE.test(ownPart)) {
+      return true;
+    }
     if (
       !opensWithCameraBody &&
-      /(?<![\p{L}\d])(?:ống[\s-]{0,2}kính|ong[\s-]{0,2}kinh|lens|đèn[\s-]{0,2}flash|den[\s-]{0,2}flash|gimbals?|cage|khung[\s-]{0,2}bảo[\s-]{0,2}vệ|khung[\s-]{0,2}bao[\s-]{0,2}ve|chân[\s-]{0,2}máy(?:[\s-]{0,2}ảnh)?|chan[\s-]{0,2}may(?:[\s-]{0,2}anh)?|tripods?|monopods?|túi[\s-]{0,2}(?:đựng[\s-]{0,2})?máy[\s-]{0,2}ảnh|tui[\s-]{0,2}(?:dung[\s-]{0,2})?may[\s-]{0,2}anh|ba[\s-]{0,2}lô[\s-]{0,2}máy[\s-]{0,2}ảnh|balo[\s-]{0,2}máy[\s-]{0,2}ảnh|balo[\s-]{0,2}may[\s-]{0,2}anh|thẻ[\s-]{0,2}nhớ|the[\s-]{0,2}nho|memory[\s-]{0,2}cards?|kính[\s-]{0,2}lọc|kinh[\s-]{0,2}loc|filters?|lens[\s-]{0,2}hoods?|hood|loa[\s-]{0,2}che[\s-]{0,2}nắng|ngàm[\s-]{0,2}chuyển|ngam[\s-]{0,2}chuyen|mount[\s-]{0,2}adapters?|pin[\s-]{0,2}rời|pin[\s-]{0,2}roi|sạc[\s-]{0,2}rời|sac[\s-]{0,2}roi|tủ[\s-]{0,2}chống[\s-]{0,2}ẩm|tu[\s-]{0,2}chong[\s-]{0,2}am)(?![\p{L}\d])/iu.test(
-        ownPart
-      )
+      (CAMERA_LENS_WORD_RE.test(ownPart) || isBareStandaloneLens(ownPart, opensWithCameraBody))
     ) {
       return true;
     }
@@ -851,12 +934,15 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
   // Legion R monitor models do not collide with laptop series names (DOS/Rate#1976).
   // All repetitions are strictly bounded to prevent polynomial ReDoS (CodeQL).
   const isNonMonitorItem =
-    /(?<![\p{L}\d])(?:điện[\s-]{0,2}thoại|dien[\s-]{0,2}thoai|smartphone|iphone|ipad|macbook|laptop|máy[\s-]{0,2}tính[\s-]{0,2}(?:xách[\s-]{0,2}tay|bảng)|may[\s-]{0,2}tinh[\s-]{0,2}(?:xach[\s-]{0,2}tay|bang)|ultrabook|tablet|rog[\s-]{0,2}(?:zephyrus|flow|strix(?![\s-]{0,2}(?:(?:oled|qd[\s-]{0,2}oled)[\s-]{0,2})?xg))|tuf[\s-]{0,2}(?:gaming[\s-]{0,2}(?:a\d{2}|f\d{2}|dash)|dash[\s-]{0,2}f\d{2})|legion[\s-]{0,2}(?:[579]i?|pro|slim|go|s\d{1,2}i?|[ry][79]\d{3}[a-z]?)|predator[\s-]{0,2}(?:helios|triton)|nitro[\s-]{0,2}(?:5|16|17|v(?![a-z])(?:[\s-]{0,2}\d{1,2})?)|xps[\s-]{0,2}\d{2}|(?<!rog[\s-])swift[\s-]{0,2}(?:go|edge|x[\s-]{0,2}1[46]|(?:1|3|5|7|14|16)(?![\p{L}\d]|"|''))|proart[\s-]{0,2}(?:p\d{2}|px\d{2}|pz\d{2}|studiobook)|omen[\s-]{0,2}1[4-7][a-z]?|zenbook|vivo[\s-]{0,2}book|thinkpad|ideapad|inspiron|latitude|vostro|pavilion|envy|elitebook|probook|victus|katana|cyborg|stealth|raider|razer[\s-]{0,2}blade|lg[\s-]{0,2}gram(?![\s-]{0,2}\+view)|surface[\s-]{0,2}(?:laptop|pro|book|go)|ryzen[\s-]{0,2}ai|core[\s-]{0,2}i[3579]|core[\s-]{0,2}ultra|geforce[\s-]{0,2}rtx|rtx[\s-]{0,2}\d{4}|máy[\s-]{0,2}lọc[\s-]{0,2}(?:không[\s-]{0,2})?khí|may[\s-]{0,2}loc[\s-]{0,2}(?:khong[\s-]{0,2})?khi|air[\s-]{0,2}purifier|máy[\s-]{0,2}giặt|may[\s-]{0,2}giat|tủ[\s-]{0,2}lạnh|tu[\s-]{0,2}lanh|điều[\s-]{0,2}hòa|điều[\s-]{0,2}hoà|dieu[\s-]{0,2}hoa|máy[\s-]{0,2}lạnh|may[\s-]{0,2}lanh|tivi|smart[\s-]{0,2}tv|google[\s-]{0,2}tv|android[\s-]{0,2}tv|4k[\s-]{0,2}tv|8k[\s-]{0,2}tv|uhd[\s-]{0,2}tv|mini[\s-]{0,2}led[\s-]{0,2}tv|oled[\s-]{0,2}tv|qled[\s-]{0,2}tv|bravia|galaxy[\s-]{0,2}(?:s\d{1,3}|z[\s-]{0,2}fold|z[\s-]{0,2}flip|z[\s-]{0,2}\d|a\d{1,3}|m\d{1,3}|tab|watch|buds)|xiaomi[\s-]{0,2}1\d(?![\s-]{0,2}(?:inch|in(?![\p{L}\d])|"|''))|redmi|poco|oneplus|pixel[\s-]{0,2}\d|honor[\s-]{0,2}magic|oppo|vivo(?![\s-]{0,2}(?:view|display))|realme|matepad|xiaomi[\s-]{0,2}pad|redmi[\s-]{0,2}pad|garmin|apple[\s-]{0,2}watch|galaxy[\s-]{0,2}watch|amazfit|jbl[\s-]{0,2}tour|smartwatch|đồng[\s-]{0,2}hồ|tai[\s-]{0,2}nghe|airpods|earbuds?|sạc[\s-]{0,2}dự[\s-]{0,2}phòng|sac[\s-]{0,2}du[\s-]{0,2}phong|pin[\s-]{0,2}dự[\s-]{0,2}phòng|pin[\s-]{0,2}du[\s-]{0,2}phong|power[\s-]{0,2}bank|màn[\s-]{0,2}hình[\s-]{0,2}android|man[\s-]{0,2}hinh[\s-]{0,2}android|dvd[\s-]{0,2}android|carplay|zestech|gotech|oledpro|bravigo|máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|camera|ô[\s-]{0,2}tô|o[\s-]{0,2}to|xe[\s-]{0,2}hơi|xe[\s-]{0,2}hoi|android[\s-]{0,2}box|thay[\s-]{0,2}màn[\s-]{0,2}hình|thay[\s-]{0,2}man[\s-]{0,2}hinh|màn[\s-]{0,2}hình[\s-]{0,2}(?:thay[\s-]{0,2}thế|thay[\s-]{0,2}the|zin|bóc[\s-]{0,2}máy|boc[\s-]{0,2}may|linh[\s-]{0,2}kiện|linh[\s-]{0,2}kien|điện[\s-]{0,2}thoại|dien[\s-]{0,2}thoai|laptop|iphone|ipad)|man[\s-]{0,2}hinh[\s-]{0,2}(?:thay[\s-]{0,2}the|zin|boc[\s-]{0,2}may|linh[\s-]{0,2}kien|dien[\s-]{0,2}thoai|laptop|iphone|ipad)|ép[\s-]{0,2}kính|ep[\s-]{0,2}kinh|giá[\s-]{0,2}treo|gia[\s-]{0,2}treo|tay[\s-]{0,2}(?:đỡ|do|nâng|nang)|arm[\s-]{0,2}màn[\s-]{0,2}hình|arm[\s-]{0,2}man[\s-]{0,2}hinh|chân[\s-]{0,2}đế[\s-]{0,2}rời|chan[\s-]{0,2}de[\s-]{0,2}roi|dán[\s-]{0,2}màn[\s-]{0,2}hình|dan[\s-]{0,2}man[\s-]{0,2}hinh|kính[\s-]{0,2}cường[\s-]{0,2}lực|kinh[\s-]{0,2}cuong[\s-]{0,2}luc|miếng[\s-]{0,2}dán|mieng[\s-]{0,2}dan|tấm[\s-]{0,2}bảo[\s-]{0,2}vệ|tam[\s-]{0,2}bao[\s-]{0,2}ve|đèn[\s-]{0,2}treo[\s-]{0,2}màn[\s-]{0,2}hình|den[\s-]{0,2}treo[\s-]{0,2}man[\s-]{0,2}hinh|monitor[\s-]{0,2}(?:arm|mount|stand|light[\s-]{0,2}bar|riser|hood|protector|cable)|screen[\s-]{0,2}protectors?|baby[\s-]{0,2}monitor|blood[\s-]{0,2}pressure[\s-]{0,2}monitor|heart[\s-]{0,2}rate[\s-]{0,2}monitor|máy[\s-]{0,2}đo[\s-]{0,2}huyết[\s-]{0,2}áp|may[\s-]{0,2}do[\s-]{0,2}huyet[\s-]{0,2}ap|cáp[\s-]{0,2}(?:hdmi|displayport|vga)|cap[\s-]{0,2}(?:hdmi|displayport|vga))(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:điện[\s-]{0,2}thoại|dien[\s-]{0,2}thoai|smartphone|iphone|ipad|macbook|máy[\s-]{0,2}tính[\s-]{0,2}(?:xách[\s-]{0,2}tay|bảng)|may[\s-]{0,2}tinh[\s-]{0,2}(?:xach[\s-]{0,2}tay|bang)|ultrabook|tablet|rog[\s-]{0,2}(?:zephyrus|flow|strix(?![\s-]{0,2}(?:(?:oled|qd[\s-]{0,2}oled)[\s-]{0,2})?xg))|tuf[\s-]{0,2}(?:gaming[\s-]{0,2}(?:a\d{2}|f\d{2}|dash)|dash[\s-]{0,2}f\d{2})|legion[\s-]{0,2}(?:[579]i?|pro|slim|go|s\d{1,2}i?|[ry][79]\d{3}[a-z]?)|predator[\s-]{0,2}(?:helios|triton)|nitro[\s-]{0,2}(?:5|16|17|v(?![a-z])(?:[\s-]{0,2}\d{1,2})?)|xps[\s-]{0,2}\d{2}|(?<!rog[\s-])swift[\s-]{0,2}(?:go|edge|x[\s-]{0,2}1[46]|(?:1|3|5|7|14|16)(?![\p{L}\d]|"|''))|proart[\s-]{0,2}(?:p\d{2}|px\d{2}|pz\d{2}|studiobook)|omen[\s-]{0,2}1[4-7][a-z]?|zenbook|vivo[\s-]{0,2}book|thinkpad|ideapad|inspiron|latitude|vostro|pavilion|envy|elitebook|probook|victus|katana|cyborg|stealth|raider|razer[\s-]{0,2}blade|lg[\s-]{0,2}gram(?![\s-]{0,2}\+view)|surface[\s-]{0,2}(?:laptop|pro|book|go)|ryzen[\s-]{0,2}ai|core[\s-]{0,2}i[3579]|core[\s-]{0,2}ultra|geforce[\s-]{0,2}rtx|rtx[\s-]{0,2}\d{4}|máy[\s-]{0,2}lọc[\s-]{0,2}(?:không[\s-]{0,2})?khí|may[\s-]{0,2}loc[\s-]{0,2}(?:khong[\s-]{0,2})?khi|air[\s-]{0,2}purifier|máy[\s-]{0,2}giặt|may[\s-]{0,2}giat|tủ[\s-]{0,2}lạnh|tu[\s-]{0,2}lanh|điều[\s-]{0,2}hòa|điều[\s-]{0,2}hoà|dieu[\s-]{0,2}hoa|máy[\s-]{0,2}lạnh|may[\s-]{0,2}lanh|tivi|smart[\s-]{0,2}tv|google[\s-]{0,2}tv|android[\s-]{0,2}tv|4k[\s-]{0,2}tv|8k[\s-]{0,2}tv|uhd[\s-]{0,2}tv|mini[\s-]{0,2}led[\s-]{0,2}tv|oled[\s-]{0,2}tv|qled[\s-]{0,2}tv|bravia|galaxy[\s-]{0,2}(?:s\d{1,3}|z[\s-]{0,2}fold|z[\s-]{0,2}flip|z[\s-]{0,2}\d|a\d{1,3}|m\d{1,3}|tab|watch|buds)|xiaomi[\s-]{0,2}1\d[a-z]?(?![\s-]{0,2}(?:inch|in(?![\p{L}\d])|"|''|″))|redmi|poco|oneplus|pixel[\s-]{0,2}\d|honor[\s-]{0,2}magic|oppo|vivo(?![\s-]{0,2}(?:view|display))|realme|matepad|xiaomi[\s-]{0,2}pad|redmi[\s-]{0,2}pad|garmin|apple[\s-]{0,2}watch|galaxy[\s-]{0,2}watch|amazfit|jbl[\s-]{0,2}tour|smartwatch|đồng[\s-]{0,2}hồ|tai[\s-]{0,2}nghe|airpods|earbuds?|sạc[\s-]{0,2}dự[\s-]{0,2}phòng|sac[\s-]{0,2}du[\s-]{0,2}phong|pin[\s-]{0,2}dự[\s-]{0,2}phòng|pin[\s-]{0,2}du[\s-]{0,2}phong|power[\s-]{0,2}bank|màn[\s-]{0,2}hình[\s-]{0,2}android|man[\s-]{0,2}hinh[\s-]{0,2}android|dvd[\s-]{0,2}android|carplay|zestech|gotech|oledpro|bravigo|máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|ô[\s-]{0,2}tô|o[\s-]{0,2}to|xe[\s-]{0,2}hơi|xe[\s-]{0,2}hoi|android[\s-]{0,2}box|thay[\s-]{0,2}màn[\s-]{0,2}hình|thay[\s-]{0,2}man[\s-]{0,2}hinh|màn[\s-]{0,2}hình[\s-]{0,2}(?:thay[\s-]{0,2}thế|thay[\s-]{0,2}the|zin|bóc[\s-]{0,2}máy|boc[\s-]{0,2}may|linh[\s-]{0,2}kiện|linh[\s-]{0,2}kien|điện[\s-]{0,2}thoại|dien[\s-]{0,2}thoai|laptop|iphone|ipad)|man[\s-]{0,2}hinh[\s-]{0,2}(?:thay[\s-]{0,2}the|zin|boc[\s-]{0,2}may|linh[\s-]{0,2}kien|dien[\s-]{0,2}thoai|laptop|iphone|ipad)|ép[\s-]{0,2}kính|ep[\s-]{0,2}kinh|giá[\s-]{0,2}treo|gia[\s-]{0,2}treo|tay[\s-]{0,2}(?:đỡ|do|nâng|nang)|arm[\s-]{0,2}màn[\s-]{0,2}hình|arm[\s-]{0,2}man[\s-]{0,2}hinh|chân[\s-]{0,2}đế[\s-]{0,2}rời|chan[\s-]{0,2}de[\s-]{0,2}roi|dán[\s-]{0,2}màn[\s-]{0,2}hình|dan[\s-]{0,2}man[\s-]{0,2}hinh|kính[\s-]{0,2}cường[\s-]{0,2}lực|kinh[\s-]{0,2}cuong[\s-]{0,2}luc|miếng[\s-]{0,2}dán|mieng[\s-]{0,2}dan|tấm[\s-]{0,2}bảo[\s-]{0,2}vệ|tam[\s-]{0,2}bao[\s-]{0,2}ve|đèn[\s-]{0,2}treo[\s-]{0,2}màn[\s-]{0,2}hình|den[\s-]{0,2}treo[\s-]{0,2}man[\s-]{0,2}hinh|monitor[\s-]{0,2}(?:arm|mount|stand|light[\s-]{0,2}bar|riser|hood|protector|cable)|screen[\s-]{0,2}protectors?|baby[\s-]{0,2}monitor|blood[\s-]{0,2}pressure[\s-]{0,2}monitor|heart[\s-]{0,2}rate[\s-]{0,2}monitor|máy[\s-]{0,2}đo[\s-]{0,2}huyết[\s-]{0,2}áp|may[\s-]{0,2}do[\s-]{0,2}huyet[\s-]{0,2}ap)(?![\p{L}\d])/iu.test(
       t
-    );
+    ) ||
+    hasNonMonitorCameraMention(t) ||
+    hasStandaloneMonitorCable(t) ||
+    hasNonMonitorLaptopMention(t);
   if (
     !isNonMonitorItem &&
-    (/(?<![\p{L}\d])(?:màn[\s-]{0,2}hình[\s-]{0,2}(?:máy[\s-]{0,2}tính|pc|gaming|đồ[\s-]{0,2}họa|đồ[\s-]{0,2}hoạ|chuyên[\s-]{0,2}đồ[\s-]{0,2}họa|văn[\s-]{0,2}phòng|rời|di[\s-]{0,2}động|chơi[\s-]{0,2}game|ultrawide|tương[\s-]{0,2}tác)|man[\s-]{0,2}hinh[\s-]{0,2}(?:may[\s-]{0,2}tinh|pc|gaming|do[\s-]{0,2}hoa|chuyen[\s-]{0,2}do[\s-]{0,2}hoa|van[\s-]{0,2}phong|roi|di[\s-]{0,2}dong|choi[\s-]{0,2}game|ultrawide|tuong[\s-]{0,2}tac)|(?:gaming|ultrawide|computer|pc|curved|oled|4k|2k|portable|ips)[\s-]{0,2}monitors?|apple[\s-]{0,2}(?:studio[\s-]{0,2}display|pro[\s-]{0,2}display[\s-]{0,2}xdr)|ultrasharp|odyssey[\s-]{0,2}(?:g\d[a-z0-9-]{0,12}|neo|oled|ark)|proart(?:[\s-]{0,2}display|[\s-]{0,2}pa(?:2[2-9]|3[0-9])[a-z0-9-]{1,13})|tuf[\s-]{0,2}gaming[\s-]{0,2}vg\d[a-z0-9-]{0,12}|rog[\s-]{0,2}(?:strix|swift)[\s-]{0,2}(?:(?:oled|qd[\s-]{0,2}oled)[\s-]{0,2})?(?:xg|pg)\d[a-z0-9-]{0,12}|ultragear|benq[\s-]{0,2}(?:mobiuz|(?:pd|sw|gw|ex)\d[a-z0-9-]{0,12}|zowie[\s-]{0,2}xl\d[a-z0-9-]{0,12})|zowie[\s-]{0,2}xl\d[a-z0-9-]{0,12}|viewsonic[\s-]{0,2}(?:vx|vg|va|vp|xg|omni)\d[a-z0-9-]{0,12}|aoc[\s-]{0,2}(?:(?:24g|27g|q27g|cu34|c24g|c27g|ag|24b|27b)[a-z0-9-]{0,12}|agon)|msi[\s-]{0,2}(?:optix|modern[\s-]{0,2}md\d[a-z0-9-]{0,12}|pro[\s-]{0,2}mp\d[a-z0-9-]{0,12}|g(?:2[4-9]|3[0-9])\d{0,2}[a-z][a-z0-9-]{0,12}|(?:mpg|mag)[\s-]{0,2}(?:(?:2[4-9]|3[0-9]|4[0-9])\d[a-z0-9-]{0,12}|artymis|qd[\s-]{0,2}oled|qr[a-z0-9-]{0,10}|cq[a-z0-9-]{0,10}|curv[a-z0-9-]{0,10}))|gigabyte[\s-]{0,2}(?:m27|m28|m32|g24|g27|g32|gs27|gs32|fo\d|fi\d|aorus[\s-]{0,2}(?:fo|fi|fv|co))[a-z0-9-]{0,12}|dell[\s-]{0,2}(?:ultrasharp|u|p|s|e|g|se|aw)(?:19|2[0-9]|3[0-9]|4[0-9])\d{2}[a-z0-9-]{0,12}|alienware[\s-]{0,2}aw\d{4}[a-z0-9-]{0,12}|lg[\s-]{0,2}(?:(?:2[2-9]|3[0-9]|4[0-9])(?:up|uk|ul|un|uq|gp|gn|gr|gs|gq|gl|gx|mr|mp|mn|ba|bp|bq|wq|wn|wp|sr|bn)[a-z0-9-]{0,12}|dualup|ergo)|philips[\s-]{0,2}(?:evnia|(?:2[2-9]|3[0-9]|4[0-9])[a-z]\d[a-z0-9-]{0,12})|hkc[\s-]{0,2}(?:mg|mb|ant|gs|g\d)[a-z0-9-]{0,12}|ktc[\s-]{0,2}(?:h|m|g)\d{2}[a-z0-9-]{0,12}|acer[\s-]{0,2}(?:nitro[\s-]{0,2}(?:vg|xv|kg|ed|qg|xf)|predator[\s-]{0,2}(?:xb|x(?:2[4-9]|3[0-9]|4[0-9])|cg)|(?:ka|ek|sa)\d{3})[a-z0-9-]{0,12}|lenovo[\s-]{0,2}(?:thinkvision|legion[\s-]{0,2}(?:r|y|g)(?:2[4-9]|3[0-9]|4[0-9])[a-z][a-z0-9-]{0,12})|hp[\s-]{0,2}(?:omen[\s-]{0,2}(?:2[4-9]|3[0-9])[a-z][a-z0-9-]{0,12}|(?:e|m|z)(?:2[2-9]|3[0-9])[a-z0-9-]{0,10})|xiaomi[\s-]{0,2}(?:mi[\s-]{0,2})?(?:desktop[\s-]{0,2}monitor|gaming[\s-]{0,2}monitor|curved[\s-]{0,2}gaming[\s-]{0,2}monitor|(?:g24|g27|a24|a27|p27)[a-z0-9-]{0,12}))(?![\p{L}\d])/iu.test(
+    (/(?<![\p{L}\d])(?:màn[\s-]{0,2}hình[\s-]{0,2}(?:máy[\s-]{0,2}tính|pc|gaming|đồ[\s-]{0,2}họa|đồ[\s-]{0,2}hoạ|chuyên[\s-]{0,2}đồ[\s-]{0,2}họa|văn[\s-]{0,2}phòng|rời|di[\s-]{0,2}động|chơi[\s-]{0,2}game|ultrawide|tương[\s-]{0,2}tác)|man[\s-]{0,2}hinh[\s-]{0,2}(?:may[\s-]{0,2}tinh|pc|gaming|do[\s-]{0,2}hoa|chuyen[\s-]{0,2}do[\s-]{0,2}hoa|van[\s-]{0,2}phong|roi|di[\s-]{0,2}dong|choi[\s-]{0,2}game|ultrawide|tuong[\s-]{0,2}tac)|(?:gaming|ultrawide|computer|pc|curved|oled|4k|2k|portable|ips)[\s-]{0,2}monitors?|apple[\s-]{0,2}(?:studio[\s-]{0,2}display|pro[\s-]{0,2}display[\s-]{0,2}xdr)|ultrasharp|zenscreen|odyssey[\s-]{0,2}(?:g\d[a-z0-9-]{0,12}|neo|oled|ark)|proart(?:[\s-]{0,2}display|[\s-]{0,2}pa(?:2[2-9]|3[0-9])[a-z0-9-]{1,13})|tuf[\s-]{0,2}gaming[\s-]{0,2}vg\d[a-z0-9-]{0,12}|rog[\s-]{0,2}(?:strix|swift)[\s-]{0,2}(?:(?:oled|qd[\s-]{0,2}oled)[\s-]{0,2})?(?:xg|pg)\d[a-z0-9-]{0,12}|ultragear|benq[\s-]{0,2}(?:mobiuz|(?:pd|sw|gw|ex)\d[a-z0-9-]{0,12}|zowie[\s-]{0,2}xl\d[a-z0-9-]{0,12})|zowie[\s-]{0,2}xl\d[a-z0-9-]{0,12}|viewsonic[\s-]{0,2}(?:vx|vg|va|vp|xg|omni)\d[a-z0-9-]{0,12}|aoc[\s-]{0,2}(?:(?:24g|27g|q27g|cu34|c24g|c27g|ag|24b|27b)[a-z0-9-]{0,12}|agon)|msi[\s-]{0,2}(?:optix|modern[\s-]{0,2}md\d[a-z0-9-]{0,12}|pro[\s-]{0,2}mp\d[a-z0-9-]{0,12}|g(?:2[4-9]|3[0-9])\d{0,2}[a-z][a-z0-9-]{0,12}|(?:mpg|mag)[\s-]{0,2}(?:(?:2[4-9]|3[0-9]|4[0-9])\d[a-z0-9-]{0,12}|artymis|qd[\s-]{0,2}oled|qr[a-z0-9-]{0,10}|cq[a-z0-9-]{0,10}|curv[a-z0-9-]{0,10}))|gigabyte[\s-]{0,2}(?:m27|m28|m32|g24|g27|g32|gs27|gs32|fo\d|fi\d|aorus[\s-]{0,2}(?:fo|fi|fv|co))[a-z0-9-]{0,12}|dell[\s-]{0,2}(?:ultrasharp|u|p|s|e|g|se|aw)(?:19|2[0-9]|3[0-9]|4[0-9])\d{2}[a-z0-9-]{0,12}|alienware[\s-]{0,2}aw\d{4}[a-z0-9-]{0,12}|lg[\s-]{0,2}(?:(?:2[2-9]|3[0-8])(?:up|uk|ul|un|uq)[a-z0-9-]{0,12}|(?:2[2-9]|3[0-9]|4[0-9])(?:gp|gn|gr|gs|gq|gl|gx|mr|mp|mn|ba|bp|bq|wq|wn|wp|sr|bn)[a-z0-9-]{0,12}|dualup|ergo)|philips[\s-]{0,2}(?:evnia|(?:2[2-9]|3[0-9]|4[0-9])[a-z]\d[a-z0-9-]{0,12})|hkc[\s-]{0,2}(?:mg|mb|ant|gs|g\d)[a-z0-9-]{0,12}|ktc[\s-]{0,2}(?:h|m|g)\d{2}[a-z0-9-]{0,12}|acer[\s-]{0,2}(?:nitro[\s-]{0,2}(?:vg|xv|kg|ed|qg|xf)|predator[\s-]{0,2}(?:xb|x(?:2[4-9]|3[0-9]|4[0-9])|cg)|(?:ka|ek|sa)\d{3})[a-z0-9-]{0,12}|lenovo[\s-]{0,2}(?:thinkvision|legion[\s-]{0,2}(?:r|y|g)(?:2[4-9]|3[0-9]|4[0-9])[a-z][a-z0-9-]{0,12})|hp[\s-]{0,2}(?:omen[\s-]{0,2}(?:2[4-9]|3[0-9])[a-z][a-z0-9-]{0,12}|(?:e|m|z)(?:2[2-9]|3[0-9])[a-z0-9-]{0,10})|xiaomi[\s-]{0,2}(?:mi[\s-]{0,2})?(?:desktop[\s-]{0,2}monitor|gaming[\s-]{0,2}monitor|curved[\s-]{0,2}gaming[\s-]{0,2}monitor|(?:g24|g27|a24|a27|p27)[a-z0-9-]{0,12}))(?![\p{L}\d])/iu.test(
       t
     ) ||
       /^\s{0,4}(?:(?:\[[^\]]{0,40}\]|\([^)]{0,40}\)|【[^】]{0,40}】)\s{0,4}){0,3}(?:màn[\s-]{0,2}hình|man[\s-]{0,2}hinh)(?![\p{L}\d])/iu.test(
@@ -918,10 +1004,10 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
   // Wave E6 cameras exclude smartphones, dashcams, security/IP/Wi-Fi cameras, webcams,
   // drones, Bravia TVs, and standalone lenses/flashes/gimbals/cages/tripods/bags/filters (DOS/Rate#1976).
   // All repetitions are strictly bounded to prevent polynomial ReDoS (CodeQL).
+  const cameraOpenerText = stripCameraLeadingRetailPrefix(t);
+  const opensWithCameraNoun = CAMERA_BODY_NOUN_OPENER_RE.test(cameraOpenerText);
   const opensWithCameraBody =
-    /^\s{0,4}(?:(?:\[[^\]]{0,40}\]|\([^)]{0,40}\)|【[^】]{0,40}】)\s{0,4}){0,3}(?:máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|camera[\s-]{0,2}hành[\s-]{0,2}động|camera[\s-]{0,2}hanh[\s-]{0,2}dong|action[\s-]{0,2}cam|máy[\s-]{0,2}quay|may[\s-]{0,2}quay|gopro[\s-]{0,2}(?:hero|max)|dji[\s-]{0,2}osmo[\s-]{0,2}(?:action|pocket)|insta360[\s-]{0,2}(?:x\d|ace|go[\s-]{0,2}\d|one))(?![\p{L}\d])/iu.test(
-      t
-    );
+    opensWithCameraNoun || CAMERA_BODY_LINE_OPENER_RE.test(cameraOpenerText);
   const isNonCameraItem =
     /(?<![\p{L}\d])(?:điện[\s-]{0,2}thoại|dien[\s-]{0,2}thoai|smartphone|iphone|ipad|macbook|laptop|máy[\s-]{0,2}tính[\s-]{0,2}(?:xách[\s-]{0,2}tay|bảng)|tablet|galaxy[\s-]{0,2}(?:s\d{1,3}|z[\s-]{0,2}fold|z[\s-]{0,2}flip|z[\s-]{0,2}\d|a\d{1,3}|m\d{1,3}|tab|watch|buds)|redmi|poco|oppo|vivo|realme|smartwatch|đồng[\s-]{0,2}hồ|tai[\s-]{0,2}nghe|airpods|tivi|bravia|qd[\s-]{0,2}oled|smart[\s-]{0,2}tv|oled[\s-]{0,2}tv|qled[\s-]{0,2}tv|4k[\s-]{0,2}tv|8k[\s-]{0,2}tv|uhd[\s-]{0,2}tv|google[\s-]{0,2}tv|android[\s-]{0,2}tv|mini[\s-]{0,2}led[\s-]{0,2}tv|(?:4[0-9]|5[0-9]|6[0-9]|7[0-9]|8[0-9]|9[0-9])[\s-]{0,2}(?:inch|in(?![\p{L}\d])|"|'')|màn[\s-]{0,2}hình[\s-]{0,2}(?:máy[\s-]{0,2}tính|pc|gaming|cong)|man[\s-]{0,2}hinh[\s-]{0,2}(?:may[\s-]{0,2}tinh|pc|gaming|cong)|camera[\s-]{0,2}(?:hành[\s-]{0,2}trình|hanh[\s-]{0,2}trinh|an[\s-]{0,2}ninh|giám[\s-]{0,2}sát|giam[\s-]{0,2}sat|wifi|wi-fi|ip|quan[\s-]{0,2}sát|quan[\s-]{0,2}sat|ngoài[\s-]{0,2}trời|ngoai[\s-]{0,2}troi|trong[\s-]{0,2}nhà|trong[\s-]{0,2}nha|lùi|lui|ô[\s-]{0,2}tô|o[\s-]{0,2}to|xe[\s-]{0,2}hơi|xe[\s-]{0,2}hoi|xe[\s-]{0,2}máy|xe[\s-]{0,2}may|nội[\s-]{0,2}soi|noi[\s-]{0,2}soi|cửa|chuông[\s-]{0,2}cửa|360[\s-]{0,2}(?:wifi|trong[\s-]{0,2}nhà|trong[\s-]{0,2}nha|ngoài[\s-]{0,2}trời|ngoai[\s-]{0,2}troi|ezviz|imou|tapo|xiaomi|yoosee))|dash[\s-]{0,2}cam|dashcam|cctv|security[\s-]{0,2}camera|ip[\s-]{0,2}camera|ezviz|imou|tapo[\s-]{0,2}c\d|yoosee|hikvision|dahua|kbvision|webcam|web[\s-]{0,2}cam|flycam|drone|mavic|đồ[\s-]{0,2}chơi|do[\s-]{0,2}choi|trẻ[\s-]{0,2}em|tre[\s-]{0,2}em|cho[\s-]{0,2}bé|cho[\s-]{0,2}be)(?![\p{L}\d])/iu.test(
       t
@@ -930,13 +1016,12 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
     /^\s{0,4}(?:(?:\[[^\]]{0,40}\]|\([^)]{0,40}\)|【[^】]{0,40}】)\s{0,4}){0,3}(?:ống[\s-]{0,2}kính|ong[\s-]{0,2}kinh|lens|chân[\s-]{0,2}máy|chan[\s-]{0,2}may|tripods?|monopods?|gimbals?|túi[\s-]{0,2}(?:đựng[\s-]{0,2})?máy[\s-]{0,2}ảnh|tui[\s-]{0,2}(?:dung[\s-]{0,2})?may[\s-]{0,2}anh|ba[\s-]{0,2}lô[\s-]{0,2}máy[\s-]{0,2}ảnh|balo[\s-]{0,2}máy[\s-]{0,2}ảnh|balo[\s-]{0,2}may[\s-]{0,2}anh|thẻ[\s-]{0,2}nhớ|the[\s-]{0,2}nho|memory[\s-]{0,2}cards?|kính[\s-]{0,2}lọc|kinh[\s-]{0,2}loc|filters?|lens[\s-]{0,2}hoods?|hood|loa[\s-]{0,2}che[\s-]{0,2}nắng|ngàm[\s-]{0,2}chuyển|ngam[\s-]{0,2}chuyen|mount[\s-]{0,2}adapters?|pin[\s-]{0,2}(?:rời|roi|sạc|sac|dự[\s-]{0,2}phòng|du[\s-]{0,2}phong|máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh)|sạc[\s-]{0,2}rời|sac[\s-]{0,2}roi|đèn[\s-]{0,2}flash|den[\s-]{0,2}flash|tủ[\s-]{0,2}chống[\s-]{0,2}ẩm|tu[\s-]{0,2}chong[\s-]{0,2}am|nắp[\s-]{0,2}(?:ống[\s-]{0,2}kính|lens|body)|khung[\s-]{0,2}bảo[\s-]{0,2}vệ|khung[\s-]{0,2}bao[\s-]{0,2}ve|cage|ốp|miếng[\s-]{0,2}dán|dây[\s-]{0,2}đeo)(?![\p{L}\d])/iu.test(
       t
     ) ||
+    (!opensWithCameraNoun && CAMERA_NON_LENS_ACCESSORY_RE.test(t)) ||
     (!opensWithCameraBody &&
-      /(?<![\p{L}\d])(?:ống[\s-]{0,2}kính|ong[\s-]{0,2}kinh|lens|đèn[\s-]{0,2}flash|den[\s-]{0,2}flash|gimbals?|cage|khung[\s-]{0,2}bảo[\s-]{0,2}vệ|khung[\s-]{0,2}bao[\s-]{0,2}ve|chân[\s-]{0,2}máy|chan[\s-]{0,2}may|tripods?|túi[\s-]{0,2}đựng|tui[\s-]{0,2}dung|thẻ[\s-]{0,2}nhớ|the[\s-]{0,2}nho|memory[\s-]{0,2}cards?|kính[\s-]{0,2}lọc|kinh[\s-]{0,2}loc|filters?|hood|ngàm[\s-]{0,2}chuyển|ngam[\s-]{0,2}chuyen|pin[\s-]{0,2}rời|pin[\s-]{0,2}roi|sạc[\s-]{0,2}rời|sac[\s-]{0,2}roi|tủ[\s-]{0,2}chống[\s-]{0,2}ẩm|tu[\s-]{0,2}chong[\s-]{0,2}am)(?![\p{L}\d])/iu.test(
-        t
-      ));
+      (CAMERA_LENS_WORD_RE.test(t) || isBareStandaloneLens(t, opensWithCameraBody)));
   if (
     !isNonCameraItem &&
-    /(?<![\p{L}\d])(?:máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|mirrorless|dslr|action[\s-]{0,2}cam(?:era)?|camera[\s-]{0,2}(?:hành[\s-]{0,2}động|hanh[\s-]{0,2}dong|thể[\s-]{0,2}thao|the[\s-]{0,2}thao)|máy[\s-]{0,2}quay[\s-]{0,2}(?:phim|vlog|cầm[\s-]{0,2}tay|hành[\s-]{0,2}động|360)|gopro[\s-]{0,2}(?:hero(?:[\s-]{0,2}(?:\d[a-z0-9-]{0,8}|max|mini|black))?|max)|dji[\s-]{0,2}(?:osmo[\s-]{0,2}(?:action|pocket)|action[\s-]{0,2}\d[a-z0-9-]{0,8}|pocket[\s-]{0,2}\d[a-z0-9-]{0,8})|insta360[\s-]{0,2}(?:x\d[a-z0-9-]{0,8}|ace|go[\s-]{0,2}\d[a-z0-9-]{0,8}|one[\s-]{0,2}(?:rs|r|x))|sony[\s-]{0,2}(?:alpha|a(?!(?:80|90|95)[jklm](?![\p{L}\d]))\d[a-z0-9-]{0,10}|zv-[a-z0-9-]{1,12}|fx\d[a-z0-9-]{0,8}|rx\d[a-z0-9-]{0,8}|ilce-[a-z0-9-]{1,12}|dsc-[a-z0-9-]{1,12})|canon[\s-]{0,2}(?:eos|powershot|ixus)|fujifilm[\s-]{0,2}(?:x-[a-z0-9-]{1,12}|gfx[\s-]{0,2}\d[a-z0-9-]{0,8}|instax)|nikon[\s-]{0,2}(?:z[\s-]{0,2}(?!(?:\d{1,3}[\s-]{0,2}-[\s-]{0,2})?\d{1,3}(?:[.,]\d)?[\s-]{0,2}mm(?![\p{L}\d]))\d[a-z0-9-]{0,8}|z[\s-]{0,2}fc?|d\d{3}[a-z0-9-]{0,8}|coolpix)|(?:panasonic[\s-]{0,2})?lumix[\s-]{0,2}(?:s|g|gh|gx|tz|lx)\d[a-z0-9-]{0,10}|om[\s-]{0,2}system[\s-]{0,2}om-\d[a-z0-9-]{0,8}|olympus[\s-]{0,2}(?:om-d|pen[\s-]{0,2}e-[a-z0-9-]{1,10}|tg-\d[a-z0-9-]{0,8})|leica[\s-]{0,2}(?:(?:q|m|sl)\d[a-z0-9-]{0,8}|d-lux|sofort)|ricoh[\s-]{0,2}gr[\s-]{0,2}(?:iii|ii|3|2)[a-z0-9-]{0,8})(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|mirrorless|dslr|action[\s-]{0,2}cam(?:era)?|camera[\s-]{0,2}(?:hành[\s-]{0,2}động|hanh[\s-]{0,2}dong|thể[\s-]{0,2}thao|the[\s-]{0,2}thao)|máy[\s-]{0,2}quay[\s-]{0,2}(?:phim|vlog|cầm[\s-]{0,2}tay|hành[\s-]{0,2}động|360)|gopro[\s-]{0,2}(?:hero(?:[\s-]{0,2}(?:\d[a-z0-9-]{0,8}|max|mini|black))?|max)|dji[\s-]{0,2}(?:osmo[\s-]{0,2}(?:action|pocket)|action[\s-]{0,2}\d[a-z0-9-]{0,8}|pocket[\s-]{0,2}\d[a-z0-9-]{0,8})|insta360[\s-]{0,2}(?:x\d[a-z0-9-]{0,8}|ace|go[\s-]{0,2}\d[a-z0-9-]{0,8}|one[\s-]{0,2}(?:rs|r|x))|sony[\s-]{0,2}(?:alpha|a(?!(?:80|90|95)[jklm](?![\p{L}\d]))\d[a-z0-9-]{0,10}|zv-[a-z0-9-]{1,12}|fx\d[a-z0-9-]{0,8}|rx\d[a-z0-9-]{0,8}|ilce-[a-z0-9-]{1,12}|dsc-[a-z0-9-]{1,12})|canon[\s-]{0,2}(?:eos|powershot|ixus)|fujifilm[\s-]{0,2}(?:x(?:-[a-z0-9-]{1,12}|(?![fc]\d{1,3}(?:[\s-]{0,2}-[\s-]{0,2}\d{1,3})?[\s-]{0,2}mm)[a-z]\d{1,3}[a-z0-9-]{0,8}|100[a-z0-9]{0,4})|gfx[\s-]{0,2}\d[a-z0-9-]{0,8}|instax)|nikon[\s-]{0,2}(?:z[\s-]{0,2}(?!(?:\d{1,3}[\s-]{0,2}-[\s-]{0,2})?\d{1,3}(?:[.,]\d)?[\s-]{0,2}mm(?![\p{L}\d]))\d[a-z0-9-]{0,8}|z[\s-]{0,2}fc?|d\d{3}[a-z0-9-]{0,8}|coolpix)|(?:panasonic[\s-]{0,2})?lumix[\s-]{0,2}(?:s|g|gh|gx|tz|lx)\d[a-z0-9-]{0,10}|om[\s-]{0,2}system[\s-]{0,2}om-\d[a-z0-9-]{0,8}|olympus[\s-]{0,2}(?:om-d|pen[\s-]{0,2}e-[a-z0-9-]{1,10}|tg-\d[a-z0-9-]{0,8})|leica[\s-]{0,2}(?:(?:q|m|sl)\d[a-z0-9-]{0,8}|d-lux|sofort)|ricoh[\s-]{0,2}gr[\s-]{0,2}(?:iii|ii|3|2)[a-z0-9-]{0,8})(?![\p{L}\d])/iu.test(
       t
     )
   ) {
@@ -2555,7 +2640,7 @@ const WAVE_E1_ONLY_APPLIANCE_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, str
   [/(?<![\p{L}\d])bear(?![\p{L}\d])/iu, 'Bear'],
   [/(?<![\p{L}\d])carrier(?![\p{L}\d])/iu, 'Carrier'],
   [/(?<![\p{L}\d])darling(?![\p{L}\d])/iu, 'Darling'],
-  [/(?<![\p{L}\d])(?<!dùng\s)(?<!dung\s)chung\s?ho(?!\s+gia\s+d[iì]nh)(?![\p{L}\d])/iu, 'Chungho'],
+  [/(?<![\p{L}\d])(?<!d[uùụ]ng\s)chung\s?ho(?!\s+gia\s+[dđ][iì]nh)(?![\p{L}\d])/iu, 'Chungho'],
 ];
 
 const ALL_APPLIANCE_BRAND_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
@@ -2764,6 +2849,7 @@ const STRUCTURED_BRAND_DISALLOWED_SLUGS = new Set([
   'khong-co',
   'khong-ro',
   'khong-thuong-hieu',
+  'khong-nhan-hieu',
   'khong-co-thuong-hieu',
   'khong-ro-thuong-hieu',
   'thuong-hieu-khac',
@@ -2775,10 +2861,16 @@ const STRUCTURED_BRAND_DISALLOWED_SLUGS = new Set([
   'hang-chinh-hang',
   'hang-nhap-khau',
   'hang-noi-dia',
+  'hang-noi-dia-trung',
+  'hang-noi-dia-trung-quoc',
+  'hang-noi-dia-nhat',
+  'hang-xach-tay',
+  'xach-tay',
   'viet-nam',
   'vietnam',
   'noi-dia',
   'noi-dia-trung',
+  'noi-dia-trung-quoc',
   'noi-dia-nhat',
   'han-quoc',
   'nhat-ban',
@@ -2926,7 +3018,8 @@ const CURATED_RETAIL_CHAIN_PLATFORMS: ReadonlySet<string> = new Set([
 const WAVE_E3_RETAIL_SHOP_PREFIX_RE =
   /^(?:shop|cua hang|nha thuoc|sieu thi|tong kho|dai ly|tiem|dien may|trung tam dien may)(?:\s|$)/;
 const STRUCTURED_BRAND_COMPAT_SPAM_RE =
-  /(?<![\p{L}\d])(?:tuong thich|dung cho|phu kien|thay the|compatible|replacement|for)(?![\p{L}\d])/u;
+  /(?<![\p{L}\d])(?:tuong thich|dung cho|phu kien|thay the|compatible|replacement|(?:case|cover|filter|parts?|adapters?|cables?|chargers?|straps?|bands?|glass|film|mounts?|stands?|holders?|bags?|pouch|accessory|accessories|fits?|suitable|designed|used)[\s-]+for|for[\s-]+(?:iphone|ipad|ipod|macbook|airpods|apple|samsung|galaxy|xiaomi|redmi|poco|oppo|vivo|realme|huawei|honor|google|pixel|sony|lg|dyson|sharp|daikin|panasonic|toshiba|electrolux|philips|bosch|midea|gree|casper|hitachi|aqua|tcl|hisense|dell|asus|acer|lenovo|hp|msi|canon|nikon|fujifilm|gopro|dji|insta360|garmin|phone|smartphone|tablet|laptop|watch|smartwatch|earbuds|tv|monitor|camera))(?![\p{L}\d])/u;
+const STRUCTURED_BRAND_CONTAINS_FOR_RE = /(?<![\p{L}\d])for(?![\p{L}\d])/u;
 
 export interface WaveE3BrandSanitizeContext {
   identityTitle: string;
@@ -2980,7 +3073,8 @@ function isShortDisallowedTokenSequence(tokens: readonly string[]): boolean {
 }
 
 function stripTrailingRetailShopSuffixes(text: string): string {
-  const tokens = text.split(' ').filter(Boolean);
+  const trimmedInput = trimTrailingChars(text, ' ,:;-');
+  const tokens = trimmedInput.split(' ').filter(Boolean);
   let strippedAny = false;
   while (tokens.length > 0) {
     // Reject retail chains such as "FPT Shop Official" or "Viettel Store Official"
@@ -3167,6 +3261,14 @@ export function sanitizeWaveE3StructuredBrand(
 
   const foldedTitle = foldAccentsLower(context.identityTitle ?? '');
   const groundedInTitle = containsWordBoundedSubstring(foldedTitle, foldedCandidate);
+  if (STRUCTURED_BRAND_CONTAINS_FOR_RE.test(foldedCandidate)) {
+    // Reject compatibility hints targeting known Wave E3 allowlist brands (e.g. "For Medela")
+    // and require title grounding for any other "for"-containing brand ("Just For Men", "For Baby")
+    // so ungrounded compatibility phrases never leak through curated/mall catalogs (DOS/Rate#1959).
+    if (detectWaveE3AllowlistBrand(candidate) || !groundedInTitle) {
+      return null;
+    }
+  }
   if (!groundedInTitle) {
     const isCuratedCatalog =
       context.platform === 'tiki' ||
@@ -3882,10 +3984,15 @@ export class ProductNormalizer {
         };
         for (const hint of structuredHints) {
           if (isDisallowedStructuredBrandHintNoise(hint)) continue;
-          const canonical = detectWaveE3AllowlistBrand(hint);
-          if (canonical) {
-            brand = canonical;
-            break;
+          const hintHasFor = STRUCTURED_BRAND_CONTAINS_FOR_RE.test(foldAccentsLower(hint));
+          if (hintHasFor) {
+            if (detectWaveE3AllowlistBrand(hint)) continue;
+          } else {
+            const canonical = detectWaveE3AllowlistBrand(hint);
+            if (canonical) {
+              brand = canonical;
+              break;
+            }
           }
           const sanitized = sanitizeWaveE3StructuredBrand(hint, brandContext);
           if (sanitized) {
@@ -5260,10 +5367,10 @@ export class ProductNormalizer {
     const titleScreenMatch = !hasScreenAxis
       ? null
       : categorySlug === 'tvs'
-        ? title.match(/\b(\d{2,3}(?:[.,]\d)?)\s*(?:inch|in\b|")/i)
+        ? title.match(/\b(\d{2,3}(?:[.,]\d)?)\s*(?:inch|in\b|"|''|″)/i)
         : categorySlug === 'monitors'
-          ? title.match(/\b(\d{2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i)
-          : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i);
+          ? title.match(/\b(\d{2}(?:[.,]\d)?)\s*(?:inch|in\b|"|''|″)/i)
+          : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|"|''|″)/i);
     const parsedTitleScreen = titleScreenMatch
       ? parseFloat(titleScreenMatch[1].replace(',', '.'))
       : null;
