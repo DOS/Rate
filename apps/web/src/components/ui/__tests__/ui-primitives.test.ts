@@ -71,6 +71,30 @@ function main() {
     buttonVariants({ variant: 'outline', size: 'icon' }),
     /\bshrink-0\b/
   );
+  const wrapSmClasses = buttonVariants({ size: 'sm', wrap: true });
+  assert.match(wrapSmClasses, /(?:^|\s)whitespace-normal(?:\s|$)/);
+  assert.match(wrapSmClasses, /(?:^|\s)h-auto(?:\s|$)/);
+  assert.match(wrapSmClasses, /(?:^|\s)min-h-9(?:\s|$)/);
+  assert.match(wrapSmClasses, /(?:^|\s)max-w-full(?:\s|$)/);
+  assert.doesNotMatch(wrapSmClasses, /(?:^|\s)h-(?:9|10)(?:\s|$)/);
+
+  const wrapDefaultClasses = buttonVariants({ size: 'default', wrap: true });
+  assert.match(wrapDefaultClasses, /(?:^|\s)whitespace-normal(?:\s|$)/);
+  assert.match(wrapDefaultClasses, /(?:^|\s)h-auto(?:\s|$)/);
+  assert.match(wrapDefaultClasses, /(?:^|\s)min-h-10(?:\s|$)/);
+  assert.match(wrapDefaultClasses, /(?:^|\s)max-w-full(?:\s|$)/);
+  assert.doesNotMatch(wrapDefaultClasses, /(?:^|\s)h-(?:9|10)(?:\s|$)/);
+
+  const wrapBtnHtml = renderToStaticMarkup(
+    React.createElement(
+      Button,
+      { variant: 'outline', size: 'sm', wrap: true },
+      'Long wrapped label'
+    )
+  );
+  assert.match(wrapBtnHtml, /\bwhitespace-normal\b/);
+  assert.match(wrapBtnHtml, /\bmin-h-9\b/);
+  assert.doesNotMatch(wrapBtnHtml, /\bwrap=/);
   const surfaceBadgeClasses = cn(
     badgeVariants({ variant: 'success' }),
     'bg-surface'
@@ -238,20 +262,28 @@ function main() {
   assert.match(tabsHtml, /\bh-9\b/);
   assert.doesNotMatch(tabsHtml, /rounded-full|999px/);
 
-  // 6. Zero em-dashes or en-dashes across UI primitives and Phase 2A migrated files.
+  // 6. Zero em-dashes or en-dashes across UI primitives and Phase 2A/2B migrated files.
   for (const rel of [
     '../button.tsx',
     '../badge.tsx',
     '../card.tsx',
     '../tabs.tsx',
+    '../../elementary/ExportMenu.tsx',
+    '../../home/HeroSearchInspector.tsx',
     '../../radar/RadarBadge.tsx',
     '../../product/PhoneCollapsible.tsx',
+    '../../product/ProductCard.tsx',
     '../../product/item/ItemLazySizePanel.tsx',
     '../../reviews/JReviewsSection.tsx',
     '../../reviews/ReviewFormV2.tsx',
     '../../price-history/PriceHistorySection.tsx',
+    '../../leaderboard/CategoryCatalogToolbar.tsx',
     '../../leaderboard/ProductOffersExplorer.tsx',
     '../../leaderboard/ProductValueCalculator.tsx',
+    '../../../app/[locale]/components/catalog-sort-dropdown.tsx',
+    '../../../app/[locale]/components/list-sidebar-one.tsx',
+    '../../../app/[locale]/smartphones/page.tsx',
+    '../../../app/[locale]/page.tsx',
     '../../../lib/utils.ts',
     '../../../app/style/tailwind.css',
   ] as const) {

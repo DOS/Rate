@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { BsDownload } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
-import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
+import ExportMenu from '@/components/elementary/ExportMenu';
+import { Button } from '@/components/ui/button';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   formatDecimal,
@@ -428,7 +428,6 @@ export default function CategoryCatalogToolbar({
   const [slugA, setSlugA] = useState<string>('');
   const [slugB, setSlugB] = useState<string>('');
   const [copiedCatalogMd, setCopiedCatalogMd] = useState(false);
-  const { ref: exportMenuRef, close: closeExportMenu } = useDetailsDismiss();
 
   const radarIndex = useDealRadarIndex(dealRadar);
   const radarFor = (slug: string) => getRadarSignal(radarIndex, slug);
@@ -625,59 +624,58 @@ export default function CategoryCatalogToolbar({
                 </option>
               ))}
             </select>
-            <Link
-              href={versusHref(
-                effectiveSlugA,
-                effectiveSlugB,
-                resolvedItemSlugBySlug
-              )}
-              className="btn btn-sm btn-primary fw-semibold px-3"
-              data-testid="catalog-1v1-go-btn"
-            >
-              {t('toolbar.versusGoBtn')}
-            </Link>
+            <Button variant="primary" size="sm" asChild>
+              <Link
+                href={versusHref(
+                  effectiveSlugA,
+                  effectiveSlugB,
+                  resolvedItemSlugBySlug
+                )}
+                data-testid="catalog-1v1-go-btn"
+              >
+                {t('toolbar.versusGoBtn')}
+              </Link>
+            </Button>
           </div>
         ) : (
           <div />
         )}
 
-        <details ref={exportMenuRef} className="rate-export-menu ms-auto">
-          <summary>
-            <BsDownload aria-hidden="true" />
-            {t('toolbar.exportMenu')}
-          </summary>
-          <div className="rate-export-menu-list">
-            <button
-              type="button"
-              onClick={handleCopyCatalogMarkdown}
-              data-testid="copy-catalog-md-btn"
-            >
-              {copiedCatalogMd
-                ? t('toolbar.copiedMdBtn')
-                : t('toolbar.copyMdBtn')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                handleDownloadCatalogCsv();
-                closeExportMenu();
-              }}
-              data-testid="download-catalog-csv-btn"
-            >
-              {t('toolbar.exportCsvBtn')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                handleDownloadCategoryJson();
-                closeExportMenu();
-              }}
-              data-testid="download-catalog-json-btn"
-            >
-              {t('toolbar.exportJsonBtn')}
-            </button>
-          </div>
-        </details>
+        <ExportMenu label={t('toolbar.exportMenu')} className="ms-auto">
+          {(close) => (
+            <>
+              <button
+                type="button"
+                onClick={handleCopyCatalogMarkdown}
+                data-testid="copy-catalog-md-btn"
+              >
+                {copiedCatalogMd
+                  ? t('toolbar.copiedMdBtn')
+                  : t('toolbar.copyMdBtn')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleDownloadCatalogCsv();
+                  close();
+                }}
+                data-testid="download-catalog-csv-btn"
+              >
+                {t('toolbar.exportCsvBtn')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleDownloadCategoryJson();
+                  close();
+                }}
+                data-testid="download-catalog-json-btn"
+              >
+                {t('toolbar.exportJsonBtn')}
+              </button>
+            </>
+          )}
+        </ExportMenu>
       </div>
     </div>
   );

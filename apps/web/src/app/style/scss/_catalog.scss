@@ -197,23 +197,4 @@
   @media (min-width: 1200px) {
     gap: 1.25rem;
   }
-
-  // Near the 290px minimum, longer copy (cs) must not overflow the card:
-  // the radar badge wraps (Bootstrap's .badge nowrap otherwise wins over
-  // .rate-product-card-radar in _custom.scss), and the second button drops
-  // to its own row instead of breaking its label over two lines.
-  .rate-product-card-radar {
-    max-width: 100%;
-    white-space: normal;
-    text-align: left;
-  }
-
-  .rate-product-card-cta {
-    flex-wrap: wrap;
-
-    .btn {
-      flex: 1 1 auto;
-      white-space: nowrap;
-    }
-  }
 }

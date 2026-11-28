@@ -110,7 +110,7 @@ export default function CatalogSortDropdown({
       <button
         ref={buttonRef}
         type="button"
-        className={`dropdown-toggle toogleDrops px-3 py-2${open ? ' show' : ''}`}
+        className={`dropdown-toggle toogleDrops${open ? ' show' : ''}`}
         id="shortfilter"
         aria-expanded={open}
         aria-controls={menuId}

@@ -235,7 +235,11 @@
   // theme, so their inks go back to the light ones.
   :is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark, .bg-dark)
     :is(.bg-white, .bg-light):not([class*='bg-opacity']),
-  .rate-ink-on-dark :is(.card, .dropdown-menu):not(.bg-dark, .text-bg-dark) {
+  .rate-ink-on-dark
+    :is(.card, [data-slot='card'], .dropdown-menu):not(
+      .bg-dark,
+      .text-bg-dark
+    ) {
     --rate-ink-primary: #ff6b6b;
     --rate-ink-success: #34d399;
     --rate-ink-danger: #ff6b6b;
