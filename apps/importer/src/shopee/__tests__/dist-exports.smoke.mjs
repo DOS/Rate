@@ -28,6 +28,11 @@ for (const name of [
   'resolveItemModelMode',
   'UnkeyableProductTitleError',
   'NonNewListingError',
+  'evaluateElectronicsDraftPublish',
+  'isDraftPublishable',
+  'isSourcedSeedModelKey',
+  'isFullySourcedSeed',
+  'qualifyingChains',
 ]) {
   assert.equal(typeof crawlers[name], 'function', `@repo/crawlers is missing export ${name}`);
 }
@@ -66,6 +71,39 @@ assert.ok(
     crawlers.WAVE_E6_SERVICE_CATEGORY_SLUGS.has('vps-hosting'),
   '@repo/crawlers is missing export WAVE_E6_SERVICE_CATEGORY_SLUGS'
 );
+
+// Publish predicate for sourced electronics drafts (DOS/Rate#1996): Rate-Services wires it
+// into its price-spread auditor.
+assert.equal(crawlers.MIN_PUBLISH_CHAINS, 2);
+assert.ok(Array.isArray(crawlers.SOURCED_SEED_SETS) && crawlers.SOURCED_SEED_SETS.length > 0);
+{
+  const pp = await import('@repo/crawlers/shopee/publish-predicate');
+  for (const name of [
+    'evaluateElectronicsDraftPublish',
+    'isDraftPublishable',
+    'isSourcedSeedModelKey',
+    'isFullySourcedSeed',
+    'unsourcedSpecGroups',
+    'qualifyingChains',
+  ]) {
+    assert.equal(typeof pp[name], 'function', `publish-predicate subpath is missing ${name}`);
+  }
+  assert.equal(pp.isSourcedSeedModelKey('apple:iphone-17e:256gb'), true);
+  assert.equal(pp.isSourcedSeedModelKey('khac:unknown:128gb'), false);
+  const listing = platform => ({
+    platform,
+    price_current: 10_000_000,
+    availability: 'in_stock',
+  });
+  const publish = listings =>
+    pp.evaluateElectronicsDraftPublish({
+      master: { model_key: 'apple:iphone-17e:256gb' },
+      listings,
+      categoryPriceFloor: 1_000_000,
+    });
+  assert.equal(publish([listing('fptshop'), listing('hoanghamobile')]).publishable, true);
+  assert.equal(publish([listing('fptshop'), listing('fptshop')]).publishable, false);
+}
 
 const { createImporterLogger } = await import('@repo/crawlers/shopee/logger');
 assert.equal(typeof createImporterLogger, 'function', 'logger subpath export is broken');
@@ -188,6 +226,7 @@ for (const dts of [
   'dist/shopee/jobs/backfill-specs.d.ts',
   'dist/shopee/jobs/product-points-ai.d.ts',
   'dist/shopee/product-points-ai-prompt.d.ts',
+  'dist/shopee/publish-predicate.d.ts',
 ]) {
   assert.ok(fs.existsSync(pkgDir + dts), `Missing type declarations: ${dts}`);
 }
