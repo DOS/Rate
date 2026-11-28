@@ -705,6 +705,7 @@ export default function HeroSearchInspector({
           type="button"
           variant={mode === 'search' ? 'primary' : 'outline'}
           size="sm"
+          wrap
           aria-pressed={mode === 'search'}
           onClick={() => setMode('search')}
         >
@@ -715,6 +716,7 @@ export default function HeroSearchInspector({
           type="button"
           variant={mode === 'inspect' ? 'primary' : 'outline'}
           size="sm"
+          wrap
           aria-pressed={mode === 'inspect'}
           onClick={() => setMode('inspect')}
         >
@@ -785,7 +787,7 @@ export default function HeroSearchInspector({
             >
               <CardContent>
                 {isLikelyEcommerceUrl(query) && (
-                  <div className="alert alert-danger d-flex align-items-center justify-content-between rounded-3 mb-3 px-3 py-2">
+                  <div className="alert alert-danger d-flex align-items-center justify-content-between rounded-3 mb-3 flex-wrap gap-2 px-3 py-2">
                     <div className="small">
                       <strong>{t('urlDetectedStrong')}</strong>{' '}
                       {t('urlDetectedSub')}
@@ -794,11 +796,12 @@ export default function HeroSearchInspector({
                       type="button"
                       variant="primary"
                       size="sm"
+                      wrap
                       onClick={() => {
                         setIsDropdownOpen(false);
                         void runUrlInspection(query);
                       }}
-                      className="ms-2 flex-shrink-0"
+                      className="flex-shrink-0"
                     >
                       {t('inspectLinkBtn')}
                     </Button>
@@ -825,20 +828,21 @@ export default function HeroSearchInspector({
 
                 {filteredProducts.length === 0 ? (
                   <div className="text-muted small px-2 py-3">
-                    {t('noMatchPrefix', { query })}{' '}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setIsDropdownOpen(false);
-                        void runUrlInspection(query);
-                      }}
-                      className="align-baseline"
-                    >
-                      {t('inspectTabLinkBtn')}
-                    </Button>
-                    .
+                    <div>{t('noMatchPrefix', { query })}</div>
+                    <div className="mt-2">
+                      <Button
+                        type="button"
+                        variant="outline-primary"
+                        size="sm"
+                        wrap
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          void runUrlInspection(query);
+                        }}
+                      >
+                        {t('inspectTabLinkBtn')}
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="list-group list-group-flush">
@@ -1098,6 +1102,7 @@ export default function HeroSearchInspector({
                 type="button"
                 variant="outline"
                 size="sm"
+                wrap
                 onClick={() => void runUrlInspection(sample.value)}
               >
                 <BsLightningChargeFill
@@ -1276,7 +1281,7 @@ export default function HeroSearchInspector({
                               inspectResult.merchantProfile
                             );
                             return (
-                              <div className="d-flex justify-content-between align-items-center border-bottom mb-2 pb-2">
+                              <div className="d-flex justify-content-between align-items-center border-bottom mb-2 flex-wrap gap-2 pb-2">
                                 <div className="small">
                                   <span className="text-muted">
                                     {t('merchantLabel')}{' '}
@@ -1328,7 +1333,7 @@ export default function HeroSearchInspector({
                               );
                             if (!reviewAuth) return null;
                             return (
-                              <div className="d-flex justify-content-between align-items-center small mb-3">
+                              <div className="d-flex justify-content-between align-items-center small mb-3 flex-wrap gap-2">
                                 <span className="text-muted">
                                   {t('aiReviewAuthLabel')}
                                 </span>
@@ -1343,6 +1348,7 @@ export default function HeroSearchInspector({
                           <Button
                             variant="primary"
                             size="sm"
+                            wrap
                             asChild
                             className="flex-grow-1"
                           >
@@ -1355,7 +1361,12 @@ export default function HeroSearchInspector({
                               <BsArrowRight aria-hidden="true" />
                             </Link>
                           </Button>
-                          <Button variant="outline-primary" size="sm" asChild>
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            wrap
+                            asChild
+                          >
                             <Link
                               href={`/inspect?q=${encodeURIComponent(inspectQuery)}`}
                             >
@@ -1363,7 +1374,7 @@ export default function HeroSearchInspector({
                             </Link>
                           </Button>
                           {inspectResult.merchantProfile && (
-                            <Button variant="outline" size="sm" asChild>
+                            <Button variant="outline" size="sm" wrap asChild>
                               <Link
                                 href={`/merchants/${inspectResult.merchantProfile.id}`}
                               >
@@ -1378,7 +1389,7 @@ export default function HeroSearchInspector({
                 ) : inspectResult.merchantProfile ? (
                   <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
                     <div>
-                      <div className="d-flex align-items-center mb-1 gap-2">
+                      <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
                         <Badge variant="brand" className="text-uppercase">
                           {inspectResult.merchantProfile.platform}
                         </Badge>
@@ -1448,7 +1459,7 @@ export default function HeroSearchInspector({
                         </strong>
                       </div>
                     </div>
-                    <Button variant="primary" size="default" asChild>
+                    <Button variant="primary" size="default" wrap asChild>
                       <Link
                         href={`/merchants/${inspectResult.merchantProfile.id}`}
                       >
@@ -1470,7 +1481,12 @@ export default function HeroSearchInspector({
                         {t('unmatchedDesc')}
                       </p>
                     </div>
-                    <Button variant="outline-primary" size="default" asChild>
+                    <Button
+                      variant="outline-primary"
+                      size="default"
+                      wrap
+                      asChild
+                    >
                       <Link
                         href={`/smartphones?q=${encodeURIComponent(inspectResult.query)}`}
                       >

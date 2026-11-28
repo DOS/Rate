@@ -29,14 +29,25 @@ const buttonVariants = cva('rounded-[var(--rate-radius-btn)]', {
         'bg-status-warn-bg text-status-warn-fg border-status-warn-fg/40 hover:bg-status-warn-bg hover:text-status-warn-fg',
     },
     size: {
-      sm: 'h-9 px-3.5 text-[13px] leading-tight',
-      default: 'h-10 px-[16px] text-[14px] leading-tight',
+      sm: 'px-3.5 text-[13px] leading-tight',
+      default: 'px-[16px] text-[14px] leading-tight',
       icon: 'h-9 w-9 shrink-0 p-[0px] text-[14px]',
     },
+    wrap: {
+      false: '',
+      true: 'h-auto max-w-full whitespace-normal py-1.5 text-center',
+    },
   },
+  compoundVariants: [
+    { size: 'sm', wrap: false, className: 'h-9' },
+    { size: 'default', wrap: false, className: 'h-10' },
+    { size: 'sm', wrap: true, className: 'min-h-9' },
+    { size: 'default', wrap: true, className: 'min-h-10' },
+  ],
   defaultVariants: {
     variant: 'primary',
     size: 'default',
+    wrap: false,
   },
 });
 
@@ -49,6 +60,7 @@ function Button({
   className,
   variant,
   size,
+  wrap,
   asChild = false,
   type,
   ...props
@@ -58,7 +70,7 @@ function Button({
       <Slot
         data-slot="button"
         {...(type !== undefined ? { type } : {})}
-        className={cn(buttonVariants({ variant, size }), className)}
+        className={cn(buttonVariants({ variant, size, wrap }), className)}
         {...props}
       />
     );
@@ -67,7 +79,7 @@ function Button({
     <button
       data-slot="button"
       type={type ?? 'button'}
-      className={cn(buttonVariants({ variant, size }), className)}
+      className={cn(buttonVariants({ variant, size, wrap }), className)}
       {...props}
     />
   );

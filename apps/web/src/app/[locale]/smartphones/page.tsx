@@ -1144,20 +1144,20 @@ export async function CategoryCatalogContent({
                     </p>
                     <div className="d-flex justify-content-center flex-wrap gap-2">
                       {activeChips.length > 0 && (
-                        <Button variant="primary" size="sm" asChild>
+                        <Button variant="primary" size="sm" wrap asChild>
                           <Link href={basePath}>
                             {t('page.resetFiltersBtn')}
                           </Link>
                         </Button>
                       )}
                       {categorySlug !== 'smartphones' && (
-                        <Button variant="primary" size="sm" asChild>
+                        <Button variant="primary" size="sm" wrap asChild>
                           <Link href="/smartphones">
                             {t('page.browseSmartphonesBtn')}
                           </Link>
                         </Button>
                       )}
-                      <Button variant="outline" size="sm" asChild>
+                      <Button variant="outline" size="sm" wrap asChild>
                         <Link href="/merchants">
                           {t('page.merchantProfilesBtn')}
                         </Link>
@@ -1314,7 +1314,7 @@ export async function CategoryCatalogContent({
                 )}
                 {(page > 1 || hasNextPage) && (
                   <nav
-                    className="d-flex justify-content-center align-items-center gap-3 mt-4"
+                    className="d-flex justify-content-center align-items-center mt-4 flex-wrap gap-2 gap-sm-3"
                     aria-label={t('page.paginationLabel')}
                   >
                     {page > 1 &&

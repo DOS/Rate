@@ -346,7 +346,7 @@ test('catalog toolbar, sort, product cards, and home hero search use unified 8px
       sortBtn,
       cardCtas,
       overflow: {
-        hasCard: Boolean(card && body && title),
+        hasCard: Boolean(card && body && title && titleLink),
         cardScrollDiff: card ? card.scrollWidth - card.clientWidth : 999,
         bodyScrollDiff: body ? body.scrollWidth - body.clientWidth : 999,
         titleOverflowRight:
@@ -434,3 +434,49 @@ test('catalog toolbar, sort, product cards, and home hero search use unified 8px
   expect(homeMetrics.submitRadius).toBe('8px');
   expect(homeMetrics.pillButtons).toEqual([]);
 });
+
+// 320px phone reflow check across vi and cs locales (DOS/Rate#2003):
+// HeroSearchInspector mode switcher buttons wrap cleanly inside the viewport
+// with zero clipping or horizontal overflow.
+for (const locale of ['vi', 'cs'] as const) {
+  test(`home hero search mode buttons fit a 320px screen in ${locale} (#2003)`, async ({
+    page,
+    baseURL,
+  }) => {
+    await page
+      .context()
+      .addCookies([{ name: 'NEXT_LOCALE', value: locale, url: baseURL ?? '' }]);
+    await page.setViewportSize({ width: 320, height: 640 });
+    expect((await page.goto('/'))?.status()).toBe(200);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await page.evaluate(() => document.fonts.ready);
+    const phoneMetrics = await page.evaluate(() => {
+      const hero = document.querySelector('.hero-header');
+      const modeButtons = Array.from(
+        hero?.querySelectorAll<HTMLElement>('button[aria-pressed]') ?? []
+      ).map((el) => {
+        const rect = el.getBoundingClientRect();
+        return {
+          width: rect.width,
+          left: rect.left,
+          right: rect.right,
+          scrollDiff: el.scrollWidth - el.clientWidth,
+          radius: getComputedStyle(el).borderRadius,
+        };
+      });
+      return {
+        modeButtons,
+        scrollWidth: document.documentElement.scrollWidth,
+      };
+    });
+    expect(phoneMetrics.scrollWidth, locale).toBeLessThanOrEqual(320);
+    expect(phoneMetrics.modeButtons, locale).toHaveLength(2);
+    for (const btn of phoneMetrics.modeButtons) {
+      expect(btn.width, locale).toBeGreaterThan(0);
+      expect(btn.left, locale).toBeGreaterThanOrEqual(0);
+      expect(btn.right, locale).toBeLessThanOrEqual(320);
+      expect(btn.scrollDiff, locale).toBeLessThanOrEqual(1);
+      expect(btn.radius, locale).toBe('8px');
+    }
+  });
+}

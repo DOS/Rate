@@ -84,6 +84,10 @@
     outline-offset: 2px;
   }
 
+  [data-slot='button'] svg {
+    flex-shrink: 0;
+  }
+
   [data-slot='badge'] {
     display: inline-flex;
     max-width: 100%;
