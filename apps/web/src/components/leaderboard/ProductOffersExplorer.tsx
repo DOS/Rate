@@ -8,6 +8,9 @@ import {
   type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import ExportMenu from '@/components/elementary/ExportMenu';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import {
   BsBarChart,
   BsCheckCircle,
@@ -97,12 +100,14 @@ export function offerRiskTone(riskScore: unknown): MerchantRiskTone | null {
   return merchantRiskTone(100 - trust);
 }
 
-export function offerTrustBadgeClass(riskScore: unknown): string {
+export function offerTrustBadgeVariant(
+  riskScore: unknown
+): NonNullable<BadgeProps['variant']> {
   const tone = offerRiskTone(riskScore);
-  if (tone == null) return 'bg-light text-muted border';
-  if (tone === 'good') return 'bg-success-subtle text-success';
-  if (tone === 'warn') return 'bg-warning-subtle text-warning-emphasis';
-  return 'bg-danger-subtle text-danger';
+  if (tone == null) return 'secondary';
+  if (tone === 'good') return 'success';
+  if (tone === 'warn') return 'warning';
+  return 'danger';
 }
 
 export function hasPositiveOfferPrice(price: unknown): boolean {
@@ -466,16 +471,20 @@ export function buildOffersMarkdown(params: {
   ].join('\n');
 }
 
-export function resolveOfferOriginBadgeClass(origin: ProductOrigin): string {
-  if (origin === 'official_vna') return 'bg-info-subtle text-info-emphasis';
-  if (origin === 'imported') return 'bg-warning-subtle text-warning-emphasis';
-  return 'bg-light text-muted border';
+export function resolveOfferOriginBadgeVariant(
+  origin: ProductOrigin
+): NonNullable<BadgeProps['variant']> {
+  if (origin === 'official_vna') return 'info';
+  if (origin === 'imported') return 'warning';
+  return 'secondary';
 }
 
-export function resolveSellerChannelBadgeClass(channel: SellerChannel): string {
-  if (channel === 'authorized_vat') return 'bg-success-subtle text-success';
-  if (channel === 'official_mall') return 'bg-success-subtle text-success';
-  return 'bg-secondary-subtle text-secondary';
+export function resolveSellerChannelBadgeVariant(
+  channel: SellerChannel
+): NonNullable<BadgeProps['variant']> {
+  if (channel === 'authorized_vat') return 'success';
+  if (channel === 'official_mall') return 'success';
+  return 'secondary';
 }
 
 export default function ProductOffersExplorer({
@@ -786,9 +795,10 @@ export default function ProductOffersExplorer({
   return (
     <div>
       {priceSpreadAudit && (
-        <div
+        <Card
+          tone="success"
           data-testid="price-spread-audit-banner"
-          className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 border p-3"
+          className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 p-3"
         >
           {(() => {
             const spreadCurrency = priceSpreadAudit.cheapest.currency;
@@ -802,12 +812,12 @@ export default function ProductOffersExplorer({
                 : formatPriceVnd(val, locale);
             return (
               <>
-                <div>
-                  <span className="badge bg-success rounded-pill me-2 text-white">
+                <div className="d-flex align-items-center flex-wrap gap-2">
+                  <Badge variant="success">
                     {t('offersSpreadBadge', {
                       count: priceSpreadAudit.platformCount,
                     })}
-                  </span>
+                  </Badge>
                   <strong className="text-dark small">
                     {t('offersSpreadSavePrefix')}{' '}
                     <span className="text-success rate-tabular">
@@ -842,45 +852,38 @@ export default function ProductOffersExplorer({
               </>
             );
           })()}
-        </div>
+        </Card>
       )}
 
       {/* Interactive Filter, Sort & Export Toolbar */}
-      <div className="rounded-3 bg-light mb-3 border p-3">
+      <Card tone="elevated" className="mb-3 p-3">
         <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
           <div
             className="d-flex align-items-center flex-wrap gap-1"
             role="group"
             aria-label={t('offersColPlatformMerchant')}
           >
-            <button
+            <Button
               type="button"
+              variant={selectedPlatform === 'all' ? 'secondary' : 'outline'}
+              size="sm"
               aria-pressed={selectedPlatform === 'all'}
               onClick={() => setSelectedPlatform('all')}
-              className={`btn btn-sm rounded-pill px-3 py-1 ${
-                selectedPlatform === 'all'
-                  ? 'btn-dark fw-semibold text-white'
-                  : 'btn-outline-dark bg-white'
-              }`}
-              style={{ fontSize: '0.8125rem' }}
             >
               {t('offersFilterAll', { count: safeOffers.length })}
-            </button>
+            </Button>
             {platforms.map(([plat, count]) => (
-              <button
+              <Button
                 key={plat}
                 type="button"
+                variant={selectedPlatform === plat ? 'primary' : 'outline'}
+                size="sm"
                 aria-pressed={selectedPlatform === plat}
                 onClick={() => setSelectedPlatform(plat)}
-                className={`btn btn-sm rounded-pill text-uppercase px-2 py-1 ${
-                  selectedPlatform === plat
-                    ? 'btn-danger fw-semibold text-white'
-                    : 'btn-outline-secondary bg-white'
-                }`}
-                style={{ fontSize: '0.8125rem' }}
+                className="text-uppercase"
               >
                 {plat} ({count})
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -923,46 +926,34 @@ export default function ProductOffersExplorer({
 
         <div className="d-flex justify-content-between align-items-center border-top flex-wrap gap-2 pt-2">
           <div className="d-flex align-items-center flex-wrap gap-2">
-            <button
+            <Button
               type="button"
+              variant={officialOnly ? 'success' : 'outline-success'}
+              size="sm"
               aria-pressed={officialOnly}
               onClick={() => setOfficialOnly((v) => !v)}
-              className={`btn btn-sm rounded-pill px-3 py-1 ${
-                officialOnly
-                  ? 'btn-success fw-semibold text-white'
-                  : 'btn-outline-success bg-white'
-              }`}
-              style={{ fontSize: '0.8125rem' }}
             >
               {t('offersOfficialOnlyBtn')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant={officialVnaOnly ? 'secondary' : 'outline'}
+              size="sm"
               aria-pressed={officialVnaOnly}
               onClick={() => setOfficialVnaOnly((v) => !v)}
               data-testid="offers-official-vna-filter-btn"
-              className={`btn btn-sm rounded-pill px-3 py-1 ${
-                officialVnaOnly
-                  ? 'btn-dark fw-semibold'
-                  : 'btn-outline-dark bg-white'
-              }`}
-              style={{ fontSize: '0.8125rem' }}
             >
               {t('oVnaBtn')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant={highTrustOnly ? 'primary' : 'outline-primary'}
+              size="sm"
               aria-pressed={highTrustOnly}
               onClick={() => setHighTrustOnly((v) => !v)}
-              className={`btn btn-sm rounded-pill px-3 py-1 ${
-                highTrustOnly
-                  ? 'btn-primary fw-semibold text-white'
-                  : 'btn-outline-primary bg-white'
-              }`}
-              style={{ fontSize: '0.8125rem' }}
             >
               {t('offersHighTrustOnlyBtn')}
-            </button>
+            </Button>
           </div>
 
           <div className="d-flex align-items-center gap-2">
@@ -981,24 +972,25 @@ export default function ProductOffersExplorer({
             </select>
           </div>
         </div>
-      </div>
+      </Card>
 
       {filteredOffers.length === 0 ? (
-        <div className="rounded-3 border bg-white p-4 text-center">
+        <Card className="p-4 text-center">
           <p className="text-muted small mb-2">{t('offersEmptyFilterText')}</p>
-          <button
+          <Button
             type="button"
+            variant="outline-primary"
+            size="sm"
             onClick={() => {
               setSelectedPlatform('all');
               setOfficialOnly(false);
               setOfficialVnaOnly(false);
               setHighTrustOnly(false);
             }}
-            className="btn btn-sm btn-outline-danger rounded-pill px-3"
           >
             {t('offersResetFiltersBtn')}
-          </button>
-        </div>
+          </Button>
+        </Card>
       ) : (
         <div className="table-responsive">
           <table className="table-hover mb-0 table align-middle">
@@ -1059,7 +1051,7 @@ export default function ProductOffersExplorer({
                 const safeOfferUrl = isSafeExternalOfferUrl(offer.url)
                   ? offer.url.trim()
                   : null;
-                const trustBadgeClass = offerTrustBadgeClass(
+                const trustBadgeVariant = offerTrustBadgeVariant(
                   offer.merchant.risk_score
                 );
                 const trustBadgeText =
@@ -1098,14 +1090,14 @@ export default function ProductOffersExplorer({
                   inStockOffers,
                   implausibleOfferIds
                 );
-                const discountBadgeClass =
+                const discountBadgeVariant: NonNullable<BadgeProps['variant']> =
                   discountAnalysis?.verdict === 'fake_discount'
-                    ? 'bg-danger text-white'
+                    ? 'danger'
                     : discountAnalysis?.verdict === 'suspicious_discount'
-                      ? 'bg-warning text-dark'
+                      ? 'warning'
                       : discountAnalysis?.verdict === 'genuine_deal'
-                        ? 'bg-success text-white'
-                        : 'bg-light text-secondary border';
+                        ? 'success'
+                        : 'secondary';
                 const DiscountIcon =
                   discountAnalysis?.verdict === 'fake_discount'
                     ? BsExclamationOctagon
@@ -1119,9 +1111,9 @@ export default function ProductOffersExplorer({
                   <tr key={offer.id}>
                     <td>
                       <div className="d-flex align-items-center gap-2">
-                        <span className="badge bg-dark text-uppercase small">
+                        <Badge variant="default" className="text-uppercase">
                           {offer.platform}
-                        </span>
+                        </Badge>
                         <div>
                           <div className="fw-semibold small">
                             {offer.merchant.id ? (
@@ -1141,40 +1133,42 @@ export default function ProductOffersExplorer({
                               />
                             )}
                           </div>
-                          <div className="mt-1">
-                            <span
-                              className={`badge me-1 ${resolveOfferOriginBadgeClass(origin)}`}
+                          <div className="d-flex flex-wrap gap-1 mt-1">
+                            <Badge
+                              variant={resolveOfferOriginBadgeVariant(origin)}
                               data-testid="offer-origin-badge"
                               data-origin={origin}
                             >
                               {originBadgeLabel}
-                            </span>
-                            <span
-                              className={`badge me-1 ${resolveSellerChannelBadgeClass(sellerChannel)}`}
+                            </Badge>
+                            <Badge
+                              variant={resolveSellerChannelBadgeVariant(
+                                sellerChannel
+                              )}
                               data-testid="offer-channel-pill"
                               data-channel={sellerChannel}
                             >
                               {channelBadgeLabel}
-                            </span>
+                            </Badge>
                             {isBait && (
-                              <span
-                                className="badge bg-danger-subtle text-danger small"
+                              <Badge
+                                variant="danger"
                                 data-testid="offer-implausibly-low"
                                 title={t('offersImplausiblyLowTitle')}
                               >
                                 {t('offersImplausiblyLowBadge')}
-                              </span>
+                              </Badge>
                             )}
                             {isOfferUnavailable(offer) && (
-                              <span
-                                className="badge bg-secondary-subtle text-secondary small"
+                              <Badge
+                                variant="secondary"
                                 data-testid="offer-unavailable"
                                 title={t('offersUnavailableTitle')}
                               >
                                 {offer.availability === 'discontinued'
                                   ? t('offersDiscontinuedBadge')
                                   : t('offersUnavailableBadge')}
-                              </span>
+                              </Badge>
                             )}
                           </div>
                         </div>
@@ -1191,17 +1185,18 @@ export default function ProductOffersExplorer({
                       <div className="d-flex flex-column gap-1">
                         <div>
                           {offer.merchant.id ? (
-                            <Link
-                              href={`/merchants/${offer.merchant.id}`}
-                              className={`badge ${trustBadgeClass} text-decoration-none small`}
-                              title={t('offersMerchantTrustTitle')}
-                            >
-                              {trustBadgeText} ↗
-                            </Link>
+                            <Badge variant={trustBadgeVariant} asChild>
+                              <Link
+                                href={`/merchants/${offer.merchant.id}`}
+                                title={t('offersMerchantTrustTitle')}
+                              >
+                                {trustBadgeText} ↗
+                              </Link>
+                            </Badge>
                           ) : (
-                            <span className={`badge ${trustBadgeClass} small`}>
+                            <Badge variant={trustBadgeVariant}>
                               {trustBadgeText}
-                            </span>
+                            </Badge>
                           )}
                         </div>
                         <div
@@ -1238,51 +1233,53 @@ export default function ProductOffersExplorer({
                       )}
                       {discountAnalysis && (
                         <div className="mt-1">
-                          <a
-                            href="#price-history-section"
-                            title={
-                              discountVerdictCopy(
-                                tVerdict,
-                                discountAnalysis,
-                                locale
-                              ).explanation
-                            }
-                            className={`badge ${discountBadgeClass} text-decoration-none rounded-pill small`}
-                            style={{ fontSize: '0.8125rem' }}
-                          >
-                            <DiscountIcon aria-hidden="true" className="me-1" />
-                            {
-                              discountVerdictCopy(
-                                tVerdict,
-                                discountAnalysis,
-                                locale
-                              ).label
-                            }
-                          </a>
+                          <Badge variant={discountBadgeVariant} asChild>
+                            <a
+                              href="#price-history-section"
+                              title={
+                                discountVerdictCopy(
+                                  tVerdict,
+                                  discountAnalysis,
+                                  locale
+                                ).explanation
+                              }
+                            >
+                              <DiscountIcon aria-hidden="true" />
+                              {
+                                discountVerdictCopy(
+                                  tVerdict,
+                                  discountAnalysis,
+                                  locale
+                                ).label
+                              }
+                            </a>
+                          </Badge>
                         </div>
                       )}
                     </td>
                     <td className="text-end">
                       {safeOfferUrl && (
                         <div className="d-inline-flex align-items-center justify-content-end flex-wrap gap-1">
-                          <Link
-                            href={buildExplorerInspectHref(
-                              safeOfferUrl,
-                              offer.price_current
-                            )}
-                            className="btn btn-sm btn-outline-primary rounded-pill px-2"
-                            title={t('offersInspectBtnTitle')}
-                          >
-                            {t('offersInspectBtn')}
-                          </Link>
-                          <a
-                            href={safeOfferUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-sm btn-outline-secondary rounded-pill px-3"
-                          >
-                            {t('offersSourceLinkBtn')}
-                          </a>
+                          <Button variant="outline-primary" size="sm" asChild>
+                            <Link
+                              href={buildExplorerInspectHref(
+                                safeOfferUrl,
+                                offer.price_current
+                              )}
+                              title={t('offersInspectBtnTitle')}
+                            >
+                              {t('offersInspectBtn')}
+                            </Link>
+                          </Button>
+                          <Button variant="outline" size="sm" asChild>
+                            <a
+                              href={safeOfferUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {t('offersSourceLinkBtn')}
+                            </a>
+                          </Button>
                         </div>
                       )}
                     </td>

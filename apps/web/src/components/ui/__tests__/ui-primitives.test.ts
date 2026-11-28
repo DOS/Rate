@@ -25,10 +25,13 @@ function main() {
   // 2. Button enforces DESIGN.md Principle #5: var(--rate-radius-btn), never rounded-full.
   const variants = [
     'primary',
+    'secondary',
     'outline-primary',
+    'outline-success',
     'outline',
     'ghost',
     'success',
+    'warning',
   ] as const;
   const sizes = ['sm', 'default', 'icon'] as const;
 
@@ -115,6 +118,8 @@ function main() {
   for (const variant of [
     'default',
     'secondary',
+    'brand',
+    'info',
     'success',
     'warning',
     'danger',
@@ -126,9 +131,16 @@ function main() {
       `Badge (${variant}) must use 6px radius`
     );
     assert.equal(
-      /(?:^|\s)(?:border|bg-transparent|p-0|p-1)(?:\s|$)/.test(classes),
+      /(?:^|\s)(?:border|bg-transparent|bg-success|text-success|p-0|p-1)(?:\s|$)/.test(
+        classes
+      ),
       false,
-      `Badge (${variant}) must avoid colliding Bootstrap !important utilities (border, bg-transparent, p-0, p-1)`
+      `Badge (${variant}) must avoid colliding Bootstrap !important utilities`
+    );
+    assert.equal(
+      /#[0-9a-f]{3,8}/i.test(classes),
+      false,
+      `Badge (${variant}) must use --rate-* semantic color tokens instead of hardcoded hex literals`
     );
   }
   const badgeHtml = renderToStaticMarkup(
@@ -137,7 +149,18 @@ function main() {
   assert.match(badgeHtml, /data-slot="badge"/);
   assert.match(badgeHtml, /rounded-\[6px\]/);
 
-  // 4. Card enforces unified 14px radius across surfaces.
+  const badgeLinkHtml = renderToStaticMarkup(
+    React.createElement(
+      Badge,
+      { variant: 'success', asChild: true },
+      React.createElement('a', { href: '/merchants/1' }, 'Tin cay 95%')
+    )
+  );
+  assert.match(badgeLinkHtml, /^<a\b/);
+  assert.match(badgeLinkHtml, /data-slot="badge"/);
+  assert.match(badgeLinkHtml, /rounded-\[6px\]/);
+
+  // 4. Card enforces unified 14px radius across surfaces and semantic tones.
   const cardHtml = renderToStaticMarkup(
     React.createElement(
       Card,
@@ -155,6 +178,18 @@ function main() {
   assert.match(cardHtml, /\bpt-\[0px\]/);
   assert.doesNotMatch(cardHtml, /class="[^"]*\bpt-0\b/);
 
+  for (const tone of ['surface', 'elevated', 'success', 'danger'] as const) {
+    const toneHtml = renderToStaticMarkup(
+      React.createElement(Card, { tone }, tone)
+    );
+    assert.match(toneHtml, /data-slot="card"/);
+    assert.match(toneHtml, /rounded-\[14px\]/);
+    assert.doesNotMatch(
+      toneHtml,
+      /class="[^"]*(?:^|\s)(?:border|bg-transparent|bg-success)(?:\s|")/
+    );
+  }
+
   const tailwindCss = readFileSync(
     new URL('../../../app/style/tailwind.css', import.meta.url),
     'utf8'
@@ -164,6 +199,9 @@ function main() {
     '--color-success-bg: var(--rate-success-bg)',
     '--color-success-hover: var(--rate-success-hover)',
     '--color-success-fg: var(--rate-success-fg)',
+    '--color-ink-success: var(--rate-ink-success)',
+    '--color-status-info-bg: var(--rate-status-info-bg)',
+    '--color-status-info-fg: var(--rate-status-info-fg)',
   ]) {
     assert.ok(tailwindCss.includes(token), `tailwind.css must expose ${token}`);
   }
@@ -190,12 +228,20 @@ function main() {
   assert.match(tabsHtml, /\bh-9\b/);
   assert.doesNotMatch(tabsHtml, /rounded-full|999px/);
 
-  // 6. Zero em-dashes or en-dashes across all new UI primitive files.
+  // 6. Zero em-dashes or en-dashes across UI primitives and Phase 2A migrated files.
   for (const rel of [
     '../button.tsx',
     '../badge.tsx',
     '../card.tsx',
     '../tabs.tsx',
+    '../../radar/RadarBadge.tsx',
+    '../../product/PhoneCollapsible.tsx',
+    '../../product/item/ItemLazySizePanel.tsx',
+    '../../reviews/JReviewsSection.tsx',
+    '../../reviews/ReviewFormV2.tsx',
+    '../../price-history/PriceHistorySection.tsx',
+    '../../leaderboard/ProductOffersExplorer.tsx',
+    '../../leaderboard/ProductValueCalculator.tsx',
     '../../../lib/utils.ts',
     '../../../app/style/tailwind.css',
   ] as const) {

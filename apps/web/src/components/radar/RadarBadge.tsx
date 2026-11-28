@@ -1,5 +1,7 @@
 import React from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import {
   EMPTY_RADAR_SIGNAL,
   isMultiPlatformFloor,
@@ -71,20 +73,21 @@ export default function RadarBadge({
     });
   }
   if (!label) return <>{emptyFallback}</>;
-  const tone =
+  const variant =
     sig.verdict === 'genuine_deal'
-      ? 'bg-success text-white'
+      ? 'success'
       : sig.verdict === 'fake_sale_trap'
-        ? 'bg-danger text-white'
-        : 'bg-warning-subtle text-dark border border-warning-subtle';
+        ? 'danger'
+        : 'warning';
   return (
-    <span
+    <Badge
+      variant={variant}
       data-testid="radar-badge"
       data-radar-verdict={sig.verdict}
-      className={`badge rounded-pill small rate-tabular ${tone} ${className}`.trim()}
+      className={cn('rate-tabular', className)}
       style={style}
     >
       {label}
-    </span>
+    </Badge>
   );
 }

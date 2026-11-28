@@ -4,6 +4,9 @@ import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import ContentText from '@/components/elementary/ContentText';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { contentLang } from '@/lib/content-lang';
 import type { IconType } from 'react-icons';
 import {
@@ -89,28 +92,28 @@ const SERIES_COLORS = [
 ];
 
 function getVerdictBadgeStyle(verdict: DiscountVerdictType): {
-  badgeClass: string;
+  variant: NonNullable<BadgeProps['variant']>;
   icon: IconType;
 } {
   switch (verdict) {
     case 'fake_discount':
       return {
-        badgeClass: 'bg-danger text-white',
+        variant: 'danger',
         icon: BsExclamationOctagon,
       };
     case 'suspicious_discount':
       return {
-        badgeClass: 'bg-warning text-dark',
+        variant: 'warning',
         icon: BsExclamationTriangle,
       };
     case 'genuine_deal':
       return {
-        badgeClass: 'bg-success text-white',
+        variant: 'success',
         icon: BsCheckCircle,
       };
     default:
       return {
-        badgeClass: 'bg-secondary-subtle text-secondary-emphasis',
+        variant: 'secondary',
         icon: BsBarChart,
       };
   }
@@ -1166,10 +1169,7 @@ export default function PriceHistorySection({
       : chartGeometry?.mapped[chartGeometry.mapped.length - 1] || null;
 
   return (
-    <div
-      id="price-history-section"
-      className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
-    >
+    <Card id="price-history-section" className="p-md-5 mb-5 p-4 shadow-sm">
       {/* Header & Summary Badges */}
       <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center mb-4 gap-3">
         <div>
@@ -1219,22 +1219,20 @@ export default function PriceHistorySection({
             )}
           </ExportMenu>
           {history.fakeDiscountCount > 0 ? (
-            <span className="badge bg-danger rounded-pill small px-3 py-2 text-white">
+            <Badge variant="danger">
               {t('priceHistoryFakeAlertBadge', {
                 count: history.fakeDiscountCount,
               })}
-            </span>
+            </Badge>
           ) : hasAuditEvidence ? (
-            <span className="badge bg-success-subtle text-success rounded-pill small px-3 py-2">
-              {t('priceHistoryCleanBadge')}
-            </span>
+            <Badge variant="success">{t('priceHistoryCleanBadge')}</Badge>
           ) : null}
           {history.genuineDealCount > 0 && (
-            <span className="badge bg-success rounded-pill small px-3 py-2 text-white">
+            <Badge variant="success">
               {t('priceHistoryGenuineDealBadge', {
                 count: history.genuineDealCount,
               })}
-            </span>
+            </Badge>
           )}
         </div>
       </div>
@@ -1242,7 +1240,7 @@ export default function PriceHistorySection({
       {/* 4 KPI Summary Cards */}
       <div className="row g-3 mb-4">
         <div className="col-lg-3 col-6">
-          <div className="rounded-4 bg-light h-100 border p-3">
+          <Card tone="elevated" className="h-100 p-3">
             <div className="text-muted small mb-1">
               {t('priceHistoryKpiCurrentMinTitle')}
             </div>
@@ -1254,11 +1252,11 @@ export default function PriceHistorySection({
                 count: offerAnalyses.length,
               })}
             </div>
-          </div>
+          </Card>
         </div>
 
         <div className="col-lg-3 col-6">
-          <div className="rounded-4 bg-success-subtle border-success-subtle h-100 border p-3">
+          <Card tone="success" className="h-100 p-3">
             <div className="text-success-emphasis small mb-1">
               {t('priceHistoryKpiLowestEverTitle')}
             </div>
@@ -1281,11 +1279,11 @@ export default function PriceHistorySection({
                 t('priceHistoryKpiLowestEverDefaultSub')
               )}
             </div>
-          </div>
+          </Card>
         </div>
 
         <div className="col-lg-3 col-6">
-          <div className="rounded-4 bg-light h-100 border p-3">
+          <Card tone="elevated" className="h-100 p-3">
             <div className="text-muted small mb-1">
               {t('priceHistoryKpiHighestEverTitle')}
             </div>
@@ -1297,16 +1295,13 @@ export default function PriceHistorySection({
                 count: history.points.length,
               })}
             </div>
-          </div>
+          </Card>
         </div>
 
         <div className="col-lg-3 col-6">
-          <div
-            className={`rounded-4 h-100 border p-3 ${
-              history.fakeDiscountCount > 0
-                ? 'bg-danger-subtle border-danger-subtle'
-                : 'bg-light'
-            }`}
+          <Card
+            tone={history.fakeDiscountCount > 0 ? 'danger' : 'elevated'}
+            className="h-100 p-3"
           >
             <div className="text-muted small mb-1">
               {t('priceHistoryKpiAiAuditTitle')}
@@ -1331,14 +1326,15 @@ export default function PriceHistorySection({
             <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
               {t('priceHistoryKpiAiAuditSub')}
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
       {/* 3-Column EU Omnibus 30-Day Floor Audit & 90-Day Cycle Signal (#1863) */}
       {omnibusCopy && (
-        <div
-          className="rounded-4 bg-light p-md-4 mb-4 border p-3"
+        <Card
+          tone="elevated"
+          className="p-md-4 mb-4 p-3"
           data-testid="omnibus-price-audit-card"
         >
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -1346,20 +1342,20 @@ export default function PriceHistorySection({
               <BsCheckCircle aria-hidden="true" className="text-danger" />
               <span>{omnibusCopy.cardTitle}</span>
             </h3>
-            <span
+            <Badge
               data-testid="omnibus-window-badge"
-              className={`badge rounded-pill small px-3 py-2 ${
+              variant={
                 omnibusCopy.statusBadgeTone === 'good'
-                  ? 'bg-success-subtle text-success border-success-subtle border'
+                  ? 'success'
                   : omnibusCopy.statusBadgeTone === 'bad'
-                    ? 'bg-danger-subtle text-danger border-danger-subtle border'
+                    ? 'danger'
                     : omnibusCopy.statusBadgeTone === 'warn'
-                      ? 'bg-warning text-dark'
-                      : 'bg-secondary-subtle text-secondary border'
-              }`}
+                      ? 'warning'
+                      : 'secondary'
+              }
             >
               {omnibusCopy.statusBadgeText}
-            </span>
+            </Badge>
           </div>
 
           <div className="row g-3">
@@ -1415,14 +1411,12 @@ export default function PriceHistorySection({
               },
             ].map((col) => (
               <div key={col.k} className="col-lg-4 col-12">
-                <div className="rounded-4 bg-white h-100 border p-3">
+                <Card className="h-100 p-3">
                   <div className="text-muted small mb-1">{col.title}</div>
                   {col.badge ? (
                     <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
                       <span className={col.valCls}>{col.val}</span>
-                      <span className="badge bg-warning text-dark rounded-pill small">
-                        {col.badge}
-                      </span>
+                      <Badge variant="warning">{col.badge}</Badge>
                     </div>
                   ) : (
                     <div data-testid={col.testId} className={col.valCls}>
@@ -1433,11 +1427,11 @@ export default function PriceHistorySection({
                   {col.note && (
                     <div className="small text-muted mt-1">{col.note}</div>
                   )}
-                </div>
+                </Card>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Controls: Merchant Filter & Time Range. Single-select groups that
@@ -1454,39 +1448,35 @@ export default function PriceHistorySection({
           >
             {t('priceHistoryMerchantFilterLabel')}
           </span>
-          <button
+          <Button
             type="button"
+            variant={selectedProductId === 'ALL' ? 'secondary' : 'outline'}
+            size="sm"
             aria-pressed={selectedProductId === 'ALL'}
             onClick={() => {
               setSelectedProductId('ALL');
               setActivePointIndex(null);
             }}
-            className={`btn btn-sm rounded-pill px-3 ${
-              selectedProductId === 'ALL'
-                ? 'btn-dark fw-semibold'
-                : 'btn-outline-secondary'
-            }`}
           >
             {t('priceHistoryMerchantFilterAll', {
               count: offerAnalyses.length,
             })}
-          </button>
+          </Button>
           {offerAnalyses.map((oa, idx) => {
             const color =
               SERIES_COLORS[idx % SERIES_COLORS.length] || '#dc2626';
             const isSelected = selectedProductId === oa.product_id;
             return (
-              <button
+              <Button
                 key={oa.product_id}
                 type="button"
+                variant={isSelected ? 'secondary' : 'outline'}
+                size="sm"
                 aria-pressed={isSelected}
                 onClick={() => {
                   setSelectedProductId(oa.product_id);
                   setActivePointIndex(null);
                 }}
-                className={`btn btn-sm rounded-pill d-inline-flex align-items-center gap-2 px-3 ${
-                  isSelected ? 'btn-dark fw-semibold' : 'btn-outline-secondary'
-                }`}
               >
                 <span
                   className="rounded-circle d-inline-block"
@@ -1499,13 +1489,13 @@ export default function PriceHistorySection({
                 <span lang={contentLang(oa.merchant_name, locale)}>
                   {oa.merchant_name}
                 </span>
-              </button>
+              </Button>
             );
           })}
         </div>
 
         <div
-          className="btn-group btn-group-sm"
+          className="d-inline-flex flex-wrap gap-1"
           role="group"
           aria-label={t('priceHistoryRangeAria')}
         >
@@ -1516,27 +1506,26 @@ export default function PriceHistorySection({
               { key: 'all', label: t('priceHistoryRangeAll') },
             ] as const
           ).map((item) => (
-            <button
+            <Button
               key={item.key}
               type="button"
+              variant={timeRange === item.key ? 'primary' : 'outline'}
+              size="sm"
               aria-pressed={timeRange === item.key}
               onClick={() => {
                 setTimeRange(item.key);
                 setActivePointIndex(null);
               }}
-              className={`btn ${
-                timeRange === item.key ? 'btn-danger' : 'btn-outline-secondary'
-              }`}
             >
               {item.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
       {/* Interactive SVG Time-Series Chart */}
       {chartGeometry ? (
-        <div className="rounded-4 mb-4 border bg-white p-3">
+        <Card className="mb-4 p-3">
           <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 px-2">
             <div className="d-flex align-items-center small flex-wrap gap-3">
               <span className="d-inline-flex align-items-center text-dark fw-medium gap-1">
@@ -1577,26 +1566,28 @@ export default function PriceHistorySection({
             </div>
 
             {activeNode && (
-              <div className="badge bg-light text-dark rounded-pill small border px-3 py-2">
-                <BsCalendar3 aria-hidden="true" className="me-1" />
-                {formatDateShort(locale, activeNode.pt.recorded_at)} -{' '}
-                <strong>
-                  <ContentText
-                    text={activeNode.pt.merchant_name}
-                    locale={locale}
-                  />
-                </strong>
-                :{' '}
-                <span className="text-danger fw-bold">
-                  {formatVnd(activeNode.pt.price, locale)}
+              <Badge variant="default" className="rate-tabular flex-wrap">
+                <BsCalendar3 aria-hidden="true" />
+                <span>
+                  {formatDateShort(locale, activeNode.pt.recorded_at)} -{' '}
+                  <strong>
+                    <ContentText
+                      text={activeNode.pt.merchant_name}
+                      locale={locale}
+                    />
+                  </strong>
+                  :{' '}
+                  <span className="text-danger fw-bold">
+                    {formatVnd(activeNode.pt.price, locale)}
+                  </span>
+                  {activeNode.pt.price_original &&
+                    activeNode.pt.price_original > activeNode.pt.price && (
+                      <span className="text-muted text-decoration-line-through ms-2">
+                        {formatVnd(activeNode.pt.price_original, locale)}
+                      </span>
+                    )}
                 </span>
-                {activeNode.pt.price_original &&
-                  activeNode.pt.price_original > activeNode.pt.price && (
-                    <span className="text-muted text-decoration-line-through ms-2">
-                      {formatVnd(activeNode.pt.price_original, locale)}
-                    </span>
-                  )}
-              </div>
+              </Badge>
             )}
           </div>
 
@@ -1805,7 +1796,7 @@ export default function PriceHistorySection({
                 ))}
             </svg>
           </div>
-        </div>
+        </Card>
       ) : (
         <div className="alert alert-light rounded-4 text-muted small mb-4 border">
           {t('priceHistoryEmptyRange')}
@@ -1823,22 +1814,20 @@ export default function PriceHistorySection({
             const style = getVerdictBadgeStyle(oa.verdict);
             return (
               <div key={oa.product_id} className="col-md-6 col-12">
-                <div className="rounded-4 h-100 border bg-white p-3">
+                <Card className="h-100 p-3">
                   <div className="d-flex justify-content-between align-items-start mb-2 gap-2">
-                    <div>
-                      <span className="badge bg-danger text-uppercase small me-2">
+                    <div className="d-flex align-items-center flex-wrap gap-2">
+                      <Badge variant="brand" className="text-uppercase">
                         {oa.platform}
-                      </span>
+                      </Badge>
                       <span className="fw-bold text-dark small">
                         <ContentText text={oa.merchant_name} locale={locale} />
                       </span>
                     </div>
-                    <span
-                      className={`badge ${style.badgeClass} rounded-pill small px-3 py-1`}
-                    >
-                      <style.icon aria-hidden="true" className="me-1" />
+                    <Badge variant={style.variant}>
+                      <style.icon aria-hidden="true" />
                       {discountVerdictCopy(tVerdict, oa, locale).label}
-                    </span>
+                    </Badge>
                   </div>
 
                   <div className="d-flex align-items-baseline mb-2 flex-wrap gap-3">
@@ -1858,14 +1847,14 @@ export default function PriceHistorySection({
                         <span className="text-muted text-decoration-line-through small">
                           {formatVnd(oa.price_original, locale)}
                         </span>
-                        <span className="badge bg-light text-dark small ms-1 border">
+                        <Badge variant="default" className="ms-1">
                           {t('priceHistoryClaimedPctBadge', {
                             pct: formatPlainNumber(
                               oa.claimed_discount_pct,
                               locale
                             ),
                           })}
-                        </span>
+                        </Badge>
                       </div>
                     )}
                   </div>
@@ -1924,12 +1913,12 @@ export default function PriceHistorySection({
                   <p className="small text-secondary lh-sm mb-0">
                     {discountVerdictCopy(tVerdict, oa, locale).explanation}
                   </p>
-                </div>
+                </Card>
               </div>
             );
           })}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

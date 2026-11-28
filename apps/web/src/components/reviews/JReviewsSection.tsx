@@ -5,6 +5,9 @@ import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import PhoneCollapsible from '@/components/product/PhoneCollapsible';
 import StarRating from '@/components/elementary/StarRating';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import {
   BsAward,
   BsBarChart,
@@ -249,15 +252,16 @@ export function normalizeReviewCriteriaRatings(
   return out;
 }
 
-const FLAG_STYLES: Record<ReviewBadgeKind, string> = {
-  pending: 'bg-info-subtle text-info-emphasis border border-info-subtle',
-  authentic: 'bg-success-subtle text-success border border-success-subtle',
-  low_value_coin_spam:
-    'bg-secondary-subtle text-secondary border border-secondary-subtle',
-  seeding_fake: 'bg-danger-subtle text-danger border border-danger-subtle',
-  competitor_sabotage:
-    'bg-warning-subtle text-warning-emphasis border border-warning-subtle',
-  review_bombing: 'bg-danger-subtle text-danger border border-danger-subtle',
+const FLAG_VARIANTS: Record<
+  ReviewBadgeKind,
+  NonNullable<BadgeProps['variant']>
+> = {
+  pending: 'info',
+  authentic: 'success',
+  low_value_coin_spam: 'secondary',
+  seeding_fake: 'danger',
+  competitor_sabotage: 'warning',
+  review_bombing: 'danger',
 };
 
 const STORAGE_KEY = 'rate_review_votes_v1';
@@ -563,20 +567,22 @@ function ReportReasonDialog({
           </fieldset>
 
           <div className="d-flex justify-content-end gap-2">
-            <button
+            <Button
               type="button"
-              className="btn btn-sm btn-outline-dark rounded-pill px-3"
+              variant="outline"
+              size="sm"
               onClick={() => onClose(true)}
             >
               {t('reportCancelBtn')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-sm btn-danger rounded-pill px-3 text-white"
+              variant="primary"
+              size="sm"
               data-testid="review-report-submit-btn"
             >
               {t('reportSubmitBtn')}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -647,38 +653,42 @@ export default function JReviewsSection({
   const flagMetaMap = useMemo<
     Record<
       ReviewBadgeKind,
-      { label: string; badgeClass: string; description: string }
+      {
+        label: string;
+        variant: NonNullable<BadgeProps['variant']>;
+        description: string;
+      }
     >
   >(
     () => ({
       pending: {
         label: t('flagPendingLabel'),
-        badgeClass: FLAG_STYLES.pending,
+        variant: FLAG_VARIANTS.pending,
         description: t('flagPendingDesc'),
       },
       authentic: {
         label: t('flagAuthenticLabel'),
-        badgeClass: FLAG_STYLES.authentic,
+        variant: FLAG_VARIANTS.authentic,
         description: t('flagAuthenticDesc'),
       },
       low_value_coin_spam: {
         label: t('flagCoinSpamLabel'),
-        badgeClass: FLAG_STYLES.low_value_coin_spam,
+        variant: FLAG_VARIANTS.low_value_coin_spam,
         description: t('flagCoinSpamDesc'),
       },
       seeding_fake: {
         label: t('flagSeedingFakeLabel'),
-        badgeClass: FLAG_STYLES.seeding_fake,
+        variant: FLAG_VARIANTS.seeding_fake,
         description: t('flagSeedingFakeDesc'),
       },
       competitor_sabotage: {
         label: t('flagSabotageLabel'),
-        badgeClass: FLAG_STYLES.competitor_sabotage,
+        variant: FLAG_VARIANTS.competitor_sabotage,
         description: t('flagSabotageDesc'),
       },
       review_bombing: {
         label: t('flagBombingLabel'),
-        badgeClass: FLAG_STYLES.review_bombing,
+        variant: FLAG_VARIANTS.review_bombing,
         description: t('flagBombingDesc'),
       },
     }),
@@ -1677,10 +1687,7 @@ export default function JReviewsSection({
   };
 
   return (
-    <div
-      id="jreviews-section"
-      className="card rounded-4 p-md-5 border-0 p-4 shadow-sm"
-    >
+    <Card id="jreviews-section" className="p-md-5 p-4 shadow-sm">
       {/* Header */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
         <div>
@@ -1731,22 +1738,21 @@ export default function JReviewsSection({
           {/* v2 rates a category's own criteria: a category without a
               list has no form, as the RPC refuses it (DOS/Rate#1544). */}
           {canWriteReview && (
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               aria-expanded={showWriteForm}
               aria-controls={showWriteForm ? writeFormId : undefined}
               onClick={() => {
                 setShowWriteForm((v) => !v);
                 setSubmitError(null);
               }}
-              className="btn btn-primary btn-sm rounded-pill fw-medium px-3 py-2"
             >
               {showWriteForm ? t('closeFormBtn') : t('openWriteFormBtn')}
-            </button>
+            </Button>
           )}
-          <span className="badge bg-dark rounded-pill small px-3 py-2 text-white">
-            {t('dualRatingStandardBadge')}
-          </span>
+          <Badge variant="default">{t('dualRatingStandardBadge')}</Badge>
         </div>
       </div>
 
@@ -1790,9 +1796,7 @@ export default function JReviewsSection({
             <h3 className="h6 fw-bold text-dark mb-0">
               {t('writeFormHeading', { productName })}
             </h3>
-            <span className="badge bg-primary-subtle text-primary rounded-pill small">
-              {t('aiModerationBadge')}
-            </span>
+            <Badge variant="brand">{t('aiModerationBadge')}</Badge>
           </div>
 
           {submitError && (
@@ -1922,13 +1926,14 @@ export default function JReviewsSection({
                 ★
               </strong>
             </span>
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              size="sm"
               disabled={submittingReview}
-              className="btn btn-primary btn-sm rounded-pill fw-medium px-4 py-2"
             >
               {submittingReview ? t('submittingAiBtn') : t('submitJReviewsBtn')}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -1973,7 +1978,7 @@ export default function JReviewsSection({
 
         {/* Weighted Authentic User Score */}
         <div className="col-md-4 col-12">
-          <div className="rounded-4 d-flex flex-column justify-content-between h-100 border bg-white p-4">
+          <Card className="d-flex flex-column justify-content-between h-100 p-4">
             <div>
               <div className="text-uppercase small fw-bold text-primary mb-1">
                 {t('authenticUserScoreTitle')}
@@ -2005,15 +2010,15 @@ export default function JReviewsSection({
               </div>
             </div>
             <div className="d-flex border-top mt-2 flex-wrap gap-2 pt-2">
-              <span
-                className={`badge small ${
+              <Badge
+                variant={
                   liveScores.confidenceTier === 'high' ||
                   liveScores.confidenceTier === 'medium'
-                    ? 'bg-primary-subtle text-primary'
+                    ? 'brand'
                     : liveScores.confidenceTier === 'low'
-                      ? 'bg-warning-subtle text-warning-emphasis'
-                      : 'bg-secondary-subtle text-secondary'
-                }`}
+                      ? 'warning'
+                      : 'secondary'
+                }
                 title={t('bayesianConfidenceTooltip', {
                   pct: formatPlainNumber(
                     Math.round(liveScores.bayesianConfidence * 100),
@@ -2021,26 +2026,26 @@ export default function JReviewsSection({
                   ),
                 })}
               >
-                <BsBarChart aria-hidden="true" className="me-1" />
+                <BsBarChart aria-hidden="true" />
                 {liveScores.confidenceLabel} (
                 {formatPercent(
                   Math.round(liveScores.bayesianConfidence * 100),
                   locale
                 )}
                 )
-              </span>
+              </Badge>
               {counts.ignored > 0 && (
-                <span className="badge bg-danger-subtle text-danger small">
+                <Badge variant="danger">
                   {t('blockedSeedingBadge', { count: counts.ignored })}
-                </span>
+                </Badge>
               )}
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* Expert Review Score */}
         <div className="col-md-4 col-12">
-          <div className="rounded-4 d-flex flex-column justify-content-between h-100 border bg-white p-4">
+          <Card className="d-flex flex-column justify-content-between h-100 p-4">
             <div>
               <div className="d-flex justify-content-between align-items-center mb-1">
                 <span className="text-uppercase small fw-bold text-dark">
@@ -2087,13 +2092,13 @@ export default function JReviewsSection({
                 ? t('expertReviewsCountNote', { count: counts.expert })
                 : t('zeroAdDilutionNote')}
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
       {/* 1a. 5-to-1 Star Rating Histogram */}
-      <div
-        className="rounded-4 p-md-4 mb-4 border bg-white p-3"
+      <Card
+        className="p-md-4 mb-4 p-3"
         data-testid="review-star-histogram"
         role="group"
         aria-label={t('starHistogramHeading')}
@@ -2147,17 +2152,15 @@ export default function JReviewsSection({
             );
           })}
         </div>
-      </div>
+      </Card>
 
       {/* 1b. JReviews 5-Criteria Aggregated Breakdown */}
-      <div className="rounded-4 p-md-4 mb-4 border bg-white p-3">
+      <Card className="p-md-4 mb-4 p-3">
         <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <span className="small fw-bold text-uppercase text-secondary">
             {t('criteriaMatrixHeading')}
           </span>
-          <span className="badge bg-light text-secondary rounded-pill small border">
-            {t('normalizedByHelpfulnessBadge')}
-          </span>
+          <Badge variant="secondary">{t('normalizedByHelpfulnessBadge')}</Badge>
         </div>
         {availablePointCriteria.size > 0 && (
           <span
@@ -2231,7 +2234,7 @@ export default function JReviewsSection({
             );
           })}
         </div>
-      </div>
+      </Card>
 
       {/* 1c. Product Pros & Cons from rate.product_points (DOS/Rate#1624, design 7.1) */}
       <ProductPointsBlock
@@ -2264,45 +2267,45 @@ export default function JReviewsSection({
       )}
 
       {/* 2. AI Review Synthesis (Pros / Cons / Authenticity Bar) */}
-      <div className="rounded-4 bg-light mb-4 border p-4">
+      <Card tone="elevated" className="mb-4 p-4">
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
           <div className="fw-bold text-dark d-flex align-items-center gap-2">
             <BsRobot aria-hidden="true" /> {t('aiAuthenticityHeading')}
           </div>
           {hasAnalyzedReviews ? (
-            <div className="d-flex small flex-wrap gap-2">
-              <span className="badge bg-success text-white">
+            <div className="d-flex flex-wrap gap-2">
+              <Badge variant="success">
                 {t('authenticPctBadge', {
                   pct: formatPlainNumber(
                     sanitizeJReviewsPercentage(summary.authentic_pct),
                     locale
                   ),
                 })}
-              </span>
-              <span className="badge bg-warning text-dark">
+              </Badge>
+              <Badge variant="warning">
                 {t('suspiciousPctBadge', {
                   pct: formatPlainNumber(
                     sanitizeJReviewsPercentage(summary.suspicious_pct),
                     locale
                   ),
                 })}
-              </span>
-              <span className="badge bg-danger text-white">
+              </Badge>
+              <Badge variant="danger">
                 {t('fakePctBadge', {
                   pct: formatPlainNumber(
                     sanitizeJReviewsPercentage(summary.fake_pct),
                     locale
                   ),
                 })}
-              </span>
+              </Badge>
             </div>
           ) : (
-            <span
-              className="badge bg-secondary-subtle text-secondary rounded-pill small"
+            <Badge
+              variant="secondary"
               data-testid="jreviews-authenticity-empty-badge"
             >
               {t('notAvailableShort')}
-            </span>
+            </Badge>
           )}
         </div>
 
@@ -2415,7 +2418,7 @@ export default function JReviewsSection({
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* 3. Filter Tabs, Keyword Search, Star Filter & Sort Controls */}
       <div className="d-flex flex-column mb-4 gap-3">
@@ -2426,52 +2429,46 @@ export default function JReviewsSection({
             role="group"
             aria-label={t('filterGroupAria')}
           >
-            <button
+            <Button
               type="button"
+              variant={activeTab === 'all' ? 'secondary' : 'outline'}
+              size="sm"
               onClick={() => setActiveTab('all')}
               aria-pressed={activeTab === 'all'}
-              className={`btn btn-sm rounded-pill px-3 ${
-                activeTab === 'all' ? 'btn-dark' : 'btn-outline-secondary'
-              }`}
             >
               {t('tabAll', { count: counts.all })}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant={
+                activeTab === 'authentic' ? 'success' : 'outline-success'
+              }
+              size="sm"
               onClick={() => setActiveTab('authentic')}
               aria-pressed={activeTab === 'authentic'}
-              className={`btn btn-sm rounded-pill px-3 ${
-                activeTab === 'authentic'
-                  ? 'btn-success'
-                  : 'btn-outline-success'
-              }`}
             >
               {t('tabAuthentic', { count: counts.authentic })}
-            </button>
+            </Button>
             {counts.expert > 0 && (
-              <button
+              <Button
                 type="button"
+                variant={activeTab === 'expert' ? 'warning' : 'outline'}
+                size="sm"
                 onClick={() => setActiveTab('expert')}
                 aria-pressed={activeTab === 'expert'}
-                className={`btn btn-sm rounded-pill px-3 ${
-                  activeTab === 'expert'
-                    ? 'btn-warning text-dark'
-                    : 'btn-outline-warning text-dark'
-                }`}
               >
                 {t('tabExpert', { count: counts.expert })}
-              </button>
+              </Button>
             )}
-            <button
+            <Button
               type="button"
+              variant={activeTab === 'ignored' ? 'primary' : 'outline-primary'}
+              size="sm"
               onClick={() => setActiveTab('ignored')}
               aria-pressed={activeTab === 'ignored'}
-              className={`btn btn-sm rounded-pill px-3 ${
-                activeTab === 'ignored' ? 'btn-danger' : 'btn-outline-danger'
-              }`}
             >
               {t('tabIgnored', { count: counts.ignored })}
-            </button>
+            </Button>
           </div>
 
           <div className="d-flex align-items-center small gap-2">
@@ -2485,10 +2482,14 @@ export default function JReviewsSection({
               id="review-sort-select"
               value={sortMode}
               onChange={(e) => setSortMode(e.target.value as SortMode)}
-              className="form-select form-select-sm rounded-pill"
+              className="form-select form-select-sm"
               // Up to 240px, shrinking with the row on a 320px phone
               // (DOS/Rate#809).
-              style={{ flex: '0 1 240px', minWidth: 0 }}
+              style={{
+                flex: '0 1 240px',
+                minWidth: 0,
+                borderRadius: 'var(--rate-radius-btn)',
+              }}
             >
               <option value="weight_desc">{t('sortMostHelpful')}</option>
               <option value="newest">{t('sortNewest')}</option>
@@ -2499,14 +2500,18 @@ export default function JReviewsSection({
         </div>
 
         {/* Keyword Search & Star Filter Bar */}
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-center rounded-4 bg-light gap-2 border p-2 px-3">
+        <Card
+          tone="elevated"
+          className="d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-center gap-2 p-2 px-3"
+        >
           <div className="flex-grow-1">
             <input
               type="search"
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
               placeholder={t('searchReviewsPlaceholder')}
-              className="form-control form-control-sm rounded-pill border-0 bg-white px-3"
+              className="form-control form-control-sm border-0 bg-white px-3"
+              style={{ borderRadius: 'var(--rate-radius-btn)' }}
               aria-label={t('searchReviewsAria')}
             />
           </div>
@@ -2526,9 +2531,11 @@ export default function JReviewsSection({
                   { id: 1, label: '1 ★' },
                 ] as const
               ).map((tier) => (
-                <button
+                <Button
                   key={String(tier.id)}
                   type="button"
+                  variant={starFilter === tier.id ? 'warning' : 'outline'}
+                  size="sm"
                   aria-pressed={starFilter === tier.id}
                   onClick={() =>
                     handleSelectStarFilter(
@@ -2539,31 +2546,27 @@ export default function JReviewsSection({
                           : tier.id
                     )
                   }
-                  className={`btn btn-sm rounded-pill rate-star-chip-btn px-3 py-1 ${
-                    starFilter === tier.id
-                      ? 'btn-warning text-dark fw-semibold'
-                      : 'btn-outline-secondary bg-white'
-                  }`}
-                  style={{ fontSize: '0.8125rem' }}
                 >
                   {tier.label}
-                </button>
+                </Button>
               ))}
             </div>
             {(searchKeyword.trim() !== '' || starFilter !== 'all') && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setSearchKeyword('');
                   handleSelectStarFilter('all');
                 }}
-                className="btn btn-sm btn-link text-danger text-decoration-none small px-2"
+                className="text-danger"
               >
                 {t('clearFilterBtn')}
-              </button>
+              </Button>
             )}
           </div>
-        </div>
+        </Card>
 
         {activeNextCursor && (
           <p
@@ -2605,14 +2608,15 @@ export default function JReviewsSection({
           className="alert alert-warning small rounded-3 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 px-3 py-2"
         >
           <span>{starFilterError}</span>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={() => void fetchStarSlice(starFilter)}
-            className="btn btn-sm btn-outline-dark rounded-pill px-3"
             data-testid="star-filter-retry-btn"
           >
             {t('retryStarFilterBtn')}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -2700,12 +2704,13 @@ export default function JReviewsSection({
                 {/* Excluded reviews are set apart by background and border,
                     not opacity, which dropped their text below 4.5:1
                     (DOS/Rate#811). */}
-                <div
-                  className={`rounded-4 d-flex flex-column justify-content-between h-100 p-3 ${
+                <Card
+                  tone={isFilteredOutReview(rev) ? 'elevated' : 'surface'}
+                  className={
                     isFilteredOutReview(rev)
-                      ? 'card bg-light border-danger-subtle border'
-                      : 'rate-card border bg-white shadow-sm'
-                  }`}
+                      ? 'd-flex flex-column justify-content-between h-100 border-danger-subtle p-3'
+                      : 'd-flex flex-column justify-content-between h-100 p-3 shadow-sm'
+                  }
                 >
                   <div>
                     {/* Top Row: Author + Role + Star Rating */}
@@ -2718,24 +2723,24 @@ export default function JReviewsSection({
                           {rev.author_name}
                         </span>
                         {rev.reviewer_type === 'expert' ? (
-                          <span className="badge bg-warning text-dark rounded-pill small">
+                          <Badge variant="warning">
                             {t('roleExpertBadge')}
-                          </span>
+                          </Badge>
                         ) : (
-                          <span className="badge bg-light text-secondary rounded-pill small border">
+                          <Badge variant="secondary">
                             {t('roleBuyerBadge')}
-                          </span>
+                          </Badge>
                         )}
                         {sponsorshipKey && (
-                          <span className="badge bg-warning-subtle text-warning-emphasis border-warning-subtle rounded-pill small border">
-                            <BsMegaphone aria-hidden="true" className="me-1" />
+                          <Badge variant="warning">
+                            <BsMegaphone aria-hidden="true" />
                             {t(sponsorshipKey)}
-                          </span>
+                          </Badge>
                         )}
                         {assessment.routesTo === 'merchant' && (
-                          <span className="badge bg-info-subtle text-info-emphasis border-info-subtle rounded-pill small border">
+                          <Badge variant="info">
                             {t('routedToMerchantBadge')}
-                          </span>
+                          </Badge>
                         )}
                       </div>
                       <StarRating
@@ -2746,20 +2751,21 @@ export default function JReviewsSection({
 
                     {/* Second Row: Flag Category Badge + JReviews Weight Badge */}
                     <div className="d-flex align-items-center mb-2 flex-wrap gap-2">
-                      <span
-                        className={`badge rounded-pill small ${flagMeta.badgeClass}`}
+                      <Badge
+                        variant={flagMeta.variant}
                         title={flagMeta.description}
                       >
                         {flagMeta.label}
-                      </span>
-                      <span
-                        className={`badge rounded-pill small font-monospace ${
+                      </Badge>
+                      <Badge
+                        variant={
                           isZeroWeight
-                            ? 'bg-secondary-subtle text-secondary'
+                            ? 'secondary'
                             : rev.helpfulness_weight > 1
-                              ? 'bg-primary-subtle text-primary'
-                              : 'bg-light text-muted border'
-                        }`}
+                              ? 'brand'
+                              : 'outline'
+                        }
+                        className="rate-tabular"
                         title={t('ratingWeightTitle')}
                         data-testid="review-rating-weight"
                       >
@@ -2770,27 +2776,23 @@ export default function JReviewsSection({
                             2
                           ),
                         })}
-                      </span>
+                      </Badge>
                       {tierKey && (
-                        <span
-                          className={`badge rounded-pill small border ${
-                            tier === 'excellent'
-                              ? 'bg-primary-subtle text-primary-emphasis border-primary-subtle'
-                              : 'bg-light text-dark'
-                          }`}
+                        <Badge
+                          variant={tier === 'excellent' ? 'brand' : 'default'}
                           title={t('valueTierTitle')}
                           data-testid="review-value-tier"
                         >
                           {tier === 'excellent' ? (
-                            <BsAward aria-hidden="true" className="me-1" />
+                            <BsAward aria-hidden="true" />
                           ) : (
                             <BsPatchCheck
                               aria-hidden="true"
-                              className="text-success me-1"
+                              className="text-success"
                             />
                           )}
                           {t(tierKey)}
-                        </span>
+                        </Badge>
                       )}
                     </div>
 
@@ -2830,15 +2832,15 @@ export default function JReviewsSection({
                     {reviewCriterionBadges.length > 0 && (
                       <div className="d-flex mb-2 flex-wrap gap-1">
                         {reviewCriterionBadges.map((badge) => (
-                          <span
+                          <Badge
                             key={badge.key}
+                            variant="default"
                             data-testid={`review-criterion-badge-${badge.key}`}
-                            className="badge bg-light text-dark rounded-pill border text-wrap mw-100 text-start"
-                            style={{ fontSize: '0.8125rem' }}
+                            className="text-wrap mw-100 text-start"
                           >
                             {badge.label}:{' '}
                             {`${formatRatingValue(badge.score, locale, 1)}/5`} ★
-                          </span>
+                          </Badge>
                         ))}
                       </div>
                     )}
@@ -2891,47 +2893,43 @@ export default function JReviewsSection({
                     >
                       {t('isHelpfulPrompt')}
                     </span>
-                    <div className="d-flex align-items-center gap-1">
-                      <button
+                    <div className="d-flex align-items-center flex-wrap gap-1">
+                      <Button
                         type="button"
+                        variant={myVote === 'up' ? 'success' : 'outline'}
+                        size="sm"
                         disabled={isPending}
                         onClick={() => handleVote(rev.id, 'up')}
                         aria-pressed={myVote === 'up'}
-                        className={`btn btn-sm rounded-pill px-2 py-1 ${
-                          myVote === 'up'
-                            ? 'btn-success text-white'
-                            : 'btn-outline-secondary'
-                        }`}
-                        style={{ fontSize: '0.8125rem' }}
                         title={t('upvoteTitle')}
                       >
-                        <BsHandThumbsUp aria-hidden="true" className="me-1" />
+                        <BsHandThumbsUp aria-hidden="true" />
                         {t('upvoteBtnLabel', { count: rev.upvotes })}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant={myVote === 'down' ? 'warning' : 'outline'}
+                        size="sm"
                         disabled={isPending}
                         onClick={() => handleVote(rev.id, 'down')}
                         aria-pressed={myVote === 'down'}
-                        className={`btn btn-sm rounded-pill px-2 py-1 ${
-                          myVote === 'down'
-                            ? 'btn-warning text-dark'
-                            : 'btn-outline-secondary'
-                        }`}
-                        style={{ fontSize: '0.8125rem' }}
                         title={t('downvoteTitle')}
                       >
-                        <BsHandThumbsDown aria-hidden="true" className="me-1" />
+                        <BsHandThumbsDown aria-hidden="true" />
                         <span className="visually-hidden">
                           {t('downvoteTitle')}
                         </span>
                         ({rev.downvotes})
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         ref={(node) => {
                           reportButtonRefs.current[rev.id] = node;
                         }}
                         type="button"
+                        variant={
+                          myVote === 'report' ? 'primary' : 'outline-primary'
+                        }
+                        size="sm"
                         disabled={isPending}
                         onClick={() => {
                           if (myVote === 'report') {
@@ -2954,20 +2952,14 @@ export default function JReviewsSection({
                             ? reportDialogId
                             : undefined
                         }
-                        className={`btn btn-sm rounded-pill px-2 py-1 ${
-                          myVote === 'report'
-                            ? 'btn-danger text-white'
-                            : 'btn-outline-danger'
-                        }`}
-                        style={{ fontSize: '0.8125rem' }}
                         title={t('reportTitle')}
                       >
-                        <BsFlag aria-hidden="true" className="me-1" />
+                        <BsFlag aria-hidden="true" />
                         {t('reportBtnLabel', { count: rev.report_count })}
-                      </button>
+                      </Button>
                     </div>
                   </div>
-                </div>
+                </Card>
               </div>
             );
           })}
@@ -2985,12 +2977,13 @@ export default function JReviewsSection({
             </div>
           )}
           {activeNextCursor && (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               disabled={loadingMore}
               aria-busy={loadingMore}
               onClick={handleLoadMoreReviews}
-              className="btn btn-outline-dark btn-sm rounded-pill fw-medium px-4 py-2"
               data-testid="load-more-reviews-btn"
             >
               {loadingMore
@@ -3002,7 +2995,7 @@ export default function JReviewsSection({
                         activeKnownTotalCount - activeSourceReviews.length,
                     })
                   : t('loadMoreReviewsBtn')}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -3018,6 +3011,6 @@ export default function JReviewsSection({
           }}
         />
       )}
-    </div>
+    </Card>
   );
 }
