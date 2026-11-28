@@ -133,6 +133,12 @@ import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
 import { buildProductSpecGroups } from '@/lib/product-spec-rows';
 import {
+  buildCustomFieldDisplayRows,
+  buildCustomFieldExportRows,
+  customFieldsGroupHeading,
+  customFieldsSectionEyebrow,
+} from '@/lib/custom-fields-display';
+import {
   listingCountForSaleState,
   masterSaleState,
   saleStateLabelKey,
@@ -1874,9 +1880,34 @@ export async function ProductDetailView({
               ui: specUi,
               locale,
             });
-            if (isPlace && specGroups.length === 0) {
+            const customFieldRows = buildCustomFieldDisplayRows(
+              specs?.custom_fields,
+              categorySlug,
+              locale
+            );
+            const hasCustomFields = customFieldRows.length > 0;
+            const totalSpecGroups =
+              specGroups.length + (hasCustomFields ? 1 : 0);
+            if (isPlace && totalSpecGroups === 0) {
               return null;
             }
+            const customExportRows = hasCustomFields
+              ? buildCustomFieldExportRows(
+                  specs?.custom_fields,
+                  categorySlug,
+                  locale
+                )
+              : undefined;
+            const isCoreTechCategory =
+              categorySlug === 'smartphones' ||
+              categorySlug === 'tablets' ||
+              categorySlug === 'laptops' ||
+              categorySlug === 'smartwatches' ||
+              categorySlug === 'earbuds';
+            const sectionEyebrow =
+              !isCoreTechCategory && hasCustomFields
+                ? customFieldsSectionEyebrow(locale)
+                : specUi.sectionEyebrow;
             return (
               <div
                 id="specs-section"
@@ -1885,7 +1916,7 @@ export async function ProductDetailView({
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-2">
                   <div>
                     <span className="rate-eyebrow text-muted d-block mb-1">
-                      {specUi.sectionEyebrow}
+                      {sectionEyebrow}
                     </span>
                     <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
                       <BsCardChecklist aria-hidden="true" />{' '}
@@ -1893,7 +1924,7 @@ export async function ProductDetailView({
                     </h2>
                   </div>
                   <div className="d-flex align-items-center flex-wrap gap-2">
-                    {!isPlace && specGroups.length > 0 && (
+                    {!isPlace && totalSpecGroups > 0 && (
                       <ProductSpecsExportToolbar
                         productName={product.name}
                         productSlug={product.slug}
@@ -1902,10 +1933,11 @@ export async function ProductDetailView({
                         keySpecs={keySpecs || {}}
                         categorySlug={categorySlug}
                         radarSignal={radarSignal}
+                        {...(customExportRows ? { customExportRows } : {})}
                       />
                     )}
                     <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
-                      {specSectionBadge(specUi, specGroups.length)}
+                      {specSectionBadge(specUi, totalSpecGroups)}
                     </span>
                   </div>
                 </div>
@@ -1915,8 +1947,37 @@ export async function ProductDetailView({
                   showMoreLabel={t('specsShowAll')}
                   showLessLabel={t('specsShowLess')}
                   openOnHash="#specs-section"
-                  collapsible={specGroups.length > 3}
+                  collapsible={totalSpecGroups > 3}
                 >
+                  {hasCustomFields && (
+                    <div
+                      key="custom-fields"
+                      className="col-md-6 col-12"
+                      data-testid="custom-fields-spec-card"
+                    >
+                      <div className="rounded-4 h-100 border bg-white p-4">
+                        <h3 className="h6 fw-bold text-primary mb-3">
+                          {customFieldsGroupHeading(locale, categorySlug)}
+                        </h3>
+                        <dl className="row small mb-0">
+                          {customFieldRows.map(
+                            ({ key, label, value, lang }) => (
+                              <Fragment key={key}>
+                                <dt className="text-muted col-5">{label}</dt>
+                                <dd className="fw-medium col-7">
+                                  <ContentText
+                                    text={value}
+                                    lang={lang}
+                                    locale={locale}
+                                  />
+                                </dd>
+                              </Fragment>
+                            )
+                          )}
+                        </dl>
+                      </div>
+                    </div>
+                  )}
                   {specGroups.map(({ group, rows }) => (
                     <div key={group} className="col-md-6 col-12">
                       <div className="rounded-4 h-100 border bg-white p-4">

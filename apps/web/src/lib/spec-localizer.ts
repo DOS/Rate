@@ -346,8 +346,16 @@ export function specGroupHeading(
     : ui.groups[group];
 }
 
-/** The "10 spec groups" badge with the category's own group count. */
+/** The "10 spec groups" badge with the category's own group count and pluralization. */
 export function specSectionBadge(ui: SpecUiDictionary, count: number): string {
+  if (ui.sectionBadge.includes('spec groups')) {
+    return `${count} ${count === 1 ? 'spec group' : 'spec groups'}`;
+  }
+  if (ui.sectionBadge.includes('skupin parametrů')) {
+    if (count === 1) return '1 skupina parametrů';
+    if (count >= 2 && count <= 4) return `${count} skupiny parametrů`;
+    return `${count} skupin parametrů`;
+  }
   return ui.sectionBadge.replace(/^\d+/, String(count));
 }
 

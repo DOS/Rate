@@ -1486,6 +1486,10 @@ test('DOS/Rate#1953 Round 1 review: guards core-tech/Wave E2 brand hijacks, VN p
     'Máy lọc không khí dùng chung hộ gia đình AP-100',
     'May loc khong khi dung chung ho gia dinh AP-100',
     'May loc khong khi chung ho gia dinh AP-100',
+    // DOS/Rate#1959: mixed-accent Vietnamese "chung ho gia đình" and "sử dụng chung ho"
+    'Máy lọc không khí chung ho gia đình AP-100',
+    'Máy lọc không khí sử dụng chung ho AP-100',
+    'Máy lọc không khí dụng chung ho gia đình AP-100',
   ]) {
     assert.equal(
       normalizer.normalize(
@@ -1508,9 +1512,16 @@ test('DOS/Rate#1953 Round 1 review: guards core-tech/Wave E2 brand hijacks, VN p
     'Hàng nhập khẩu',
     'Hàng nội địa',
     'Nội địa Trung',
+    'Nội địa Trung Quốc',
+    'Hàng nội địa Trung',
+    'Hàng nội địa Nhật',
+    'Hàng xách tay',
+    'Xách tay',
+    'Không nhãn hiệu',
     'Nội địa Nhật',
     'FPT Shop - Hàng Chính Hãng',
     'FPT Shop Hàng Chính Hãng',
+    'FPT Shop - Official -',
     'Nguyễn Kim - Hàng Chính Hãng',
   ]) {
     const out = normalizer.normalize(
@@ -1528,7 +1539,9 @@ test('DOS/Rate#1953 Round 1 review: guards core-tech/Wave E2 brand hijacks, VN p
   for (const genuineWithSuffix of [
     'Kuvings Hàng Chính Hãng',
     'Kuvings - Hàng Chính Hãng',
+    'Kuvings - Hàng Chính Hãng -',
     'Kuvings - Hàng Nhập Khẩu',
+    'Kuvings Official - ',
   ]) {
     const out = normalizer.normalize(
       baseProduct({
