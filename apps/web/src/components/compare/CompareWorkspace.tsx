@@ -16,6 +16,7 @@ import {
   BsBatteryHalf,
   BsCalendar3,
   BsCamera,
+  BsCardChecklist,
   BsCpu,
   BsGlobe,
   BsPhone,
@@ -36,6 +37,7 @@ import type {
 import {
   applyCategorySpecTemplate,
   getCategorySpecTemplate,
+  sanitizeCustomFields,
   specFieldApplies,
   type CategorySpecTemplate,
   type RatingCriterionKey,
@@ -114,6 +116,13 @@ import {
   specGroupHeading,
 } from '@/lib/spec-localizer';
 import { compareRowIsShown, known5g } from '@/lib/product-spec-rows';
+import {
+  customFieldHigherIsBetter,
+  customFieldLabel,
+  customFieldsGroupHeading,
+  formatCustomFieldEntry,
+  orderCustomFieldKeys,
+} from '@/lib/custom-fields-display';
 import ContentText from '@/components/elementary/ContentText';
 import {
   compareCellSegments,
@@ -2095,6 +2104,88 @@ export function filterSpecGroupsForCategory(
     .filter((group) => group.rows.length > 0);
 }
 
+/**
+ * Synthesizes a dynamic `custom_fields` compare group from the union of
+ * sanitized `specifications.custom_fields` keys across compared products
+ * (DOS/Rate#1980). Returns `null` when no product carries custom fields.
+ */
+export function buildCustomFieldsCompareGroup(
+  products: readonly MasterProduct[],
+  categorySlug: string,
+  locale: string
+): SpecGroupDef | null {
+  const allKeys = new Set<string>();
+  for (const product of products) {
+    const safe = sanitizeCustomFields(
+      (product.specifications as ProductSpecifications | null | undefined)
+        ?.custom_fields
+    );
+    if (!safe) continue;
+    for (const key of Object.keys(safe)) {
+      allKeys.add(key);
+    }
+  }
+  if (allKeys.size === 0) return null;
+
+  const readEntry = (p: MasterProduct, key: string) => {
+    const safe = sanitizeCustomFields(
+      (p.specifications as ProductSpecifications | null | undefined)
+        ?.custom_fields
+    );
+    const rawVal = safe && Object.hasOwn(safe, key) ? safe[key] : undefined;
+    return formatCustomFieldEntry(key, rawVal, locale);
+  };
+
+  const orderedKeys = orderCustomFieldKeys(allKeys, categorySlug);
+  const rows: SpecRowDef[] = orderedKeys.map((key) => {
+    const higherIsBetter = customFieldHigherIsBetter(key);
+    return {
+      id: `custom_${key}`,
+      label: customFieldLabel(key, locale),
+      renderValue: (p) => readEntry(p, key)?.value ?? '-',
+      renderCell: (p) => {
+        const entry = readEntry(p, key);
+        if (!entry) return '-';
+        return entry.lang ? specPart(entry.value) : entry.value;
+      },
+      ...(higherIsBetter !== undefined
+        ? {
+            numericValue: (p: MasterProduct) =>
+              readEntry(p, key)?.numericValue ?? null,
+            higherIsBetter,
+          }
+        : {}),
+    };
+  });
+
+  return {
+    id: 'custom_fields',
+    title: customFieldsGroupHeading(locale, categorySlug),
+    icon: BsCardChecklist,
+    rows,
+  };
+}
+
+/**
+ * Inserts a synthesized `custom_fields` group immediately after `market_trust`
+ * (and before `availability`/`regulatory`) without altering `filterSpecGroupsForCategory`.
+ */
+export function mergeCustomFieldsCompareGroup(
+  baseGroups: readonly SpecGroupDef[],
+  customGroup: SpecGroupDef | null
+): SpecGroupDef[] {
+  if (!customGroup || customGroup.rows.length === 0) {
+    return [...baseGroups];
+  }
+  const marketIdx = baseGroups.findIndex((g) => g.id === 'market_trust');
+  const insertAt = marketIdx >= 0 ? marketIdx + 1 : 0;
+  return [
+    ...baseGroups.slice(0, insertAt),
+    customGroup,
+    ...baseGroups.slice(insertAt),
+  ];
+}
+
 function CompareUrlWeightsSync({
   categorySlug,
   onSync,
@@ -2465,10 +2556,18 @@ export default function CompareWorkspace({
     clientItemSlugs,
     itemLookupRetryTick,
   ]);
-  const specGroups = useMemo(
-    () => filterSpecGroupsForCategory(allSpecGroups, activeCategory),
-    [allSpecGroups, activeCategory]
-  );
+  const specGroups = useMemo(() => {
+    const baseGroups = filterSpecGroupsForCategory(
+      allSpecGroups,
+      activeCategory
+    );
+    const customGroup = buildCustomFieldsCompareGroup(
+      products,
+      activeCategory,
+      locale
+    );
+    return mergeCustomFieldsCompareGroup(baseGroups, customGroup);
+  }, [allSpecGroups, activeCategory, products, locale]);
 
   // No row that every column leaves empty, and with `showDiffOnly` no row
   // where every column agrees (DOS/Rate#1186).

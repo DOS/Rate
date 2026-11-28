@@ -992,6 +992,85 @@ describe('ProductNormalizer Wave E3 retail SKU and Wave E4 places', () => {
       assert.equal(sanitized, null, `Expected hint ${JSON.stringify(bad.hint)} to be rejected`);
     }
 
+    // DOS/Rate#1959: genuine Wave E3 brand names containing "For" allowed when grounded in title;
+    // compatibility spam ("for iPhone", "for Samsung", "case for ...", "phụ kiện for ...") still blocked;
+    // new Vietnamese placeholders and trailing punctuation before suffix peeling handled cleanly.
+    assert.equal(
+      sanitizeWaveE3StructuredBrand('Just For Men', {
+        identityTitle: 'Dầu gội phủ bạc Just For Men Control GX 118ml',
+        platform: 'shopee',
+        shopName: 'Cosmetics Mall',
+        isMall: false,
+      }),
+      'Just For Men'
+    );
+    assert.equal(
+      sanitizeWaveE3StructuredBrand('For Baby', {
+        identityTitle: 'Kem dưỡng ẩm dịu nhẹ For Baby 50ml',
+        platform: 'tiki',
+        shopName: 'Tiki Trading',
+        isMall: true,
+      }),
+      'For Baby'
+    );
+    // Ungrounded "For ..." brand hint rejected even on curated/mall platforms
+    assert.equal(
+      sanitizeWaveE3StructuredBrand('For Baby', {
+        identityTitle: 'Kem dưỡng ẩm dịu nhẹ 50ml',
+        platform: 'tiki',
+        shopName: 'Tiki Trading',
+        isMall: true,
+      }),
+      null
+    );
+    for (const compatSpam of [
+      'For iPhone',
+      'For Samsung',
+      'Case for Pixel',
+      'Phụ kiện for Baby',
+      'Filter for Dyson',
+    ]) {
+      assert.equal(
+        sanitizeWaveE3StructuredBrand(compatSpam, {
+          identityTitle: `Sản phẩm ${compatSpam} chính hãng`,
+          platform: 'tiki',
+          shopName: 'Tiki Trading',
+          isMall: true,
+        }),
+        null,
+        `Compat spam ${JSON.stringify(compatSpam)} must remain rejected`
+      );
+    }
+    for (const vnPlaceholder of [
+      'Nội địa Trung Quốc',
+      'Hàng nội địa Trung',
+      'Hàng nội địa Nhật',
+      'Hàng xách tay',
+      'Xách tay',
+      'Không nhãn hiệu',
+      'Hàng xách tay -',
+    ]) {
+      assert.equal(
+        sanitizeWaveE3StructuredBrand(vnPlaceholder, {
+          identityTitle: 'Kem dưỡng da 50ml',
+          platform: 'tiki',
+          shopName: 'Tiki Trading',
+          isMall: true,
+        }),
+        null,
+        `Placeholder ${JSON.stringify(vnPlaceholder)} must be rejected`
+      );
+    }
+    assert.equal(
+      sanitizeWaveE3StructuredBrand('Bio-Oil Official -', {
+        identityTitle: 'Dầu chăm sóc da Bio-Oil 60ml',
+        platform: 'tiki',
+        shopName: 'Tiki Trading',
+        isMall: true,
+      }),
+      'Bio-Oil'
+    );
+
     // 6. No HP tech hijack in E3 even when structured brand is absent or generic.
     const noHpHijack = normalizer.normalize(
       createSampleProduct({

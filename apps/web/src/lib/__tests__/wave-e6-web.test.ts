@@ -422,6 +422,59 @@ const fallbackCases: Array<[{ slug: string; name?: string }, string]> = [
     { slug: 'sony-a95l-65-inch', name: 'Sony A95L 65 inch QD-OLED' },
     'smartphones',
   ],
+  // DOS/Rate#1978 Wave E6 Round 2 P2 polish cases
+  [
+    {
+      slug: 'canon-eos-r50-kit-lens-18-45mm',
+      name: 'Canon EOS R50 Kit Lens 18-45mm Chính hãng',
+    },
+    'cameras',
+  ],
+  [
+    { slug: 'sony-a7-iv-lens-28-70mm', name: 'Sony A7 IV + Lens 28-70mm' },
+    'cameras',
+  ],
+  [
+    {
+      slug: 'apple-studio-display-27-5k-camera-12mp',
+      name: 'Apple Studio Display 27 inch 5K Camera 12MP',
+    },
+    'monitors',
+  ],
+  [
+    {
+      slug: 'dell-u2724d-27-inch-2k-ips-co-cap-hdmi',
+      name: 'Màn hình Dell U2724D 27 inch 2K IPS (Có cáp HDMI)',
+    },
+    'monitors',
+  ],
+  [
+    {
+      slug: 'man-hinh-di-dong-asus-zenscreen-mb166c-15-6-inch-cho-laptop',
+      name: 'Màn hình di động ASUS ZenScreen MB166C 15.6 inch cho Laptop',
+    },
+    'monitors',
+  ],
+  [
+    { slug: 'lg-43uq7550psf', name: 'LG 43UQ7550PSF 43 inch 4K' },
+    'smartphones',
+  ],
+  [
+    {
+      slug: 'xiaomi-14t-pro',
+      name: 'Xiaomi 14T Pro màn hình gaming 144Hz',
+    },
+    'smartphones',
+  ],
+  [{ slug: 'fujifilm-x100vi', name: 'Fujifilm X100VI' }, 'cameras'],
+  [
+    { slug: 'sony-fe-24-70mm-f2-8-gm-ii', name: 'Sony FE 24-70mm f/2.8 GM II' },
+    'smartphones',
+  ],
+  [
+    { slug: 'canon-rf-50mm-f1-8-stm', name: 'Canon RF 50mm f/1.8 STM' },
+    'smartphones',
+  ],
   // ASCII / hyphenated slug guards
   [{ slug: 'chan-de-roi-man-hinh-dell' }, 'smartphones'],
   [{ slug: 'den-treo-man-hinh-xiaomi' }, 'smartphones'],

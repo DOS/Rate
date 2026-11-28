@@ -481,6 +481,8 @@ describe('Wave E6 normalization, publish gates, and shipping review guards', () 
     );
     assert.equal(dellInch.model_key, 'dell:u2724d:unknown');
     assert.equal(dellQuotes.model_key, 'dell:u2724d:unknown');
+    assert.equal(dellInch.screen_size_inch, 27);
+    assert.equal(dellQuotes.screen_size_inch, 27);
 
     const studioDisplay = normalizer.normalize(
       makeListing({ title: 'Màn hình Apple Studio Display 27 inch', priceMin: 39_990_000 })
@@ -584,5 +586,88 @@ describe('Wave E6 normalization, publish gates, and shipping review guards', () 
       }),
       true
     );
+  });
+
+  it("closes DOS/Rate#1978 Wave E6 P2 regex polish items (lenses, kit lenses, monitors, LG 43UQ, 27'', Xiaomi 14T, Fujifilm X100VI)", () => {
+    // 1. Bare focal-length standalone lenses rejected by isAccessoryTitle(..., 'cameras')
+    for (const bareLens of [
+      'Nikon Z 24-70mm f/2.8 S',
+      'Sony FE 24-70mm f/2.8 GM II',
+      'Canon RF 50mm f/1.8 STM',
+      'Fujifilm XF 35mm f/1.4 R',
+      'Sigma 24-70mm f/2.8 DG DN Art',
+    ]) {
+      assert.equal(isAccessoryTitle(bareLens, 'cameras'), true, `bare lens: ${bareLens}`);
+      assert.notEqual(detectCategorySlug(bareLens), 'cameras', `bare lens detect: ${bareLens}`);
+    }
+
+    // 2. Camera body+kit titles without leading "Máy ảnh" containing "Kit Lens" or "+ Lens"
+    for (const bodyKit of [
+      'Canon EOS R50 Kit Lens 18-45mm Chính hãng',
+      'Sony A7 IV + Lens 28-70mm',
+      'Nikon Z6 III + Lens 24-70mm Chính hãng',
+    ]) {
+      assert.equal(detectCategorySlug(bodyKit), 'cameras', `body+kit detect: ${bodyKit}`);
+      assert.equal(isAccessoryTitle(bodyKit, 'cameras'), false, `body+kit acc: ${bodyKit}`);
+    }
+    // Non-lens accessories prefixed with body model still rejected
+    assert.equal(isAccessoryTitle('Sony A7 IV Pin rời NP-FZ100', 'cameras'), true);
+    assert.equal(isAccessoryTitle('Canon EOS R50 Cage bảo vệ', 'cameras'), true);
+
+    // 3. Monitors with built-in camera, included HDMI cable ("Có cáp HDMI"), or portable "cho Laptop"
+    for (const validMonitor of [
+      'Apple Studio Display 27 inch 5K Camera 12MP',
+      'Màn hình Dell U2724D 27 inch 2K IPS (Có cáp HDMI)',
+      'Màn hình di động ASUS ZenScreen MB166C 15.6 inch cho Laptop',
+      'ASUS ZenScreen MB166C 15.6 inch cho Laptop',
+    ]) {
+      assert.equal(detectCategorySlug(validMonitor), 'monitors', `monitor: ${validMonitor}`);
+      assert.equal(
+        isAccessoryTitle(validMonitor, 'monitors'),
+        false,
+        `monitor acc: ${validMonitor}`
+      );
+    }
+    // Standalone HDMI cables & laptops still excluded from monitors
+    assert.notEqual(detectCategorySlug('Cáp HDMI 2.1 Ugreen 2m cho màn hình 4K'), 'monitors');
+    assert.equal(detectCategorySlug('Laptop ASUS ZenBook 14 OLED 14 inch'), 'laptops');
+
+    // 4. Bare 43-inch LG TV SKU without Tivi/TV not classified as monitor, while <=38" UP/UQ still are
+    assert.notEqual(detectCategorySlug('LG 43UQ7550PSF 43 inch 4K'), 'monitors');
+    assert.equal(detectCategorySlug('LG 32UQ850-W 32 inch 4K'), 'monitors');
+    assert.equal(detectCategorySlug('LG 45GR95QE 45 inch OLED'), 'monitors');
+
+    // 5. Double-apostrophe screen_size_inch extraction (27'')
+    const dellDoubleQuote = normalizer.normalize(
+      makeListing({ title: "Màn hình Dell 27'' U2724D 2K IPS", priceMin: 9_490_000 })
+    );
+    assert.equal(dellDoubleQuote.category_slug, 'monitors');
+    assert.equal(dellDoubleQuote.screen_size_inch, 27);
+    assert.equal(dellDoubleQuote.specifications.display?.size_inch, 27);
+
+    // 6. Xiaomi 14T Pro excluded from monitors; Fujifilm X100VI recognized as cameras
+    assert.equal(detectCategorySlug('Xiaomi 14T Pro màn hình gaming 144Hz'), 'smartphones');
+    assert.equal(detectCategorySlug('Fujifilm X100VI'), 'cameras');
+    assert.equal(isAccessoryTitle('Fujifilm X100VI 23mm f/2', 'cameras'), false);
+    const x100vi = normalizer.normalize(
+      makeListing({ title: 'Fujifilm X100VI Chính hãng', priceMin: 42_990_000 })
+    );
+    assert.equal(x100vi.category_slug, 'cameras');
+    assert.equal(x100vi.brand, 'Fujifilm');
+
+    // Linear ReDoS guard on newly added #1978 patterns
+    const start = performance.now();
+    for (const payload of [
+      `cáp hdmi ${'0'.repeat(5000)}`,
+      `${'0'.repeat(5000)} laptop`,
+      `fujifilm x${'0'.repeat(5000)}`,
+      `xiaomi ${'0'.repeat(5000)}`,
+      `nikon z ${'0'.repeat(5000)}mm f/2.8`,
+    ]) {
+      detectCategorySlug(payload);
+      isAccessoryTitle(payload, 'cameras');
+      isAccessoryTitle(payload, 'monitors');
+    }
+    assert.ok(performance.now() - start < 50, 'linear ReDoS budget for #1978 patterns');
   });
 });

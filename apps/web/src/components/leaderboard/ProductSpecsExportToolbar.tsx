@@ -7,6 +7,7 @@ import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import {
   applyCategorySpecTemplate,
   getCategorySpecTemplate,
+  sanitizeCustomFields,
   specFieldApplies,
   type CategorySpecTemplate,
   type SpecGroupKey,
@@ -69,7 +70,26 @@ function joinSpecParts(parts: Array<string | null | undefined>): string {
   return valid.join(' | ') || '-';
 }
 
-type SpecExportRow = [string, string, string];
+export type SpecExportRow = [string, string, string];
+
+function fallbackCustomFieldLabel(key: string): string {
+  const parts = key.split('_').filter(Boolean);
+  if (parts.length === 0) return key;
+  return parts
+    .map((part, idx) =>
+      idx === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part
+    )
+    .join(' ');
+}
+
+function fallbackCustomFieldValue(
+  value: string | number | boolean | string[]
+): string {
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return value.join(', ');
+  return value;
+}
 
 // The template group each row reads, and the fields that make it a row the
 // category has (any one of them is enough).
@@ -108,7 +128,8 @@ const exportRowApplies = (
 export function buildProductSpecExportRows(
   specifications?: ProductSpecifications | null,
   keySpecs?: KeySpecs | null,
-  categorySlug?: string | null
+  categorySlug?: string | null,
+  customExportRows?: readonly SpecExportRow[] | null
 ): SpecExportRow[] {
   const scoped = applyCategorySpecTemplate(categorySlug, {
     specifications: specifications ?? {},
@@ -244,7 +265,34 @@ export function buildProductSpecExportRows(
       ]),
     ],
   ];
-  return rows.filter((_, index) => exportRowApplies(template, index));
+  const baseRows = rows.filter((_, index) => exportRowApplies(template, index));
+  if (Array.isArray(customExportRows) && customExportRows.length > 0) {
+    const safeCustomRows: SpecExportRow[] = [];
+    for (const entry of customExportRows) {
+      if (!Array.isArray(entry) || entry.length < 3) continue;
+      const grp = sanitizeSpecExportText(entry[0], '', 120);
+      const attr = sanitizeSpecExportText(entry[1], '', 120);
+      const val = sanitizeSpecExportText(entry[2], '', 240);
+      if (grp && attr && val) safeCustomRows.push([grp, attr, val]);
+    }
+    return safeCustomRows.length > 0
+      ? [...baseRows, ...safeCustomRows]
+      : baseRows;
+  }
+  if (customExportRows === undefined) {
+    const safeCustom = sanitizeCustomFields(specs.custom_fields);
+    if (safeCustom) {
+      const fallbackRows: SpecExportRow[] = Object.entries(safeCustom).map(
+        ([k, v]) => [
+          'Category specifications',
+          sanitizeSpecExportText(fallbackCustomFieldLabel(k), k, 120),
+          sanitizeSpecExportText(fallbackCustomFieldValue(v), '-', 240),
+        ]
+      );
+      return [...baseRows, ...fallbackRows];
+    }
+  }
+  return baseRows;
 }
 
 interface ProductSpecsExportToolbarProps {
@@ -256,6 +304,8 @@ interface ProductSpecsExportToolbarProps {
   /** Scopes the rows and the JSON to the category's spec template. */
   readonly categorySlug?: string | null;
   readonly radarSignal?: RadarSignal | null;
+  /** Pre-formatted localized custom_fields rows computed on the server (omitted when empty). */
+  readonly customExportRows?: readonly SpecExportRow[];
 }
 
 export default function ProductSpecsExportToolbar({
@@ -266,6 +316,7 @@ export default function ProductSpecsExportToolbar({
   keySpecs,
   categorySlug,
   radarSignal,
+  customExportRows,
 }: ProductSpecsExportToolbarProps) {
   const t = useTranslations('productDetail');
   const locale = useLocale();
@@ -280,7 +331,8 @@ export default function ProductSpecsExportToolbar({
     const rows = buildProductSpecExportRows(
       specifications,
       keySpecs,
-      categorySlug
+      categorySlug,
+      customExportRows
     );
 
     const md = [
@@ -309,7 +361,8 @@ export default function ProductSpecsExportToolbar({
     const rows = buildProductSpecExportRows(
       specifications,
       keySpecs,
-      categorySlug
+      categorySlug,
+      customExportRows
     );
     const headers = [
       'Slug',
