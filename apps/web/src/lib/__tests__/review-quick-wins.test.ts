@@ -14,6 +14,7 @@ import {
   REVIEW_REPORT_REASONS,
   addReviewStarCounts,
   computeReviewStarCounts,
+  isAllowedReviewImageHost,
   sanitizeReviewImages,
   type ReviewItem,
   type ReviewReportReason,
@@ -144,7 +145,10 @@ function renderSection(
 function testReviewImageSanitizerAndStrip() {
   assert.deepEqual(sanitizeReviewImages(null), []);
   assert.deepEqual(sanitizeReviewImages(undefined), []);
-  assert.deepEqual(sanitizeReviewImages('https://cdn.example.com/a.jpg'), []);
+  assert.deepEqual(
+    sanitizeReviewImages('https://down-vn.img.susercontent.com/a.jpg'),
+    []
+  );
 
   const sanitized = sanitizeReviewImages([
     'http://insecure.example.com/1.jpg',
@@ -154,18 +158,18 @@ function testReviewImageSanitizerAndStrip() {
     'file:///etc/passwd',
     '/img/local.jpg',
     '//protocol-relative.example.com/1.jpg',
-    'https://user:pass@cdn.example.com/secret.jpg',
-    'https://cdn.example.com:8443/port.jpg',
+    'https://user:pass@salt.tikicdn.com/secret.jpg',
+    'https://salt.tikicdn.com:8443/port.jpg',
     'https://.bad.example.com/1.jpg',
     'https://bad.example.com./1.jpg',
     'https://a..b.example.com/1.jpg',
-    'https://cdn.example.com/space in path.jpg',
-    'https://cdn.example.com/ctrl\u0000.jpg',
-    `https://cdn.example.com/${'a'.repeat(2040)}.jpg`,
+    'https://salt.tikicdn.com/space in path.jpg',
+    'https://salt.tikicdn.com/ctrl\u0000.jpg',
+    `https://salt.tikicdn.com/${'a'.repeat(2040)}.jpg`,
     123,
-    { url: 'https://cdn.example.com/obj.jpg' },
-    '  https://CDN.EXAMPLE.COM:443/photo-1.jpg  ',
-    'https://cdn.example.com/photo-1.jpg',
+    { url: 'https://salt.tikicdn.com/obj.jpg' },
+    '  https://SALT.TIKICDN.COM:443/photo-1.jpg  ',
+    'https://salt.tikicdn.com/photo-1.jpg',
     'https://down-vn.img.susercontent.com/file/p2.webp',
     'https://down-vn.img.susercontent.com/file/p3.webp',
     'https://down-vn.img.susercontent.com/file/p4.webp',
@@ -175,13 +179,38 @@ function testReviewImageSanitizerAndStrip() {
   ]);
   assert.equal(sanitized.length, REVIEW_IMAGES_MAX);
   assert.deepEqual(sanitized, [
-    'https://cdn.example.com/photo-1.jpg',
+    'https://salt.tikicdn.com/photo-1.jpg',
     'https://down-vn.img.susercontent.com/file/p2.webp',
     'https://down-vn.img.susercontent.com/file/p3.webp',
     'https://down-vn.img.susercontent.com/file/p4.webp',
     'https://down-vn.img.susercontent.com/file/p5.webp',
     'https://down-vn.img.susercontent.com/file/p6.webp',
   ]);
+
+  // Host allowlist (#1964): marketplace CDNs only, exact or subdomain match.
+  assert.deepEqual(
+    sanitizeReviewImages([
+      'https://down-vn.img.susercontent.com/file/a.webp',
+      'https://susercontent.com/file/b.webp',
+      'https://cf.shopee.vn/file/c.jpg',
+      'https://salt.tikicdn.com/ts/review/d.jpg',
+      'https://evil.example.com/pixel.gif',
+      'https://susercontent.com.evil.example/x.jpg',
+      'https://notsusercontent.com/x.jpg',
+      'https://evil.com/?u=https://salt.tikicdn.com/x.jpg',
+      'https://shopee.vn/x.jpg',
+      'https://tikicdn.com.attacker.io/x.jpg',
+      'https://127.0.0.1/x.jpg',
+    ]),
+    [
+      'https://down-vn.img.susercontent.com/file/a.webp',
+      'https://susercontent.com/file/b.webp',
+      'https://cf.shopee.vn/file/c.jpg',
+      'https://salt.tikicdn.com/ts/review/d.jpg',
+    ]
+  );
+  assert.equal(isAllowedReviewImageHost('evil.example.com'), false);
+  assert.equal(isAllowedReviewImageHost('salt.tikicdn.com'), true);
 
   const mapped = toReviewItem(
     {
@@ -191,16 +220,16 @@ function testReviewImageSanitizerAndStrip() {
       comment: 'Clear camera photos and reliable battery.',
       images: [
         'http://bad.example.com/x.jpg',
-        'https://cdn.example.com/good-1.jpg',
-        'https://cdn.example.com/good-1.jpg',
-        'https://cdn.example.com/good-2.jpg',
+        'https://salt.tikicdn.com/good-1.jpg',
+        'https://salt.tikicdn.com/good-1.jpg',
+        'https://salt.tikicdn.com/good-2.jpg',
       ],
     },
     {}
   );
   assert.deepEqual(mapped.images, [
-    'https://cdn.example.com/good-1.jpg',
-    'https://cdn.example.com/good-2.jpg',
+    'https://salt.tikicdn.com/good-1.jpg',
+    'https://salt.tikicdn.com/good-2.jpg',
   ]);
 
   for (const loc of ['vi', 'en', 'cs'] as const) {
@@ -209,8 +238,8 @@ function testReviewImageSanitizerAndStrip() {
         makeReview('44444444-4444-4444-8444-444444444441', {
           images: [
             'http://dropped.example.com/bad.jpg',
-            'https://cdn.example.com/photo-a.jpg',
-            'https://cdn.example.com/photo-b.jpg',
+            'https://salt.tikicdn.com/photo-a.jpg',
+            'https://salt.tikicdn.com/photo-b.jpg',
           ],
         }),
       ],
@@ -221,8 +250,8 @@ function testReviewImageSanitizerAndStrip() {
     );
     const photoHrefs = photoAnchors.map((tag) => readTagAttr(tag, 'href'));
     assert.deepEqual(photoHrefs, [
-      'https://cdn.example.com/photo-a.jpg',
-      'https://cdn.example.com/photo-b.jpg',
+      'https://salt.tikicdn.com/photo-a.jpg',
+      'https://salt.tikicdn.com/photo-b.jpg',
     ]);
     for (const tag of photoAnchors) {
       assert.equal(readTagAttr(tag, 'target'), '_blank');
@@ -232,8 +261,8 @@ function testReviewImageSanitizerAndStrip() {
     const imgTags = findOpeningTags(htmlWithPhotos, 'img');
     const photoSrcs = imgTags.map((tag) => readTagAttr(tag, 'src'));
     assert.deepEqual(photoSrcs, [
-      'https://cdn.example.com/photo-a.jpg',
-      'https://cdn.example.com/photo-b.jpg',
+      'https://salt.tikicdn.com/photo-a.jpg',
+      'https://salt.tikicdn.com/photo-b.jpg',
     ]);
     assert.equal(readTagAttr(imgTags[0]!, 'width'), '64');
     assert.equal(readTagAttr(imgTags[0]!, 'height'), '64');

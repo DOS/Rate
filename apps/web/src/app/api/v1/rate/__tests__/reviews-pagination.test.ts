@@ -65,14 +65,14 @@ const ALL_REVIEWS: StubReviewRow[] = Array.from({ length: 65 }, (_, idx) => {
       num === 1
         ? [
             'http://insecure.example.com/drop.jpg',
-            'https://cdn.example.com/pic-1.jpg',
-            'https://cdn.example.com/pic-1.jpg',
-            'https://cdn.example.com/pic-2.jpg',
-            'https://cdn.example.com/pic-3.jpg',
-            'https://cdn.example.com/pic-4.jpg',
-            'https://cdn.example.com/pic-5.jpg',
-            'https://cdn.example.com/pic-6.jpg',
-            'https://cdn.example.com/pic-7-dropped.jpg',
+            'https://salt.tikicdn.com/pic-1.jpg',
+            'https://salt.tikicdn.com/pic-1.jpg',
+            'https://salt.tikicdn.com/pic-2.jpg',
+            'https://salt.tikicdn.com/pic-3.jpg',
+            'https://salt.tikicdn.com/pic-4.jpg',
+            'https://salt.tikicdn.com/pic-5.jpg',
+            'https://salt.tikicdn.com/pic-6.jpg',
+            'https://salt.tikicdn.com/pic-7-dropped.jpg',
           ]
         : [],
     created_at: createdAt,
@@ -502,12 +502,12 @@ async function main() {
   assert.equal(first50[0]?.id, ALL_REVIEWS[0]?.id);
   assert.equal(first50[1]?.id, ALL_REVIEWS[1]?.id);
   assert.deepEqual(first50[0]?.images, [
-    'https://cdn.example.com/pic-1.jpg',
-    'https://cdn.example.com/pic-2.jpg',
-    'https://cdn.example.com/pic-3.jpg',
-    'https://cdn.example.com/pic-4.jpg',
-    'https://cdn.example.com/pic-5.jpg',
-    'https://cdn.example.com/pic-6.jpg',
+    'https://salt.tikicdn.com/pic-1.jpg',
+    'https://salt.tikicdn.com/pic-2.jpg',
+    'https://salt.tikicdn.com/pic-3.jpg',
+    'https://salt.tikicdn.com/pic-4.jpg',
+    'https://salt.tikicdn.com/pic-5.jpg',
+    'https://salt.tikicdn.com/pic-6.jpg',
   ]);
 
   // 2. #1926: getMasterProductReviewsPage paginates past 50 without hard cap.
