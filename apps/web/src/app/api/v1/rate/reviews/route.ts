@@ -15,9 +15,7 @@ import {
   isCachedPublishedMasterProduct,
 } from '@/server/rate';
 import {
-  BoundedSlidingWindowRateLimiter,
   PUBLIC_API_CORS_HEADERS,
-  extractClientRateLimitKey,
   jsonApiError,
   parseReviewsQueryParams,
   payloadTooLargeResponse,
@@ -30,6 +28,10 @@ import {
   mapRpcRejection,
   type RpcRejection,
 } from '@/server/rate/request-auth';
+import {
+  checkReviewsReadLimit,
+  reviewsRateLimitKey,
+} from '@/server/rate/reviews-read-limits';
 import { createLogger, serializeError } from '@/lib/logger';
 import {
   REVIEW_FORM_VERSION,
@@ -46,12 +48,6 @@ import { resolveApiItemContext } from '@/server/rate/item-api';
 import type { AuthenticatedRateRequest } from '@/server/rate/request-auth';
 
 const log = createLogger('api.reviews');
-
-const reviewsGetRateLimiter = new BoundedSlidingWindowRateLimiter({
-  windowMs: 60_000,
-  maxRequests: 60,
-  maxBuckets: 5_000,
-});
 
 const REVIEWS_CORS_HEADERS: Record<string, string> = {
   ...PUBLIC_API_CORS_HEADERS,
@@ -73,10 +69,17 @@ export async function OPTIONS() {
  */
 export async function GET(request: NextRequest) {
   try {
-    const clientKey = extractClientRateLimitKey(request.headers);
-    if (!reviewsGetRateLimiter.allow(clientKey)) {
+    // A `?cursor=` read is uncached (DOS/Rate#1961), so it also counts against
+    // the stricter cursor limits, even when the cursor then fails validation.
+    const hasCursor =
+      (request.nextUrl.searchParams.get('cursor') ?? '').trim() !== '';
+    const verdict = checkReviewsReadLimit(
+      reviewsRateLimitKey(request.headers),
+      hasCursor
+    );
+    if (!verdict.allowed) {
       return rateLimitExceededResponse(
-        'Rate limit exceeded. Maximum 60 review reads per minute.',
+        verdict.message,
         { ...REVIEWS_CORS_HEADERS, 'Cache-Control': 'no-store' },
         60
       );

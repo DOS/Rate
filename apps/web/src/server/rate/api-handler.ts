@@ -28,6 +28,7 @@ import {
 } from '@/lib/rate-domain-core';
 import {
   encodeReviewCursor,
+  isReviewCursorInBounds,
   parseReviewCursor,
   type ReviewKeysetCursor,
 } from '@/lib/review-cursor';
@@ -1226,7 +1227,7 @@ export function parseReviewsQueryParams(
   let cursor: ReviewKeysetCursor | null = null;
   if (rawCursor != null && trimEdgeControlAndWhitespace(rawCursor) !== '') {
     const parsedCursor = parseReviewCursor(rawCursor);
-    if (!parsedCursor) {
+    if (!parsedCursor || !isReviewCursorInBounds(parsedCursor)) {
       return null;
     }
     cursor = parsedCursor;
