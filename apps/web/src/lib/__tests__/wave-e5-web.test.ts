@@ -783,7 +783,7 @@ for (const slug of E5_PHASE2_ALL) {
   assert.ok((phoneCsv[9] as number) > 0);
 }
 
-// 10. Detail page passes effectivePriceUnit to both PriceWatchButton call sites.
+// 10. Detail page passes effectivePriceUnit to its single PriceWatchButton call site (DOS/Rate#1986).
 {
   const detailSource = readFileSync(
     join(webRoot, 'src/app/[locale]/smartphones/[slug]/page.tsx'),
@@ -793,8 +793,8 @@ for (const slug of E5_PHASE2_ALL) {
     detailSource.match(/<PriceWatchButton[\s\S]*?\/>/g) ?? [];
   assert.equal(
     watchButtons.length,
-    2,
-    'expected 2 PriceWatchButton call sites'
+    1,
+    'expected 1 PriceWatchButton call site (duplicate removed from market price strip)'
   );
   for (const snippet of watchButtons) {
     assert.match(

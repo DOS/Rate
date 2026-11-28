@@ -2,7 +2,9 @@
 
 import type { ReactNode, SyntheticEvent } from 'react';
 import { BsDownload } from 'react-icons/bs';
+import { buttonVariants } from '@/components/ui/button';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
+import { cn } from '@/lib/utils';
 
 // Keep the open list this far from the viewport edges.
 const EDGE_GAP = 8;
@@ -36,8 +38,11 @@ export default function ExportMenu({
 
   return (
     <details ref={ref} className="rate-export-menu" onToggle={onToggle}>
-      <summary>
-        <BsDownload aria-hidden="true" />
+      <summary
+        data-slot="button"
+        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+      >
+        <BsDownload aria-hidden="true" className="shrink-0" />
         {label}
       </summary>
       <div className="rate-export-menu-list">{children(close)}</div>

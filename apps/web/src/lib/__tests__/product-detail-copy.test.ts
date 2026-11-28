@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { computeProductRadarSignal } from '../../server/rate/deals';
-import { bayesianTierKey, radarExplanation } from '../product-detail-copy';
+import {
+  bayesianTierKey,
+  radarExplanation,
+  resolveDisplayVariantName,
+} from '../product-detail-copy';
 import {
   localizeSpecValue,
   normalizeStorageExpansion,
@@ -413,6 +417,47 @@ function main() {
   assert.ok(
     !/[\u2013\u2014]/.test(productScss),
     '_product.scss must contain zero em-dashes or en-dashes'
+  );
+
+  // DOS/Rate#1986: suppress generic single-variant placeholders while keeping real variants,
+  // and eliminate 999px pill radius on interactive controls in _product.scss.
+  for (const generic of [
+    '',
+    '   ',
+    null,
+    undefined,
+    'Standard',
+    'standard',
+    '  STANDARD ',
+    'Default',
+    'default',
+    'Tiêu chuẩn',
+    'tiêu chuẩn',
+    'Mặc định',
+    'mặc định',
+  ]) {
+    assert.equal(
+      resolveDisplayVariantName(generic),
+      null,
+      `generic variant_name ${JSON.stringify(generic)} must be suppressed`
+    );
+  }
+  for (const [raw, expected] of [
+    ['49mm 64GB', '49mm 64GB'],
+    ['  256GB  ', '256GB'],
+    ['14-inch M4 Pro 24GB/1TB', '14-inch M4 Pro 24GB/1TB'],
+    ['Standard Edition 512GB', 'Standard Edition 512GB'],
+  ] as const) {
+    assert.equal(
+      resolveDisplayVariantName(raw),
+      expected,
+      `meaningful variant_name ${JSON.stringify(raw)} must be preserved`
+    );
+  }
+  assert.equal(
+    /border-radius\s*:\s*999px/.test(productScss),
+    false,
+    '_product.scss must contain zero border-radius: 999px rules'
   );
 
   console.warn('✅ Product detail copy suite passed');

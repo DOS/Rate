@@ -338,7 +338,7 @@
   right: 0.75rem;
 }
 
-.rate-chip-btn {
+.rate-chip-btn:where(:not([data-slot='button'])) {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -373,6 +373,11 @@
     background-color: #fef9c3;
     border-color: #facc15;
   }
+}
+
+.rate-product-card-actions .rate-chip-btn {
+  height: 2rem;
+  padding: 0 0.65rem;
 }
 
 .rate-product-card-body {
@@ -1307,7 +1312,7 @@ body .input-group > .input-group-text {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 18px 12px 10px;
+  padding: 11px 12px;
   font-size: 13px;
   font-weight: 600;
   line-height: 1;
@@ -1357,7 +1362,7 @@ body .input-group > .input-group-text {
 
 // Narrow desktops (992-1199px): tighter link padding keeps one row.
 @media (min-width: 992px) and (max-width: 1199.98px) {
-  .navigation .nav-menu > li > a,
+  .navigation .nav-menu > li > a:where(:not([data-slot])),
   .rate-nav-dropdown-toggle {
     padding-left: 8px;
     padding-right: 8px;
@@ -1366,14 +1371,14 @@ body .input-group > .input-group-text {
 
 // Up to 1079px the theme button (DOS/Rate#1435) needs a few more pixels.
 @media (min-width: 992px) and (max-width: 1079.98px) {
-  .navigation .nav-menu > li > a,
+  .navigation .nav-menu > li > a:where(:not([data-slot])),
   .rate-nav-dropdown-toggle {
     padding-left: 6px;
     padding-right: 6px;
   }
 
-  .navigation .nav-menu.nav-menu-social > li {
-    margin-right: 6px !important;
+  .navigation .nav-menu.nav-menu-social {
+    gap: 6px !important;
   }
 }
 

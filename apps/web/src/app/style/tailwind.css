@@ -1,0 +1,44 @@
+@layer theme, bootstrap-reboot, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+
+/* Incremental Bootstrap -> Tailwind migration (DOS/Rate#1986): scan only
+   shadcn/ui primitives and migrated components so legacy Bootstrap files do
+   not emit duplicate grid/spacing/shadow CSS against the 48 KB phone budget.
+   Add new directories or files here as pages migrate. */
+@source "../../components/ui";
+@source "../../components/elementary/ThemeToggle.tsx";
+@source "../../components/elementary/LocaleSwitcher.tsx";
+@source "../../components/elementary/ExportMenu.tsx";
+@source "../../components/compare/CompareQuickToggle.tsx";
+@source "../../components/leaderboard/ProductShareAuditButton.tsx";
+@source "../../app/[locale]/components/navbar/NavbarDarkDynamic.tsx";
+@source not "../../**/__tests__";
+
+@custom-variant dark (&:where([data-bs-theme="dark"], [data-bs-theme="dark"] *));
+
+@theme inline {
+  --color-canvas: var(--rate-bg-canvas);
+  --color-surface: var(--rate-bg-surface);
+  --color-elevated: var(--rate-bg-elevated);
+  --color-brand: var(--rate-brand);
+  --color-brand-hover: var(--rate-brand-hover);
+  --color-brand-bg: var(--rate-brand-bg);
+  --color-crimson: var(--rate-crimson-text);
+  --color-ink-primary: var(--rate-ink-primary);
+  --color-fg-primary: var(--rate-fg-primary);
+  --color-fg-secondary: var(--rate-fg-secondary);
+  --color-fg-muted: var(--rate-fg-muted);
+  --color-fg-paragraph: var(--rate-fg-paragraph);
+  --color-border-subtle: var(--rate-border-subtle);
+  --color-border-strong: var(--rate-border-strong);
+  --color-focus-ring: var(--rate-focus-ring);
+  --color-status-good-bg: var(--rate-status-good-bg);
+  --color-status-good-fg: var(--rate-status-good-fg);
+  --color-status-warn-bg: var(--rate-status-warn-bg);
+  --color-status-warn-fg: var(--rate-status-warn-fg);
+  --color-status-bad-bg: var(--rate-status-bad-bg);
+  --color-status-bad-fg: var(--rate-status-bad-fg);
+  --radius-btn: var(--rate-radius-btn);
+}

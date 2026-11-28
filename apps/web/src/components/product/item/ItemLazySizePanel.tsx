@@ -6,6 +6,17 @@ import { BsShieldCheck } from 'react-icons/bs';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
 import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditButton';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  PriceStrip,
+  PriceStripActions,
+  PriceStripHeader,
+  PriceStripLabel,
+  PriceStripRange,
+  PriceStripRow,
+  PriceStripValue,
+} from '@/components/ui/card';
 import PriceWatchButton from '@/components/watchlist/PriceWatchButton';
 import {
   itemSizePanelPath,
@@ -88,13 +99,13 @@ export function ItemSizePriceStrip({
     offers: data.offers,
   });
   return (
-    <div className="rounded-4 bg-light mb-2 border p-3">
-      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
-        <div>
-          <div className="text-muted small">
-            {t('priceReferenceLabel', { count: stats.sellerCount })}
-          </div>
-          <div className="fw-bold text-dark rate-tabular fs-5">
+    <PriceStrip>
+      <PriceStripHeader>
+        <PriceStripLabel>
+          {t('priceReferenceLabel', { count: stats.sellerCount })}
+        </PriceStripLabel>
+        <PriceStripRow>
+          <PriceStripValue>
             {stats.minPrice > 0 ? (
               formatListingPrice(stats.minPrice, effectiveCurrency, locale, {
                 categorySlug,
@@ -106,72 +117,68 @@ export function ItemSizePriceStrip({
             ) : (
               t('priceNoneInStock')
             )}
-            {stats.minPrice > 0 && stats.minPrice !== stats.maxPrice && (
-              <span className="small fw-normal text-muted ms-2">
-                ~{' '}
-                {formatListingPrice(stats.maxPrice, effectiveCurrency, locale, {
-                  categorySlug,
-                })}
-              </span>
-            )}
-            {priceHistory.lowestEverPrice != null &&
-              priceHistory.lowestEverPrice > 0 && (
-                <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                  {hasListingUnitSuffix(effectiveCurrency, categorySlug)
-                    ? t('allTimeLowBadgeCurrency', {
-                        price: formatListingPrice(
-                          priceHistory.lowestEverPrice,
-                          effectiveCurrency,
-                          locale,
-                          { categorySlug }
-                        ),
-                      })
-                    : t('allTimeLowBadge', {
-                        price: formatNumber(
-                          priceHistory.lowestEverPrice,
-                          locale
-                        ),
-                      })}
-                </span>
-              )}
-          </div>
-        </div>
-        <div className="d-flex align-items-center flex-wrap gap-2">
-          {stats.minPrice > 0 && (
-            <PriceWatchButton
-              slug={product.slug}
-              name={product.name}
-              brand={product.brand}
-              categoryPath={context.categoryPath}
-              thumbnail={product.image}
-              currentMinPrice={stats.minPrice}
-              currency={effectiveCurrency}
-              size="sm"
-            />
+          </PriceStripValue>
+          {stats.minPrice > 0 && stats.minPrice !== stats.maxPrice && (
+            <PriceStripRange>
+              ~{' '}
+              {formatListingPrice(stats.maxPrice, effectiveCurrency, locale, {
+                categorySlug,
+              })}
+            </PriceStripRange>
           )}
-          <a
-            href="#pdv-price-history"
-            className="btn btn-sm btn-outline-secondary rounded-pill px-3"
-          >
-            {t('auditPriceBtn', { count: data.offers.length })}
-          </a>
-          <ProductShareAuditButton
+          {priceHistory.lowestEverPrice != null &&
+            priceHistory.lowestEverPrice > 0 && (
+              <Badge variant="success">
+                {hasListingUnitSuffix(effectiveCurrency, categorySlug)
+                  ? t('allTimeLowBadgeCurrency', {
+                      price: formatListingPrice(
+                        priceHistory.lowestEverPrice,
+                        effectiveCurrency,
+                        locale,
+                        { categorySlug }
+                      ),
+                    })
+                  : t('allTimeLowBadge', {
+                      price: formatNumber(priceHistory.lowestEverPrice, locale),
+                    })}
+              </Badge>
+            )}
+        </PriceStripRow>
+      </PriceStripHeader>
+      <PriceStripActions>
+        {stats.minPrice > 0 && (
+          <PriceWatchButton
+            slug={product.slug}
             name={product.name}
             brand={product.brand}
-            modelKey={product.model_key}
-            userScore5={context.userScore5}
-            expertScore10={context.expertScore10}
-            authenticReviews={context.authenticReviews}
-            minPriceVnd={stats.minPrice}
+            categoryPath={context.categoryPath}
+            thumbnail={product.image}
+            currentMinPrice={stats.minPrice}
             currency={effectiveCurrency}
-            categorySlug={categorySlug}
-            offerCount={stats.sellerCount}
-            keySpecLine={context.keySpecLine}
-            radarSignal={data.radarSignal}
+            size="sm"
           />
-        </div>
-      </div>
-    </div>
+        )}
+        <Button variant="outline" size="sm" asChild>
+          <a href="#pdv-price-history">
+            {t('auditPriceBtn', { count: data.offers.length })}
+          </a>
+        </Button>
+        <ProductShareAuditButton
+          name={product.name}
+          brand={product.brand}
+          modelKey={product.model_key}
+          userScore5={context.userScore5}
+          expertScore10={context.expertScore10}
+          authenticReviews={context.authenticReviews}
+          minPriceVnd={stats.minPrice}
+          currency={effectiveCurrency}
+          categorySlug={categorySlug}
+          offerCount={stats.sellerCount}
+          keySpecLine={context.keySpecLine}
+          radarSignal={data.radarSignal}
+        />
+      </PriceStripActions>
+    </PriceStrip>
   );
 }
 

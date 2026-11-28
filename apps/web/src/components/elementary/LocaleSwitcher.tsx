@@ -11,7 +11,9 @@ import { useLocale, useTranslations } from 'next-intl';
 import { FaChevronDown } from 'react-icons/fa6';
 
 import { AppLocale } from '@/types/general';
+import { Button } from '@/components/ui/button';
 import { routing, usePathname, useRouter } from '@/lib/navigation';
+import { cn } from '@/lib/utils';
 
 const FlagVN = () => (
   <svg
@@ -228,55 +230,41 @@ export function LocaleSwitcher({
 
   return (
     <div
-      className={`position-relative d-inline-flex align-items-center ${className || ''}`}
+      className={cn(
+        'position-relative d-inline-flex align-items-center',
+        className
+      )}
       ref={dropdownRef}
-      style={{ verticalAlign: 'middle' }}
     >
-      <button
+      <Button
         type="button"
+        variant={isDarkHeader ? 'ghost' : 'outline'}
+        size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className={`d-inline-flex align-items-center justify-content-center rounded-2 border transition-all ${
-          compact ? 'gap-1' : 'gap-2'
-        }`}
-        style={{
-          height: compact ? '38px' : '48px',
-          // The compact switcher sits in the phone header, which has to fit
-          // 320px (DOS/Rate#809) with the widest label: "EN" and "CS" are
-          // ~5px wider than "VI" and pushed the menu toggle's tap area off
-          // screen (DOS/Rate#1082).
-          padding: compact ? '0 5px' : '0 14px',
-          backgroundColor: isDarkHeader
-            ? 'rgba(255, 255, 255, 0.12)'
-            : 'var(--bs-card-bg, #ffffff)',
-          borderColor: isDarkHeader
-            ? 'rgba(255, 255, 255, 0.25)'
-            : 'var(--rate-border-strong)',
-          color: isDarkHeader ? '#ffffff' : 'var(--bs-body-color, #1e293b)',
-          fontSize: compact ? '13px' : '14px',
-          fontWeight: 600,
-          lineHeight: 1,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-          cursor: 'pointer',
-        }}
+        className={cn(
+          // Compact switcher sits in the phone header, which must fit 320px
+          // (DOS/Rate#809, #1082) with the widest label ("EN" / "CS").
+          compact ? 'h-9 gap-1 px-[6px]' : 'h-9 gap-1.5 px-[12px]',
+          'text-[13px] leading-none font-semibold',
+          isDarkHeader &&
+            'border-[color:rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-[#ffffff] hover:bg-[rgba(255,255,255,0.2)] hover:text-[#ffffff]'
+        )}
         aria-expanded={isOpen}
         aria-label={formatSwitcherAriaLabel(
           tNav('selectLanguageAria'),
           active.short
         )}
       >
-        <span className="d-flex align-items-center" aria-hidden="true">
+        <span className="inline-flex items-center" aria-hidden="true">
           {active.flag}
         </span>
-        <span style={{ letterSpacing: '0.5px' }}>{active.short}</span>
-        <FaChevronDown
-          aria-hidden="true"
-          style={{ fontSize: '10px', opacity: 0.8, marginLeft: '1px' }}
-        />
-      </button>
+        <span className="tracking-[0.03em]">{active.short}</span>
+        <FaChevronDown aria-hidden="true" className="text-[10px] opacity-80" />
+      </Button>
 
       {isOpen && (
         <ul
-          className="dropdown-menu show rounded-3 position-absolute m-0 border p-1 shadow-lg"
+          className="dropdown-menu show rounded-3 position-absolute m-0 border p-1"
           style={{
             minWidth: '155px',
             zIndex: 99999,
@@ -285,6 +273,7 @@ export function LocaleSwitcher({
             left: 'auto',
             backgroundColor: 'var(--rate-bg-surface)',
             borderColor: 'var(--rate-border-subtle)',
+            boxShadow: '0 10px 25px rgba(15, 23, 42, 0.18)',
           }}
         >
           {routing.locales.map((loc) => {
@@ -300,10 +289,10 @@ export function LocaleSwitcher({
                   type="button"
                   aria-pressed={isSelected}
                   onClick={() => handleSelect(loc)}
-                  className={`dropdown-item d-flex align-items-center justify-content-between rounded-2 w-100 border-0 px-2.5 py-2 text-start ${
+                  className={`dropdown-item d-flex align-items-center justify-content-between rounded-2 border-0 px-2.5 py-2 text-start ${
                     isSelected ? 'bg-light text-primary fw-bold' : 'text-dark'
                   }`}
-                  style={{ fontSize: '13px', cursor: 'pointer' }}
+                  style={{ width: '100%', fontSize: '13px', cursor: 'pointer' }}
                 >
                   <span className="d-flex align-items-center gap-2">
                     <span

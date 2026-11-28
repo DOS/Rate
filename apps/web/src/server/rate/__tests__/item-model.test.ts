@@ -1050,7 +1050,7 @@ async function main() {
     pdvSrc,
     /v\.priceHistory\.lowestEverPrice != null &&\s*v\.priceHistory\.lowestEverPrice > 0/
   );
-  assert.match(pdvSrc, /\{v\.stats\.minPrice > 0 && \(\s*<PriceWatchButton/);
+  assert.match(pdvSrc, /\{heroStats\.minPrice > 0 && \(\s*<PriceWatchButton/);
   assert.match(
     pdvSrc,
     /\{authenticCount > 0 && \(\s*<span className="rate-pdv-tag is-good">/
