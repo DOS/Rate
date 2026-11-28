@@ -44,8 +44,8 @@
  *                     until someone publishes it.
  *
  * Retractions (DOS/Rate#1972): a seed's `retract_spec_fields` removes stored spec values, so a
- * run never applies them unless `--retract` is passed. Without it the seed value replaces
- * the stored one and every other stored field stays (a scoped run changes only the paths it
+ * run never applies them (nor rewrites a replaced seed's variant name) unless `--retract` is
+ * passed. Without it the seed value replaces the stored one and every other stored field stays (a scoped run changes only the paths it
  * is approved for, e.g. the Bluetooth version of DOS/Rate#1955). `--retract` is the explicit,
  * reviewed way to remove what an unsourced seed wrote (DOS/Rate#1459, #1858).
  *   ... backfill-specs.ts --only <model_key,...> --retract                      (Dry-run: the diff shows each removal)
@@ -222,8 +222,10 @@ export function specUpdateChanges(
 /**
  * The spec columns a seed writes onto its existing master: specs and key specs merged into
  * the stored ones. A stored value the seed does not state stays: the seed's retracted paths
- * are removed, and a replaced seed's variant name and value columns written, only with
- * `retract` (`--retract`), so no run deletes a stored spec value on its own (DOS/Rate#1972).
+ * are removed, and a replaced seed's variant name rewritten, only with `retract`
+ * (`--retract`), so no run deletes a stored spec value on its own (DOS/Rate#1972). The value
+ * columns a seed carries (RAM, battery, colours) are still written by the caller as before:
+ * a seed replacing a value, not a removal.
  */
 export function seedMasterSpecUpdate(
   existing: { specifications?: unknown; key_specs?: unknown } | null | undefined,
@@ -242,8 +244,8 @@ export function seedMasterSpecUpdate(
       retracted,
       'key_specs'
     ),
-    // A replaced, unsourced seed's label ("16GB/256GB") and columns (RAM, battery, colours)
-    // follow the new one, on both entry points, in the same explicit run as its retractions.
+    // A replaced, unsourced seed's label ("16GB/256GB") and columns follow the new one, on
+    // both entry points, in the same explicit run as its retractions.
     ...(retracted
       ? {
           variant_name: seed.variant_name,

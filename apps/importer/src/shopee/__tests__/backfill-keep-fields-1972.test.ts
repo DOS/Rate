@@ -8,13 +8,18 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FLAGSHIP_DEVICES_TO_SEED, type FlagshipDeviceSeed } from '../flagship-seed-data.js';
+import {
+  FLAGSHIP_DEVICES_TO_SEED,
+  flagshipSeedsByItem,
+  type FlagshipDeviceSeed,
+} from '../flagship-seed-data.js';
 import {
   parseBackfillSpecsArgs,
   runBackfillSpecsCli,
   runMasterSpecsBackfillWith,
   seedMasterSpecUpdate,
   specUpdateChanges,
+  syncItemSeedSpecs,
   type BackfillSpecsDeps,
 } from '../jobs/backfill-specs.js';
 import type { RateSupabaseClient } from '../types.js';
@@ -97,7 +102,13 @@ function storedMaster(modelKey: string): {
     const [group, field] = path.split('.') as [string, string];
     specifications[group] = { ...(specifications[group] ?? {}), [field]: value };
   }
-  return { id: `id-${modelKey}`, specifications, key_specs: {} };
+  // Key specs the seed does not state stay; the MacBook Pro's camera text is the one the seed
+  // states itself, so the seed replaces it (a replacement, not a removal).
+  const key_specs: Record<string, unknown> = { legacy_note: 'stays' };
+  if (modelKey === 'apple:macbook-pro-m4-pro-14:512gb') {
+    key_specs.camera = '12MP Center Stage + 3x Thunderbolt 5 (120Gb/s)';
+  }
+  return { id: `id-${modelKey}`, specifications, key_specs };
 }
 
 const hasRetractions = (seed: FlagshipDeviceSeed) => (seed.retract_spec_fields ?? []).length > 0;
@@ -142,23 +153,36 @@ test('a seed update keeps every stored spec value the seed does not state (#1972
   }
 });
 
-test('only the intended paths change: the Bluetooth version and the seed colours (#1972, #1955)', () => {
+test('only the intended paths change: Bluetooth version, seed colours, seed key specs (#1972, #1955)', () => {
   for (const key of KEYS) {
     const stored = storedMaster(key);
-    const update = seedMasterSpecUpdate(stored, seedOf(key)) as {
-      specifications: Record<string, Record<string, unknown>>;
-    };
-    const paths = specUpdateChanges(stored, { specifications: update.specifications }).map(
-      c => c.split(':')[0]
-    );
+    const update = seedMasterSpecUpdate(stored, seedOf(key));
+    const paths = specUpdateChanges(stored, update).map(c => c.split(':')[0]);
+    const allowed = new Set([
+      'specifications.connectivity.bluetooth',
+      'specifications.design.colors',
+    ]);
     for (const path of paths) {
+      // key_specs: only a value the seed states itself may change.
+      const seedKeySpec = path.startsWith('key_specs.')
+        ? (seedOf(key).key_specs as unknown as Record<string, unknown>)[path.slice(10)]
+        : undefined;
       assert.ok(
-        path === 'specifications.connectivity.bluetooth' || path === 'specifications.design.colors',
+        allowed.has(path) || seedKeySpec !== undefined,
         `${key}: unexpected change at ${path}`
       );
     }
-    if (key in { 'xiaomi:14-ultra:512gb': 1, 'oppo:find-x8:256gb': 1 }) {
-      assert.deepEqual(paths, ['specifications.connectivity.bluetooth'], key);
+    assert.equal(
+      (update.key_specs as Record<string, unknown>).legacy_note,
+      'stays',
+      `${key}: a stored key spec the seed does not state stays`
+    );
+    if (key === 'xiaomi:14-ultra:512gb' || key === 'oppo:find-x8:256gb') {
+      assert.deepEqual(
+        paths.filter(p => !p.startsWith('key_specs.')),
+        ['specifications.connectivity.bluetooth'],
+        key
+      );
     }
   }
 });
@@ -234,9 +258,7 @@ test('a scoped --apply of the 10 masters writes no deletion, and --retract is th
   for (const { payload, id } of plain.writes) {
     const key = String(id).replace(/^id-/, '');
     const stored = existing[key] as ReturnType<typeof storedMaster>;
-    const changes = specUpdateChanges(stored, {
-      specifications: payload.specifications as Record<string, unknown>,
-    });
+    const changes = specUpdateChanges(stored, payload);
     assert.deepEqual(
       changes.filter(c => c.endsWith('-> (none)')),
       [],
@@ -252,9 +274,9 @@ test('a scoped --apply of the 10 masters writes no deletion, and --retract is th
     retract: true,
   });
   const deleted = retracting.writes.flatMap(({ payload, id }) =>
-    specUpdateChanges(existing[String(id).replace(/^id-/, '')] as never, {
-      specifications: payload.specifications as Record<string, unknown>,
-    }).filter(c => c.endsWith('-> (none)'))
+    specUpdateChanges(existing[String(id).replace(/^id-/, '')] as never, payload).filter(c =>
+      c.endsWith('-> (none)')
+    )
   );
   assert.ok(deleted.length >= 20, 'with --retract the dry-run deletions are written');
 });
@@ -282,4 +304,43 @@ test('--retract is a strict, single, write-side flag', async () => {
     },
   });
   assert.equal('retract' in (seen ?? {}), false);
+});
+
+test('the Item sync keeps stored fields too, and removes them only with retract (#1972)', async () => {
+  const key = 'xiaomi:14-ultra:512gb';
+  const item = flagshipSeedsByItem().find(i => key.startsWith(`${i.itemKey}:`));
+  assert.ok(item, key);
+  assert.ok((item.retract_spec_fields ?? []).includes('regulatory.certifications'));
+  const run = async (retract?: boolean) => {
+    let written: { specifications: Record<string, Record<string, unknown>> } | undefined;
+    const client = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: { id: 'i1', ...structuredClone(storedMaster(key)) },
+              error: null,
+            }),
+          }),
+        }),
+        update: (row: typeof written) => {
+          written = row;
+          return { eq: async () => ({ error: null }) };
+        },
+      }),
+    };
+    await syncItemSeedSpecs(client as never, {
+      apply: true,
+      seeds: [item],
+      itemModel: 'item',
+      ...(retract ? { retract } : {}),
+    });
+    return written!.specifications;
+  };
+  const kept = await run();
+  assert.equal(kept.regulatory?.certifications, STORED_EXTRAS[key]!['regulatory.certifications']);
+  assert.equal(kept.connectivity?.bluetooth, '5.4');
+  const retracted = await run(true);
+  assert.equal(retracted.regulatory?.certifications, undefined);
+  assert.equal(retracted.connectivity?.bluetooth, undefined);
 });
