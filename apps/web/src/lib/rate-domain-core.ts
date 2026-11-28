@@ -1285,7 +1285,10 @@ export type CanonicalCategorySlug =
   | 'gyms-fitness'
   | 'spas-aesthetics'
   | 'english-centers'
-  | 'credit-cards';
+  | 'credit-cards'
+  | 'monitors'
+  | 'cameras'
+  | 'vps-hosting';
 
 export const CORE_TECH_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   'smartphones',
@@ -1331,6 +1334,14 @@ export const WAVE_E5_PLACE_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
 export const WAVE_E5_SERVICE_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] =
   ['credit-cards'] as const;
 
+/** Wave E6 hardware product categories (DOS/Rate#1976). */
+export const WAVE_E6_PRODUCT_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] =
+  ['monitors', 'cameras'] as const;
+
+/** Wave E6 service categories (DOS/Rate#1976). */
+export const WAVE_E6_SERVICE_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] =
+  ['vps-hosting'] as const;
+
 export const ALL_CANONICAL_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   ...CORE_TECH_CATEGORY_SLUGS,
   ...WAVE_E1_CATEGORY_SLUGS,
@@ -1339,6 +1350,8 @@ export const ALL_CANONICAL_CATEGORY_SLUGS: readonly CanonicalCategorySlug[] = [
   ...WAVE_E4_PLACE_CATEGORY_SLUGS,
   ...WAVE_E5_PLACE_CATEGORY_SLUGS,
   ...WAVE_E5_SERVICE_CATEGORY_SLUGS,
+  ...WAVE_E6_PRODUCT_CATEGORY_SLUGS,
+  ...WAVE_E6_SERVICE_CATEGORY_SLUGS,
 ] as const;
 
 const CANONICAL_CATEGORY_SLUG_SET = new Set<string>(
@@ -1358,6 +1371,12 @@ const WAVE_E5_PLACE_CATEGORY_SLUG_SET = new Set<string>(
 );
 const WAVE_E5_SERVICE_CATEGORY_SLUG_SET = new Set<string>(
   WAVE_E5_SERVICE_CATEGORY_SLUGS
+);
+const WAVE_E6_PRODUCT_CATEGORY_SLUG_SET = new Set<string>(
+  WAVE_E6_PRODUCT_CATEGORY_SLUGS
+);
+const WAVE_E6_SERVICE_CATEGORY_SLUG_SET = new Set<string>(
+  WAVE_E6_SERVICE_CATEGORY_SLUGS
 );
 
 export function isCanonicalCategorySlug(
@@ -1402,10 +1421,24 @@ export function isWaveE5ServiceCategorySlug(value: unknown): boolean {
   );
 }
 
-/** Wave E2 and Wave E5 services: masters with `entity_type = 'service'`. */
+export function isWaveE6ProductCategorySlug(value: unknown): boolean {
+  return (
+    typeof value === 'string' && WAVE_E6_PRODUCT_CATEGORY_SLUG_SET.has(value)
+  );
+}
+
+export function isWaveE6ServiceCategorySlug(value: unknown): boolean {
+  return (
+    typeof value === 'string' && WAVE_E6_SERVICE_CATEGORY_SLUG_SET.has(value)
+  );
+}
+
+/** Wave E2, Wave E5, and Wave E6 services: masters with `entity_type = 'service'`. */
 export function isServiceCategorySlug(value: unknown): boolean {
   return (
-    isWaveE2ServiceCategorySlug(value) || isWaveE5ServiceCategorySlug(value)
+    isWaveE2ServiceCategorySlug(value) ||
+    isWaveE5ServiceCategorySlug(value) ||
+    isWaveE6ServiceCategorySlug(value)
   );
 }
 
@@ -1550,7 +1583,7 @@ export function getMasterProductCategorySlug(
       .normalize('NFC')
       .toLowerCase();
   const isNonCreditCardItem =
-    /(?<![\p{L}\d])(?:thẻ\s*(?:quà\s*tặng|nhớ|sim|cào|điện\s*thoại|nạp|game|garena|zing|học|tên|nhân\s*viên|từ|thang\s*máy|giữ\s*xe|bảo\s*hành|thành\s*viên|hội\s*viên|tập|bài|đồ\s*chơi)|the\s*(?:qua\s*tang|nho|sim|cao|dien\s*thoai|nap|game|hoc|ten|nhan\s*vien|tu|bao\s*hanh|thanh\s*vien|hoi\s*vien|tap|bai)|gift\s*cards?|memory\s*cards?|micro\s*sd|sd(?:xc|hc)?\s*cards?|tf\s*cards?|cfexpress|sim\s*cards?|card\s*readers?|đầu\s*đọc\s*thẻ|dau\s*doc\s*the|ví\s*(?:đựng\s*thẻ|da|nam|nữ|card)|vi\s*(?:dung\s*the|da|nam|nu|card)|(?:bao|hộp|túi|ngăn|kẹp|dây\s*đeo)\s*(?:đựng\s*|bảo\s*vệ\s*|da\s*đựng\s*)?thẻ|(?:bao|hop|tui|kep|day\s*deo)\s*(?:dung\s*|bao\s*ve\s*)?the|ốp\s*lưng|op\s*lung|bóp|bop|miếng\s*dán|mieng\s*dan|sticker|skin\s*dán|máy\s*quẹt\s*thẻ|may\s*quet\s*the|card\s*holders?|rfid\s*(?:wallet|sleeve|blocker|holder)|chống\s*rfid|flash\s*cards?|bộ\s*thẻ|bo\s*the|(?:trả\s*góp|tra\s*gop|thanh\s*toán|thanh\s*toan|giảm\s*giá|giam\s*gia)\s*(?:\d+%\s*)?(?:(?:qua|bằng|bang|với|voi)\s+)?(?:thẻ\s*tín\s*dụng|the\s*tin\s*dung)|iphone|ipad|macbook|galaxy\s*(?:s\d|z\s*|a\d|tab|watch|buds)|điện\s*thoại|laptop|máy\s*tính|tivi|tủ\s*lạnh|máy\s*giặt|điều\s*hòa|điều\s*hoà|máy\s*lạnh|máy\s*lọc\s*(?:không\s*)?khí|tai\s*nghe|airpods|apple\s*watch|smartwatch|đồng\s*hồ|smart\s*tv|oled\s*tv|qled\s*tv|xiaomi|redmi|poco|oppo|vivo|realme)(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:thẻ\s*(?:quà\s*tặng|nhớ|sim|cào|điện\s*thoại|nạp|game|garena|zing|học|tên|nhân\s*viên|từ|thang\s*máy|giữ\s*xe|bảo\s*hành|thành\s*viên|hội\s*viên|tập|bài|đồ\s*chơi)|the\s*(?:qua\s*tang|nho|sim|cao|dien\s*thoai|nap|game|hoc|ten|nhan\s*vien|tu|bao\s*hanh|thanh\s*vien|hoi\s*vien|tap|bai)|gift\s*cards?|memory\s*cards?|micro\s*sd|sd(?:xc|hc)?\s*cards?|tf\s*cards?|cfexpress|sim\s*cards?|card\s*readers?|đầu\s*đọc\s*thẻ|dau\s*doc\s*the|ví\s*(?:đựng\s*thẻ|da|nam|nữ|card)|vi\s*(?:dung\s*the|da|nam|nu|card)|(?:bao|hộp|túi|ngăn|kẹp|dây\s*đeo)\s*(?:đựng\s*|bảo\s*vệ\s*|da\s*đựng\s*)?thẻ|(?:bao|hop|tui|kep|day\s*deo)\s*(?:dung\s*|bao\s*ve\s*)?the|ốp\s*lưng|op\s*lung|bóp|bop|miếng\s*dán|mieng\s*dan|sticker|skin\s*dán|máy\s*quẹt\s*thẻ|may\s*quet\s*the|card\s*holders?|rfid\s*(?:wallet|sleeve|blocker|holder)|chống\s*rfid|flash\s*cards?|bộ\s*thẻ|bo\s*the|(?:trả\s*góp|tra\s*gop|thanh\s*toán|thanh\s*toan|giảm\s*giá|giam\s*gia)\s*(?:\d+%\s*)?(?:(?:qua|bằng|bang|với|voi)\s+)?(?:thẻ\s*tín\s*dụng|the\s*tin\s*dung)|iphone|ipad|macbook|galaxy[\s-]*(?:s\d|z[\s-]*|a\d|m\d|tab|watch|buds)|điện[\s-]*thoại|laptop|máy[\s-]*tính|màn[\s-]*hình|man[\s-]*hinh|máy[\s-]*ảnh|may[\s-]*anh|camera|vps|hosting|tivi|tủ\s*lạnh|máy\s*giặt|điều\s*hòa|điều\s*hoà|máy\s*lạnh|máy\s*lọc\s*(?:không\s*)?khí|tai\s*nghe|airpods|apple\s*watch|smartwatch|đồng\s*hồ|smart\s*tv|oled\s*tv|qled\s*tv|xiaomi|redmi|poco|oppo|vivo|realme)(?![\p{L}\d])/iu.test(
       haystack
     );
   if (
@@ -1574,6 +1607,18 @@ export function getMasterProductCategorySlug(
     )
   ) {
     return 'internet-telecom';
+  }
+  const isNonVpsHostingItem =
+    /(?<![\p{L}\d])(?:chứng[\s-]*khoán|chung[\s-]*khoan|cổ[\s-]*phiếu|co[\s-]*phieu|securities|điện[\s-]*thoại|dien[\s-]*thoai|smartphone|iphone|ipad|macbook|laptop|máy[\s-]*tính[\s-]*(?:xách[\s-]*tay|bảng)|tablet|tivi|smart[\s-]*tv|màn[\s-]*hình|man[\s-]*hinh|máy[\s-]*ảnh|may[\s-]*anh|camera|tai[\s-]*nghe|airpods|smartwatch|đồng[\s-]*hồ|tủ[\s-]*lạnh|máy[\s-]*giặt|điều[\s-]*hòa|điều[\s-]*hoà|máy[\s-]*lạnh|máy[\s-]*lọc|router|switch|cáp[\s-]*mạng|ổ[\s-]*cứng[\s-]*di[\s-]*động|box[\s-]*ssd|ốp[\s-]*lưng|túi[\s-]*đựng|sách|khóa[\s-]*học|khoa[\s-]*hoc)(?![\p{L}\d])/iu.test(
+      haystack
+    );
+  if (
+    !isNonVpsHostingItem &&
+    /(?<![\p{L}\d])(?:cloud[\s-]*vps|vps[\s-]*(?:hosting|giá[\s-]*rẻ|gia[\s-]*re|nvme|ssd|việt[\s-]*nam|viet[\s-]*nam|vn|pro|linux|windows|cao[\s-]*cấp|starter|basic|standard|business|enterprise|gpu|storage|\d+[\s-]*(?:vcpu|core|gb))|thuê[\s-]*vps|thue[\s-]*vps|gói[\s-]*vps|goi[\s-]*vps|máy[\s-]*chủ[\s-]*ảo|may[\s-]*chu[\s-]*ao|cloud[\s-]*server|thuê[\s-]*máy[\s-]*chủ|thue[\s-]*may[\s-]*chu|dedicated[\s-]*server|(?:web|wordpress|ssd|nvme|cloud|business|reseller|linux|windows|seo|email)[\s-]*hosting|thuê[\s-]*hosting|thue[\s-]*hosting|gói[\s-]*hosting|goi[\s-]*hosting|chỗ[\s-]*đặt[\s-]*máy[\s-]*chủ|colocation|nhanhoa|nh[aâ]n[\s-]*h[oò]a|pavietnam|p\.?[\s-]*a\.?[\s-]*vi[eệ]t[\s-]*nam|hostvn|bkns|longvan|long[\s-]*v[aâ]n|\bvps\b)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'vps-hosting';
   }
   if (
     /(?<![\p{L}\d])(?:máy lọc không khí|air purifier|lọc không khí)(?![\p{L}\d])/iu.test(
@@ -1611,6 +1656,42 @@ export function getMasterProductCategorySlug(
     !/(?<![\p{L}\d])(?:apple tv|tv box)(?![\p{L}\d])/iu.test(haystack)
   ) {
     return 'tvs';
+  }
+  const isNonMonitorItem =
+    /(?<![\p{L}\d])(?:điện[\s-]*thoại|dien[\s-]*thoai|smartphone|iphone|ipad|macbook|laptop|máy[\s-]*tính[\s-]*(?:xách[\s-]*tay|bảng)|ultrabook|tablet|thinkpad|ideapad|zenbook|vivo[\s-]*book|inspiron|latitude|pavilion|envy|victus|surface[\s-]*laptop|galaxy[\s-]*(?:s\d|z[\s-]*|a\d|m\d|tab|watch|buds)|redmi[\s-]*(?:note|pad|\d)|poco|oppo|vivo(?!\s*display)|realme|smartwatch|đồng[\s-]*hồ|tai[\s-]*nghe|airpods|tivi|smart[\s-]*tv|oled[\s-]*tv|qled[\s-]*tv|google[\s-]*tv|android[\s-]*tv|máy[\s-]*ảnh|may[\s-]*anh|camera|ô[\s-]*tô|o[\s-]*to|xe[\s-]*hơi|android[\s-]*box|thay[\s-]*màn[\s-]*hình|màn[\s-]*hình[\s-]*(?:thay[\s-]*thế|zin|bóc[\s-]*máy|linh[\s-]*kiện|điện[\s-]*thoại|laptop|iphone|ipad)|ép[\s-]*kính|giá[\s-]*treo|gia[\s-]*treo|tay[\s-]*(?:đỡ|nâng)|arm[\s-]*màn[\s-]*hình|arm[\s-]*man[\s-]*hinh|chân[\s-]*đế[\s-]*rời|dán[\s-]*màn[\s-]*hình|dan[\s-]*man[\s-]*hinh|kính[\s-]*cường[\s-]*lực|kinh[\s-]*cuong[\s-]*luc|miếng[\s-]*dán|tấm[\s-]*bảo[\s-]*vệ|đèn[\s-]*treo[\s-]*màn[\s-]*hình|monitor[\s-]*(?:arm|mount|stand|light[\s-]*bar|riser|hood|protector|cable)|screen[\s-]*protectors?|baby[\s-]*monitor|blood[\s-]*pressure[\s-]*monitor|heart[\s-]*rate[\s-]*monitor|máy[\s-]*đo[\s-]*huyết[\s-]*áp|cáp[\s-]*(?:hdmi|displayport|vga))(?![\p{L}\d])/iu.test(
+      haystack
+    );
+  if (
+    !isNonMonitorItem &&
+    (/(?<![\p{L}\d])(?:màn[\s-]*hình[\s-]*(?:máy[\s-]*tính|pc|gaming|cong|đồ[\s-]*họa|đồ[\s-]*hoạ|văn[\s-]*phòng|rời|di[\s-]*động|chuyên[\s-]*đồ[\s-]*họa|chơi[\s-]*game|phẳng|led|lcd|ips|oled|va|mini[\s-]*led|4k|2k|qhd|wqhd|fhd|ultrawide)|man[\s-]*hinh[\s-]*(?:may[\s-]*tinh|pc|gaming|cong|do[\s-]*hoa|van[\s-]*phong|roi|di[\s-]*dong)|(?:gaming|ultrawide|computer|pc|curved|oled|4k|2k|portable|ips)[\s-]*monitors?|ultrasharp|odyssey[\s-]*(?:g\d+[a-z0-9-]*|neo|oled|ark)|proart(?:[\s-]*display|[\s-]*pa\d+[a-z0-9-]*)?|tuf[\s-]*gaming[\s-]*vg\d+[a-z0-9-]*|rog[\s-]*(?:strix|swift)[\s-]*(?:xg|pg)\d+[a-z0-9-]*|ultragear|benq[\s-]*(?:mobiuz|pd\d+[a-z0-9-]*|sw\d+[a-z0-9-]*|gw\d+[a-z0-9-]*|ex\d+[a-z0-9-]*|zowie[\s-]*xl\d+[a-z0-9-]*)|zowie[\s-]*xl\d+[a-z0-9-]*|viewsonic[\s-]*(?:vx|vg|va|vp|xg|omni)\d+[a-z0-9-]*|aoc[\s-]*(?:(?:24g|27g|q27g|cu34|c24g|c27g|ag|24b|27b)[a-z0-9-]*|agon)|msi[\s-]*(?:optix|mpg|mag|modern[\s-]*md|pro[\s-]*mp|g\d{2}[a-z])[\s-]*[a-z0-9-]+|gigabyte[\s-]*(?:m27|m28|m32|g24|g27|g32|gs27|gs32|fo\d|fi\d|aorus[\s-]*(?:fo|fi|fv|co))[a-z0-9-]*|dell[\s-]*(?:u\d{4}|p\d{4}|s\d{4}|g\d{4}|se\d{4}|e\d{4}|aw\d{4})[a-z0-9-]*|alienware[\s-]*aw\d{4}[a-z0-9-]*|lg[\s-]*(?:\d{2}(?:up|ul|gp|gr|gn|gq|mr|mp|uq|un|bp|bn|wq|gs|gx)\d{2,3}[a-z0-9-]*|dualup|ergo)|philips[\s-]*(?:evnia|\d{2}[a-z]\d{1,4}[a-z0-9-]*)|hkc[\s-]*(?:mg|mb|ant|gs|g\d)[a-z0-9-]*|ktc[\s-]*(?:h\d{2}|m\d{2}|g\d{2})[a-z0-9-]*|acer[\s-]*(?:nitro[\s-]*(?:vg|xv|kg|ed|qg|xf)|predator[\s-]*(?:xb|x\d{2}|cg)|ka\d{3}|ek\d{3}|sa\d{3})[a-z0-9-]*|lenovo[\s-]*(?:thinkvision|legion[\s-]*(?:r\d{2}|y\d{2}|g\d{2})[a-z0-9-]*)|hp[\s-]*(?:omen[\s-]*\d{2}[a-z]|e\d{2}[a-z]?|m\d{2}[a-z]|z\d{2}[a-z])[a-z0-9-]*|xiaomi[\s-]*(?:mi[\s-]*)?(?:desktop[\s-]*monitor|gaming[\s-]*monitor|curved[\s-]*gaming[\s-]*monitor|(?:g24|g27|a24|a27|p27)[a-z0-9-]*))(?![\p{L}\d])/iu.test(
+      haystack
+    ) ||
+      /^\s*(?:(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)\s*)*(?:màn[\s-]*hình|man[\s-]*hinh)(?![\p{L}\d])/iu.test(
+        haystack
+      ))
+  ) {
+    return 'monitors';
+  }
+  const isNonCameraItem =
+    /(?<![\p{L}\d])(?:điện[\s-]*thoại|dien[\s-]*thoai|smartphone|iphone|ipad|macbook|laptop|máy[\s-]*tính[\s-]*(?:xách[\s-]*tay|bảng)|tablet|galaxy[\s-]*(?:s\d|z[\s-]*|a\d|m\d|tab|watch|buds)|redmi|poco|oppo|vivo|realme|smartwatch|đồng[\s-]*hồ|tai[\s-]*nghe|airpods|tivi|smart[\s-]*tv|màn[\s-]*hình[\s-]*(?:máy[\s-]*tính|pc|gaming|cong)|camera[\s-]*(?:hành[\s-]*trình|hanh[\s-]*trinh|an[\s-]*ninh|giám[\s-]*sát|giam[\s-]*sat|wifi|wi-fi|ip|quan[\s-]*sát|ngoài[\s-]*trời|trong[\s-]*nhà|lùi|ô[\s-]*tô|xe[\s-]*hơi|xe[\s-]*máy|nội[\s-]*soi|cửa|chuông[\s-]*cửa|360[\s-]*(?:wifi|trong[\s-]*nhà|ngoài[\s-]*trời|ezviz|imou|tapo|xiaomi|yoosee))|dash[\s-]*cam|dashcam|cctv|security[\s-]*camera|ip[\s-]*camera|ezviz|imou|tapo[\s-]*c\d|yoosee|hikvision|dahua|kbvision|webcam|web[\s-]*cam|flycam|drone|mavic|đồ[\s-]*chơi|trẻ[\s-]*em|cho[\s-]*bé)(?![\p{L}\d])/iu.test(
+      haystack
+    ) ||
+    /^\s*(?:(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)\s*)*(?:ống[\s-]*kính|ong[\s-]*kinh|lens|chân[\s-]*máy|chan[\s-]*may|tripods?|monopods?|gimbals?|túi[\s-]*(?:đựng[\s-]*)?máy[\s-]*ảnh|ba[\s-]*lô[\s-]*máy[\s-]*ảnh|balo[\s-]*máy[\s-]*ảnh|thẻ[\s-]*nhớ|the[\s-]*nho|memory[\s-]*cards?|kính[\s-]*lọc|kinh[\s-]*loc|filters?|lens[\s-]*hoods?|hood|loa[\s-]*che[\s-]*nắng|ngàm[\s-]*chuyển|ngam[\s-]*chuyen|mount[\s-]*adapters?|pin[\s-]*(?:rời|sạc|dự[\s-]*phòng|máy[\s-]*ảnh)|sạc[\s-]*rời|đèn[\s-]*flash|tủ[\s-]*chống[\s-]*ẩm|nắp[\s-]*(?:ống[\s-]*kính|lens|body)|khung[\s-]*bảo[\s-]*vệ|cage|ốp|miếng[\s-]*dán|dây[\s-]*đeo)(?![\p{L}\d])/iu.test(
+      haystack
+    ) ||
+    (/(?<![\p{L}\d])(?:ống[\s-]*kính|ong[\s-]*kinh|lens|chân[\s-]*máy|tripods?|túi[\s-]*đựng|thẻ[\s-]*nhớ|memory[\s-]*cards?|kính[\s-]*lọc|filters?|hood|ngàm[\s-]*chuyển|pin[\s-]*rời|sạc[\s-]*rời|tủ[\s-]*chống[\s-]*ẩm)(?![\p{L}\d])/iu.test(
+      haystack
+    ) &&
+      !/(?<![\p{L}\d])(?:máy[\s-]*ảnh|may[\s-]*anh|body|kit|mirrorless|dslr|action[\s-]*cam|camera[\s-]*hành[\s-]*động|camera[\s-]*hanh[\s-]*dong|gopro[\s-]*hero|osmo[\s-]*(?:action|pocket)|insta360|powershot|coolpix|instax)(?![\p{L}\d])/iu.test(
+        haystack
+      ));
+  if (
+    !isNonCameraItem &&
+    /(?<![\p{L}\d])(?:máy[\s-]*ảnh|may[\s-]*anh|mirrorless|dslr|action[\s-]*cam(?:era)?|camera[\s-]*(?:hành[\s-]*động|hanh[\s-]*dong|thể[\s-]*thao|the[\s-]*thao)|máy[\s-]*quay[\s-]*(?:phim|vlog|cầm[\s-]*tay|hành[\s-]*động|360)|gopro[\s-]*(?:hero(?:[\s-]*\d+[a-z0-9-]*|[\s-]*max|[\s-]*mini|[\s-]*black)?|max)|dji[\s-]*(?:osmo[\s-]*(?:action|pocket)|action[\s-]*\d+[a-z0-9-]*|pocket[\s-]*\d+[a-z0-9-]*)|insta360[\s-]*(?:x\d+[a-z0-9-]*|ace|go[\s-]*\d+[a-z0-9-]*|one[\s-]*(?:r|rs|x))|sony[\s-]*(?:alpha|a\d{1,4}[a-z0-9-]*|zv-[a-z0-9-]+|fx\d+[a-z0-9-]*|rx\d+[a-z0-9-]*|ilce-[a-z0-9-]+|dsc-[a-z0-9-]+)|canon[\s-]*(?:eos|powershot|ixus)|fujifilm[\s-]*(?:x-[a-z0-9-]+|gfx[\s-]*\d+[a-z0-9-]*|instax)|nikon[\s-]*(?:z[\s-]*\d+[a-z0-9-]*|z[\s-]*f[c]?|d\d{3,4}[a-z0-9-]*|coolpix)|(?:panasonic[\s-]*)?lumix[\s-]*(?:s\d|g\d|gh\d|gx\d|tz\d|lx\d)[a-z0-9-]*|om[\s-]*system[\s-]*om-\d+[a-z0-9-]*|olympus[\s-]*(?:om-d|pen[\s-]*e-[a-z0-9-]+|tg-\d+[a-z0-9-]*)|leica[\s-]*(?:q\d+[a-z0-9-]*|m\d+[a-z0-9-]*|sl\d+[a-z0-9-]*|d-lux|sofort)|ricoh[\s-]*gr[\s-]*(?:iii|ii|3|2)[a-z0-9-]*)(?![\p{L}\d])/iu.test(
+      haystack
+    )
+  ) {
+    return 'cameras';
   }
   if (
     /ipad|galaxy tab|xiaomi pad|matepad|redmi pad|tab s\d|tab a\d|tab p\d|tab m\d|oneplus pad|oppo pad|vivo pad|honor pad|surface pro|tablet|máy tính bảng/i.test(

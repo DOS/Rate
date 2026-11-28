@@ -30,6 +30,9 @@
       "spas-aesthetics": "Spa & thẩm mỹ",
       "english-centers": "Tiếng Anh",
       "credit-cards": "Thẻ tín dụng",
+      "monitors": "Màn hình",
+      "cameras": "Máy ảnh",
+      "vps-hosting": "VPS & hosting",
       "leaderboard": "Xếp hạng",
       "merchants": "Gian hàng",
       "inspect": "Kiểm tra link",
@@ -84,6 +87,9 @@
         "spas-aesthetics": "Spa & thẩm mỹ",
         "english-centers": "Trung tâm tiếng Anh",
         "credit-cards": "Thẻ tín dụng",
+        "monitors": "Màn hình máy tính",
+        "cameras": "Máy ảnh & action cam",
+        "vps-hosting": "VPS & hosting",
         "leaderboard": "Bảng xếp hạng sản phẩm",
         "inspect": "Kiểm tra link sản phẩm",
         "compare": "So sánh thông số",
@@ -286,6 +292,12 @@
     "catEnglishCentersUnit": "trung tâm",
     "catCreditCards": "Thẻ tín dụng",
     "catCreditCardsUnit": "thẻ tín dụng",
+    "catMonitors": "Màn hình",
+    "catMonitorsUnit": "màn hình",
+    "catCameras": "Máy ảnh",
+    "catCamerasUnit": "máy ảnh",
+    "catVpsHosting": "VPS & hosting",
+    "catVpsHostingUnit": "gói dịch vụ",
     "boolYes": "Có",
     "boolNo": "Không",
     "group0Title": "Điểm đánh giá và độ tin cậy",
@@ -510,6 +522,9 @@
     "catSpasAesthetics": "Spa & thẩm mỹ",
     "catEnglishCenters": "Trung tâm tiếng Anh",
     "catCreditCards": "Thẻ tín dụng",
+    "catMonitors": "Màn hình",
+    "catCameras": "Máy ảnh",
+    "catVpsHosting": "VPS & hosting",
     "badgeCombined": "Điểm tổng hợp",
     "badgeUser": "Người dùng thật",
     "badgeExpert": "Chuyên gia Rate Lab",
@@ -542,6 +557,9 @@
     "tabSpasAesthetics": "Spa & thẩm mỹ",
     "tabEnglishCenters": "Trung tâm tiếng Anh",
     "tabCreditCards": "Thẻ tín dụng",
+    "tabMonitors": "Màn hình",
+    "tabCameras": "Máy ảnh",
+    "tabVpsHosting": "VPS & hosting",
     "dirLabel": "Công nghệ & điện tử",
     "chooseCategory": "1. Chọn danh mục ngành hàng (khóa xếp hạng cùng ngành):",
     "chooseCriterion": "2. Xếp hạng theo tiêu chí:",
@@ -1096,6 +1114,9 @@
     "catSupplements": "Thực phẩm chức năng",
     "catCosmetics": "Mỹ phẩm",
     "catMotherBaby": "Mẹ & bé",
+    "catMonitors": "Màn hình",
+    "catCameras": "Máy ảnh",
+    "catVpsHosting": "VPS & hosting",
     "personaValueHunter": "Đáng tiền nhất (P/P)",
     "personaDefault": "Cân bằng toàn diện",
     "personaPhotography": "Camera và âm thanh",
@@ -1742,6 +1763,9 @@
     "catDescSpasAesthetics": "Khám phá đánh giá hiệu quả liệu trình, vệ sinh, không chèo kéo & chi phí minh bạch tại spa",
     "catDescEnglishCenters": "Khám phá đánh giá chất lượng giảng dạy, giáo viên, giáo trình, lịch học & học phí tiếng Anh",
     "catDescCreditCards": "So sánh hoàn tiền, ưu đãi, phí thường niên, lãi suất & tốc độ duyệt thẻ tín dụng",
+    "catDescMonitors": "So sánh màn hình máy tính theo tấm nền, màu sắc, tần số quét, cổng kết nối & giá bán thực tế",
+    "catDescCameras": "So sánh máy ảnh mirrorless, DSLR & action cam theo chất lượng ảnh, lấy nét, pin & giá đa sàn",
+    "catDescVpsHosting": "So sánh gói VPS & hosting theo hiệu năng, uptime, tốc độ NVMe, hỗ trợ kỹ thuật & giá mỗi tháng",
     "popularBattlesBadge": "So sánh đối đầu 1v1",
     "popularBattlesTitle": "Các flagship đang được so kè nhiều nhất",
     "leaderboard5CatsBtn": "Bảng xếp hạng",
@@ -2245,6 +2269,21 @@
         "titleCount": "So sánh thẻ tín dụng ({count} thẻ) | Rate.vn",
         "titleDefault": "So sánh thẻ tín dụng, hoàn tiền và phí thường niên | Rate.vn",
         "description": "So sánh ưu đãi hoàn tiền, phí thường niên, lãi suất, hỗ trợ khách hàng và ứng dụng quản lý thẻ tín dụng các ngân hàng trên Rate.vn."
+      },
+      "monitors": {
+        "titleCount": "So sánh màn hình máy tính ({count} mẫu) | Rate.vn",
+        "titleDefault": "So sánh màn hình máy tính, tấm nền và lịch sử giá | Rate.vn",
+        "description": "So sánh màn hình gaming, đồ họa và văn phòng theo tấm nền, độ phủ màu, tần số quét, cổng kết nối và lịch sử giá thực tế trên Rate.vn."
+      },
+      "cameras": {
+        "titleCount": "So sánh máy ảnh & action cam ({count} mẫu) | Rate.vn",
+        "titleDefault": "So sánh máy ảnh, action cam và giá bán thực tế | Rate.vn",
+        "description": "So sánh máy ảnh mirrorless, DSLR và action cam theo chất lượng ảnh, video, tốc độ lấy nét, thời lượng pin và giá bán đa sàn trên Rate.vn."
+      },
+      "vps-hosting": {
+        "titleCount": "So sánh gói VPS & hosting ({count} gói) | Rate.vn",
+        "titleDefault": "So sánh gói VPS & hosting, uptime và giá cước hàng tháng | Rate.vn",
+        "description": "So sánh các gói Cloud VPS và hosting tại Việt Nam theo hiệu năng, uptime, tốc độ mạng, SSD NVMe, hỗ trợ kỹ thuật và giá mỗi tháng trên Rate.vn."
       }
     },
     "sortOptions": {
@@ -2585,6 +2624,39 @@
           "under-500k": "Dưới 500K/năm",
           "500k-1500k": "500K - 1,5 triệu/năm",
           "over-1500k": "Trên 1,5 triệu/năm"
+        },
+        "features": {}
+      },
+      "monitors": {
+        "title": "Màn hình máy tính",
+        "subtitle": "Đối chiếu tấm nền, độ phủ màu, tần số quét, cổng kết nối và lịch sử giá màn hình chính hãng",
+        "searchPlaceholder": "Tìm Dell UltraSharp, LG UltraGear, ASUS ProArt, Odyssey...",
+        "presets": {
+          "under-5m": "Dưới 5 triệu",
+          "5m-12m": "5 - 12 triệu",
+          "over-12m": "Trên 12 triệu"
+        },
+        "features": {}
+      },
+      "cameras": {
+        "title": "Máy ảnh & action cam",
+        "subtitle": "So sánh chất lượng ảnh và video, tốc độ lấy nét, thời lượng pin và giá bán thực tế đa sàn",
+        "searchPlaceholder": "Tìm Sony Alpha, Canon EOS, Fujifilm X, GoPro, DJI...",
+        "presets": {
+          "under-15m": "Dưới 15 triệu",
+          "15m-35m": "15 - 35 triệu",
+          "over-35m": "Trên 35 triệu"
+        },
+        "features": {}
+      },
+      "vps-hosting": {
+        "title": "VPS & hosting",
+        "subtitle": "So sánh hiệu năng, uptime, tốc độ mạng và SSD NVMe, hỗ trợ kỹ thuật và giá cước theo tháng",
+        "searchPlaceholder": "Tìm Cloud VPS Nhân Hòa, P.A Việt Nam, HOSTVN, BKNS...",
+        "presets": {
+          "under-200k": "Dưới 200K/tháng",
+          "200k-600k": "200K - 600K/tháng",
+          "over-600k": "Trên 600K/tháng"
         },
         "features": {}
       }

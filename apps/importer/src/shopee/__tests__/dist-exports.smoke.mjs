@@ -44,13 +44,25 @@ assert.equal(
 );
 assert.ok(
   crawlers.SERVICE_CATEGORY_SLUGS instanceof Set &&
-    crawlers.SERVICE_CATEGORY_SLUGS.has('credit-cards'),
+    crawlers.SERVICE_CATEGORY_SLUGS.has('credit-cards') &&
+    crawlers.SERVICE_CATEGORY_SLUGS.has('vps-hosting'),
   '@repo/crawlers is missing export SERVICE_CATEGORY_SLUGS'
 );
 assert.ok(
   crawlers.WAVE_E5_SERVICE_CATEGORY_SLUGS instanceof Set &&
     crawlers.WAVE_E5_SERVICE_CATEGORY_SLUGS.has('credit-cards'),
   '@repo/crawlers is missing export WAVE_E5_SERVICE_CATEGORY_SLUGS'
+);
+assert.ok(
+  crawlers.WAVE_E6_PRODUCT_CATEGORY_SLUGS instanceof Set &&
+    crawlers.WAVE_E6_PRODUCT_CATEGORY_SLUGS.has('monitors') &&
+    crawlers.WAVE_E6_PRODUCT_CATEGORY_SLUGS.has('cameras'),
+  '@repo/crawlers is missing export WAVE_E6_PRODUCT_CATEGORY_SLUGS'
+);
+assert.ok(
+  crawlers.WAVE_E6_SERVICE_CATEGORY_SLUGS instanceof Set &&
+    crawlers.WAVE_E6_SERVICE_CATEGORY_SLUGS.has('vps-hosting'),
+  '@repo/crawlers is missing export WAVE_E6_SERVICE_CATEGORY_SLUGS'
 );
 
 const { createImporterLogger } = await import('@repo/crawlers/shopee/logger');

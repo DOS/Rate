@@ -320,6 +320,9 @@ function buildBaseRateOpenApiSpec(
     'spas-aesthetics',
     'english-centers',
     'credit-cards',
+    'monitors',
+    'cameras',
+    'vps-hosting',
   ];
   const supportedPlatforms = Object.keys(EXTENSION_CAPABILITY_MATRIX);
 
@@ -2510,7 +2513,7 @@ function buildBaseRateOpenApiSpec(
           type: 'string',
           enum: categorySlugs,
           description:
-            '24 canonical product, service, and place categories on Rate.vn.',
+            '27 canonical product, service, and place categories on Rate.vn.',
         },
         PriceVerdictLevel: {
           type: 'string',

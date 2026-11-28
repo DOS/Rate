@@ -30,6 +30,9 @@
       "spas-aesthetics": "Spas & aesthetics",
       "english-centers": "English centers",
       "credit-cards": "Credit cards",
+      "monitors": "Monitors",
+      "cameras": "Cameras",
+      "vps-hosting": "VPS & hosting",
       "leaderboard": "Leaderboard",
       "merchants": "Merchants",
       "inspect": "Check a link",
@@ -84,6 +87,9 @@
         "spas-aesthetics": "Spas & aesthetics",
         "english-centers": "English centers",
         "credit-cards": "Credit cards",
+        "monitors": "Monitors",
+        "cameras": "Cameras & action cams",
+        "vps-hosting": "VPS & hosting",
         "leaderboard": "Product rankings",
         "inspect": "Check a product link",
         "compare": "Compare specs",
@@ -286,6 +292,12 @@
     "catEnglishCentersUnit": "centers",
     "catCreditCards": "Credit cards",
     "catCreditCardsUnit": "credit cards",
+    "catMonitors": "Monitors",
+    "catMonitorsUnit": "monitors",
+    "catCameras": "Cameras",
+    "catCamerasUnit": "cameras",
+    "catVpsHosting": "VPS & hosting",
+    "catVpsHostingUnit": "plans",
     "boolYes": "Yes",
     "boolNo": "No",
     "group0Title": "Review scores and trust",
@@ -510,6 +522,9 @@
     "catSpasAesthetics": "Spas & aesthetics",
     "catEnglishCenters": "English centers",
     "catCreditCards": "Credit cards",
+    "catMonitors": "Monitors",
+    "catCameras": "Cameras",
+    "catVpsHosting": "VPS & hosting",
     "badgeCombined": "Overall score",
     "badgeUser": "Verified users",
     "badgeExpert": "Lab experts",
@@ -542,6 +557,9 @@
     "tabSpasAesthetics": "Spas & aesthetics",
     "tabEnglishCenters": "English centers",
     "tabCreditCards": "Credit cards",
+    "tabMonitors": "Monitors",
+    "tabCameras": "Cameras",
+    "tabVpsHosting": "VPS & hosting",
     "dirLabel": "Tech & electronics",
     "chooseCategory": "1. Select category (same-category ranking lock):",
     "chooseCriterion": "2. Rank by criterion:",
@@ -1096,6 +1114,9 @@
     "catSupplements": "Supplements",
     "catCosmetics": "Cosmetics",
     "catMotherBaby": "Mother & baby",
+    "catMonitors": "Monitors",
+    "catCameras": "Cameras",
+    "catVpsHosting": "VPS & hosting",
     "personaValueHunter": "Best value (P/P)",
     "personaDefault": "All-round balanced",
     "personaPhotography": "Camera and audio",
@@ -1742,6 +1763,9 @@
     "catDescSpasAesthetics": "Explore spa & aesthetic ratings for treatment skill, hygiene, no hard-sell & price transparency",
     "catDescEnglishCenters": "Explore English center ratings for teaching quality, teachers, curriculum, schedule & tuition value",
     "catDescCreditCards": "Compare credit card cashback, rewards, annual fees, interest rates & bank app experience",
+    "catDescMonitors": "Compare PC monitors by panel color accuracy, refresh rate, ports, ergonomics & real store prices",
+    "catDescCameras": "Compare mirrorless, DSLR & action cameras by image quality, autofocus, battery life & real prices",
+    "catDescVpsHosting": "Compare VPS & web hosting plans by uptime, NVMe speed, technical support & monthly pricing",
     "popularBattlesBadge": "1v1 showdowns",
     "popularBattlesTitle": "Most compared flagships right now",
     "leaderboard5CatsBtn": "Leaderboard",
@@ -2245,6 +2269,21 @@
         "titleCount": "Credit card comparison ({count, plural, one {# card} other {# cards}}) | Rate.vn",
         "titleDefault": "Credit card comparison, cashback & annual fees | Rate.vn",
         "description": "Compare credit card cashback, rewards, annual fees, interest rates, approval speed and bank app management on Rate.vn."
+      },
+      "monitors": {
+        "titleCount": "Compare PC monitors ({count} models) | Rate.vn",
+        "titleDefault": "Compare PC monitors, display specs & real prices | Rate.vn",
+        "description": "Compare gaming, creator, and office monitors by panel quality, refresh rate, ports, ergonomics, and verified price history on Rate.vn."
+      },
+      "cameras": {
+        "titleCount": "Compare cameras & action cams ({count} models) | Rate.vn",
+        "titleDefault": "Compare cameras, action cams & real prices | Rate.vn",
+        "description": "Compare mirrorless cameras, DSLRs, and action cams by image and video quality, autofocus, battery life, and real store prices on Rate.vn."
+      },
+      "vps-hosting": {
+        "titleCount": "Compare VPS & hosting plans ({count} plans) | Rate.vn",
+        "titleDefault": "Compare VPS & hosting plans, uptime & monthly pricing | Rate.vn",
+        "description": "Compare Vietnamese VPS and hosting plans by performance, uptime, network and NVMe SSD speed, support, and transparent monthly pricing on Rate.vn."
       }
     },
     "sortOptions": {
@@ -2585,6 +2624,39 @@
           "under-500k": "Under 500K/yr",
           "500k-1500k": "500K - 1.5M/yr",
           "over-1500k": "Over 1.5M/yr"
+        },
+        "features": {}
+      },
+      "monitors": {
+        "title": "PC monitors",
+        "subtitle": "Compare panel color accuracy, refresh rate, response time, connectivity, and verified monitor prices",
+        "searchPlaceholder": "Search Dell UltraSharp, LG UltraGear, ASUS ProArt, Odyssey...",
+        "presets": {
+          "under-5m": "Under 5M VND",
+          "5m-12m": "5M - 12M VND",
+          "over-12m": "Over 12M VND"
+        },
+        "features": {}
+      },
+      "cameras": {
+        "title": "Cameras & action cams",
+        "subtitle": "Compare image and video quality, autofocus speed, build ergonomics, battery life, and real prices",
+        "searchPlaceholder": "Search Sony Alpha, Canon EOS, Fujifilm X, GoPro, DJI...",
+        "presets": {
+          "under-15m": "Under 15M VND",
+          "15m-35m": "15M - 35M VND",
+          "over-35m": "Over 35M VND"
+        },
+        "features": {}
+      },
+      "vps-hosting": {
+        "title": "VPS & hosting",
+        "subtitle": "Compare performance, uptime, network and NVMe SSD speed, technical support, and monthly pricing",
+        "searchPlaceholder": "Search Nhan Hoa, P.A Viet Nam, HOSTVN, BKNS, Long Van...",
+        "presets": {
+          "under-200k": "Under 200K/mo",
+          "200k-600k": "200K - 600K/mo",
+          "over-600k": "Over 600K/mo"
         },
         "features": {}
       }

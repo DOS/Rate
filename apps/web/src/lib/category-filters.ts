@@ -1158,6 +1158,141 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     ],
     featureCheckboxes: [],
   },
+  monitors: {
+    categorySlug: 'monitors',
+    directorySlug: 'tech_electronics',
+    directoryName: 'Công nghệ & thiết bị số',
+    categoryTitle: 'Màn hình máy tính',
+    categorySubtitle:
+      'Đối chiếu tấm nền, độ phủ màu, tần số quét, cổng kết nối và lịch sử giá màn hình chính hãng',
+    searchPlaceholder:
+      'Tìm Dell UltraSharp, LG UltraGear, ASUS ProArt, Odyssey...',
+    defaultBrands: [
+      'Dell',
+      'LG',
+      'Asus',
+      'Samsung',
+      'MSI',
+      'Acer',
+      'BenQ',
+      'ViewSonic',
+      'AOC',
+      'Gigabyte',
+    ],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 45,
+      step: 0.5,
+    },
+    pricePresets: [
+      {
+        id: 'under-5m',
+        label: 'Dưới 5 triệu',
+        minVnd: 0,
+        maxVnd: 5_000_000,
+      },
+      {
+        id: '5m-12m',
+        label: '5 - 12 triệu',
+        minVnd: 5_000_000,
+        maxVnd: 12_000_000,
+      },
+      {
+        id: 'over-12m',
+        label: 'Trên 12 triệu',
+        minVnd: 12_000_000,
+        maxVnd: 45_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  cameras: {
+    categorySlug: 'cameras',
+    directorySlug: 'tech_electronics',
+    directoryName: 'Công nghệ & thiết bị số',
+    categoryTitle: 'Máy ảnh & Action Cam',
+    categorySubtitle:
+      'So sánh chất lượng ảnh và video, tốc độ lấy nét, thời lượng pin và giá bán thực tế đa sàn',
+    searchPlaceholder: 'Tìm Sony Alpha, Canon EOS, Fujifilm X, GoPro, DJI...',
+    defaultBrands: [
+      'Sony',
+      'Canon',
+      'Fujifilm',
+      'Nikon',
+      'GoPro',
+      'DJI',
+      'Insta360',
+      'Panasonic',
+    ],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 100,
+      step: 1,
+    },
+    pricePresets: [
+      {
+        id: 'under-15m',
+        label: 'Dưới 15 triệu',
+        minVnd: 0,
+        maxVnd: 15_000_000,
+      },
+      {
+        id: '15m-35m',
+        label: '15 - 35 triệu',
+        minVnd: 15_000_000,
+        maxVnd: 35_000_000,
+      },
+      {
+        id: 'over-35m',
+        label: 'Trên 35 triệu',
+        minVnd: 35_000_000,
+        maxVnd: 100_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
+  'vps-hosting': {
+    categorySlug: 'vps-hosting',
+    directorySlug: 'services',
+    directoryName: 'Dịch vụ công & tài chính',
+    categoryTitle: 'VPS & Hosting',
+    categorySubtitle:
+      'So sánh hiệu năng, uptime, tốc độ mạng và SSD NVMe, hỗ trợ kỹ thuật và giá cước theo tháng',
+    searchPlaceholder: 'Tìm Cloud VPS Nhân Hòa, P.A Việt Nam, HOSTVN, BKNS...',
+    defaultBrands: ['Nhân Hòa', 'P.A Việt Nam', 'HOSTVN', 'BKNS', 'Long Vân'],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 5,
+      step: 0.05,
+    },
+    pricePresets: [
+      {
+        id: 'under-200k',
+        label: 'Dưới 200K/tháng',
+        minVnd: 0,
+        maxVnd: 200_000,
+      },
+      {
+        id: '200k-600k',
+        label: '200K - 600K/tháng',
+        minVnd: 200_000,
+        maxVnd: 600_000,
+      },
+      {
+        id: 'over-600k',
+        label: 'Trên 600K/tháng',
+        minVnd: 600_000,
+        maxVnd: 5_000_000,
+      },
+    ],
+    featureCheckboxes: [],
+  },
 };
 
 const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {

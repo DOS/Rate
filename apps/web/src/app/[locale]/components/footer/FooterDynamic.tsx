@@ -75,6 +75,9 @@ export default async function FooterDynamic({
     'spas-aesthetics',
     'english-centers',
     'credit-cards',
+    'monitors',
+    'cameras',
+    'vps-hosting',
   ]
     .filter((slug) => populatedCategorySlugs?.includes(slug))
     .map((slug) => ({

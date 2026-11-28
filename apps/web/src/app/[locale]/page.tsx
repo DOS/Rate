@@ -49,11 +49,13 @@ import {
   BsBatteryHalf,
   BsBoxSeam,
   BsBuilding,
+  BsCamera,
   BsCapsule,
   BsCheckCircleFill,
   BsCpu,
   BsCreditCard2Front,
   BsCupHot,
+  BsDisplay,
   BsDroplet,
   BsForkKnife,
   BsGraphUpArrow,
@@ -65,6 +67,7 @@ import {
   BsPersonArmsUp,
   BsLaptop,
   BsPhone,
+  BsServer,
   BsShieldCheck,
   BsShieldExclamation,
   BsShop,
@@ -164,6 +167,9 @@ const CATEGORY_DESC_KEYS = {
   'spas-aesthetics': 'catDescSpasAesthetics',
   'english-centers': 'catDescEnglishCenters',
   'credit-cards': 'catDescCreditCards',
+  monitors: 'catDescMonitors',
+  cameras: 'catDescCameras',
+  'vps-hosting': 'catDescVpsHosting',
 } as const;
 
 type KnownCategorySlug = keyof typeof CATEGORY_DESC_KEYS;
@@ -226,6 +232,12 @@ function getCategoryIcon(slug: string) {
       return <BsMortarboard />;
     case 'credit-cards':
       return <BsCreditCard2Front />;
+    case 'monitors':
+      return <BsDisplay />;
+    case 'cameras':
+      return <BsCamera />;
+    case 'vps-hosting':
+      return <BsServer />;
     default:
       return <BsCpu />;
   }

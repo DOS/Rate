@@ -69,11 +69,10 @@ assert.deepEqual(
 assert.deepEqual([...WAVE_E5_SERVICE_CATEGORY_SLUGS], ['credit-cards']);
 assert.equal(WAVE_E2_SERVICE_CATEGORY_SLUGS.length, 2);
 assert.equal(WAVE_E4_PLACE_CATEGORY_SLUGS.length, 4);
-assert.equal(ALL_CANONICAL_CATEGORY_SLUGS.length, 24);
-assert.deepEqual(ALL_CANONICAL_CATEGORY_SLUGS.slice(-5), [
-  ...E5,
-  ...E5_PHASE2_ALL,
-]);
+assert.equal(ALL_CANONICAL_CATEGORY_SLUGS.length, 27);
+for (const slug of [...E5, ...E5_PHASE2_ALL]) {
+  assert.ok(ALL_CANONICAL_CATEGORY_SLUGS.includes(slug), `${slug} in ALL`);
+}
 for (const slug of E5) {
   assert.equal(isCanonicalCategorySlug(slug), true);
   assert.equal(isWaveE5PlaceCategorySlug(slug), true);
@@ -366,7 +365,7 @@ const nextConfig = readFileSync(join(webRoot, 'next.config.mjs'), 'utf8');
 assert.equal(
   (
     nextConfig.match(
-      /\|homestays\|dental-clinics\|gyms-fitness\|spas-aesthetics\|english-centers\|credit-cards\)/g
+      /\|homestays\|dental-clinics\|gyms-fitness\|spas-aesthetics\|english-centers\|credit-cards(?:\||\))/g
     ) ?? []
   ).length,
   2

@@ -239,6 +239,47 @@ const SPEC_TEMPLATES: Readonly<Record<string, CategorySpecTemplate>> = {
   'spas-aesthetics': NON_HARDWARE_TEMPLATE,
   'english-centers': NON_HARDWARE_TEMPLATE,
   'credit-cards': NON_HARDWARE_TEMPLATE,
+  monitors: {
+    groups: [
+      'display',
+      'connectivity',
+      'multimedia',
+      'design',
+      'availability',
+      'regulatory',
+    ],
+    hiddenFields: {
+      display: ['protection'],
+      design: ['biometrics'],
+      connectivity: ['nfc', 'location', 'gps'],
+    },
+    displayHiddenFields: {},
+    keySpecs: ['screen'],
+    ram: false,
+    storage: false,
+    screen: true,
+    has5g: false,
+  },
+  cameras: {
+    groups: [
+      'design',
+      'display',
+      'battery',
+      'connectivity',
+      'availability',
+      'regulatory',
+    ],
+    hiddenFields: {
+      design: ['biometrics'],
+    },
+    displayHiddenFields: {},
+    keySpecs: [],
+    ram: false,
+    storage: false,
+    screen: false,
+    has5g: false,
+  },
+  'vps-hosting': NON_HARDWARE_TEMPLATE,
 };
 
 const normalizeSlug = (categorySlug: unknown): string =>

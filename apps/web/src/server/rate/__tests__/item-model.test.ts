@@ -102,7 +102,7 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
       return json([
         { id: CAT_PHONES, slug: 'smartphones' },
         { id: CAT_TABLETS, slug: 'tablets' },
-        { id: CAT_OTHER, slug: 'cameras' },
+        { id: CAT_OTHER, slug: 'printers' },
       ]);
     case '/rest/v1/items':
       if (
