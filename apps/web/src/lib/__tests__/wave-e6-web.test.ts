@@ -179,9 +179,31 @@ const fallbackCases: Array<[{ slug: string; name?: string }, string]> = [
     'monitors',
   ],
   [{ slug: 'asus-proart-display-pa279crv' }, 'monitors'],
+  [
+    {
+      slug: 'asus-proart-pa32ucx',
+      name: 'ASUS ProArt PA32UCX 32 inch 4K Mini-LED',
+    },
+    'monitors',
+  ],
+  [
+    {
+      slug: 'asus-rog-strix-qd-oled-xg27acdng',
+      name: 'Màn hình ASUS ROG Strix QD-OLED XG27ACDNG 27 inch 360Hz',
+    },
+    'monitors',
+  ],
   [{ slug: 'lenovo-legion-r27q-30' }, 'monitors'],
   [{ slug: 'hp-omen-27q' }, 'monitors'],
   [{ slug: 'msi-mag-274qrf-qd-e2' }, 'monitors'],
+  [
+    { slug: 'msi-modern-md272qxp', name: 'MSI Modern MD272QXP 27 inch' },
+    'monitors',
+  ],
+  [
+    { slug: 'msi-pro-mp243x', name: 'MSI PRO MP243X 24 inch 100Hz' },
+    'monitors',
+  ],
   [{ slug: 'lg-27up850n-w' }, 'monitors'],
   [
     { slug: 'sony-alpha-a6700', name: 'Máy ảnh Sony Alpha A6700 Body' },
@@ -240,13 +262,62 @@ const fallbackCases: Array<[{ slug: string; name?: string }, string]> = [
   ],
   [
     {
+      slug: 'lenovo-legion-r7000p-gaming',
+      name: 'Lenovo Legion R7000P màn hình gaming 165Hz',
+    },
+    'laptops',
+  ],
+  [
+    {
+      slug: 'lenovo-legion-5i-pro',
+      name: 'Lenovo Legion 5i Pro màn hình gaming 240Hz',
+    },
+    'laptops',
+  ],
+  [
+    {
       slug: 'hp-omen-16b',
       name: 'HP OMEN 16b màn hình 16.1 inch QHD',
     },
     'laptops',
   ],
   [
+    {
+      slug: 'hp-omen-16b-gaming',
+      name: 'HP OMEN 16b màn hình gaming 16.1 inch',
+    },
+    'laptops',
+  ],
+  [
+    {
+      slug: 'acer-nitro-v15-gaming',
+      name: 'Acer Nitro V15 màn hình gaming 144Hz',
+    },
+    'laptops',
+  ],
+  [
+    {
+      slug: 'asus-tuf-dash-f15',
+      name: 'ASUS TUF Dash F15 màn hình gaming',
+    },
+    'laptops',
+  ],
+  [
     { slug: 'asus-proart-p16-h7606', name: 'ASUS ProArt P16 H7606 OLED' },
+    'smartphones',
+  ],
+  [
+    {
+      slug: 'asus-proart-p16-dohoa',
+      name: 'ASUS ProArt P16 H7606 màn hình đồ họa 4K OLED',
+    },
+    'smartphones',
+  ],
+  [
+    {
+      slug: 'asus-proart-px13-dohoa',
+      name: 'ASUS ProArt PX13 màn hình đồ họa OLED',
+    },
     'smartphones',
   ],
   [{ slug: 'dell-e7470-core-i5', name: 'Dell E7470 Core i5' }, 'smartphones'],
