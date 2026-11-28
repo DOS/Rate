@@ -1217,7 +1217,7 @@ export default async function Home({
               <div className="col-xl-10 col-lg-11 col-md-12 col-sm-12">
                 <div className="position-relative mb-4 pt-2 pb-2 text-center">
                   <div
-                    className="d-inline-flex align-items-center rounded-pill small fw-semibold mb-3 gap-2 px-3 py-2"
+                    className="d-inline-flex align-items-center rounded-3 small fw-semibold mb-3 gap-2 px-3 py-2"
                     style={{
                       backgroundColor: 'var(--rate-glass-bg)',
                       border: '1px solid var(--rate-glass-border)',

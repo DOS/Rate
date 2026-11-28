@@ -85,6 +85,7 @@ import {
   versusHref,
 } from '@/lib/item-compare';
 import { withoutSpecSheet } from '@/lib/hero-products';
+import { Button } from '@/components/ui/button';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -945,13 +946,15 @@ export async function CategoryCatalogContent({
                     </div>
                     <div className="col-xl-3 col-lg-4 col-md-12 col-sm-12">
                       <div className="form-group d-flex mb-0 gap-2">
-                        <button
+                        <Button
                           type="submit"
-                          className="btn btn-primary full-width fw-medium"
+                          variant="primary"
+                          size="default"
+                          className="w-100"
                         >
-                          <BsSearch className="me-2" aria-hidden="true" />
+                          <BsSearch aria-hidden="true" />
                           {t('page.searchBtn')}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -1141,27 +1144,24 @@ export async function CategoryCatalogContent({
                     </p>
                     <div className="d-flex justify-content-center flex-wrap gap-2">
                       {activeChips.length > 0 && (
-                        <Link
-                          href={basePath}
-                          className="btn btn-primary rounded-pill fw-medium px-4"
-                        >
-                          {t('page.resetFiltersBtn')}
-                        </Link>
+                        <Button variant="primary" size="sm" wrap asChild>
+                          <Link href={basePath}>
+                            {t('page.resetFiltersBtn')}
+                          </Link>
+                        </Button>
                       )}
                       {categorySlug !== 'smartphones' && (
-                        <Link
-                          href="/smartphones"
-                          className="btn btn-primary rounded-pill fw-medium px-4"
-                        >
-                          {t('page.browseSmartphonesBtn')}
-                        </Link>
+                        <Button variant="primary" size="sm" wrap asChild>
+                          <Link href="/smartphones">
+                            {t('page.browseSmartphonesBtn')}
+                          </Link>
+                        </Button>
                       )}
-                      <Link
-                        href="/merchants"
-                        className="btn btn-outline-dark rounded-pill fw-medium px-4"
-                      >
-                        {t('page.merchantProfilesBtn')}
-                      </Link>
+                      <Button variant="outline" size="sm" wrap asChild>
+                        <Link href="/merchants">
+                          {t('page.merchantProfilesBtn')}
+                        </Link>
+                      </Button>
                     </div>
                   </div>
                 ) : (
@@ -1314,38 +1314,31 @@ export async function CategoryCatalogContent({
                 )}
                 {(page > 1 || hasNextPage) && (
                   <nav
-                    className="d-flex justify-content-center align-items-center gap-3 mt-4"
+                    className="d-flex justify-content-center align-items-center mt-4 flex-wrap gap-2 gap-sm-3"
                     aria-label={t('page.paginationLabel')}
                   >
                     {page > 1 &&
                       (products.length === 0 ? (
                         // Past the last page: go back to the start.
-                        <Link
-                          href={pageHref(1)}
-                          className="btn btn-outline-secondary rounded-pill px-4"
-                        >
-                          {t('page.firstPage')}
-                        </Link>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={pageHref(1)}>{t('page.firstPage')}</Link>
+                        </Button>
                       ) : (
-                        <Link
-                          href={pageHref(page - 1)}
-                          className="btn btn-outline-secondary rounded-pill px-4"
-                          rel="prev"
-                        >
-                          {t('page.prevPage')}
-                        </Link>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={pageHref(page - 1)} rel="prev">
+                            {t('page.prevPage')}
+                          </Link>
+                        </Button>
                       ))}
                     <span className="text-muted small">
                       {t('page.pageNumber', { page })}
                     </span>
                     {hasNextPage && (
-                      <Link
-                        href={pageHref(page + 1)}
-                        className="btn btn-outline-secondary rounded-pill px-4"
-                        rel="next"
-                      >
-                        {t('page.nextPage')}
-                      </Link>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={pageHref(page + 1)} rel="next">
+                          {t('page.nextPage')}
+                        </Link>
+                      </Button>
                     )}
                   </nav>
                 )}

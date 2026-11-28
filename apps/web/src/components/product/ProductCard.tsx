@@ -17,6 +17,8 @@ import {
 } from '@/lib/locale-format';
 import { deviceImageSrcSet } from '@/lib/device-images';
 import StarRating from '@/components/elementary/StarRating';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 export interface ProductCardSpec {
   readonly key: string;
@@ -259,13 +261,11 @@ export default function ProductCard({
           >
             {sizeChips.map((chip) => (
               <li key={chip.href}>
-                <Link
-                  href={chip.href}
-                  aria-label={`${name} ${chip.label}`}
-                  className="badge rounded-pill border text-body text-decoration-none fw-normal"
-                >
-                  {chip.label}
-                </Link>
+                <Badge variant="outline" asChild>
+                  <Link href={chip.href} aria-label={`${name} ${chip.label}`}>
+                    {chip.label}
+                  </Link>
+                </Badge>
               </li>
             ))}
           </ul>
@@ -338,17 +338,18 @@ export default function ProductCard({
           </div>
 
           <div className="rate-product-card-cta">
-            <Link href={href} className="btn btn-primary fw-semibold">
-              {t('viewDetails')}
-            </Link>
-            <Link
-              href={`/inspect?q=${encodeURIComponent(safeSlug)}`}
-              className="btn btn-outline-secondary fw-medium"
-              title={t('priceHistoryTitle')}
-            >
-              <BsGraphUpArrow aria-hidden="true" />
-              <span>{t('priceHistory')}</span>
-            </Link>
+            <Button variant="primary" size="sm" asChild>
+              <Link href={href}>{t('viewDetails')}</Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link
+                href={`/inspect?q=${encodeURIComponent(safeSlug)}`}
+                title={t('priceHistoryTitle')}
+              >
+                <BsGraphUpArrow aria-hidden="true" />
+                <span>{t('priceHistory')}</span>
+              </Link>
+            </Button>
           </div>
         </div>
       </div>

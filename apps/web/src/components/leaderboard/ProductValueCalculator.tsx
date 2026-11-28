@@ -31,6 +31,8 @@ import {
 } from '@/lib/locale-format';
 import ContentText from '@/components/elementary/ContentText';
 import StarRating from '@/components/elementary/StarRating';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 interface ProductValueCalculatorProps {
   readonly productName: string;
@@ -394,7 +396,7 @@ export default function ProductValueCalculator({
   };
 
   return (
-    <div className="rate-card mb-4 p-4">
+    <Card className="mb-4 p-4 shadow-sm">
       <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
         <div>
           <span className="rate-eyebrow text-danger d-block mb-1">
@@ -416,62 +418,62 @@ export default function ProductValueCalculator({
 
         <div className="d-flex align-items-center flex-wrap gap-2">
           <div
-            className="btn-group btn-group-sm"
+            className="d-inline-flex flex-wrap gap-1"
             role="group"
             aria-label={t('valueCalcHorizonAria')}
           >
             {([12, 24, 36] as HorizonMonths[]).map((m) => (
-              <button
+              <Button
                 key={m}
                 type="button"
+                variant={months === m ? 'primary' : 'outline'}
+                size="sm"
                 aria-pressed={months === m}
                 onClick={() => setMonths(m)}
-                className={`btn rounded-pill fw-semibold me-1 px-3 ${
-                  months === m ? 'btn-danger' : 'btn-outline-secondary'
-                }`}
               >
                 {t('valueCalcMonthsBtn', { months: m })}
-              </button>
+              </Button>
             ))}
           </div>
 
-          <button
+          <Button
             type="button"
+            variant={includeResale ? 'secondary' : 'outline'}
+            size="sm"
             aria-pressed={includeResale}
             onClick={() => setIncludeResale((prev) => !prev)}
-            className={`btn btn-sm rounded-pill fw-medium px-3 ${
-              includeResale ? 'btn-dark' : 'btn-outline-dark'
-            }`}
           >
             {includeResale
               ? t('valueCalcIncludeResaleOn', {
                   pct: formatPlainNumber(metrics.retentionPct, locale),
                 })
               : t('valueCalcIncludeResaleOff')}
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={handleDownloadValueCsv}
             data-testid="download-value-csv-btn"
-            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3"
           >
             CSV
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={handleDownloadValueJson}
             data-testid="download-value-json-btn"
-            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3"
           >
             JSON
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className="row g-3">
         <div className="col-md-3 col-6">
-          <div className="rounded-3 bg-light h-100 border p-3">
+          <Card tone="elevated" className="h-100 p-3">
             <div className="text-muted small mb-1">
               {t('valueCalcCardCostPerPointTitle')}
             </div>
@@ -487,11 +489,11 @@ export default function ProductValueCalculator({
                   })
                 : t('valueCalcCardCostPerPointEmpty')}
             </div>
-          </div>
+          </Card>
         </div>
 
         <div className="col-md-3 col-6">
-          <div className="rounded-3 bg-light h-100 border p-3">
+          <Card tone="elevated" className="h-100 p-3">
             <div className="text-muted small mb-1">
               {t('valueCalcCardDailyCostTitle', { months })}
             </div>
@@ -506,11 +508,11 @@ export default function ProductValueCalculator({
                 symbol: t('valueCalcPerMonthUnit'),
               })}
             </div>
-          </div>
+          </Card>
         </div>
 
         <div className="col-md-3 col-6">
-          <div className="rounded-3 bg-light h-100 border p-3">
+          <Card tone="elevated" className="h-100 p-3">
             <div className="text-muted small mb-1">
               {t('valueCalcCardResaleTitle', { months })}
             </div>
@@ -531,11 +533,11 @@ export default function ProductValueCalculator({
                   })
                 : t('valueCalcCardResaleSubOff')}
             </div>
-          </div>
+          </Card>
         </div>
 
         <div className="col-md-3 col-6">
-          <div className="rounded-3 bg-light h-100 border p-3">
+          <Card tone="elevated" className="h-100 p-3">
             <div className="text-muted small mb-1">
               {t('valueCalcCardValueScoreTitle')}
             </div>
@@ -552,29 +554,29 @@ export default function ProductValueCalculator({
                   })
                 : t('valueCalcUniformPriceSub')}
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
       <div className="border-top mt-3 pt-3">
-        <button
+        <Button
           type="button"
+          variant={isEffectiveOpen ? 'secondary' : 'outline'}
+          size="sm"
           aria-expanded={isEffectiveOpen}
           aria-controls={isEffectiveOpen ? effectivePanelId : undefined}
           onClick={() => setIsEffectiveOpen((prev) => !prev)}
           data-testid="effective-price-toggle-btn"
-          className={`btn btn-sm rounded-pill fw-semibold px-3 ${
-            isEffectiveOpen ? 'btn-dark' : 'btn-outline-dark'
-          }`}
         >
           {t('effToggle')}
-        </button>
+        </Button>
 
         {isEffectiveOpen && (
-          <div
+          <Card
+            tone="elevated"
             id={effectivePanelId}
             data-testid="effective-price-panel"
-            className="rounded-3 bg-light mt-3 border p-3"
+            className="mt-3 p-3"
           >
             <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
               <div>
@@ -599,43 +601,41 @@ export default function ProductValueCalculator({
 
               {hasDistinctVnaOffer && baseOffers.bestOfficialVnaPriceVnd && (
                 <div
-                  className="btn-group btn-group-sm"
+                  className="d-inline-flex flex-wrap gap-1"
                   role="group"
                   aria-label={t('effBase')}
                 >
-                  <button
+                  <Button
                     type="button"
+                    variant={
+                      activeOfferTier === 'lowest' ? 'secondary' : 'outline'
+                    }
+                    size="sm"
                     aria-pressed={activeOfferTier === 'lowest'}
                     onClick={() => {
                       setOfferTier('lowest');
                       setCustomBasePriceInput(null);
                     }}
-                    className={`btn rounded-pill me-1 px-3 ${
-                      activeOfferTier === 'lowest'
-                        ? 'btn-dark'
-                        : 'btn-outline-dark'
-                    }`}
                   >
                     {t('offersSpreadLowLabel')}{' '}
                     {formatPriceVnd(baseOffers.bestPlausiblePriceVnd, locale)}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant={
+                      activeOfferTier === 'vna' ? 'secondary' : 'outline'
+                    }
+                    size="sm"
                     aria-pressed={activeOfferTier === 'vna'}
                     onClick={() => {
                       setOfferTier('vna');
                       setCustomBasePriceInput(null);
                     }}
-                    className={`btn rounded-pill px-3 ${
-                      activeOfferTier === 'vna'
-                        ? 'btn-dark'
-                        : 'btn-outline-dark'
-                    }`}
                   >
                     {t('oVna')} (
                     {formatPriceVnd(baseOffers.bestOfficialVnaPriceVnd, locale)}
                     )
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -666,30 +666,26 @@ export default function ProductValueCalculator({
                   role="group"
                   aria-label={t('effDisc')}
                 >
-                  <button
+                  <Button
                     type="button"
+                    variant={discountMode === 'fixed' ? 'secondary' : 'outline'}
+                    size="sm"
                     aria-pressed={discountMode === 'fixed'}
                     onClick={() => setDiscountMode('fixed')}
-                    className={`btn btn-sm rounded-pill px-3 ${
-                      discountMode === 'fixed'
-                        ? 'btn-dark'
-                        : 'btn-outline-secondary'
-                    }`}
                   >
                     VND
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant={
+                      discountMode === 'percent' ? 'secondary' : 'outline'
+                    }
+                    size="sm"
                     aria-pressed={discountMode === 'percent'}
                     onClick={() => setDiscountMode('percent')}
-                    className={`btn btn-sm rounded-pill px-3 ${
-                      discountMode === 'percent'
-                        ? 'btn-dark'
-                        : 'btn-outline-secondary'
-                    }`}
                   >
                     %
-                  </button>
+                  </Button>
                 </div>
 
                 {discountMode === 'fixed' ? (
@@ -762,17 +758,16 @@ export default function ProductValueCalculator({
               <div className="col-12">
                 <div className="border-top pt-3">
                   <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-                    <button
+                    <Button
                       type="button"
+                      variant={tradeInEnabled ? 'secondary' : 'outline'}
+                      size="sm"
                       aria-pressed={tradeInEnabled}
                       onClick={() => setTradeInEnabled((prev) => !prev)}
                       data-testid="effective-trade-in-toggle-btn"
-                      className={`btn btn-sm rounded-pill px-3 ${
-                        tradeInEnabled ? 'btn-dark' : 'btn-outline-dark'
-                      }`}
                     >
                       {t('effTrade')}
-                    </button>
+                    </Button>
 
                     <div
                       className="d-flex align-items-center flex-wrap gap-1"
@@ -780,23 +775,22 @@ export default function ProductValueCalculator({
                       aria-label={t('effTerm')}
                     >
                       {INSTALLMENT_TERMS.map((term) => (
-                        <button
+                        <Button
                           key={String(term)}
                           type="button"
+                          variant={
+                            installmentTerm === term ? 'primary' : 'outline'
+                          }
+                          size="sm"
                           aria-pressed={installmentTerm === term}
                           onClick={() => setInstallmentTerm(term)}
-                          className={`btn btn-sm rounded-pill px-2 ${
-                            installmentTerm === term
-                              ? 'btn-danger'
-                              : 'btn-outline-secondary'
-                          }`}
                         >
                           {term === 'cash'
                             ? t('effCash')
                             : t('valueCalcMonthsBtn', {
                                 months: term,
                               })}
-                        </button>
+                        </Button>
                       ))}
                     </div>
                   </div>
@@ -858,20 +852,21 @@ export default function ProductValueCalculator({
                               TRADE_IN_CONDITION_FACTORS[tier] * 100
                             );
                             return (
-                              <button
+                              <Button
                                 key={tier}
                                 type="button"
+                                variant={
+                                  conditionTier === tier
+                                    ? 'secondary'
+                                    : 'outline'
+                                }
+                                size="sm"
                                 aria-pressed={conditionTier === tier}
                                 onClick={() => setConditionTier(tier)}
-                                className={`btn btn-sm rounded-pill px-2 ${
-                                  conditionTier === tier
-                                    ? 'btn-dark'
-                                    : 'btn-outline-secondary'
-                                }`}
                               >
                                 {t('effC', { n: idx + 1 })} (
                                 {formatPercent(pct, locale)})
-                              </button>
+                              </Button>
                             );
                           })}
                         </div>
@@ -910,7 +905,7 @@ export default function ProductValueCalculator({
 
             <div className="row g-3 mt-1">
               <div className="col-md-4">
-                <div className="rounded-3 bg-white h-100 border p-3">
+                <Card className="h-100 p-3">
                   <div className="text-muted small mb-1">{t('effNet')}</div>
                   <div
                     className="h5 fw-bold rate-tabular text-dark mb-1"
@@ -927,12 +922,12 @@ export default function ProductValueCalculator({
                       )}
                     </div>
                   )}
-                </div>
+                </Card>
               </div>
 
               {tradeInEnabled && effectiveResult.oldDeviceBenchmarkVnd > 0 && (
                 <div className="col-md-4">
-                  <div className="rounded-3 bg-white h-100 border p-3">
+                  <Card className="h-100 p-3">
                     <div className="text-muted small mb-1">
                       {t('effStore')} / {t('effSelf')}
                     </div>
@@ -987,7 +982,7 @@ export default function ProductValueCalculator({
                                 ),
                               })}`}
                     </div>
-                  </div>
+                  </Card>
                 </div>
               )}
 
@@ -998,7 +993,7 @@ export default function ProductValueCalculator({
                     : 'col-md-8'
                 }
               >
-                <div className="rounded-3 bg-white h-100 border p-3">
+                <Card className="h-100 p-3">
                   <div className="text-muted small mb-1">
                     {installmentTerm === 'cash'
                       ? t('effCash')
@@ -1039,7 +1034,7 @@ export default function ProductValueCalculator({
                       </div>
                     </>
                   )}
-                </div>
+                </Card>
               </div>
             </div>
 
@@ -1049,9 +1044,9 @@ export default function ProductValueCalculator({
             >
               {t('effNote')}
             </p>
-          </div>
+          </Card>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

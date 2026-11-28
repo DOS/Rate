@@ -14,9 +14,11 @@ const EDGE_GAP = 8;
 // `children` receives `close` for actions that should dismiss the menu.
 export default function ExportMenu({
   label,
+  className,
   children,
 }: {
   label: string;
+  className?: string;
   children: (close: () => void) => ReactNode;
 }) {
   const { ref, close } = useDetailsDismiss();
@@ -37,7 +39,11 @@ export default function ExportMenu({
   };
 
   return (
-    <details ref={ref} className="rate-export-menu" onToggle={onToggle}>
+    <details
+      ref={ref}
+      className={cn('rate-export-menu', className)}
+      onToggle={onToggle}
+    >
       <summary
         data-slot="button"
         className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}

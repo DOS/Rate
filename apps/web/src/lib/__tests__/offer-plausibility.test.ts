@@ -810,21 +810,12 @@ async function main() {
   assert.equal(ProductOffersExplorerMod.offerRiskTone(49.6), 'bad');
   assert.equal(ProductOffersExplorerMod.offerRiskTone(50), 'bad');
   assert.equal(
-    ProductOffersExplorerMod.offerTrustBadgeClass(null),
-    'bg-light text-muted border'
+    ProductOffersExplorerMod.offerTrustBadgeVariant(null),
+    'secondary'
   );
-  assert.equal(
-    ProductOffersExplorerMod.offerTrustBadgeClass(19),
-    'bg-success-subtle text-success'
-  );
-  assert.equal(
-    ProductOffersExplorerMod.offerTrustBadgeClass(20),
-    'bg-warning-subtle text-warning-emphasis'
-  );
-  assert.equal(
-    ProductOffersExplorerMod.offerTrustBadgeClass(50),
-    'bg-danger-subtle text-danger'
-  );
+  assert.equal(ProductOffersExplorerMod.offerTrustBadgeVariant(19), 'success');
+  assert.equal(ProductOffersExplorerMod.offerTrustBadgeVariant(20), 'warning');
+  assert.equal(ProductOffersExplorerMod.offerTrustBadgeVariant(50), 'danger');
   assert.equal(
     ProductOffersExplorerMod.buildExplorerInspectHref(
       'https://shopee.vn/item-i.1.2',

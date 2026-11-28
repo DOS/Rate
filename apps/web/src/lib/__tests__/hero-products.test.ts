@@ -258,46 +258,31 @@ async function testHeroSearchInspector() {
   );
 
   // Fallback riskScore = 100 - trustScore thresholds (< 20 good, 20..49 warn, >= 50 bad).
-  assert.deepEqual(
-    resolveHeroMerchantTrustBadge({ trust_score: 81 }, 'subtle'),
-    {
-      score: 81,
-      tone: 'good',
-      badgeClass: 'bg-success-subtle text-success',
-    }
-  );
-  assert.deepEqual(
-    resolveHeroMerchantTrustBadge({ trust_score: 80 }, 'subtle'),
-    {
-      score: 80,
-      tone: 'warn',
-      badgeClass: 'bg-warning-subtle text-warning-emphasis',
-    }
-  );
-  assert.deepEqual(
-    resolveHeroMerchantTrustBadge({ trust_score: 51 }, 'solid'),
-    {
-      score: 51,
-      tone: 'warn',
-      badgeClass: 'bg-warning text-dark',
-    }
-  );
-  assert.deepEqual(
-    resolveHeroMerchantTrustBadge({ trust_score: 50 }, 'solid'),
-    {
-      score: 50,
-      tone: 'bad',
-      badgeClass: 'bg-danger text-white',
-    }
-  );
-  assert.deepEqual(
-    resolveHeroMerchantTrustBadge({ trust_score: 32 }, 'subtle'),
-    {
-      score: 32,
-      tone: 'bad',
-      badgeClass: 'bg-danger-subtle text-danger',
-    }
-  );
+  assert.deepEqual(resolveHeroMerchantTrustBadge({ trust_score: 81 }), {
+    score: 81,
+    tone: 'good',
+    variant: 'success',
+  });
+  assert.deepEqual(resolveHeroMerchantTrustBadge({ trust_score: 80 }), {
+    score: 80,
+    tone: 'warn',
+    variant: 'warning',
+  });
+  assert.deepEqual(resolveHeroMerchantTrustBadge({ trust_score: 51 }), {
+    score: 51,
+    tone: 'warn',
+    variant: 'warning',
+  });
+  assert.deepEqual(resolveHeroMerchantTrustBadge({ trust_score: 50 }), {
+    score: 50,
+    tone: 'bad',
+    variant: 'danger',
+  });
+  assert.deepEqual(resolveHeroMerchantTrustBadge({ trust_score: 32 }), {
+    score: 32,
+    tone: 'bad',
+    variant: 'danger',
+  });
 
   // Explicit risk_score takes precedence over 100 - trust_score.
   assert.equal(
@@ -315,19 +300,19 @@ async function testHeroSearchInspector() {
 
   // Fractional trust/risk scores near thresholds classify identically in Mode 1 and Mode 2.
   assert.equal(
-    resolveHeroMerchantTrustBadge({ trust_score: 80.4 }, 'subtle')?.tone,
+    resolveHeroMerchantTrustBadge({ trust_score: 80.4 })?.tone,
     resolveHeroMerchantTrustBadge({ trust_score: 80.4, risk_score: 19.6 })?.tone
   );
   assert.equal(
-    resolveHeroMerchantTrustBadge({ trust_score: 80.4 }, 'subtle')?.tone,
+    resolveHeroMerchantTrustBadge({ trust_score: 80.4 })?.tone,
     'good'
   );
   assert.equal(
-    resolveHeroMerchantTrustBadge({ trust_score: 50.4 }, 'subtle')?.tone,
+    resolveHeroMerchantTrustBadge({ trust_score: 50.4 })?.tone,
     resolveHeroMerchantTrustBadge({ trust_score: 50.4, risk_score: 49.6 })?.tone
   );
   assert.equal(
-    resolveHeroMerchantTrustBadge({ trust_score: 50.4 }, 'subtle')?.tone,
+    resolveHeroMerchantTrustBadge({ trust_score: 50.4 })?.tone,
     'warn'
   );
 
@@ -565,11 +550,11 @@ async function testHeroSearchInspector() {
         `${locale}/${scope}: Mode 1 renders "-" for 0 VND`
       );
       assert.ok(
-        mode1Html.includes('bg-success-subtle text-success rounded-pill')
+        mode1Html.includes('bg-status-good-bg text-status-good-fg') &&
+          mode1Html.includes('data-slot="badge"')
       );
-      assert.ok(
-        mode1Html.includes('bg-danger-subtle text-danger rounded-pill')
-      );
+      assert.ok(mode1Html.includes('bg-status-bad-bg text-status-bad-fg'));
+      assert.doesNotMatch(mode1Html, /rounded-pill/);
 
       const mode1WarnHtml = renderHero(locale, scope, {
         initialProducts: heroProducts,
@@ -578,9 +563,7 @@ async function testHeroSearchInspector() {
         initialDropdownOpen: true,
       });
       assert.ok(
-        mode1WarnHtml.includes(
-          'bg-warning-subtle text-warning-emphasis rounded-pill'
-        )
+        mode1WarnHtml.includes('bg-status-warn-bg text-status-warn-fg')
       );
       assert.ok(
         mode1WarnHtml.includes(fullMessages.heroSearch.trustBadgeNoData)
@@ -653,12 +636,11 @@ async function testHeroSearchInspector() {
           `aria-label="${fullMessages.heroSearch.officialMallBadge}"`
         )
       );
+      assert.ok(mode2ZeroHtml.includes('bg-status-bad-bg text-status-bad-fg'));
       assert.ok(
-        mode2ZeroHtml.includes('badge bg-danger text-white rounded-pill')
+        !mode2ZeroHtml.includes('bg-status-good-bg text-status-good-fg')
       );
-      assert.ok(
-        !mode2ZeroHtml.includes('badge bg-success rounded-pill text-white')
-      );
+      assert.doesNotMatch(mode2ZeroHtml, /rounded-pill/);
 
       // Mode 2 shop-only card caution tone (risk_score: 30, trust_score: 70):
       const mode2ShopWarnHtml = renderHero(locale, scope, {
@@ -691,8 +673,9 @@ async function testHeroSearchInspector() {
         },
       });
       assert.ok(
-        mode2ShopWarnHtml.includes('badge bg-warning text-dark rounded-pill')
+        mode2ShopWarnHtml.includes('bg-status-warn-bg text-status-warn-fg')
       );
+      assert.doesNotMatch(mode2ShopWarnHtml, /rounded-pill/);
     }
   }
 

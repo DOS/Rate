@@ -87,6 +87,8 @@
   --rate-status-warn-bg: #fef3c7;
   --rate-status-bad-fg: #991b1b;
   --rate-status-bad-bg: #fee2e2;
+  --rate-status-info-fg: #0a6c7d;
+  --rate-status-info-bg: #e0f2fe;
   --rate-brand-bg: #fff1f2;
   --rate-score-star-bg: #fffbeb;
   // Rating stars by band (DOS/Rate#1528): at least 3:1 on white and #f1f5f9.
@@ -258,7 +260,8 @@
 // dark, so they keep the light inks.
 :is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark, .bg-dark)
   :is(.bg-white, .bg-light):not([class*='bg-opacity']),
-.rate-ink-on-dark :is(.card, .dropdown-menu):not(.bg-dark, .text-bg-dark) {
+.rate-ink-on-dark
+  :is(.card, [data-slot='card'], .dropdown-menu):not(.bg-dark, .text-bg-dark) {
   --rate-ink-primary: #b42828;
   --rate-ink-success: #146c43;
   --rate-ink-danger: #b02a37;
@@ -388,6 +391,7 @@
   display: flex;
   flex-direction: column;
   flex-grow: 1;
+  min-width: 0;
   padding: 1rem 1rem 1.125rem;
 
   @media (min-width: 768px) {
@@ -412,6 +416,7 @@
   font-weight: 700;
   line-height: 1.35;
   min-height: calc(1.0625rem * 1.35 * 2);
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -455,6 +460,7 @@
 
 .rate-product-card-radar {
   align-self: flex-start;
+  max-width: 100%;
   margin-bottom: 0.75rem;
   white-space: normal;
   text-align: left;
@@ -481,6 +487,11 @@
   display: inline-flex;
   flex-shrink: 0;
   color: var(--rate-fg-muted);
+}
+
+.rate-product-card-sizes [data-slot='badge']:hover {
+  color: var(--rate-crimson-text);
+  border-color: var(--rate-fg-muted);
 }
 
 .rate-product-card-footer {
@@ -517,20 +528,11 @@
 
 .rate-product-card-cta {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
-    height: 2.5rem;
-    padding: 0 0.875rem;
-    font-size: 0.875rem;
-  }
-
-  .btn-primary {
-    flex-grow: 1;
+  > [data-slot='button'] {
+    flex: 1 1 auto;
   }
 }
 

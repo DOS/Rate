@@ -65,14 +65,14 @@ const ALL_REVIEWS: StubReviewRow[] = Array.from({ length: 65 }, (_, idx) => {
       num === 1
         ? [
             'http://insecure.example.com/drop.jpg',
-            'https://cdn.example.com/pic-1.jpg',
-            'https://cdn.example.com/pic-1.jpg',
-            'https://cdn.example.com/pic-2.jpg',
-            'https://cdn.example.com/pic-3.jpg',
-            'https://cdn.example.com/pic-4.jpg',
-            'https://cdn.example.com/pic-5.jpg',
-            'https://cdn.example.com/pic-6.jpg',
-            'https://cdn.example.com/pic-7-dropped.jpg',
+            'https://salt.tikicdn.com/pic-1.jpg',
+            'https://salt.tikicdn.com/pic-1.jpg',
+            'https://salt.tikicdn.com/pic-2.jpg',
+            'https://salt.tikicdn.com/pic-3.jpg',
+            'https://salt.tikicdn.com/pic-4.jpg',
+            'https://salt.tikicdn.com/pic-5.jpg',
+            'https://salt.tikicdn.com/pic-6.jpg',
+            'https://salt.tikicdn.com/pic-7-dropped.jpg',
           ]
         : [],
     created_at: createdAt,
@@ -502,12 +502,12 @@ async function main() {
   assert.equal(first50[0]?.id, ALL_REVIEWS[0]?.id);
   assert.equal(first50[1]?.id, ALL_REVIEWS[1]?.id);
   assert.deepEqual(first50[0]?.images, [
-    'https://cdn.example.com/pic-1.jpg',
-    'https://cdn.example.com/pic-2.jpg',
-    'https://cdn.example.com/pic-3.jpg',
-    'https://cdn.example.com/pic-4.jpg',
-    'https://cdn.example.com/pic-5.jpg',
-    'https://cdn.example.com/pic-6.jpg',
+    'https://salt.tikicdn.com/pic-1.jpg',
+    'https://salt.tikicdn.com/pic-2.jpg',
+    'https://salt.tikicdn.com/pic-3.jpg',
+    'https://salt.tikicdn.com/pic-4.jpg',
+    'https://salt.tikicdn.com/pic-5.jpg',
+    'https://salt.tikicdn.com/pic-6.jpg',
   ]);
 
   // 2. #1926: getMasterProductReviewsPage paginates past 50 without hard cap.
@@ -788,6 +788,72 @@ async function main() {
   const emptyStarRes = await get(`slug=${STAR_SLUG}&star=`, '198.51.100.83');
   assert.equal(emptyStarRes.status, 200);
   assert.equal((await emptyStarRes.json()).totalCount, 14);
+
+  // 12. #1961: a cursor page runs no exact-count (HEAD) query, reports the cached
+  // first-page total, and the library caps the hideFake scan when asked.
+  const { parseReviewCursor: parseCursorForTest } =
+    await import('@/lib/review-cursor');
+  const firstBoundedBody = await (
+    await get(`slug=${MASTER_SLUG}&limit=25`, '198.51.100.90')
+  ).json();
+  recordedReviewCalls.length = 0;
+  const boundedCursorRes = await get(
+    `slug=${MASTER_SLUG}&limit=25&cursor=${encodeURIComponent(firstBoundedBody.nextCursor)}`,
+    '198.51.100.90'
+  );
+  assert.equal(boundedCursorRes.status, 200);
+  const boundedCursorBody = await boundedCursorRes.json();
+  assert.equal(boundedCursorBody.totalCount, 65);
+  assert.ok(
+    recordedReviewCalls.every((c) => c.method !== 'HEAD'),
+    'cursor pages skip the exact-count HEAD queries'
+  );
+
+  const hintedPage = await getMasterProductReviewsPage(MASTER_ID, {
+    limit: 25,
+    cursor: parseCursorForTest(boundedCursorBody.nextCursor),
+    totalCountHint: 4242,
+  });
+  assert.equal(hintedPage.totalCount, 4242, 'totalCountHint is reported as-is');
+
+  // The stub picks its review set from the last master-product lookup.
+  assert.equal(
+    (await get(`slug=${HIDE_FAKE_SLUG}&limit=5`, '198.51.100.91')).status,
+    200
+  );
+  const uncappedHf = await getMasterProductReviewsPage(HIDE_FAKE_MASTER, {
+    hideFake: true,
+    limit: 5,
+  });
+  const cappedHf = await getMasterProductReviewsPage(HIDE_FAKE_MASTER, {
+    hideFake: true,
+    limit: 5,
+    maxHideFakeBatches: 1,
+  });
+  assert.equal(uncappedHf.reviews.length, 5);
+  assert.ok(
+    cappedHf.reviews.length < uncappedHf.reviews.length,
+    'one hideFake batch finds fewer authentic reviews than the full scan'
+  );
+  assert.ok(cappedHf.nextCursor, 'a capped scan hands back a cursor to resume');
+
+  // 13. #1961: past 20 cursor reads a minute a client gets a no-store 429 with Retry-After.
+  assert.equal(
+    (await get(`slug=${MASTER_SLUG}&limit=25`, '198.51.100.92')).status,
+    200
+  );
+  let limitedRes: Response | null = null;
+  for (let i = 0; i < 25 && !limitedRes; i += 1) {
+    const res = await get(
+      `slug=${MASTER_SLUG}&limit=25&cursor=${encodeURIComponent(firstBoundedBody.nextCursor)}`,
+      '198.51.100.92'
+    );
+    if (res.status === 429) limitedRes = res;
+  }
+  assert.ok(limitedRes, 'cursor reads are rate limited per client');
+  assert.equal(limitedRes.headers.get('Retry-After'), '60');
+  assert.equal(limitedRes.headers.get('Cache-Control'), 'no-store');
+  assert.equal((await limitedRes.json()).code, 'RATE_LIMIT_EXCEEDED');
 
   console.warn(
     '✅ Reviews keyset pagination, star counts & ?star=1..5 API suite passed (#1924, #1926, #1940)'

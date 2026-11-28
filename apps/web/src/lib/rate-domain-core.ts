@@ -185,6 +185,27 @@ export function addReviewStarCounts(
 
 export const REVIEW_IMAGES_MAX = 6;
 
+/**
+ * Hosts allowed to serve review photos (#1964). A host matches when it equals an
+ * entry or is a subdomain of it. Sourced from the shared DB (read-only check on
+ * `rate.reviews.images`: only `down-vn.img.susercontent.com` and
+ * `salt.tikicdn.com`) plus legacy Shopee `cf.shopee.vn`. There is no community
+ * photo upload yet; add the Rate storage bucket host here when one is built, and
+ * tighten CSP `img-src` to the same list once it is stable.
+ */
+export const REVIEW_IMAGE_HOST_ALLOWLIST: readonly string[] = [
+  'susercontent.com',
+  'cf.shopee.vn',
+  'tikicdn.com',
+];
+
+/** True when `host` (lowercase hostname) is an allowlisted review-photo host. */
+export function isAllowedReviewImageHost(host: string): boolean {
+  return REVIEW_IMAGE_HOST_ALLOWLIST.some(
+    (allowed) => host === allowed || host.endsWith(`.${allowed}`)
+  );
+}
+
 export interface ReviewItem {
   id: string;
   author_name: string;
@@ -1053,7 +1074,7 @@ export function usableImageUrls(
 /**
  * Sanitizes stored marketplace/community review photo URLs for public rendering:
  * HTTPS only, parsed with `URL`, no embedded credentials or non-standard ports,
- * deduplicated by normalized href, capped at `REVIEW_IMAGES_MAX` (6).
+ * host in `REVIEW_IMAGE_HOST_ALLOWLIST` (others are dropped), deduplicated by normalized href, capped at `REVIEW_IMAGES_MAX` (6).
  */
 export function sanitizeReviewImages(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -1086,6 +1107,7 @@ export function sanitizeReviewImages(raw: unknown): string[] {
       ) {
         continue;
       }
+      if (!isAllowedReviewImageHost(host)) continue;
       if (seen.has(parsed.href)) continue;
       seen.add(parsed.href);
       out.push(parsed.href);

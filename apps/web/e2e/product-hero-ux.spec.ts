@@ -128,6 +128,124 @@ test('hero removes duplicate CTAs, aligns seller counts, collapses empty boxes, 
   await expect(standingLabel.locator('svg')).toHaveCount(0);
 });
 
+test('desktop navbar uses sentence case, lower PDV uses unified 8px buttons, and alternatives never overflow (#2002)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const res = await page.goto(IPHONE);
+  expect(res?.status()).toBe(200);
+
+  // 1. Left desktop navbar links use sentence case (no text-transform: capitalize).
+  const navTransforms = await page.evaluate(() => {
+    const links = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '.nav-menu:not(.nav-menu-social) > li > a'
+      )
+    ).filter((el) => el.getBoundingClientRect().width > 0);
+    return links.map((el) => ({
+      text: el.textContent?.trim() ?? '',
+      textTransform: getComputedStyle(el).textTransform,
+    }));
+  });
+  expect(navTransforms.length).toBeGreaterThanOrEqual(3);
+  for (const item of navTransforms) {
+    expect(item.textTransform, item.text).toBe('none');
+  }
+
+  // 2. Lower PDV sections use unified 8px button radius across migrated controls.
+  const lowerButtons = await page.evaluate(() => {
+    const sections = [
+      '#jreviews-section',
+      '#pdv-price-history',
+      '#offers-table',
+    ];
+    return sections.map((selector) => {
+      const root = document.querySelector(selector);
+      const buttons = Array.from(
+        root?.querySelectorAll<HTMLElement>('[data-slot="button"]') ?? []
+      ).filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+      return {
+        selector,
+        count: buttons.length,
+        radii: [...new Set(buttons.map((el) => getComputedStyle(el).borderRadius))],
+      };
+    });
+  });
+  for (const section of lowerButtons) {
+    expect(section.count, section.selector).toBeGreaterThan(0);
+    expect(section.radii, section.selector).toEqual(['8px']);
+  }
+
+  // 3. Alternatives cards wrap unbroken slash-separated titles with zero horizontal overflow or overlap.
+  const alternatives = page.getByTestId('same-category-value-alternatives');
+  await expect(alternatives).toBeVisible();
+  const peerOverflow = await alternatives.evaluate((grid) => {
+    const longSlashTitle =
+      'Samsung G3 G31H LS27HG310EEXXV 27 inch/FHD/IPS/144Hz/1ms/UltraLongUnbrokenSpecToken';
+    const cards = Array.from(
+      grid.querySelectorAll<HTMLElement>('[data-slot="card"]')
+    );
+    for (const card of cards) {
+      const link = card.querySelector<HTMLElement>('h4 a');
+      if (link) link.textContent = longSlashTitle;
+    }
+    const results = cards.map((card) => {
+      const cardRect = card.getBoundingClientRect();
+      const title = card.querySelector<HTMLElement>('h4');
+      const titleRect = title?.getBoundingClientRect() ?? null;
+      const body = card.querySelector<HTMLElement>('.rate-pdv-peer-body');
+      return {
+        cardScrollDiff: card.scrollWidth - card.clientWidth,
+        bodyScrollDiff: body ? body.scrollWidth - body.clientWidth : 0,
+        titleOverflowRight: titleRect
+          ? Math.round(titleRect.right - cardRect.right)
+          : 0,
+        overflowWrap: title ? getComputedStyle(title).overflowWrap : '',
+      };
+    });
+    return {
+      cardCount: cards.length,
+      pageScrollWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      results,
+    };
+  });
+  expect(peerOverflow.cardCount).toBeGreaterThan(0);
+  expect(peerOverflow.pageScrollWidth).toBeLessThanOrEqual(
+    peerOverflow.viewportWidth
+  );
+  for (const row of peerOverflow.results) {
+    expect(row.cardScrollDiff).toBeLessThanOrEqual(1);
+    expect(row.bodyScrollDiff).toBeLessThanOrEqual(1);
+    expect(row.titleOverflowRight).toBeLessThanOrEqual(1);
+    expect(row.overflowWrap).toBe('anywhere');
+  }
+
+  // 4. Competitors heading never widens a 375px phone viewport.
+  await page.setViewportSize({ width: 375, height: 812 });
+  const phoneOverflow = await page.evaluate(() => {
+    const heading = document.querySelector<HTMLElement>(
+      '.rate-pdv-wrap-heading h3, h3.rate-pdv-wrap-heading'
+    );
+    if (heading) {
+      heading.textContent =
+        'Lựa chọn thay thế cho Samsung/G3/G31H/LS27HG310EEXXV/27inch/FHD/IPS/144Hz/1ms';
+    }
+    return {
+      hasHeading: Boolean(heading),
+      scrollWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  expect(phoneOverflow.hasHeading).toBe(true);
+  expect(phoneOverflow.scrollWidth).toBeLessThanOrEqual(
+    phoneOverflow.viewportWidth
+  );
+});
+
 test('multi-variant product surfaces variant picker inside pdv-variant-strip', async ({
   page,
 }) => {

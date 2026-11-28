@@ -536,6 +536,17 @@ async function testReviews() {
   assert.equal(okPayload.mode, 'supabase_rpc');
   assert.equal(okPayload.review.reviewer_type, 'user');
   assert.equal(okPayload.review.helpfulness_weight, 1);
+  // Only this product's caches are flushed (#1962): its page tag needs the
+  // master's slug, read as the reviewer.
+  const slugRead = calls.find(
+    (c) =>
+      c.method === 'GET' &&
+      c.url.includes('/rest/v1/master_products') &&
+      c.url.includes(`id=eq.${MASTER_ID}`) &&
+      c.url.includes('select=slug')
+  );
+  assert.ok(slugRead, 'an accepted review reads its master slug (#1962)');
+  assert.equal(slugRead.headers.authorization, `Bearer ${GOOD_TOKEN}`);
   const [reviewRpc] = rpcCalls('submit_community_review');
   assert.ok(reviewRpc, 'review RPC must be called');
   assert.equal(reviewRpc.headers.authorization, `Bearer ${GOOD_TOKEN}`);
@@ -2268,6 +2279,65 @@ async function testCookieSessions() {
     'a report over an up-vote is written (#1306)'
   );
 
+  // A report with a reason that is present but unknown is refused, not
+  // stored as spam (#1963); nothing is read or written.
+  for (const badBody of [
+    { voteType: 'report', reportReason: 'not-a-reason' },
+    { voteType: 'report', reason: 'typo' },
+    { voteType: 'report', reportReason: '' },
+    { voteType: 'report', reportReason: 42 },
+  ]) {
+    calls.length = 0;
+    const badReasonRes = await postVote(
+      new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SAME_VOTE_TOKEN}`,
+        },
+        body: JSON.stringify(badBody),
+      }) as VoteReq,
+      { params: Promise.resolve({ id: reviewId }) }
+    );
+    assert.equal(
+      badReasonRes.status,
+      400,
+      `an invalid report reason must answer 400 (#1963): ${JSON.stringify(badBody)}`
+    );
+    assert.equal((await badReasonRes.json()).code, 'INVALID_REPORT_REASON');
+    assert.ok(
+      !calls.some((c) => c.url.includes('/rest/v1/review_votes')),
+      'an invalid report reason must not touch review_votes (#1963)'
+    );
+  }
+  // An absent reason keeps the spam default, and a valid one is stored as is.
+  for (const [body, expected] of [
+    [{ voteType: 'report' }, 'spam'],
+    [{ voteType: 'report', reportReason: ' FAKE ' }, 'fake'],
+  ] as const) {
+    calls.length = 0;
+    const okReportRes = await postVote(
+      new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SAME_VOTE_TOKEN}`,
+        },
+        body: JSON.stringify(body),
+      }) as VoteReq,
+      { params: Promise.resolve({ id: reviewId }) }
+    );
+    assert.notEqual(okReportRes.status, 400, JSON.stringify(body));
+    const reportWrite = calls.find(
+      (c) => c.method === 'POST' && c.url.includes('/rest/v1/review_votes')
+    );
+    assert.equal(
+      (reportWrite?.body as { report_reason?: string } | null)?.report_reason,
+      expected,
+      `report_reason stored for ${JSON.stringify(body)} (#1963)`
+    );
+  }
+
   // An ineligible voter (no created_at, no confirmation) can still clear a vote.
   const clearRes = await postVote(
     new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
@@ -3361,9 +3431,122 @@ async function testLeaderboardAllCategoryCompareUrl() {
   );
 }
 
+// A new review flushes its product's caches only, at most 6 times a minute
+// per reviewer (DOS/Rate#1962).
+async function testReviewSubmissionRevalidation() {
+  const { masterReviewsCacheTag, productCacheTag, RATE_CACHE_TAGS } =
+    await import('@/server/rate/cache-tags');
+  const { revalidateSubmittedReview, masterReviewCacheTags } =
+    await import('@/server/rate/review-revalidation');
+  const clientWith = (slug: string | null, fail = false) =>
+    ({
+      from: (table: string) => {
+        assert.equal(table, 'master_products');
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => {
+                if (fail) throw new Error('boom');
+                return { data: slug ? { slug } : null, error: null };
+              },
+            }),
+          }),
+        };
+      },
+    }) as unknown as Parameters<typeof revalidateSubmittedReview>[0];
+
+  const flushed: string[] = [];
+  const spy = (tag: string, profile: 'max') => {
+    assert.equal(profile, 'max');
+    flushed.push(tag);
+  };
+  const expected = [
+    masterReviewsCacheTag(MASTER_ID),
+    productCacheTag('apple-iphone-16-128gb'),
+  ];
+
+  const tags = await revalidateSubmittedReview(
+    clientWith('apple-iphone-16-128gb'),
+    'reviewer-1962-a',
+    MASTER_ID,
+    spy
+  );
+  assert.deepEqual(tags, expected);
+  assert.deepEqual(flushed, expected);
+  for (const global of [
+    RATE_CACHE_TAGS.REVIEWS,
+    RATE_CACHE_TAGS.PRODUCTS,
+    RATE_CACHE_TAGS.STATS,
+  ]) {
+    assert.ok(
+      !flushed.includes(global),
+      `a review must not flush the site-wide ${global} tag (#1962)`
+    );
+  }
+
+  // The slug read failing or finding nothing keeps the reviews tag.
+  assert.deepEqual(await masterReviewCacheTags(clientWith(null), MASTER_ID), [
+    masterReviewsCacheTag(MASTER_ID),
+  ]);
+  assert.deepEqual(
+    await masterReviewCacheTags(clientWith('x', true), MASTER_ID),
+    [masterReviewsCacheTag(MASTER_ID)]
+  );
+
+  // A throwing revalidateTag (outside Next.js) never fails the submission.
+  assert.deepEqual(
+    await revalidateSubmittedReview(
+      clientWith('apple-iphone-16-128gb'),
+      'reviewer-1962-b',
+      MASTER_ID,
+      () => {
+        throw new Error('outside request context');
+      }
+    ),
+    expected
+  );
+
+  // The same reviewer is past the limit after 6 flushes in a minute; another
+  // reviewer is not.
+  flushed.length = 0;
+  for (let i = 0; i < 6; i++) {
+    await revalidateSubmittedReview(
+      clientWith('apple-iphone-16-128gb'),
+      'reviewer-1962-c',
+      MASTER_ID,
+      spy
+    );
+  }
+  assert.equal(flushed.length, 12);
+  assert.deepEqual(
+    await revalidateSubmittedReview(
+      clientWith('apple-iphone-16-128gb'),
+      'reviewer-1962-c',
+      MASTER_ID,
+      spy
+    ),
+    []
+  );
+  assert.equal(flushed.length, 12, 'a 7th flush in a minute is skipped');
+  assert.deepEqual(
+    await revalidateSubmittedReview(
+      clientWith('apple-iphone-16-128gb'),
+      'reviewer-1962-d',
+      MASTER_ID,
+      spy
+    ),
+    expected
+  );
+
+  console.log(
+    '  ✅ A new review flushes its own product caches only, limited per reviewer (#1962)'
+  );
+}
+
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
+  await testReviewSubmissionRevalidation();
   await testReviewsV2();
   await testReviewsByIdPublishedOnly();
   await testReviewsHideFakeAnd413Cors();

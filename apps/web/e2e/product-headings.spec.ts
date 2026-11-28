@@ -28,7 +28,7 @@ for (const [path, lang] of [
     const labels = await page.evaluate(() =>
       Array.from(
         document.querySelectorAll<HTMLElement>(
-          '.container h2, .container h3, .container .rate-eyebrow, .container .badge, .container a.btn'
+          '.container h2, .container h3, .container .rate-eyebrow, .container .badge, .container [data-slot="badge"], .container a.btn, .container a[data-slot="button"]'
         )
       )
         // The footer call-to-action is shared site-wide and tested there.

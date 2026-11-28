@@ -108,6 +108,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  Card,
   PriceStrip,
   PriceStripActions,
   PriceStripHeader,
@@ -992,9 +993,7 @@ export async function ProductDetailView({
             {t('offersTitle', { count: v.offers.length })}
           </h2>
         </div>
-        <span className="badge bg-light text-secondary rounded-pill border px-3 py-2">
-          {t('offersMedianBadge')}
-        </span>
+        <Badge variant="secondary">{t('offersMedianBadge')}</Badge>
       </div>
 
       {v.offers.length === 0 ? (
@@ -1936,10 +1935,7 @@ export async function ProductDetailView({
                 ? customFieldsSectionEyebrow(locale)
                 : specUi.sectionEyebrow;
             return (
-              <div
-                id="specs-section"
-                className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
-              >
+              <Card id="specs-section" className="p-md-5 mb-5 p-4 shadow-sm">
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-2">
                   <div>
                     <span className="rate-eyebrow text-muted d-block mb-1">
@@ -1963,9 +1959,9 @@ export async function ProductDetailView({
                         {...(customExportRows ? { customExportRows } : {})}
                       />
                     )}
-                    <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
+                    <Badge variant="secondary">
                       {specSectionBadge(specUi, totalSpecGroups)}
-                    </span>
+                    </Badge>
                   </div>
                 </div>
 
@@ -1982,7 +1978,7 @@ export async function ProductDetailView({
                       className="col-md-6 col-12"
                       data-testid="custom-fields-spec-card"
                     >
-                      <div className="rounded-4 h-100 border bg-white p-4">
+                      <Card className="h-100 p-4">
                         <h3 className="h6 fw-bold text-primary mb-3">
                           {customFieldsGroupHeading(locale, categorySlug)}
                         </h3>
@@ -2002,12 +1998,12 @@ export async function ProductDetailView({
                             )
                           )}
                         </dl>
-                      </div>
+                      </Card>
                     </div>
                   )}
                   {specGroups.map(({ group, rows }) => (
                     <div key={group} className="col-md-6 col-12">
-                      <div className="rounded-4 h-100 border bg-white p-4">
+                      <Card className="h-100 p-4">
                         <h3 className="h6 fw-bold text-primary mb-3">
                           {specGroupHeading(specUi, group, specTemplate.has5g)}
                         </h3>
@@ -2025,11 +2021,11 @@ export async function ProductDetailView({
                             </Fragment>
                           ))}
                         </dl>
-                      </div>
+                      </Card>
                     </div>
                   ))}
                 </PhoneCollapsible>
-              </div>
+              </Card>
             );
           })()}
 
@@ -2084,10 +2080,7 @@ export async function ProductDetailView({
 
           {/* Neutral Merchant Reference & Trust Audit Table */}
           {(!isPlace || offers.length > 0) && (
-            <div
-              id="offers-table"
-              className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
-            >
+            <Card id="offers-table" className="p-md-5 mb-5 p-4 shadow-sm">
               {isItemGroup
                 ? renderSizePanels('offers', (v) =>
                     renderOffersBody(variantPanelInput(v))
@@ -2099,15 +2092,15 @@ export async function ProductDetailView({
                     radarSignal,
                     emptyText: pageEmptyOffersText,
                   })}
-            </div>
+            </Card>
           )}
 
           {/* Listings whose size is not stated: their own group, never part
               of the "from" price (Q2, DOS/Rate#1154). */}
           {itemPage && itemPage.unknownOffers.length > 0 && (
-            <div
+            <Card
               id="offers-unknown-size"
-              className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
+              className="p-md-5 mb-5 p-4 shadow-sm"
               data-testid="pdv-unknown-size-offers"
             >
               <h2 className="h5 fw-bold mb-1">
@@ -2122,7 +2115,7 @@ export async function ProductDetailView({
                 offers={itemPage.unknownOffers}
                 byOffer={itemPage.unknownByOffer}
               />
-            </div>
+            </Card>
           )}
 
           {/* Interactive Value Efficiency & 2-Year Ownership Calculator (#62) */}
@@ -2156,44 +2149,41 @@ export async function ProductDetailView({
 
           {/* Related Competitors & 1-Click Head-to-Head Compare */}
           {relatedCompetitors.length > 0 && (
-            <div className="card rounded-4 mt-4 border-0 bg-white p-4 shadow-sm">
+            <Card className="mt-4 p-4 shadow-sm">
               <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <div>
-                  <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-1 px-3 py-1">
+                <div className="rate-pdv-wrap-heading">
+                  <Badge variant="brand" className="mb-1">
                     {t('competitorsBadge', {
                       category: localizedCategoryLabel,
                     })}
-                  </span>
-                  <h3 className="h5 fw-bold mb-0">
+                  </Badge>
+                  <h3 className="h5 fw-bold mb-0 rate-pdv-wrap-heading">
                     {t('competitorsTitle', { name: product.name })}
                   </h3>
                 </div>
                 <div className="d-flex flex-wrap gap-2">
-                  <Link
-                    href="/deals"
-                    className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"
-                  >
-                    {t('dealHub10PlatformsBtn')}
-                  </Link>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/deals">{t('dealHub10PlatformsBtn')}</Link>
+                  </Button>
                   {comboCartHref && (
-                    <Link
-                      href={comboCartHref}
-                      prefetch={false}
-                      data-testid="pdv-combo-cart-link"
-                      className="btn btn-sm btn-outline-success rounded-pill fw-semibold px-3"
-                    >
-                      {t('comboCartBtn')}
-                    </Link>
+                    <Button variant="outline-success" size="sm" asChild>
+                      <Link
+                        href={comboCartHref}
+                        prefetch={false}
+                        data-testid="pdv-combo-cart-link"
+                      >
+                        {t('comboCartBtn')}
+                      </Link>
+                    </Button>
                   )}
                   {currentCompareCount > 0 && compareAllCount >= 2 && (
-                    <Link
-                      href={compareAllHref}
-                      className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
-                    >
-                      {t('compareAllPeersBtn', {
-                        count: compareAllCount,
-                      })}
-                    </Link>
+                    <Button variant="primary" size="sm" asChild>
+                      <Link href={compareAllHref}>
+                        {t('compareAllPeersBtn', {
+                          count: compareAllCount,
+                        })}
+                      </Link>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -2255,7 +2245,10 @@ export async function ProductDetailView({
 
                   return (
                     <div key={peer.id} className="col-lg-4 col-md-6 col-12">
-                      <div className="card rounded-4 bg-light h-100 border p-3">
+                      <Card
+                        tone="elevated"
+                        className="d-flex flex-column h-100 overflow-hidden p-3"
+                      >
                         <div className="d-flex align-items-center mb-3 gap-3">
                           <div
                             className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 border bg-white p-2"
@@ -2345,11 +2338,9 @@ export async function ProductDetailView({
                               })()
                             )}
                           </div>
-                          <div className="overflow-hidden">
+                          <div className="rate-pdv-peer-body">
                             <div className="d-flex align-items-center mb-1 flex-wrap gap-1">
-                              <span className="badge bg-secondary-subtle text-secondary small">
-                                {peer.brand}
-                              </span>
+                              <Badge variant="secondary">{peer.brand}</Badge>
                               <StarRating
                                 value={peerRating}
                                 size="sm"
@@ -2362,7 +2353,7 @@ export async function ProductDetailView({
                                 )}
                               />
                             </div>
-                            <h4 className="h6 fw-bold text-truncate mb-1">
+                            <h4 className="h6 fw-bold mb-1 rate-pdv-peer-title">
                               <Link
                                 href={peerDetailHref}
                                 className="text-dark text-decoration-none"
@@ -2389,13 +2380,11 @@ export async function ProductDetailView({
                                 </span>
                               )}
                               {priceDelta !== 0 && (
-                                <span
-                                  className={`badge rounded-pill ${
-                                    priceDelta < 0
-                                      ? 'bg-success-subtle text-success'
-                                      : 'bg-secondary-subtle text-secondary'
-                                  }`}
-                                  style={{ fontSize: '0.8125rem' }}
+                                <Badge
+                                  variant={
+                                    priceDelta < 0 ? 'success' : 'secondary'
+                                  }
+                                  className="rate-tabular"
                                 >
                                   {effectiveCurrency === 'PCT'
                                     ? `${priceDelta < 0 ? '-' : '+'}${formatListingPrice(
@@ -2420,7 +2409,7 @@ export async function ProductDetailView({
                                             priceUnit: effectivePriceUnit,
                                           }
                                         )}`}
-                                </span>
+                                </Badge>
                               )}
                             </div>
                             {peerCostPerPoint > 0 && (
@@ -2438,28 +2427,36 @@ export async function ProductDetailView({
                           </div>
                         </div>
 
-                        <div className="d-flex mt-auto gap-2">
+                        <div className="d-flex mt-auto flex-wrap gap-2">
                           {peerVersusHref && (
-                            <IntentLink
-                              href={peerVersusHref}
-                              className="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1"
+                            <Button
+                              variant="outline-primary"
+                              size="sm"
+                              className="flex-grow-1"
+                              asChild
                             >
-                              {t('compare1v1Btn')}
-                            </IntentLink>
+                              <IntentLink href={peerVersusHref}>
+                                {t('compare1v1Btn')}
+                              </IntentLink>
+                            </Button>
                           )}
-                          <Link
-                            href={peerDetailHref}
-                            className={`btn btn-sm btn-light rounded-pill border px-3${peerVersusHref ? '' : ' flex-grow-1'}`}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={
+                              peerVersusHref ? undefined : 'flex-grow-1'
+                            }
+                            asChild
                           >
-                            {t('detailsBtn')}
-                          </Link>
+                            <Link href={peerDetailHref}>{t('detailsBtn')}</Link>
+                          </Button>
                         </div>
-                      </div>
+                      </Card>
                     </div>
                   );
                 })}
               </div>
-            </div>
+            </Card>
           )}
         </div>
         <CompareTrayBar />

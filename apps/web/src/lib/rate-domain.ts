@@ -51,6 +51,8 @@ export {
   parseEcommerceUrlOrQuery,
   resolveProductImageUrl,
   sanitizePostgrestFilterToken,
+  isAllowedReviewImageHost,
+  REVIEW_IMAGE_HOST_ALLOWLIST,
   sanitizeReviewImages,
   stripEcommerceNoiseTokens,
   normalizeCompareFiveStarRating,

@@ -213,9 +213,7 @@ export function ItemSizeOffers({ data }: { data: ItemSizePanelData }) {
             {t('offersTitle', { count: data.offers.length })}
           </h2>
         </div>
-        <span className="badge bg-light text-secondary rounded-pill border px-3 py-2">
-          {t('offersMedianBadge')}
-        </span>
+        <Badge variant="secondary">{t('offersMedianBadge')}</Badge>
       </div>
       {data.offers.length === 0 ? (
         <p className="text-muted mb-0">{t('noOffersYet')}</p>
@@ -304,13 +302,15 @@ export default function ItemLazySizePanel({
       <p className="text-muted small mb-0">
         {failed ? t('sizePanelLoadFailed') : t('sizePanelLoading')}
         {failed && (
-          <button
+          <Button
             type="button"
-            className="btn btn-link btn-sm p-0 ms-2 align-baseline"
+            variant="ghost"
+            size="sm"
+            className="ms-2"
             onClick={() => setAttempt((n) => n + 1)}
           >
             {t('sizePanelRetry')}
-          </button>
+          </Button>
         )}
       </p>
     </div>

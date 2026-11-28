@@ -47,7 +47,7 @@ for (const [locale, labels] of Object.entries(LABELS)) {
       page.getByTestId('star-distribution-anomaly-alert')
     ).toHaveText(labels.warning);
     await expect(
-      page.locator('.badge', { hasText: labels.badge }).first()
+      page.locator('.badge, [data-slot="badge"]', { hasText: labels.badge }).first()
     ).toBeVisible();
     await expect(
       page

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import {
   sanitizeReviewImages,
@@ -7,7 +6,6 @@ import {
   type ReviewItem,
 } from '@/lib/rate-api';
 import {
-  RATE_CACHE_TAGS,
   getCachedMasterProductBySlug,
   getCachedMasterProductReviewsPage,
   getCachedMasterProductReviewSummary,
@@ -15,21 +13,24 @@ import {
   isCachedPublishedMasterProduct,
 } from '@/server/rate';
 import {
-  BoundedSlidingWindowRateLimiter,
   PUBLIC_API_CORS_HEADERS,
-  extractClientRateLimitKey,
   jsonApiError,
   parseReviewsQueryParams,
   payloadTooLargeResponse,
   readBoundedJsonBody,
   rateLimitExceededResponse,
 } from '@/server/rate/api-handler';
+import { revalidateSubmittedReview } from '@/server/rate/review-revalidation';
 import {
   authenticateRateRequest,
   isMissingRpcError,
   mapRpcRejection,
   type RpcRejection,
 } from '@/server/rate/request-auth';
+import {
+  checkReviewsReadLimit,
+  reviewsRateLimitKey,
+} from '@/server/rate/reviews-read-limits';
 import { createLogger, serializeError } from '@/lib/logger';
 import {
   REVIEW_FORM_VERSION,
@@ -46,12 +47,6 @@ import { resolveApiItemContext } from '@/server/rate/item-api';
 import type { AuthenticatedRateRequest } from '@/server/rate/request-auth';
 
 const log = createLogger('api.reviews');
-
-const reviewsGetRateLimiter = new BoundedSlidingWindowRateLimiter({
-  windowMs: 60_000,
-  maxRequests: 60,
-  maxBuckets: 5_000,
-});
 
 const REVIEWS_CORS_HEADERS: Record<string, string> = {
   ...PUBLIC_API_CORS_HEADERS,
@@ -73,10 +68,17 @@ export async function OPTIONS() {
  */
 export async function GET(request: NextRequest) {
   try {
-    const clientKey = extractClientRateLimitKey(request.headers);
-    if (!reviewsGetRateLimiter.allow(clientKey)) {
+    // A `?cursor=` read is uncached (DOS/Rate#1961), so it also counts against
+    // the stricter cursor limits, even when the cursor then fails validation.
+    const hasCursor =
+      (request.nextUrl.searchParams.get('cursor') ?? '').trim() !== '';
+    const verdict = checkReviewsReadLimit(
+      reviewsRateLimitKey(request.headers),
+      hasCursor
+    );
+    if (!verdict.allowed) {
       return rateLimitExceededResponse(
-        'Rate limit exceeded. Maximum 60 review reads per minute.',
+        verdict.message,
         { ...REVIEWS_CORS_HEADERS, 'Cache-Control': 'no-store' },
         60
       );
@@ -474,7 +476,7 @@ export async function POST(request: NextRequest) {
     // With v2 on, every review is a v2 review: a v1 body (no verdict, pros
     // or cons, a star from the browser) is refused as INVALID_BODY.
     if (isReviewFormV2Enabled()) {
-      return await submitReviewV2(auth.rateClient, rawBody);
+      return await submitReviewV2(auth.rateClient, auth.userId, rawBody);
     }
 
     const parsed = SubmitReviewSchema.safeParse(rawBody ?? {});
@@ -581,13 +583,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    try {
-      revalidateTag(RATE_CACHE_TAGS.REVIEWS, 'max');
-      revalidateTag(RATE_CACHE_TAGS.PRODUCTS, 'max');
-      revalidateTag(RATE_CACHE_TAGS.STATS, 'max');
-    } catch {
-      // Ignore revalidateTag errors outside Next.js request context
-    }
+    // This product's reviews and page only, not the whole catalogue
+    // (DOS/Rate#1962).
+    await revalidateSubmittedReview(
+      auth.rateClient,
+      auth.userId,
+      body.masterProductId
+    );
 
     return NextResponse.json(
       {
@@ -616,6 +618,7 @@ export async function POST(request: NextRequest) {
  */
 async function submitReviewV2(
   rateClient: AuthenticatedRateRequest['rateClient'],
+  userId: string,
   rawBody: unknown
 ): Promise<NextResponse> {
   const parsed = SubmitReviewV2Schema.safeParse(rawBody);
@@ -736,13 +739,9 @@ async function submitReviewV2(
     );
   }
 
-  try {
-    revalidateTag(RATE_CACHE_TAGS.REVIEWS, 'max');
-    revalidateTag(RATE_CACHE_TAGS.PRODUCTS, 'max');
-    revalidateTag(RATE_CACHE_TAGS.STATS, 'max');
-  } catch {
-    // Ignore revalidateTag errors outside Next.js request context
-  }
+  // This product's reviews and page only, not the whole catalogue
+  // (DOS/Rate#1962).
+  await revalidateSubmittedReview(rateClient, userId, body.masterProductId);
 
   // The RPC's `verdict` is the writer's verdict text; the analysis verdict
   // the review list reads is `flag_verdict`. Its criteria use the

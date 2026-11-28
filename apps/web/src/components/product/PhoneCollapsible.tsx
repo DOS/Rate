@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { BsChevronDown } from 'react-icons/bs';
+import { Button } from '@/components/ui/button';
 
 // A long list that stays whole from tablets up; on phones only its first three
 // children show until the reader expands it (DOS/Rate#621). The hidden part
@@ -66,10 +67,12 @@ export default function PhoneCollapsible({
       >
         {children}
       </div>
-      <button
+      <Button
         ref={buttonRef}
         type="button"
-        className="btn btn-outline-secondary rounded-pill d-md-none d-print-none d-inline-flex align-items-center justify-content-center fw-semibold mt-3 w-100 gap-2"
+        variant="outline"
+        size="default"
+        className="d-md-none d-print-none mt-3 w-100"
         aria-expanded={open}
         aria-controls={id}
         onClick={toggle}
@@ -79,7 +82,7 @@ export default function PhoneCollapsible({
           aria-hidden="true"
           style={{ transform: open ? 'rotate(180deg)' : undefined }}
         />
-      </button>
+      </Button>
     </>
   );
 }

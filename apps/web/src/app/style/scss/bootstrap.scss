@@ -6,7 +6,7 @@
 // carousel, spinners, pagination, toasts, placeholders. Add the partial back
 // here before using one of them.
 
-@layer theme, bootstrap-reboot, utilities;
+@layer theme, bootstrap-reboot, components, utilities;
 
 @import 'bootstrap/scss/functions';
 @import 'bootstrap/scss/variables';
