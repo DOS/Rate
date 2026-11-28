@@ -2165,7 +2165,7 @@ function buildBaseRateOpenApiSpec(
               description: 'Updated helpful/report counters for the review.',
             },
             '400': errorResponse(
-              'Invalid review id or body, or the database rejected the vote (`code: "VOTE_REJECTED"`).'
+              'Invalid review id or body (`code: "INVALID_VOTE_ACTION"`, or `"INVALID_REPORT_REASON"` for a report whose reason is present but unknown; an absent reason defaults to `spam`), or the database rejected the vote (`code: "VOTE_REJECTED"`).'
             ),
             '401': errorResponse('Missing or invalid bearer token.'),
             '403': errorResponse(
