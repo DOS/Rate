@@ -318,7 +318,7 @@ test('the Item sync keeps stored fields too, and removes them only with retract 
         select: () => ({
           eq: () => ({
             maybeSingle: async () => ({
-              data: { id: 'i1', ...structuredClone(storedMaster(key)) },
+              data: { ...structuredClone(storedMaster(key)), id: 'i1' },
               error: null,
             }),
           }),
