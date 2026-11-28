@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
+import { Button } from '@/components/ui/button';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   RADAR_CSV_HEADERS,
@@ -457,7 +458,7 @@ export default function ProductShareAuditButton({
   };
 
   return (
-    <div className="d-inline-flex align-items-center flex-wrap gap-2">
+    <div className="inline-flex flex-wrap items-center gap-2">
       <ExportMenu label={t('exportMenu')}>
         {(close) => (
           <>
@@ -502,14 +503,15 @@ export default function ProductShareAuditButton({
           </>
         )}
       </ExportMenu>
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
         onClick={handleCopyLink}
-        className="btn btn-sm btn-outline-secondary rounded-pill px-3"
         title={t('shareAuditCopyLinkTitle')}
       >
         {copiedUrl ? t('shareAuditCopiedLinkBtn') : t('shareAuditCopyLinkBtn')}
-      </button>
+      </Button>
     </div>
   );
 }

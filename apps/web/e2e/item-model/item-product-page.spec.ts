@@ -111,6 +111,17 @@ for (const path of [ITEM, BIG, `${BIG}?v=256gb`]) {
     expect(hrefs).toEqual(ORDER.map((id) => `#${id}`));
     // Every jump target exists once, lazy size panels included.
     for (const id of ORDER) await expect(page.locator(`#${id}`)).toHaveCount(1);
+    // Multi-size Item pages render strictly one visible size-scoped PriceWatchButton
+    // (inside the active size price strip, never duplicated in hero actions, DOS/Rate#1986).
+    const watchBtns = page
+      .getByRole('button', { name: /Theo dõi giảm giá/i })
+      .filter({ visible: true });
+    await expect(watchBtns).toHaveCount(1);
+    await expect(
+      page
+        .locator('.rate-pdv-actions')
+        .getByRole('button', { name: /Theo dõi giảm giá/i })
+    ).toHaveCount(0);
   });
 }
 

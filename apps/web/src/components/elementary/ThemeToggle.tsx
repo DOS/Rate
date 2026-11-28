@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { BsCircleHalf, BsMoonStarsFill, BsSunFill } from 'react-icons/bs';
 
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   applyThemeChoice,
   followSystemTheme,
@@ -123,9 +125,11 @@ export function ThemeCycleButton({ className = '' }: { className?: string }) {
   const Icon = current.Icon;
 
   return (
-    <button
+    <Button
       type="button"
-      className={`rate-theme-cycle ${className}`}
+      variant="outline"
+      size="icon"
+      className={cn('shrink-0', className)}
       aria-label={t('themeCycleAria', { theme: t(current.labelKey) })}
       title={t('themeCycleAria', { theme: t(current.labelKey) })}
       data-testid="theme-cycle"
@@ -133,6 +137,6 @@ export function ThemeCycleButton({ className = '' }: { className?: string }) {
       onClick={() => choose(nextChoice())}
     >
       <Icon aria-hidden="true" />
-    </button>
+    </Button>
   );
 }

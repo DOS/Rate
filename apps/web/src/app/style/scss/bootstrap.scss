@@ -3,7 +3,10 @@
 // blocked the first paint on every page.
 //
 // Left out, because no page renders them: accordion, modal, tooltip, popover,
-// carousel, spinners. Add the partial back here before using one of them.
+// carousel, spinners, pagination, toasts, placeholders. Add the partial back
+// here before using one of them.
+
+@layer theme, bootstrap-reboot, utilities;
 
 @import 'bootstrap/scss/functions';
 @import 'bootstrap/scss/variables';
@@ -42,7 +45,9 @@ $utilities: map-remove(
 );
 
 @import 'bootstrap/scss/root';
-@import 'bootstrap/scss/reboot';
+@layer bootstrap-reboot {
+  @import 'bootstrap/scss/reboot';
+}
 @import 'bootstrap/scss/type';
 @import 'bootstrap/scss/images';
 @import 'bootstrap/scss/containers';
@@ -57,14 +62,11 @@ $utilities: map-remove(
 @import 'bootstrap/scss/navbar';
 @import 'bootstrap/scss/card';
 @import 'bootstrap/scss/breadcrumb';
-@import 'bootstrap/scss/pagination';
 @import 'bootstrap/scss/badge';
 @import 'bootstrap/scss/alert';
 @import 'bootstrap/scss/progress';
 @import 'bootstrap/scss/list-group';
 @import 'bootstrap/scss/close';
-@import 'bootstrap/scss/toasts';
 @import 'bootstrap/scss/offcanvas';
-@import 'bootstrap/scss/placeholders';
 @import 'bootstrap/scss/helpers';
 @import 'bootstrap/scss/utilities/api';

@@ -783,7 +783,8 @@ for (const slug of E5_PHASE2_ALL) {
   assert.ok((phoneCsv[9] as number) > 0);
 }
 
-// 10. Detail page passes effectivePriceUnit to both PriceWatchButton call sites.
+// 10. Detail page passes effectivePriceUnit to both mutually exclusive PriceWatchButton call sites
+//     (size-scoped strip for isItemGroup, hero actions for single-variant products, DOS/Rate#1986).
 {
   const detailSource = readFileSync(
     join(webRoot, 'src/app/[locale]/smartphones/[slug]/page.tsx'),
@@ -794,7 +795,17 @@ for (const slug of E5_PHASE2_ALL) {
   assert.equal(
     watchButtons.length,
     2,
-    'expected 2 PriceWatchButton call sites'
+    'expected 2 mutually exclusive PriceWatchButton call sites (isItemGroup strip vs !isItemGroup hero)'
+  );
+  assert.match(
+    detailSource,
+    /\{isItemGroup && v\.stats\.minPrice > 0 && \(\s*<PriceWatchButton/,
+    'Item-group price strip must gate its size-scoped PriceWatchButton on isItemGroup'
+  );
+  assert.match(
+    detailSource,
+    /\{!isItemGroup && heroStats\.minPrice > 0 && \(\s*<PriceWatchButton/,
+    'Hero actions must gate its PriceWatchButton on !isItemGroup so no page renders duplicates'
   );
   for (const snippet of watchButtons) {
     assert.match(

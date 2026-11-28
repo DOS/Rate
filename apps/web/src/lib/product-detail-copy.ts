@@ -16,6 +16,26 @@ export type BayesianTierKey =
 
 const COPY_CONTROL_CHAR_RE = /\p{Cc}/gu;
 
+const GENERIC_VARIANT_NAME_RE = /^(?:standard|default|tiêu chuẩn|mặc định)$/i;
+
+/**
+ * Returns a meaningful single-variant label, or null when the stored
+ * variant_name is empty or a generic placeholder like "Standard" / "Default" /
+ * "Tiêu chuẩn" / "Mặc định" (DESIGN.md section 4.1, DOS/Rate#1986).
+ */
+export function resolveDisplayVariantName(
+  variantName: string | null | undefined
+): string | null {
+  if (typeof variantName !== 'string') return null;
+  const trimmed = variantName
+    .normalize('NFC')
+    .replace(COPY_CONTROL_CHAR_RE, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!trimmed || GENERIC_VARIANT_NAME_RE.test(trimmed)) return null;
+  return trimmed;
+}
+
 function parseDecimalDetailNumber(value: unknown): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'string') {

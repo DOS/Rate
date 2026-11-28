@@ -653,10 +653,10 @@ async function runCoreArchitectureSuite() {
     'MerchantDirectoryExplorer.tsx must use DESIGN.md v3.0 .rate-card'
   );
 
+  // apps/web/src/components/ui is now reserved for Rate.vn shadcn/ui primitives (DOS/Rate#1986).
   for (const deadRel of [
     'apps/web/src/components/forms',
     'apps/web/src/components/typography',
-    'apps/web/src/components/ui',
     'apps/web/src/app/[locale]/style',
   ]) {
     assert.equal(

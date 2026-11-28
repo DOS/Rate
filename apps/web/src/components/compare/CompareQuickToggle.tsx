@@ -10,6 +10,8 @@ import {
   subscribeCompareTray,
   toggleCompareTrayItem,
 } from './compare-tray';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import WatchlistQuickToggle from '@/components/watchlist/WatchlistQuickToggle';
 
 export function normalizeQuickCompareSlug(value: unknown): string {
@@ -164,13 +166,20 @@ export default function CompareQuickToggle({
             }}
           />
         )}
-        <button
+        <Button
           type="button"
+          variant={selected ? 'outline-primary' : 'outline'}
+          size="sm"
           onClick={handleToggle}
           title={title}
           aria-label={ariaLabel}
           aria-pressed={ariaPressed}
-          className={`rate-chip-btn${selected ? ' is-active' : ''}${limitAlert ? ' is-warning' : ''}`}
+          className={cn(
+            'rate-chip-btn',
+            selected && 'is-active bg-brand-bg dark:bg-brand-bg',
+            limitAlert &&
+              'is-warning border-status-warn-fg/40 bg-status-warn-bg text-status-warn-fg hover:bg-status-warn-bg hover:text-status-warn-fg'
+          )}
         >
           {selected ? (
             <BsCheckLg aria-hidden="true" />
@@ -178,7 +187,7 @@ export default function CompareQuickToggle({
             <BsPlusLg aria-hidden="true" />
           )}
           <span>{shortLabel}</span>
-        </button>
+        </Button>
       </div>
     );
   }
@@ -210,8 +219,10 @@ export default function CompareQuickToggle({
           size={size}
         />
       )}
-      <button
+      <Button
         type="button"
+        variant={selected ? 'primary' : 'outline'}
+        size={size === 'sm' ? 'sm' : 'default'}
         onClick={handleToggle}
         title={
           limitAlert
@@ -222,17 +233,14 @@ export default function CompareQuickToggle({
         }
         aria-label={ariaLabel}
         aria-pressed={ariaPressed}
-        className={`btn ${
-          limitAlert
-            ? 'btn-warning text-dark'
-            : selected
-              ? 'btn-danger text-white'
-              : 'btn-outline-secondary text-dark bg-white'
-        } ${size === 'sm' ? 'btn-sm small px-2 py-1' : 'px-3 py-2'} rounded-pill fw-medium d-inline-flex align-items-center gap-1 shadow-sm ${className}`}
-        style={{ fontSize: size === 'sm' ? '0.8125rem' : '13.5px' }}
+        className={cn(
+          limitAlert &&
+            'border-status-warn-fg/40 bg-status-warn-bg text-status-warn-fg hover:bg-status-warn-bg hover:text-status-warn-fg',
+          className
+        )}
       >
         <span>{btnLabel}</span>
-      </button>
+      </Button>
     </div>
   );
 }
