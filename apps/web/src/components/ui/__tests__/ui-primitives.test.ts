@@ -45,12 +45,25 @@ function main() {
         `Button (${variant}/${size}) must never use rounded-full`
       );
       assert.equal(
-        /(?:^|\s)(?:border|bg-transparent|p-0|p-1)(?:\s|$)/.test(classes),
+        /(?:^|\s)(?:border|bg-transparent|bg-success|text-success|p-0|p-1|pt-0)(?:\s|$)/.test(
+          classes
+        ),
         false,
-        `Button (${variant}/${size}) must avoid colliding Bootstrap !important utilities (border, bg-transparent, p-0, p-1)`
+        `Button (${variant}/${size}) must avoid colliding Bootstrap !important utilities`
+      );
+      assert.equal(
+        /#[0-9a-f]{3,8}/i.test(classes),
+        false,
+        `Button (${variant}/${size}) must use --rate-* semantic color tokens instead of hardcoded hex literals`
       );
     }
   }
+
+  assert.match(buttonVariants({ variant: 'primary' }), /\btext-brand-fg\b/);
+  assert.match(
+    buttonVariants({ variant: 'success' }),
+    /\bbg-success-bg\b.*\btext-success-fg\b.*\bhover:bg-success-hover\b.*\bhover:text-success-fg\b/
+  );
 
   const smBtnHtml = renderToStaticMarkup(
     React.createElement(
@@ -77,6 +90,26 @@ function main() {
   assert.match(asChildHtml, /href="#pdv-price-history"/);
   assert.match(asChildHtml, /\bh-9\b/);
   assert.doesNotMatch(asChildHtml, /\btype="button"/);
+
+  const asChildExplicitTypeHtml = renderToStaticMarkup(
+    React.createElement(
+      Button,
+      { variant: 'primary', size: 'sm', asChild: true, type: 'submit' },
+      React.createElement('button', null, 'Submit')
+    )
+  );
+  assert.match(asChildExplicitTypeHtml, /^<button\b/);
+  assert.match(asChildExplicitTypeHtml, /\btype="submit"/);
+
+  const asChildChildTypeHtml = renderToStaticMarkup(
+    React.createElement(
+      Button,
+      { variant: 'primary', size: 'sm', asChild: true },
+      React.createElement('button', { type: 'submit' }, 'Submit')
+    )
+  );
+  assert.match(asChildChildTypeHtml, /^<button\b/);
+  assert.match(asChildChildTypeHtml, /\btype="submit"/);
 
   // 3. Badge enforces unified 6px radius and semantic variants.
   for (const variant of [
@@ -119,6 +152,21 @@ function main() {
   assert.match(cardHtml, /data-slot="card-header"/);
   assert.match(cardHtml, /data-slot="card-content"/);
   assert.match(cardHtml, /data-slot="card-footer"/);
+  assert.match(cardHtml, /\bpt-\[0px\]/);
+  assert.doesNotMatch(cardHtml, /class="[^"]*\bpt-0\b/);
+
+  const tailwindCss = readFileSync(
+    new URL('../../../app/style/tailwind.css', import.meta.url),
+    'utf8'
+  );
+  for (const token of [
+    '--color-brand-fg: var(--rate-brand-fg)',
+    '--color-success-bg: var(--rate-success-bg)',
+    '--color-success-hover: var(--rate-success-hover)',
+    '--color-success-fg: var(--rate-success-fg)',
+  ]) {
+    assert.ok(tailwindCss.includes(token), `tailwind.css must expose ${token}`);
+  }
 
   // 5. NavTabs / NavTabLink replace giant 999px pills with compact segmented tabs.
   const tabsHtml = renderToStaticMarkup(

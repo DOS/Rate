@@ -14,6 +14,7 @@ export type BayesianTierKey =
   | 'bayesianTierSmoothed'
   | 'bayesianTierPrior';
 
+const WHITESPACE_CONTROL_CHAR_RE = /[\t\n\v\f\r\u0085]/g;
 const COPY_CONTROL_CHAR_RE = /\p{Cc}/gu;
 
 const GENERIC_VARIANT_NAME_RE = /^(?:standard|default|tiêu chuẩn|mặc định)$/i;
@@ -29,6 +30,7 @@ export function resolveDisplayVariantName(
   if (typeof variantName !== 'string') return null;
   const trimmed = variantName
     .normalize('NFC')
+    .replace(WHITESPACE_CONTROL_CHAR_RE, ' ')
     .replace(COPY_CONTROL_CHAR_RE, '')
     .replace(/\s+/g, ' ')
     .trim();

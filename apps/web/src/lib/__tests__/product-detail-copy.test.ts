@@ -434,6 +434,8 @@ function main() {
     'Tiêu chuẩn',
     'tiêu chuẩn',
     'Tiêu   chuẩn',
+    'Tiêu\tchuẩn',
+    'Tiêu\nchuẩn',
     'Tiêu chuẩn'.normalize('NFD'),
     'Mặc định',
     'mặc định',
@@ -447,6 +449,8 @@ function main() {
   }
   for (const [raw, expected] of [
     ['49mm 64GB', '49mm 64GB'],
+    ['49mm\t64GB', '49mm 64GB'],
+    ['49mm\n64GB', '49mm 64GB'],
     ['  256GB  ', '256GB'],
     ['14-inch M4 Pro 24GB/1TB', '14-inch M4 Pro 24GB/1TB'],
     ['Standard Edition 512GB', 'Standard Edition 512GB'],
