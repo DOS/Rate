@@ -3,6 +3,8 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { BsExclamationTriangle, BsStarFill, BsX } from 'react-icons/bs';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import {
   REVIEW_CRITERION_POINTS_MAX,
   REVIEW_POINTS_MAX,
@@ -253,14 +255,15 @@ function LineList({
                 className={`form-control form-control-sm rounded-3 ${error ? 'is-invalid' : ''}`}
               />
               {rows.length > 1 && (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="icon"
                   aria-label={t('v2RemoveLine')}
                   onClick={() => onChange(rows.filter((_, i) => i !== index))}
-                  className="btn btn-sm btn-outline-secondary rounded-3"
                 >
                   <BsX aria-hidden="true" />
-                </button>
+                </Button>
               )}
             </div>
             {error && (
@@ -277,13 +280,14 @@ function LineList({
         </div>
       )}
       {rows.length < max && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => onChange([...rows, ''])}
-          className="btn btn-link btn-sm p-0"
         >
           + {t('v2AddLine')}
-        </button>
+        </Button>
       )}
     </fieldset>
   );
@@ -491,7 +495,7 @@ export default function ReviewFormV2({
         </div>
       </div>
 
-      <div className="rounded-3 mb-3 border bg-white p-3">
+      <Card className="mb-3 p-3">
         <div className="d-flex justify-content-between align-items-center mb-2">
           <span className="small fw-semibold">{t('v2CriteriaLabel')}</span>
           <span className="small" data-testid="review-v2-overall">
@@ -536,24 +540,26 @@ export default function ReviewFormV2({
                   {value == null ? '' : formatDecimal(value, locale, 1)}
                 </span>
                 {!c.required && (
-                  <button
+                  <Button
                     type="button"
+                    variant={skipped ? 'secondary' : 'outline'}
+                    size="sm"
                     aria-pressed={skipped}
                     onClick={() => setRating(c.key, null)}
-                    className={`btn btn-sm rounded-pill py-0 ${skipped ? 'btn-secondary' : 'btn-outline-secondary'}`}
                   >
                     {t('v2Skip')}
-                  </button>
+                  </Button>
                 )}
                 {value != null && (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     aria-expanded={pointsOpen}
                     onClick={() => setOpenPoints(pointsOpen ? null : c.key)}
-                    className="btn btn-link btn-sm py-0"
                   >
                     {t('v2CriterionPoints')}
-                  </button>
+                  </Button>
                 )}
               </div>
               {error && (
@@ -593,7 +599,7 @@ export default function ReviewFormV2({
             {skippedError}
           </div>
         )}
-      </div>
+      </Card>
 
       <div className="mb-3">
         <label
@@ -676,13 +682,9 @@ export default function ReviewFormV2({
       </div>
 
       <div className="d-flex justify-content-end">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="btn btn-primary btn-sm rounded-pill fw-medium px-4 py-2"
-        >
+        <Button type="submit" variant="primary" size="sm" disabled={submitting}>
           {submitting ? t('v2Submitting') : t('v2Submit')}
-        </button>
+        </Button>
       </div>
     </form>
   );

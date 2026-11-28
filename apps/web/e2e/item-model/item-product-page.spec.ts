@@ -131,7 +131,7 @@ test('a seller with no data shows no trust score on the Item page', async ({
   await page.goto(`${ITEM}?v=256gb`);
   const badge = page
     .locator('#offers-table')
-    .locator(`a.badge[href$="/merchants/${NO_DATA_MERCHANT}"]`)
+    .locator(`a[data-slot="badge"][href$="/merchants/${NO_DATA_MERCHANT}"]`)
     .filter({ visible: true });
   await expect(badge).toHaveCount(1);
   await expect(badge).toContainText('chưa có dữ liệu');
