@@ -43,6 +43,9 @@ const KNOWN_NON_DEVICE_TEMPLATES = [
   'spas-aesthetics',
   'english-centers',
   'credit-cards',
+  'monitors',
+  'cameras',
+  'vps-hosting',
 ];
 
 /** A keyset-paged stand-in for the audit's master_products read. */

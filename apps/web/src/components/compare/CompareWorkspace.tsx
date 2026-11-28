@@ -1322,6 +1322,21 @@ function buildCategoryTabs(t: CompareTranslator): Array<{
       label: t('catCreditCards'),
       unitLabel: t('catCreditCardsUnit'),
     },
+    {
+      slug: 'monitors',
+      label: t('catMonitors'),
+      unitLabel: t('catMonitorsUnit'),
+    },
+    {
+      slug: 'cameras',
+      label: t('catCameras'),
+      unitLabel: t('catCamerasUnit'),
+    },
+    {
+      slug: 'vps-hosting',
+      label: t('catVpsHosting'),
+      unitLabel: t('catVpsHostingUnit'),
+    },
   ];
 }
 

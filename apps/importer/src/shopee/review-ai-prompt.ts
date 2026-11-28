@@ -92,6 +92,7 @@ export function aiCategoryOpen(slug: string | null | undefined): slug is string 
     slug !== 'bank-savings' &&
     slug !== 'internet-telecom' &&
     slug !== 'credit-cards' &&
+    slug !== 'vps-hosting' &&
     hasRatingCriteria(slug)
   );
 }
@@ -223,6 +224,23 @@ const CATEGORY_CRITERION_HINTS: Readonly<Record<string, Readonly<Record<string, 
     quality: 'giáo trình, tài liệu học, sĩ số lớp, phòng học và trang thiết bị cơ sở vật chất',
     location: 'vị trí cơ sở, bãi gửi xe, lịch học và độ linh hoạt ca học',
     value: 'học phí có xứng đáng với chất lượng giảng dạy và cam kết đầu ra không',
+  },
+  monitors: {
+    display: 'tấm nền IPS/VA/OLED, độ phủ màu sRGB/DCI-P3, độ sáng, tương phản, hở sáng, điểm chết',
+    performance: 'tần số quét Hz, tốc độ phản hồi ms, bóng mờ ghosting, xé hình FreeSync/G-Sync',
+    connectivity: 'cổng HDMI, DisplayPort, USB-C Power Delivery, hub USB, jack tai nghe',
+    design: 'chân đế nâng hạ xoay dọc công thái học, ngàm VESA, viền màn hình, độ hoàn thiện',
+    value: 'đáng tiền hay không so với tầm giá và bảo hành',
+  },
+  cameras: {
+    camera:
+      'chất lượng ảnh, cảm biến, chụp thiếu sáng, dải tương phản, màu ảnh, quay video 4K, chống rung',
+    performance:
+      'tốc độ lấy nét autofocus, bắt nét chủ thể, chụp liên tiếp, độ ổn định nhiệt khi quay',
+    design:
+      'báng cầm, trọng lượng, hoàn thiện thân máy, kính ngắm EVF, màn hình xoay lật, chống thời tiết',
+    battery: 'thời lượng pin chụp và quay thực tế, sạc USB-C',
+    value: 'đáng tiền hay không so với tầm giá và hệ sinh thái ống kính',
   },
 };
 

@@ -262,7 +262,7 @@ describe('Wave E3 & E4 PA2 shared-data and prompt contracts', () => {
     assert.equal(RATING_CRITERIA_VERSION, 1);
     assert.equal(RATING_CRITERIA_V3_VERSION, 3);
     assert.equal(PROMPT_V3_VERSION, 3);
-    assert.equal(RATING_CRITERIA_ALL_CATEGORIES.length, 25);
+    assert.equal(RATING_CRITERIA_ALL_CATEGORIES.length, 28);
     assert.equal(RATING_CRITERION_KEYS.length, 45);
     assert.equal(V3_RATING_CRITERIA_CATEGORIES.size, 7);
 

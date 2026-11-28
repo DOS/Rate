@@ -40,6 +40,9 @@ const CANONICAL_CATEGORY_SLUGS: ReadonlySet<string> =
     'spas-aesthetics',
     'english-centers',
     'credit-cards',
+    'monitors',
+    'cameras',
+    'vps-hosting',
   ]);
 
 /**

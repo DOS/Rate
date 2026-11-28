@@ -166,6 +166,9 @@ export function resolveListingUnitSuffix(
   }
   const normalizedUnit =
     typeof priceUnit === 'string' ? priceUnit.trim().toLowerCase() : '';
+  if (normalizedUnit === 'vnd_per_month') {
+    return MONTHLY_VND_UNIT_SUFFIX[loc];
+  }
   if (normalizedUnit === 'vnd_per_person') {
     return PER_PERSON_VND_UNIT_SUFFIX[loc];
   }
@@ -178,7 +181,10 @@ export function resolveListingUnitSuffix(
           categorySlug.trim().replace(/^\/+/, '').split('/')[0] ?? ''
         ).toLowerCase()
       : '';
-  if (normalizedCategory === 'internet-telecom') {
+  if (
+    normalizedCategory === 'internet-telecom' ||
+    normalizedCategory === 'vps-hosting'
+  ) {
     return MONTHLY_VND_UNIT_SUFFIX[loc];
   }
   if (normalizedCategory === 'credit-cards') {

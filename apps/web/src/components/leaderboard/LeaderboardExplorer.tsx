@@ -76,6 +76,7 @@ import {
   BsBatteryCharging,
   BsBoxSeam,
   BsBuilding,
+  BsCamera,
   BsCameraFill,
   BsCapsule,
   BsCpu,
@@ -97,6 +98,7 @@ import {
   BsPersonArmsUp,
   BsPhone,
   BsSearch,
+  BsServer,
   BsShieldCheck,
   BsSmartwatch,
   BsSnow,
@@ -832,6 +834,21 @@ function buildCategoryTabs(t: TranslateFn): ReadonlyArray<{
       slug: 'credit-cards',
       icon: BsCreditCard2Front,
       label: t('tabCreditCards'),
+    },
+    {
+      slug: 'monitors',
+      icon: BsDisplay,
+      label: t('tabMonitors'),
+    },
+    {
+      slug: 'cameras',
+      icon: BsCamera,
+      label: t('tabCameras'),
+    },
+    {
+      slug: 'vps-hosting',
+      icon: BsServer,
+      label: t('tabVpsHosting'),
     },
   ];
 }

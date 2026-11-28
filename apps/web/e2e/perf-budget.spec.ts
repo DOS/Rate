@@ -31,8 +31,8 @@ const PAGES: Record<string, { path: string; budget: Budget; photo?: string }> =
     },
     category: {
       path: '/smartphones',
-      // Bumped from 44 * KB after adding #1968 Wave E5 Phase 2 categories (spas-aesthetics, english-centers, credit-cards) nav/footer i18n strings (CI measured 44.1 KB / 45155 bytes).
-      budget: { html: 46 * KB, js: 373 * KB, css: 50 * KB, prefetch: 10 * KB },
+      // Bumped from 46 * KB after adding #1976 Wave E6 categories (monitors, cameras, vps-hosting) nav/footer i18n strings.
+      budget: { html: 48 * KB, js: 373 * KB, css: 50 * KB, prefetch: 10 * KB },
     },
     product: {
       path: '/smartphones/iphone-16-pro-max-256gb',

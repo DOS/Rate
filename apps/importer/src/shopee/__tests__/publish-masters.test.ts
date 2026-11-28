@@ -559,7 +559,7 @@ test('parsePublishMastersArgs handles --crawled flags and guards core tech categ
     /does not support core tech category/
   );
   assert.throws(
-    () => parsePublishMastersArgs(['--crawled', '--category', 'monitors']),
+    () => parsePublishMastersArgs(['--crawled', '--category', 'printers']),
     /unknown --crawled category/
   );
   assert.throws(

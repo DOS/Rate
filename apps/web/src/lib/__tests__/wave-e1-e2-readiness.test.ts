@@ -114,7 +114,7 @@ console.warn('🧪 Wave E1/E2 web readiness suite (DOS/Rate#1901)');
 assert.equal(CORE_TECH_CATEGORY_SLUGS.length, 5);
 assert.equal(WAVE_E1_CATEGORY_SLUGS.length, 5);
 assert.equal(WAVE_E2_SERVICE_CATEGORY_SLUGS.length, 2);
-assert.equal(ALL_CANONICAL_CATEGORY_SLUGS.length, 24);
+assert.equal(ALL_CANONICAL_CATEGORY_SLUGS.length, 27);
 
 const nextConfigSrc = readFileSync(join(webRoot, 'next.config.mjs'), 'utf8');
 for (const slug of [

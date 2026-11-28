@@ -27,6 +27,9 @@ const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
   'supplements',
   'cosmetics',
   'mother-baby',
+  'monitors',
+  'cameras',
+  'vps-hosting',
 ]);
 
 const VALID_PLATFORMS = SUPPORTED_PLATFORM_SLUGS;

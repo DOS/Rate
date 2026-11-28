@@ -48,6 +48,9 @@ const CANONICAL_TRAY_CATEGORIES = new Set<CanonicalCategorySlug>([
   'spas-aesthetics',
   'english-centers',
   'credit-cards',
+  'monitors',
+  'cameras',
+  'vps-hosting',
 ]);
 
 export const MAX_COMPARE_ITEMS = 4;

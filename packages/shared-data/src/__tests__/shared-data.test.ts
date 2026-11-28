@@ -1926,7 +1926,7 @@ function testRatingCriteriaAndReviewForm(): void {
   const earbudKeys = rules.getRatingCriteria('earbuds').map((cr) => cr.key);
   assert.ok(earbudKeys.includes('sound') && !earbudKeys.includes('display'));
   assert.deepEqual(
-    rules.getRatingCriteria('cameras'),
+    rules.getRatingCriteria('printers'),
     rules.getRatingCriteria('smartphones')
   );
   assert.deepEqual(
@@ -3448,7 +3448,7 @@ function testReviewValue(): void {
   );
   // A category without its own criteria list has no criteria to complete.
   assert.equal(completeness({ categorySlug: null }), 15);
-  assert.equal(completeness({ categorySlug: 'monitors' }), 15);
+  assert.equal(completeness({ categorySlug: 'printers' }), 15);
   // A verdict that repeats a line, or longer than the form allows, earns nothing.
   const longLine = 'Pin dùng cả ngày với nhu cầu vừa phải';
   assert.equal(
@@ -3648,7 +3648,7 @@ function testWaveE1E2Readiness(): void {
   assert.equal(rules.RATING_CRITERIA_V2_VERSION, 2);
   assert.equal(rules.RATING_CRITERIA_V3_VERSION, 3);
   assert.equal(rules.RATING_CRITERIA_CATEGORIES.length, 6);
-  assert.equal(rules.RATING_CRITERIA_ALL_CATEGORIES.length, 25);
+  assert.equal(rules.RATING_CRITERIA_ALL_CATEGORIES.length, 28);
 
   const expectedWeights: Record<string, Record<string, number>> = {
     tvs: {
@@ -3768,6 +3768,11 @@ function testWaveE1E2Readiness(): void {
     'tpbank',
     'hsbc',
     'shinhan',
+    'nhanhoa',
+    'pavietnam',
+    'hostvn',
+    'bkns',
+    'longvan',
   ]);
   for (const p of [
     'shopee',
@@ -5004,9 +5009,211 @@ function main(): void {
   );
   testWaveE5Phase2Readiness();
   console.log(
-    '  ✅ [19/19] Wave E5 Phase 2 spas-aesthetics, english-centers, credit-cards criteria v5 (DOS/Rate#1968) verified'
+    '  ✅ [19/20] Wave E5 Phase 2 spas-aesthetics, english-centers, credit-cards criteria v5 (DOS/Rate#1968) verified'
+  );
+  testWaveE6Readiness();
+  console.log(
+    '  ✅ [20/20] Wave E6 monitors, cameras, vps-hosting criteria v6, templates, and service platforms (DOS/Rate#1976) verified'
   );
   console.log('🎉 All @repo/shared-data tests passed!');
+}
+
+function testWaveE6Readiness(): void {
+  // Criteria v6 mirrors DOS/DOS.Me#2034 rows byte-for-byte (key, weight, required, position).
+  assert.equal(rules.RATING_CRITERIA_V6_VERSION, 6);
+  assert.deepEqual([...rules.V6_RATING_CRITERIA_CATEGORIES].sort(), [
+    'cameras',
+    'monitors',
+    'vps-hosting',
+  ]);
+  const snap = (slug: string) =>
+    rules
+      .getRatingCriteria(slug)
+      .map(
+        (cr) =>
+          `${cr.key}:${cr.weight}:${cr.specGroup ?? '-'}:${cr.required ? 1 : 0}`
+      );
+  assert.deepEqual(snap('monitors'), [
+    'display:35:display:0',
+    'performance:20:display:0',
+    'connectivity:15:connectivity:0',
+    'design:15:design:0',
+    'value:15:-:1',
+  ]);
+  assert.deepEqual(snap('cameras'), [
+    'camera:35:-:0',
+    'performance:20:-:0',
+    'design:15:design:0',
+    'battery:15:battery:0',
+    'value:15:-:1',
+  ]);
+  assert.deepEqual(snap('vps-hosting'), [
+    'performance:30:-:0',
+    'price:25:-:1',
+    'speed:20:-:0',
+    'service_quality:15:-:0',
+    'ease_of_use:10:-:0',
+  ]);
+
+  for (const slug of ['monitors', 'cameras', 'vps-hosting']) {
+    assert.equal(rules.getRatingCriteriaVersion(slug), 6, slug);
+    assert.equal(rules.getRatingCriteriaVersion(` ${slug.toUpperCase()} `), 6);
+    assert.equal(rules.hasRatingCriteria(slug), true);
+    assert.equal(rules.V5_RATING_CRITERIA_CATEGORIES.has(slug), false);
+    assert.ok(rules.RATING_CRITERIA_ALL_CATEGORIES.includes(slug));
+    assert.equal(rules.RATING_CRITERIA_CATEGORIES.includes(slug), false);
+    const list = rules.getRatingCriteria(slug);
+    assert.equal(list.length, 5, slug);
+    assert.equal(
+      list.reduce((acc, cr) => acc + cr.weight, 0),
+      100,
+      `Sum 100 for ${slug}`
+    );
+    assert.equal(
+      list.filter((cr) => cr.required).length,
+      1,
+      `1 required for ${slug}`
+    );
+    for (const cr of list) {
+      assert.ok(
+        cr.label.vi.length > 0 &&
+          cr.label.en.length > 0 &&
+          cr.label.cs.length > 0
+      );
+    }
+    const presets = rules.getRatingUseCasePresets(slug);
+    assert.equal(presets.length, 1);
+    assert.equal(presets[0]!.id, 'default');
+  }
+
+  // Spec templates: monitors keeps screen axis like TVs, cameras omits phone camera group, vps-hosting uses non-hardware.
+  const monitorTemplate = rules.getCategorySpecTemplate('monitors');
+  assert.deepEqual(
+    [...monitorTemplate.groups],
+    [
+      'display',
+      'connectivity',
+      'multimedia',
+      'design',
+      'availability',
+      'regulatory',
+    ]
+  );
+  assert.deepEqual([...monitorTemplate.keySpecs], ['screen']);
+  assert.equal(monitorTemplate.screen, true);
+  assert.equal(monitorTemplate.ram, false);
+  assert.equal(monitorTemplate.storage, false);
+  assert.equal(monitorTemplate.has5g, false);
+
+  const cameraTemplate = rules.getCategorySpecTemplate('cameras');
+  assert.deepEqual(
+    [...cameraTemplate.groups],
+    [
+      'design',
+      'display',
+      'battery',
+      'connectivity',
+      'availability',
+      'regulatory',
+    ]
+  );
+  assert.equal(cameraTemplate.groups.includes('camera'), false);
+  assert.deepEqual([...cameraTemplate.keySpecs], []);
+  assert.equal(cameraTemplate.screen, false);
+  assert.equal(cameraTemplate.ram, false);
+  assert.equal(cameraTemplate.storage, false);
+  assert.equal(cameraTemplate.has5g, false);
+
+  const vpsTemplate = rules.getCategorySpecTemplate('vps-hosting');
+  assert.deepEqual([...vpsTemplate.groups], ['availability', 'regulatory']);
+  assert.deepEqual([...vpsTemplate.keySpecs], []);
+  assert.equal(vpsTemplate.screen, false);
+  assert.equal(vpsTemplate.ram, false);
+  assert.equal(vpsTemplate.storage, false);
+  assert.equal(vpsTemplate.has5g, false);
+
+  // Price floors: monitors/cameras inherit device floor (1.2M VND), vps-hosting service floor is 0.
+  assert.equal(
+    rules.minimumListingPriceVnd(['Dell UltraSharp U2724D'], {
+      categorySlug: 'monitors',
+    }),
+    rules.MINIMUM_DEVICE_PRICE_FLOOR_VND
+  );
+  assert.equal(
+    rules.minimumListingPriceVnd(['Sony Alpha A6700'], {
+      categorySlug: 'cameras',
+    }),
+    rules.MINIMUM_DEVICE_PRICE_FLOOR_VND
+  );
+  assert.equal(
+    rules.minimumListingPriceVnd(['Cloud VPS NVMe Nhan Hoa'], {
+      categorySlug: 'vps-hosting',
+    }),
+    0
+  );
+
+  // Service platforms: 5 Vietnamese VPS/hosting providers added while e-commerce stays at 22.
+  assert.equal(SupportedEcommercePlatformSchema.options.length, 22);
+  for (const platform of [
+    'nhanhoa',
+    'pavietnam',
+    'hostvn',
+    'bkns',
+    'longvan',
+  ]) {
+    assert.equal(
+      SupportedServicePlatformSchema.safeParse(platform).success,
+      true,
+      platform
+    );
+    assert.equal(
+      SupportedIngestionPlatformSchema.safeParse(platform).success,
+      true,
+      platform
+    );
+    assert.equal(
+      SupportedEcommercePlatformSchema.safeParse(platform).success,
+      false,
+      platform
+    );
+  }
+
+  // Routes & product-points criterion keywords.
+  assert.equal(RATE_ROUTES.MONITORS, '/monitors');
+  assert.equal(RATE_ROUTES.CAMERAS, '/cameras');
+  assert.equal(RATE_ROUTES.VPS_HOSTING, '/vps-hosting');
+  assert.equal(
+    rules.assignPointCriterion(
+      'monitors',
+      null,
+      'Tần số quét 165Hz chơi game không bóng mờ'
+    ),
+    'performance'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'cameras',
+      null,
+      'Cảm biến full frame chụp thiếu sáng đẹp'
+    ),
+    'camera'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'vps-hosting',
+      null,
+      'Uptime ổn định, không downtime cả năm'
+    ),
+    'performance'
+  );
+  assert.equal(
+    rules.assignPointCriterion(
+      'vps-hosting',
+      null,
+      'Băng thông quốc tế, SSD NVMe ping thấp'
+    ),
+    'speed'
+  );
 }
 
 main();

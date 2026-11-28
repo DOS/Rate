@@ -1475,7 +1475,7 @@ async function runMcpTestSuite() {
     );
   }
 
-  // 11b. 24-category coverage in server instructions, tool text and /llms.txt (#1927, #1937, #1968)
+  // 11b. 27-category coverage in server instructions, tool text and /llms.txt (#1927, #1937, #1968, #1976)
   const expectedCategoryGroups: ReadonlyArray<
     readonly [string, readonly string[]]
   > = [
@@ -1498,6 +1498,8 @@ async function runMcpTestSuite() {
       ['dental-clinics', 'gyms-fitness', 'spas-aesthetics', 'english-centers'],
     ],
     ['Wave E5 services', ['credit-cards']],
+    ['Wave E6 hardware', ['monitors', 'cameras']],
+    ['Wave E6 services', ['vps-hosting']],
   ];
   assert.deepEqual(
     MCP_SUPPORTED_CATEGORY_GROUPS.map((g) => [g.label, [...g.slugs]]),
@@ -1506,9 +1508,9 @@ async function runMcpTestSuite() {
   const enumCategories = SUPPORTED_CATEGORY_ENUM.options.filter(
     (c) => c !== 'all'
   );
-  assert.equal(enumCategories.length, 24);
-  assert.equal(SUPPORTED_CATEGORY_ENUM.options.length, 25);
-  assert.equal(MCP_SUPPORTED_CATEGORY_COUNT, 24);
+  assert.equal(enumCategories.length, 27);
+  assert.equal(SUPPORTED_CATEGORY_ENUM.options.length, 28);
+  assert.equal(MCP_SUPPORTED_CATEGORY_COUNT, 27);
   assert.deepEqual(
     MCP_SUPPORTED_CATEGORY_GROUPS.flatMap((g) => [...g.slugs]),
     enumCategories,
@@ -1530,7 +1532,7 @@ async function runMcpTestSuite() {
     ['MCP_SERVER_INSTRUCTIONS', MCP_SERVER_INSTRUCTIONS],
     ['search_verified_catalog description', searchTool.description],
   ] as const) {
-    assert.match(text, /24 categories/, `${label} must say 24 categories`);
+    assert.match(text, /27 categories/, `${label} must say 27 categories`);
     assert.doesNotMatch(
       text,
       /\b5 (device |hardware |tech )?categories\b/,
@@ -1557,8 +1559,8 @@ async function runMcpTestSuite() {
   assert.match(MCP_SERVER_INSTRUCTIONS, /compare_devices_by_use_case/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /ok: false, isError: true/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /fewer than two requested slugs/);
-  assert.match(dealsTool.description, /24 categories/);
-  assert.match(dealsTool.description, /16 non-place categories/);
+  assert.match(dealsTool.description, /27 categories/);
+  assert.match(dealsTool.description, /19 non-place categories/);
   assert.match(dealsTool.description, /Wave E4 and Wave E5 places/);
   assert.match(dealsTool.description, /returns no deals/);
   assert.match(dealsTool.description, /empty results/);
@@ -1568,14 +1570,23 @@ async function runMcpTestSuite() {
   assert.match(compareTool.description, /category-scoped specs/);
   assert.match(
     compareTool.description,
-    /availability \+ regulatory on Wave E2\/E3\/E4\/E5/
+    /availability \+ regulatory on Wave E2\/E3\/E4\/E5\/E6 services/
   );
   assert.match(compareTool.description, /earbuds omitting screen/);
   assert.match(compareTool.description, /screen \+ value on tvs/);
+  assert.match(
+    compareTool.description,
+    /screen \+ performance \+ value on monitors/
+  );
+  assert.match(
+    compareTool.description,
+    /performance \+ camera \+ battery \+ value on cameras/
+  );
+  assert.match(compareTool.description, /performance \+ value on vps-hosting/);
   assert.match(compareTool.description, /value only on other Wave E1-E5/);
   assert.match(
     compareTool.description,
-    /maps to price on bank-savings, internet-telecom, restaurants, cafes, dental-clinics, spas-aesthetics, and credit-cards/
+    /maps to price on bank-savings, internet-telecom, restaurants, cafes, dental-clinics, spas-aesthetics, credit-cards, and vps-hosting/
   );
   assert.match(compareTool.description, /ok: false, isError: true/);
   assert.match(compareTool.description, /fewer than two requested slugs/);
@@ -1609,7 +1620,7 @@ async function runMcpTestSuite() {
   ]);
   assert.match(
     searchSchemaFor19.properties.category?.description ?? '',
-    /24 supported categories/
+    /27 supported categories/
   );
   const dealsSchemaFor19 = dealsTool.inputSchema as {
     properties: Record<string, { enum?: string[]; description?: string }>;
@@ -1619,7 +1630,7 @@ async function runMcpTestSuite() {
   ]);
   assert.match(
     dealsSchemaFor19.properties.category?.description ?? '',
-    /16 non-place categories/
+    /19 non-place categories/
   );
   assert.match(
     dealsSchemaFor19.properties.category?.description ?? '',
@@ -1642,20 +1653,20 @@ async function runMcpTestSuite() {
   );
   assert.match(
     compareSchemaFor19.properties.persona?.description ?? '',
-    /maps to price on bank-savings, internet-telecom, restaurants, cafes, dental-clinics, spas-aesthetics, and credit-cards/
+    /maps to price on bank-savings, internet-telecom, restaurants, cafes, dental-clinics, spas-aesthetics, credit-cards, and vps-hosting/
   );
 
-  assert.match(llmsBody, /across 24 categories/);
+  assert.match(llmsBody, /across 27 categories/);
   assert.match(
     llmsBody,
-    /`value` slot maps to `price` on `bank-savings`, `internet-telecom`, `restaurants`, `cafes`, `dental-clinics`, `spas-aesthetics`, and `credit-cards`/
+    /`value` slot maps to `price` on `bank-savings`, `internet-telecom`, `restaurants`, `cafes`, `dental-clinics`, `spas-aesthetics`, `credit-cards`, and `vps-hosting`/
   );
-  assert.match(llmsBody, /\*\*24 Canonical Categories\*\*/);
+  assert.match(llmsBody, /\*\*27 Canonical Categories\*\*/);
   assert.match(llmsBody, /no published items yet returns empty results/);
   assert.match(llmsBody, /for category-filtered tools/);
   assert.match(llmsBody, /`ok: false`.*`isError: true`/);
   assert.match(llmsBody, /fewer than two requested slugs/);
-  assert.match(llmsBody, /16 non-place categories/);
+  assert.match(llmsBody, /19 non-place categories/);
   assert.match(llmsBody, /category-scoped specification templates/);
   assert.match(llmsBody, /`earbuds` omitting `screen`/);
   assert.doesNotMatch(llmsBody, /from every tool|every tool returns/i);
@@ -1695,7 +1706,7 @@ async function runMcpTestSuite() {
     endpoints: { mcp: string; transport: string };
     tools: Array<{ name: string; description: string }>;
   };
-  assert.match(wkJson.description, /24 categories/);
+  assert.match(wkJson.description, /27 categories/);
   assert.match(wkJson.description, /category-scoped specs/);
   assert.match(wkJson.description, /category-filtered tools/);
   assert.match(wkJson.description, /compare_devices_by_use_case/);
