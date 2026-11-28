@@ -39,6 +39,7 @@ const SERVICE_CATEGORY_SLUGS = new Set([
   'bank-savings',
   'internet-telecom',
   'credit-cards',
+  'vps-hosting',
   'services',
 ]);
 const PLACE_CATEGORY_SLUGS = new Set([
@@ -65,7 +66,7 @@ export interface MinimumListingPriceOptions {
 }
 
 /**
- * The floor for a listing: 0 for Wave E2/E5 services, Wave E4/E5 places, or PCT-denominated rates,
+ * The floor for a listing: 0 for Wave E2/E5/E6 services, Wave E4/E5 places, or PCT-denominated rates,
  * the small-appliance floor for air purifiers, the consumable retail floor (20,000 VND) for
  * Wave E3 categories, the earbuds floor when the category is `earbuds` or the texts (title, URL)
  * name earbuds (without a conflicting non-earbuds category), else the device floor.

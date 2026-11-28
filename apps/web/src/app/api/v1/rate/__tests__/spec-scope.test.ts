@@ -1273,6 +1273,9 @@ async function testSpecMatchesBodies() {
     'spas-aesthetics',
     'english-centers',
     'credit-cards',
+    'monitors',
+    'cameras',
+    'vps-hosting',
     'all',
   ]);
   assert.equal(productCategoryParam.schema.default, 'smartphones');

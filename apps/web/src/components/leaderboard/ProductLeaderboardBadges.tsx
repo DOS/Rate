@@ -34,6 +34,9 @@ const VALID_BADGE_CATEGORIES = new Set<CanonicalCategorySlug>([
   'spas-aesthetics',
   'english-centers',
   'credit-cards',
+  'monitors',
+  'cameras',
+  'vps-hosting',
 ]);
 
 const VALID_BADGE_CRITERIA = new Set<LeaderboardCriterionKey>([
@@ -137,6 +140,9 @@ export default async function ProductLeaderboardBadges({
     'spas-aesthetics': t('catSpasAesthetics'),
     'english-centers': t('catEnglishCenters'),
     'credit-cards': t('catCreditCards'),
+    monitors: t('catMonitors'),
+    cameras: t('catCameras'),
+    'vps-hosting': t('catVpsHosting'),
   };
 
   const critLabels: Record<LeaderboardCriterionKey, string> = {

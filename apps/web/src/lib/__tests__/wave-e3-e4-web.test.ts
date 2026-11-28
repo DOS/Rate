@@ -60,13 +60,13 @@ import { MCP_TOOL_DEFINITIONS } from '../../server/rate/mcp';
 
 const webRoot = join(__dirname, '..', '..', '..');
 
-// 1. Canonical 24-category exports (19 through Wave E4, plus Wave E5 Phase 1 & Phase 2), Wave E3/E4 guards & keyword fallback
+// 1. Canonical 27-category exports (through Wave E6), Wave E3/E4 guards & keyword fallback
 assert.equal(CORE_TECH_CATEGORY_SLUGS.length, 5);
 assert.equal(WAVE_E1_CATEGORY_SLUGS.length, 5);
 assert.equal(WAVE_E2_SERVICE_CATEGORY_SLUGS.length, 2);
 assert.equal(WAVE_E3_CATEGORY_SLUGS.length, 3);
 assert.equal(WAVE_E4_PLACE_CATEGORY_SLUGS.length, 4);
-assert.equal(ALL_CANONICAL_CATEGORY_SLUGS.length, 24);
+assert.equal(ALL_CANONICAL_CATEGORY_SLUGS.length, 27);
 
 for (const slug of WAVE_E3_CATEGORY_SLUGS) {
   assert.equal(isCanonicalCategorySlug(slug), true);
@@ -593,7 +593,7 @@ assert.equal(
   spec.components.schemas.SupportedEcommercePlatform.enum.length,
   22
 );
-assert.equal(spec.components.schemas.CanonicalRateCategorySlug.enum.length, 24);
+assert.equal(spec.components.schemas.CanonicalRateCategorySlug.enum.length, 27);
 assert.ok(MCP_TOOL_DEFINITIONS.length > 0);
 assert.equal(
   (CLIENT_MESSAGE_SCOPES.productDetail as readonly string[]).includes(

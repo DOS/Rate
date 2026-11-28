@@ -235,6 +235,9 @@ const LEGACY_CRITERION_MAP: Readonly<
   'spas-aesthetics': {},
   'english-centers': {},
   'credit-cards': {},
+  monitors: {},
+  cameras: {},
+  'vps-hosting': {},
 };
 
 const CRITERION_KEY_RE = /^[a-z_]{2,32}$/;

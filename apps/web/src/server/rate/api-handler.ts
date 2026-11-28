@@ -1302,6 +1302,9 @@ const VALID_PRODUCT_CATEGORY_SLUGS = new Set([
   'spas-aesthetics',
   'english-centers',
   'credit-cards',
+  'monitors',
+  'cameras',
+  'vps-hosting',
 ]);
 
 const VALID_BRAND_TOKEN_REGEX =

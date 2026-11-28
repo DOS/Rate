@@ -129,6 +129,9 @@ export const VALID_LEADERBOARD_CATEGORIES: readonly CanonicalCategorySlug[] = [
   'spas-aesthetics',
   'english-centers',
   'credit-cards',
+  'monitors',
+  'cameras',
+  'vps-hosting',
 ] as const;
 
 export function normalizeLeaderboardCategory(
@@ -284,6 +287,15 @@ export function leaderboardCriteriaForCategory(
   }
   if (categorySlug === 'tvs') {
     return ['screen', 'value'];
+  }
+  if (categorySlug === 'monitors') {
+    return ['screen', 'performance', 'value'];
+  }
+  if (categorySlug === 'cameras') {
+    return ['performance', 'camera', 'battery', 'value'];
+  }
+  if (categorySlug === 'vps-hosting') {
+    return ['performance', 'value'];
   }
   if (
     categorySlug === 'air-conditioners' ||

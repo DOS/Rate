@@ -84,7 +84,10 @@ export type CanonicalCategorySlug =
   | 'gyms-fitness'
   | 'spas-aesthetics'
   | 'english-centers'
-  | 'credit-cards';
+  | 'credit-cards'
+  | 'monitors'
+  | 'cameras'
+  | 'vps-hosting';
 
 export const CANONICAL_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
   'smartphones',
@@ -111,6 +114,9 @@ export const CANONICAL_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new 
   'spas-aesthetics',
   'english-centers',
   'credit-cards',
+  'monitors',
+  'cameras',
+  'vps-hosting',
 ]);
 
 export const WAVE_E1_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
@@ -131,10 +137,22 @@ export const WAVE_E5_SERVICE_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> 
   'credit-cards',
 ]);
 
-/** Every category whose masters are `entity_type = 'service'` (Wave E2 and Wave E5). */
+/** Wave E6 hardware product categories (DOS/Rate#1976): monitors and cameras. */
+export const WAVE_E6_PRODUCT_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
+  'monitors',
+  'cameras',
+]);
+
+/** Wave E6 service categories (DOS/Rate#1976): VPS & hosting. */
+export const WAVE_E6_SERVICE_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
+  'vps-hosting',
+]);
+
+/** Every category whose masters are `entity_type = 'service'` (Wave E2, E5, and E6). */
 export const SERVICE_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
   ...WAVE_E2_SERVICE_CATEGORY_SLUGS,
   ...WAVE_E5_SERVICE_CATEGORY_SLUGS,
+  ...WAVE_E6_SERVICE_CATEGORY_SLUGS,
 ]);
 
 export const WAVE_E3_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new Set([
@@ -170,6 +188,7 @@ export const SIZELESS_CATEGORY_SLUGS: ReadonlySet<CanonicalCategorySlug> = new S
   ...SERVICE_CATEGORY_SLUGS,
   ...WAVE_E3_CATEGORY_SLUGS,
   ...PLACE_CATEGORY_SLUGS,
+  ...WAVE_E6_PRODUCT_CATEGORY_SLUGS,
 ]);
 
 export type ProductCondition = 'new' | 'like_new_99' | 'used' | 'refurbished';
@@ -587,7 +606,7 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
 // "combo", "bộ" or "set" before the accessory, and titles typed without diacritics
 // ("Op lung"), count too.
 const ACCESSORY_OPENER =
-  /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*(?:cường\s*lực|camera|bảo\s*vệ)|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc|cáp|dây|giá\s*đỡ|lõi\s*lọc|màng\s*lọc|ống\s*đồng|điều\s*khiển\s*(?:tivi|tv|điều\s*hòa|máy\s*lạnh)|remote\s*(?:tivi|tv|điều\s*hòa|máy\s*lạnh)|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
+  /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng|máy\s*ảnh)|ba\s*lô\s*máy\s*ảnh|balo\s*máy\s*ảnh|kính\s*(?:cường\s*lực|camera|bảo\s*vệ|lọc)|kinh\s*loc|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc(?:\s*rời)?|pin\s*(?:rời|sạc|dự\s*phòng|máy\s*ảnh)|cáp|dây|giá\s*(?:đỡ|treo(?:\s*màn\s*hình)?)|tay\s*(?:đỡ|nâng)(?:\s*màn\s*hình)?|arm\s*màn\s*hình|chân\s*(?:đế\s*(?:rời|màn\s*hình)|máy(?:\s*ảnh)?)|chan\s*may(?:\s*anh)?|đèn\s*(?:treo\s*màn\s*hình|flash)|ống\s*kính(?:\s*rời)?|ong\s*kinh(?:\s*roi)?|lens|tripods?|monopods?|gimbals?|thẻ\s*nhớ|the\s*nho|memory\s*cards?|filters?|lens\s*hoods?|hood|loa\s*che\s*nắng|ngàm\s*chuyển|ngam\s*chuyen|mount\s*adapters?|tủ\s*chống\s*ẩm|nắp\s*(?:ống\s*kính|lens|body)|lens\s*caps?|khung\s*bảo\s*vệ|cage|monitor\s*(?:arm|mount|stand|light\s*bar|riser)|lõi\s*lọc|màng\s*lọc|ống\s*đồng|điều\s*khiển\s*(?:tivi|tv|điều\s*hòa|máy\s*lạnh)|remote\s*(?:tivi|tv|điều\s*hòa|máy\s*lạnh)|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
 // Words that make "Apple Pencil" what something fits or copies, not what it is.
 const PENCIL_FIT_WORD =
   /(?<![\p{L}\d])(?:cho|for|thay|như|giống|kiểu|dùng|tương\s*thích|compatible|khe|đựng|ngăn)(?![\p{L}\d])/iu;
@@ -657,6 +676,17 @@ function openingWords(text: string): string {
   }
 }
 
+const CAMERA_ACCESSORY_COMPAT_ITEM_RE =
+  /(?<![\p{L}\d])(?:lens|ống[\s-]{0,2}kính|ong[\s-]{0,2}kinh|tripods?|chân[\s-]{0,2}máy|chan[\s-]{0,2}may|túi|tui|ba[\s-]{0,2}lô|balo|filters?|kính[\s-]{0,2}lọc|kinh[\s-]{0,2}loc|đèn[\s-]{0,2}flash|den[\s-]{0,2}flash|flash|gimbals?|cage|khung[\s-]{0,2}bảo[\s-]{0,2}vệ|khung[\s-]{0,2}bao[\s-]{0,2}ve|pin|sạc|sac|hoods?|ngàm[\s-]{0,2}chuyển|ngam[\s-]{0,2}chuyen|micro|mic)(?![\p{L}\d])/iu;
+const CAMERA_ACCESSORY_COMPAT_TARGET_RE =
+  /(?<![\p{L}\d])(?:cho|for|dành[\s-]{0,2}cho|danh[\s-]{0,2}cho)[\s-]{1,2}(?:máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|mirrorless|dslr|sony|canon|nikon|fujifilm|gopro|dji|insta360)(?![\p{L}\d])/iu;
+
+function hasCameraAccessoryCompatibility(text: string): boolean {
+  const targetMatch = CAMERA_ACCESSORY_COMPAT_TARGET_RE.exec(text);
+  if (!targetMatch) return false;
+  return CAMERA_ACCESSORY_COMPAT_ITEM_RE.test(text.slice(0, targetMatch.index));
+}
+
 /**
  * Whether a title sells an accessory for a device rather than the device: it opens with
  * the accessory (DOS/Rate#1505). Opening promo brackets ("[Hàng chính hãng]") are skipped.
@@ -678,7 +708,34 @@ export function isAccessoryTitle(
   const t = typeof title === 'string' ? title.normalize('NFC') : '';
   // What the title sells, not a gift it opens with: "Ốp lưng tặng kèm khi mua iPhone 16 Pro
   // Max" sells the iPhone (DOS/Rate#1407).
-  const opening = openingWords(ownProductPart(t));
+  const ownPart = ownProductPart(t);
+  const opening = openingWords(ownPart);
+  if (categorySlug === 'monitors') {
+    if (
+      /(?<![\p{L}\d])(?:giá[\s-]{0,2}treo[\s-]{0,2}màn[\s-]{0,2}hình|gia[\s-]{0,2}treo[\s-]{0,2}man[\s-]{0,2}hinh|tay[\s-]{0,2}(?:đỡ|do|nâng|nang)[\s-]{0,2}(?:màn[\s-]{0,2}hình|man[\s-]{0,2}hinh)|arm[\s-]{0,2}(?:màn[\s-]{0,2}hình|man[\s-]{0,2}hinh)|chân[\s-]{0,2}đế[\s-]{0,2}rời|chan[\s-]{0,2}de[\s-]{0,2}roi|dán[\s-]{0,2}màn[\s-]{0,2}hình|dan[\s-]{0,2}man[\s-]{0,2}hinh|kính[\s-]{0,2}cường[\s-]{0,2}lực|kinh[\s-]{0,2}cuong[\s-]{0,2}luc|miếng[\s-]{0,2}dán[\s-]{0,2}(?:màn[\s-]{0,2}hình|man[\s-]{0,2}hinh)|mieng[\s-]{0,2}dan[\s-]{0,2}man[\s-]{0,2}hinh|đèn[\s-]{0,2}treo[\s-]{0,2}màn[\s-]{0,2}hình|den[\s-]{0,2}treo[\s-]{0,2}man[\s-]{0,2}hinh|monitor[\s-]{0,2}(?:arm|mount|stand|light[\s-]{0,2}bar|riser|hood|protector)|screen[\s-]{0,2}protectors?)(?![\p{L}\d])/iu.test(
+        ownPart
+      )
+    ) {
+      return true;
+    }
+  }
+  if (categorySlug === 'cameras') {
+    if (hasCameraAccessoryCompatibility(ownPart)) {
+      return true;
+    }
+    const opensWithCameraBody =
+      /^(?:máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|camera[\s-]{0,2}hành[\s-]{0,2}động|camera[\s-]{0,2}hanh[\s-]{0,2}dong|action[\s-]{0,2}cam|máy[\s-]{0,2}quay|may[\s-]{0,2}quay|gopro[\s-]{0,2}(?:hero|max)|dji[\s-]{0,2}osmo[\s-]{0,2}(?:action|pocket)|insta360[\s-]{0,2}(?:x\d|ace|go[\s-]{0,2}\d|one))(?![\p{L}\d])/iu.test(
+        opening
+      );
+    if (
+      !opensWithCameraBody &&
+      /(?<![\p{L}\d])(?:ống[\s-]{0,2}kính|ong[\s-]{0,2}kinh|lens|đèn[\s-]{0,2}flash|den[\s-]{0,2}flash|gimbals?|cage|khung[\s-]{0,2}bảo[\s-]{0,2}vệ|khung[\s-]{0,2}bao[\s-]{0,2}ve|chân[\s-]{0,2}máy(?:[\s-]{0,2}ảnh)?|chan[\s-]{0,2}may(?:[\s-]{0,2}anh)?|tripods?|monopods?|túi[\s-]{0,2}(?:đựng[\s-]{0,2})?máy[\s-]{0,2}ảnh|tui[\s-]{0,2}(?:dung[\s-]{0,2})?may[\s-]{0,2}anh|ba[\s-]{0,2}lô[\s-]{0,2}máy[\s-]{0,2}ảnh|balo[\s-]{0,2}máy[\s-]{0,2}ảnh|balo[\s-]{0,2}may[\s-]{0,2}anh|thẻ[\s-]{0,2}nhớ|the[\s-]{0,2}nho|memory[\s-]{0,2}cards?|kính[\s-]{0,2}lọc|kinh[\s-]{0,2}loc|filters?|lens[\s-]{0,2}hoods?|hood|loa[\s-]{0,2}che[\s-]{0,2}nắng|ngàm[\s-]{0,2}chuyển|ngam[\s-]{0,2}chuyen|mount[\s-]{0,2}adapters?|pin[\s-]{0,2}rời|pin[\s-]{0,2}roi|sạc[\s-]{0,2}rời|sac[\s-]{0,2}roi|tủ[\s-]{0,2}chống[\s-]{0,2}ẩm|tu[\s-]{0,2}chong[\s-]{0,2}am)(?![\p{L}\d])/iu.test(
+        ownPart
+      )
+    ) {
+      return true;
+    }
+  }
   if (
     !ACCESSORY_OPENER.test(opening) ||
     opensWithApplePencil(opening) ||
@@ -701,7 +758,7 @@ export function isAccessoryTitle(
 
 /**
  * Detect canonical category slug from product title (or optional upstream hint)
- * across all 24 canonical categories.
+ * across all 27 canonical categories.
  */
 export function detectCategorySlug(
   title: string,
@@ -739,7 +796,7 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
   // as credit-cards, while excluding gift/memory/SIM/scratch/flash/name cards, card
   // holders/readers, and retail installment promos paid via credit card (DOS/Rate#1968).
   const isNonCreditCardItem =
-    /(?<![\p{L}\d])(?:thẻ\s*(?:quà\s*tặng|nhớ|sim|cào|điện\s*thoại|nạp|game|garena|zing|học|tên|nhân\s*viên|từ|thang\s*máy|giữ\s*xe|bảo\s*hành|thành\s*viên|hội\s*viên|tập|bài|đồ\s*chơi)|the\s*(?:qua\s*tang|nho|sim|cao|dien\s*thoai|nap|game|hoc|ten|nhan\s*vien|tu|bao\s*hanh|thanh\s*vien|hoi\s*vien|tap|bai)|gift\s*cards?|memory\s*cards?|micro\s*sd|sd(?:xc|hc)?\s*cards?|tf\s*cards?|cfexpress|sim\s*cards?|card\s*readers?|đầu\s*đọc\s*thẻ|dau\s*doc\s*the|ví\s*(?:đựng\s*thẻ|da|nam|nữ|card)|vi\s*(?:dung\s*the|da|nam|nu|card)|(?:bao|hộp|túi|ngăn|kẹp|dây\s*đeo)\s*(?:đựng\s*|bảo\s*vệ\s*|da\s*đựng\s*)?thẻ|(?:bao|hop|tui|kep|day\s*deo)\s*(?:dung\s*|bao\s*ve\s*)?the|ốp\s*lưng|op\s*lung|bóp|bop|miếng\s*dán|mieng\s*dan|sticker|skin\s*dán|máy\s*quẹt\s*thẻ|may\s*quet\s*the|card\s*holders?|rfid\s*(?:wallet|sleeve|blocker|holder)|chống\s*rfid|flash\s*cards?|bộ\s*thẻ|bo\s*the|(?:trả\s*góp|tra\s*gop|thanh\s*toán|thanh\s*toan|giảm\s*giá|giam\s*gia)\s*(?:\d+%\s*)?(?:(?:qua|bằng|bang|với|voi)\s+)?(?:thẻ\s*tín\s*dụng|the\s*tin\s*dung)|iphone|ipad|macbook|galaxy\s*(?:s\d|z\s*|a\d|tab|watch|buds)|điện\s*thoại|laptop|máy\s*tính|tivi|tủ\s*lạnh|máy\s*giặt|điều\s*hòa|điều\s*hoà|máy\s*lạnh|máy\s*lọc\s*(?:không\s*)?khí|tai\s*nghe|airpods|apple\s*watch|smartwatch|đồng\s*hồ|smart\s*tv|oled\s*tv|qled\s*tv|xiaomi|redmi|poco|oppo|vivo|realme)(?![\p{L}\d])/iu.test(
+    /(?<![\p{L}\d])(?:thẻ\s*(?:quà\s*tặng|nhớ|sim|cào|điện\s*thoại|nạp|game|garena|zing|học|tên|nhân\s*viên|từ|thang\s*máy|giữ\s*xe|bảo\s*hành|thành\s*viên|hội\s*viên|tập|bài|đồ\s*chơi)|the\s*(?:qua\s*tang|nho|sim|cao|dien\s*thoai|nap|game|hoc|ten|nhan\s*vien|tu|bao\s*hanh|thanh\s*vien|hoi\s*vien|tap|bai)|gift\s*cards?|memory\s*cards?|micro\s*sd|sd(?:xc|hc)?\s*cards?|tf\s*cards?|cfexpress|sim\s*cards?|card\s*readers?|đầu\s*đọc\s*thẻ|dau\s*doc\s*the|ví\s*(?:đựng\s*thẻ|da|nam|nữ|card)|vi\s*(?:dung\s*the|da|nam|nu|card)|(?:bao|hộp|túi|ngăn|kẹp|dây\s*đeo)\s*(?:đựng\s*|bảo\s*vệ\s*|da\s*đựng\s*)?thẻ|(?:bao|hop|tui|kep|day\s*deo)\s*(?:dung\s*|bao\s*ve\s*)?the|ốp\s*lưng|op\s*lung|bóp|bop|miếng\s*dán|mieng\s*dan|sticker|skin\s*dán|máy\s*quẹt\s*thẻ|may\s*quet\s*the|card\s*holders?|rfid\s*(?:wallet|sleeve|blocker|holder)|chống\s*rfid|flash\s*cards?|bộ\s*thẻ|bo\s*the|(?:trả\s*góp|tra\s*gop|thanh\s*toán|thanh\s*toan|giảm\s*giá|giam\s*gia)\s*(?:\d+%\s*)?(?:(?:qua|bằng|bang|với|voi)\s+)?(?:thẻ\s*tín\s*dụng|the\s*tin\s*dung)|iphone|ipad|macbook|galaxy\s*(?:s\d|z\s*|a\d|m\d|tab|watch|buds)|điện\s*thoại|laptop|máy\s*tính|màn\s*hình|máy\s*ảnh|camera|vps|hosting|tivi|tủ\s*lạnh|máy\s*giặt|điều\s*hòa|điều\s*hoà|máy\s*lạnh|máy\s*lọc\s*(?:không\s*)?khí|tai\s*nghe|airpods|apple\s*watch|smartwatch|đồng\s*hồ|smart\s*tv|oled\s*tv|qled\s*tv|xiaomi|redmi|poco|oppo|vivo|realme)(?![\p{L}\d])/iu.test(
       t
     );
   if (
@@ -764,6 +821,18 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
   ) {
     return 'internet-telecom';
   }
+  const isNonVpsHostingItem =
+    /(?<![\p{L}\d])(?:chứng[\s-]{0,2}khoán|chung[\s-]{0,2}khoan|cổ[\s-]{0,2}phiếu|co[\s-]{0,2}phieu|securities|smartone|smartpro|tài[\s-]{0,2}khoản[\s-]{0,2}giao[\s-]{0,2}dịch|tai[\s-]{0,2}khoan[\s-]{0,2}giao[\s-]{0,2}dich|nha[\s-]{0,2}khoa|khách[\s-]{0,2}sạn|khach[\s-]{0,2}san|homestay|nhà[\s-]{0,2}hàng|nha[\s-]{0,2}hang|quán[\s-]{0,2}cà[\s-]{0,2}phê|quan[\s-]{0,2}ca[\s-]{0,2}phe|spa|điện[\s-]{0,2}thoại|dien[\s-]{0,2}thoai|smartphone|iphone|ipad|macbook|laptop|máy[\s-]{0,2}tính[\s-]{0,2}(?:xách[\s-]{0,2}tay|bảng)|tablet|tivi|smart[\s-]{0,2}tv|màn[\s-]{0,2}hình|man[\s-]{0,2}hinh|máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|camera|tai[\s-]{0,2}nghe|airpods|smartwatch|đồng[\s-]{0,2}hồ|tủ[\s-]{0,2}lạnh|máy[\s-]{0,2}giặt|điều[\s-]{0,2}hòa|điều[\s-]{0,2}hoà|máy[\s-]{0,2}lạnh|máy[\s-]{0,2}lọc|router|switch|cáp[\s-]{0,2}mạng|ổ[\s-]{0,2}cứng[\s-]{0,2}di[\s-]{0,2}động|box[\s-]{0,2}ssd|ốp[\s-]{0,2}lưng|túi[\s-]{0,2}đựng|sách|khóa[\s-]{0,2}học|khoa[\s-]{0,2}hoc)(?![\p{L}\d])/iu.test(
+      t
+    );
+  if (
+    !isNonVpsHostingItem &&
+    /(?<![\p{L}\d])(?:cloud[\s-]{0,2}vps|vps[\s-]{0,2}(?:hosting|kvm|nvme|ssd|cloud|giá[\s-]{0,2}rẻ|gia[\s-]{0,2}re|việt[\s-]{0,2}nam|viet[\s-]{0,2}nam|vn|pro|tier|plan|gói|goi|vm\d{1,3}|linux|windows|cao[\s-]{0,2}cấp|cao[\s-]{0,2}cap|chuyên[\s-]{0,2}nghiệp|chuyen[\s-]{0,2}nghiep|starter|basic|standard|business|enterprise|gpu|storage|nhanhoa|nh[aâ]n[\s-]{0,2}h[oò]a|pavietnam|p\.?[\s-]{0,2}a\.?[\s-]{0,2}vi[eệ]t[\s-]{0,2}nam|hostvn|bkns|longvan|long[\s-]{0,2}v[aâ]n|\d{1,3}(?:[\s-]{0,2}(?:vcpu|core|gb))?)|thuê[\s-]{0,2}vps|thue[\s-]{0,2}vps|gói[\s-]{0,2}vps|goi[\s-]{0,2}vps|máy[\s-]{0,2}chủ[\s-]{0,2}ảo|may[\s-]{0,2}chu[\s-]{0,2}ao|cloud[\s-]{0,2}server|thuê[\s-]{0,2}máy[\s-]{0,2}chủ|thue[\s-]{0,2}may[\s-]{0,2}chu|dedicated[\s-]{0,2}server|(?:web|wordpress|ssd|nvme|cloud|business|reseller|linux|windows|seo|email)[\s-]{0,2}hosting|thuê[\s-]{0,2}hosting|thue[\s-]{0,2}hosting|gói[\s-]{0,2}hosting|goi[\s-]{0,2}hosting|chỗ[\s-]{0,2}đặt[\s-]{0,2}máy[\s-]{0,2}chủ|cho[\s-]{0,2}dat[\s-]{0,2}may[\s-]{0,2}chu|colocation)(?![\p{L}\d])/iu.test(
+      t
+    )
+  ) {
+    return 'vps-hosting';
+  }
   if (
     /airpods|galaxy\s*buds|nothing\s*(?:ear|headphone)\b|cmf\s*(?:by\s*nothing\s*)?buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
@@ -778,8 +847,26 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
   ) {
     return 'smartwatches';
   }
+  // Wave E6 monitors run before laptops so TUF Gaming VG / ROG Strix XG / Predator XB /
+  // Legion R monitor models do not collide with laptop series names (DOS/Rate#1976).
+  // All repetitions are strictly bounded to prevent polynomial ReDoS (CodeQL).
+  const isNonMonitorItem =
+    /(?<![\p{L}\d])(?:điện[\s-]{0,2}thoại|dien[\s-]{0,2}thoai|smartphone|iphone|ipad|macbook|laptop|máy[\s-]{0,2}tính[\s-]{0,2}(?:xách[\s-]{0,2}tay|bảng)|may[\s-]{0,2}tinh[\s-]{0,2}(?:xach[\s-]{0,2}tay|bang)|ultrabook|tablet|rog[\s-]{0,2}(?:zephyrus|flow|strix(?![\s-]{0,2}(?:(?:oled|qd[\s-]{0,2}oled)[\s-]{0,2})?xg))|tuf[\s-]{0,2}(?:gaming[\s-]{0,2}(?:a\d{2}|f\d{2}|dash)|dash[\s-]{0,2}f\d{2})|legion[\s-]{0,2}(?:[579]i?|pro|slim|go|s\d{1,2}i?|[ry][79]\d{3}[a-z]?)|predator[\s-]{0,2}(?:helios|triton)|nitro[\s-]{0,2}(?:5|16|17|v(?![a-z])(?:[\s-]{0,2}\d{1,2})?)|xps[\s-]{0,2}\d{2}|(?<!rog[\s-])swift[\s-]{0,2}(?:go|edge|x[\s-]{0,2}1[46]|(?:1|3|5|7|14|16)(?![\p{L}\d]|"|''))|proart[\s-]{0,2}(?:p\d{2}|px\d{2}|pz\d{2}|studiobook)|omen[\s-]{0,2}1[4-7][a-z]?|zenbook|vivo[\s-]{0,2}book|thinkpad|ideapad|inspiron|latitude|vostro|pavilion|envy|elitebook|probook|victus|katana|cyborg|stealth|raider|razer[\s-]{0,2}blade|lg[\s-]{0,2}gram(?![\s-]{0,2}\+view)|surface[\s-]{0,2}(?:laptop|pro|book|go)|ryzen[\s-]{0,2}ai|core[\s-]{0,2}i[3579]|core[\s-]{0,2}ultra|geforce[\s-]{0,2}rtx|rtx[\s-]{0,2}\d{4}|máy[\s-]{0,2}lọc[\s-]{0,2}(?:không[\s-]{0,2})?khí|may[\s-]{0,2}loc[\s-]{0,2}(?:khong[\s-]{0,2})?khi|air[\s-]{0,2}purifier|máy[\s-]{0,2}giặt|may[\s-]{0,2}giat|tủ[\s-]{0,2}lạnh|tu[\s-]{0,2}lanh|điều[\s-]{0,2}hòa|điều[\s-]{0,2}hoà|dieu[\s-]{0,2}hoa|máy[\s-]{0,2}lạnh|may[\s-]{0,2}lanh|tivi|smart[\s-]{0,2}tv|google[\s-]{0,2}tv|android[\s-]{0,2}tv|4k[\s-]{0,2}tv|8k[\s-]{0,2}tv|uhd[\s-]{0,2}tv|mini[\s-]{0,2}led[\s-]{0,2}tv|oled[\s-]{0,2}tv|qled[\s-]{0,2}tv|bravia|galaxy[\s-]{0,2}(?:s\d{1,3}|z[\s-]{0,2}fold|z[\s-]{0,2}flip|z[\s-]{0,2}\d|a\d{1,3}|m\d{1,3}|tab|watch|buds)|xiaomi[\s-]{0,2}1\d(?![\s-]{0,2}(?:inch|in(?![\p{L}\d])|"|''))|redmi|poco|oneplus|pixel[\s-]{0,2}\d|honor[\s-]{0,2}magic|oppo|vivo(?![\s-]{0,2}(?:view|display))|realme|matepad|xiaomi[\s-]{0,2}pad|redmi[\s-]{0,2}pad|garmin|apple[\s-]{0,2}watch|galaxy[\s-]{0,2}watch|amazfit|jbl[\s-]{0,2}tour|smartwatch|đồng[\s-]{0,2}hồ|tai[\s-]{0,2}nghe|airpods|earbuds?|sạc[\s-]{0,2}dự[\s-]{0,2}phòng|sac[\s-]{0,2}du[\s-]{0,2}phong|pin[\s-]{0,2}dự[\s-]{0,2}phòng|pin[\s-]{0,2}du[\s-]{0,2}phong|power[\s-]{0,2}bank|màn[\s-]{0,2}hình[\s-]{0,2}android|man[\s-]{0,2}hinh[\s-]{0,2}android|dvd[\s-]{0,2}android|carplay|zestech|gotech|oledpro|bravigo|máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|camera|ô[\s-]{0,2}tô|o[\s-]{0,2}to|xe[\s-]{0,2}hơi|xe[\s-]{0,2}hoi|android[\s-]{0,2}box|thay[\s-]{0,2}màn[\s-]{0,2}hình|thay[\s-]{0,2}man[\s-]{0,2}hinh|màn[\s-]{0,2}hình[\s-]{0,2}(?:thay[\s-]{0,2}thế|thay[\s-]{0,2}the|zin|bóc[\s-]{0,2}máy|boc[\s-]{0,2}may|linh[\s-]{0,2}kiện|linh[\s-]{0,2}kien|điện[\s-]{0,2}thoại|dien[\s-]{0,2}thoai|laptop|iphone|ipad)|man[\s-]{0,2}hinh[\s-]{0,2}(?:thay[\s-]{0,2}the|zin|boc[\s-]{0,2}may|linh[\s-]{0,2}kien|dien[\s-]{0,2}thoai|laptop|iphone|ipad)|ép[\s-]{0,2}kính|ep[\s-]{0,2}kinh|giá[\s-]{0,2}treo|gia[\s-]{0,2}treo|tay[\s-]{0,2}(?:đỡ|do|nâng|nang)|arm[\s-]{0,2}màn[\s-]{0,2}hình|arm[\s-]{0,2}man[\s-]{0,2}hinh|chân[\s-]{0,2}đế[\s-]{0,2}rời|chan[\s-]{0,2}de[\s-]{0,2}roi|dán[\s-]{0,2}màn[\s-]{0,2}hình|dan[\s-]{0,2}man[\s-]{0,2}hinh|kính[\s-]{0,2}cường[\s-]{0,2}lực|kinh[\s-]{0,2}cuong[\s-]{0,2}luc|miếng[\s-]{0,2}dán|mieng[\s-]{0,2}dan|tấm[\s-]{0,2}bảo[\s-]{0,2}vệ|tam[\s-]{0,2}bao[\s-]{0,2}ve|đèn[\s-]{0,2}treo[\s-]{0,2}màn[\s-]{0,2}hình|den[\s-]{0,2}treo[\s-]{0,2}man[\s-]{0,2}hinh|monitor[\s-]{0,2}(?:arm|mount|stand|light[\s-]{0,2}bar|riser|hood|protector|cable)|screen[\s-]{0,2}protectors?|baby[\s-]{0,2}monitor|blood[\s-]{0,2}pressure[\s-]{0,2}monitor|heart[\s-]{0,2}rate[\s-]{0,2}monitor|máy[\s-]{0,2}đo[\s-]{0,2}huyết[\s-]{0,2}áp|may[\s-]{0,2}do[\s-]{0,2}huyet[\s-]{0,2}ap|cáp[\s-]{0,2}(?:hdmi|displayport|vga)|cap[\s-]{0,2}(?:hdmi|displayport|vga))(?![\p{L}\d])/iu.test(
+      t
+    );
   if (
-    /macbook|thinkpad|ideapad|legion|vivo\s*book|zenbook|rog\s*(?:strix|zephyrus|flow)|tuf\s*gaming|inspiron|\bxps\b|latitude|pavilion|envy|victus|omen|nitro\s*\d|swift|predator|surface\s*laptop|\blaptop\b|máy\s*tính\s*xách\s*tay|ultrabook/i.test(
+    !isNonMonitorItem &&
+    (/(?<![\p{L}\d])(?:màn[\s-]{0,2}hình[\s-]{0,2}(?:máy[\s-]{0,2}tính|pc|gaming|đồ[\s-]{0,2}họa|đồ[\s-]{0,2}hoạ|chuyên[\s-]{0,2}đồ[\s-]{0,2}họa|văn[\s-]{0,2}phòng|rời|di[\s-]{0,2}động|chơi[\s-]{0,2}game|ultrawide|tương[\s-]{0,2}tác)|man[\s-]{0,2}hinh[\s-]{0,2}(?:may[\s-]{0,2}tinh|pc|gaming|do[\s-]{0,2}hoa|chuyen[\s-]{0,2}do[\s-]{0,2}hoa|van[\s-]{0,2}phong|roi|di[\s-]{0,2}dong|choi[\s-]{0,2}game|ultrawide|tuong[\s-]{0,2}tac)|(?:gaming|ultrawide|computer|pc|curved|oled|4k|2k|portable|ips)[\s-]{0,2}monitors?|apple[\s-]{0,2}(?:studio[\s-]{0,2}display|pro[\s-]{0,2}display[\s-]{0,2}xdr)|ultrasharp|odyssey[\s-]{0,2}(?:g\d[a-z0-9-]{0,12}|neo|oled|ark)|proart(?:[\s-]{0,2}display|[\s-]{0,2}pa(?:2[2-9]|3[0-9])[a-z0-9-]{1,13})|tuf[\s-]{0,2}gaming[\s-]{0,2}vg\d[a-z0-9-]{0,12}|rog[\s-]{0,2}(?:strix|swift)[\s-]{0,2}(?:(?:oled|qd[\s-]{0,2}oled)[\s-]{0,2})?(?:xg|pg)\d[a-z0-9-]{0,12}|ultragear|benq[\s-]{0,2}(?:mobiuz|(?:pd|sw|gw|ex)\d[a-z0-9-]{0,12}|zowie[\s-]{0,2}xl\d[a-z0-9-]{0,12})|zowie[\s-]{0,2}xl\d[a-z0-9-]{0,12}|viewsonic[\s-]{0,2}(?:vx|vg|va|vp|xg|omni)\d[a-z0-9-]{0,12}|aoc[\s-]{0,2}(?:(?:24g|27g|q27g|cu34|c24g|c27g|ag|24b|27b)[a-z0-9-]{0,12}|agon)|msi[\s-]{0,2}(?:optix|modern[\s-]{0,2}md\d[a-z0-9-]{0,12}|pro[\s-]{0,2}mp\d[a-z0-9-]{0,12}|g(?:2[4-9]|3[0-9])\d{0,2}[a-z][a-z0-9-]{0,12}|(?:mpg|mag)[\s-]{0,2}(?:(?:2[4-9]|3[0-9]|4[0-9])\d[a-z0-9-]{0,12}|artymis|qd[\s-]{0,2}oled|qr[a-z0-9-]{0,10}|cq[a-z0-9-]{0,10}|curv[a-z0-9-]{0,10}))|gigabyte[\s-]{0,2}(?:m27|m28|m32|g24|g27|g32|gs27|gs32|fo\d|fi\d|aorus[\s-]{0,2}(?:fo|fi|fv|co))[a-z0-9-]{0,12}|dell[\s-]{0,2}(?:ultrasharp|u|p|s|e|g|se|aw)(?:19|2[0-9]|3[0-9]|4[0-9])\d{2}[a-z0-9-]{0,12}|alienware[\s-]{0,2}aw\d{4}[a-z0-9-]{0,12}|lg[\s-]{0,2}(?:(?:2[2-9]|3[0-9]|4[0-9])(?:up|uk|ul|un|uq|gp|gn|gr|gs|gq|gl|gx|mr|mp|mn|ba|bp|bq|wq|wn|wp|sr|bn)[a-z0-9-]{0,12}|dualup|ergo)|philips[\s-]{0,2}(?:evnia|(?:2[2-9]|3[0-9]|4[0-9])[a-z]\d[a-z0-9-]{0,12})|hkc[\s-]{0,2}(?:mg|mb|ant|gs|g\d)[a-z0-9-]{0,12}|ktc[\s-]{0,2}(?:h|m|g)\d{2}[a-z0-9-]{0,12}|acer[\s-]{0,2}(?:nitro[\s-]{0,2}(?:vg|xv|kg|ed|qg|xf)|predator[\s-]{0,2}(?:xb|x(?:2[4-9]|3[0-9]|4[0-9])|cg)|(?:ka|ek|sa)\d{3})[a-z0-9-]{0,12}|lenovo[\s-]{0,2}(?:thinkvision|legion[\s-]{0,2}(?:r|y|g)(?:2[4-9]|3[0-9]|4[0-9])[a-z][a-z0-9-]{0,12})|hp[\s-]{0,2}(?:omen[\s-]{0,2}(?:2[4-9]|3[0-9])[a-z][a-z0-9-]{0,12}|(?:e|m|z)(?:2[2-9]|3[0-9])[a-z0-9-]{0,10})|xiaomi[\s-]{0,2}(?:mi[\s-]{0,2})?(?:desktop[\s-]{0,2}monitor|gaming[\s-]{0,2}monitor|curved[\s-]{0,2}gaming[\s-]{0,2}monitor|(?:g24|g27|a24|a27|p27)[a-z0-9-]{0,12}))(?![\p{L}\d])/iu.test(
+      t
+    ) ||
+      /^\s{0,4}(?:(?:\[[^\]]{0,40}\]|\([^)]{0,40}\)|【[^】]{0,40}】)\s{0,4}){0,3}(?:màn[\s-]{0,2}hình|man[\s-]{0,2}hinh)(?![\p{L}\d])/iu.test(
+        t
+      ))
+  ) {
+    return 'monitors';
+  }
+  if (
+    /macbook|thinkpad|ideapad|legion|vivo\s*book|zenbook|rog\s*(?:strix|zephyrus|flow)|tuf\s*(?:gaming|dash)|inspiron|\bxps\b|latitude|pavilion|envy|victus|omen|nitro\s*(?:v\s*)?\d|swift|predator|surface\s*laptop|\blaptop\b|máy\s*tính\s*xách\s*tay|ultrabook/i.test(
       t
     )
   ) {
@@ -827,6 +914,33 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
     )
   ) {
     return 'tvs';
+  }
+  // Wave E6 cameras exclude smartphones, dashcams, security/IP/Wi-Fi cameras, webcams,
+  // drones, Bravia TVs, and standalone lenses/flashes/gimbals/cages/tripods/bags/filters (DOS/Rate#1976).
+  // All repetitions are strictly bounded to prevent polynomial ReDoS (CodeQL).
+  const opensWithCameraBody =
+    /^\s{0,4}(?:(?:\[[^\]]{0,40}\]|\([^)]{0,40}\)|【[^】]{0,40}】)\s{0,4}){0,3}(?:máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|camera[\s-]{0,2}hành[\s-]{0,2}động|camera[\s-]{0,2}hanh[\s-]{0,2}dong|action[\s-]{0,2}cam|máy[\s-]{0,2}quay|may[\s-]{0,2}quay|gopro[\s-]{0,2}(?:hero|max)|dji[\s-]{0,2}osmo[\s-]{0,2}(?:action|pocket)|insta360[\s-]{0,2}(?:x\d|ace|go[\s-]{0,2}\d|one))(?![\p{L}\d])/iu.test(
+      t
+    );
+  const isNonCameraItem =
+    /(?<![\p{L}\d])(?:điện[\s-]{0,2}thoại|dien[\s-]{0,2}thoai|smartphone|iphone|ipad|macbook|laptop|máy[\s-]{0,2}tính[\s-]{0,2}(?:xách[\s-]{0,2}tay|bảng)|tablet|galaxy[\s-]{0,2}(?:s\d{1,3}|z[\s-]{0,2}fold|z[\s-]{0,2}flip|z[\s-]{0,2}\d|a\d{1,3}|m\d{1,3}|tab|watch|buds)|redmi|poco|oppo|vivo|realme|smartwatch|đồng[\s-]{0,2}hồ|tai[\s-]{0,2}nghe|airpods|tivi|bravia|qd[\s-]{0,2}oled|smart[\s-]{0,2}tv|oled[\s-]{0,2}tv|qled[\s-]{0,2}tv|4k[\s-]{0,2}tv|8k[\s-]{0,2}tv|uhd[\s-]{0,2}tv|google[\s-]{0,2}tv|android[\s-]{0,2}tv|mini[\s-]{0,2}led[\s-]{0,2}tv|(?:4[0-9]|5[0-9]|6[0-9]|7[0-9]|8[0-9]|9[0-9])[\s-]{0,2}(?:inch|in(?![\p{L}\d])|"|'')|màn[\s-]{0,2}hình[\s-]{0,2}(?:máy[\s-]{0,2}tính|pc|gaming|cong)|man[\s-]{0,2}hinh[\s-]{0,2}(?:may[\s-]{0,2}tinh|pc|gaming|cong)|camera[\s-]{0,2}(?:hành[\s-]{0,2}trình|hanh[\s-]{0,2}trinh|an[\s-]{0,2}ninh|giám[\s-]{0,2}sát|giam[\s-]{0,2}sat|wifi|wi-fi|ip|quan[\s-]{0,2}sát|quan[\s-]{0,2}sat|ngoài[\s-]{0,2}trời|ngoai[\s-]{0,2}troi|trong[\s-]{0,2}nhà|trong[\s-]{0,2}nha|lùi|lui|ô[\s-]{0,2}tô|o[\s-]{0,2}to|xe[\s-]{0,2}hơi|xe[\s-]{0,2}hoi|xe[\s-]{0,2}máy|xe[\s-]{0,2}may|nội[\s-]{0,2}soi|noi[\s-]{0,2}soi|cửa|chuông[\s-]{0,2}cửa|360[\s-]{0,2}(?:wifi|trong[\s-]{0,2}nhà|trong[\s-]{0,2}nha|ngoài[\s-]{0,2}trời|ngoai[\s-]{0,2}troi|ezviz|imou|tapo|xiaomi|yoosee))|dash[\s-]{0,2}cam|dashcam|cctv|security[\s-]{0,2}camera|ip[\s-]{0,2}camera|ezviz|imou|tapo[\s-]{0,2}c\d|yoosee|hikvision|dahua|kbvision|webcam|web[\s-]{0,2}cam|flycam|drone|mavic|đồ[\s-]{0,2}chơi|do[\s-]{0,2}choi|trẻ[\s-]{0,2}em|tre[\s-]{0,2}em|cho[\s-]{0,2}bé|cho[\s-]{0,2}be)(?![\p{L}\d])/iu.test(
+      t
+    ) ||
+    hasCameraAccessoryCompatibility(t) ||
+    /^\s{0,4}(?:(?:\[[^\]]{0,40}\]|\([^)]{0,40}\)|【[^】]{0,40}】)\s{0,4}){0,3}(?:ống[\s-]{0,2}kính|ong[\s-]{0,2}kinh|lens|chân[\s-]{0,2}máy|chan[\s-]{0,2}may|tripods?|monopods?|gimbals?|túi[\s-]{0,2}(?:đựng[\s-]{0,2})?máy[\s-]{0,2}ảnh|tui[\s-]{0,2}(?:dung[\s-]{0,2})?may[\s-]{0,2}anh|ba[\s-]{0,2}lô[\s-]{0,2}máy[\s-]{0,2}ảnh|balo[\s-]{0,2}máy[\s-]{0,2}ảnh|balo[\s-]{0,2}may[\s-]{0,2}anh|thẻ[\s-]{0,2}nhớ|the[\s-]{0,2}nho|memory[\s-]{0,2}cards?|kính[\s-]{0,2}lọc|kinh[\s-]{0,2}loc|filters?|lens[\s-]{0,2}hoods?|hood|loa[\s-]{0,2}che[\s-]{0,2}nắng|ngàm[\s-]{0,2}chuyển|ngam[\s-]{0,2}chuyen|mount[\s-]{0,2}adapters?|pin[\s-]{0,2}(?:rời|roi|sạc|sac|dự[\s-]{0,2}phòng|du[\s-]{0,2}phong|máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh)|sạc[\s-]{0,2}rời|sac[\s-]{0,2}roi|đèn[\s-]{0,2}flash|den[\s-]{0,2}flash|tủ[\s-]{0,2}chống[\s-]{0,2}ẩm|tu[\s-]{0,2}chong[\s-]{0,2}am|nắp[\s-]{0,2}(?:ống[\s-]{0,2}kính|lens|body)|khung[\s-]{0,2}bảo[\s-]{0,2}vệ|khung[\s-]{0,2}bao[\s-]{0,2}ve|cage|ốp|miếng[\s-]{0,2}dán|dây[\s-]{0,2}đeo)(?![\p{L}\d])/iu.test(
+      t
+    ) ||
+    (!opensWithCameraBody &&
+      /(?<![\p{L}\d])(?:ống[\s-]{0,2}kính|ong[\s-]{0,2}kinh|lens|đèn[\s-]{0,2}flash|den[\s-]{0,2}flash|gimbals?|cage|khung[\s-]{0,2}bảo[\s-]{0,2}vệ|khung[\s-]{0,2}bao[\s-]{0,2}ve|chân[\s-]{0,2}máy|chan[\s-]{0,2}may|tripods?|túi[\s-]{0,2}đựng|tui[\s-]{0,2}dung|thẻ[\s-]{0,2}nhớ|the[\s-]{0,2}nho|memory[\s-]{0,2}cards?|kính[\s-]{0,2}lọc|kinh[\s-]{0,2}loc|filters?|hood|ngàm[\s-]{0,2}chuyển|ngam[\s-]{0,2}chuyen|pin[\s-]{0,2}rời|pin[\s-]{0,2}roi|sạc[\s-]{0,2}rời|sac[\s-]{0,2}roi|tủ[\s-]{0,2}chống[\s-]{0,2}ẩm|tu[\s-]{0,2}chong[\s-]{0,2}am)(?![\p{L}\d])/iu.test(
+        t
+      ));
+  if (
+    !isNonCameraItem &&
+    /(?<![\p{L}\d])(?:máy[\s-]{0,2}ảnh|may[\s-]{0,2}anh|mirrorless|dslr|action[\s-]{0,2}cam(?:era)?|camera[\s-]{0,2}(?:hành[\s-]{0,2}động|hanh[\s-]{0,2}dong|thể[\s-]{0,2}thao|the[\s-]{0,2}thao)|máy[\s-]{0,2}quay[\s-]{0,2}(?:phim|vlog|cầm[\s-]{0,2}tay|hành[\s-]{0,2}động|360)|gopro[\s-]{0,2}(?:hero(?:[\s-]{0,2}(?:\d[a-z0-9-]{0,8}|max|mini|black))?|max)|dji[\s-]{0,2}(?:osmo[\s-]{0,2}(?:action|pocket)|action[\s-]{0,2}\d[a-z0-9-]{0,8}|pocket[\s-]{0,2}\d[a-z0-9-]{0,8})|insta360[\s-]{0,2}(?:x\d[a-z0-9-]{0,8}|ace|go[\s-]{0,2}\d[a-z0-9-]{0,8}|one[\s-]{0,2}(?:rs|r|x))|sony[\s-]{0,2}(?:alpha|a(?!(?:80|90|95)[jklm](?![\p{L}\d]))\d[a-z0-9-]{0,10}|zv-[a-z0-9-]{1,12}|fx\d[a-z0-9-]{0,8}|rx\d[a-z0-9-]{0,8}|ilce-[a-z0-9-]{1,12}|dsc-[a-z0-9-]{1,12})|canon[\s-]{0,2}(?:eos|powershot|ixus)|fujifilm[\s-]{0,2}(?:x-[a-z0-9-]{1,12}|gfx[\s-]{0,2}\d[a-z0-9-]{0,8}|instax)|nikon[\s-]{0,2}(?:z[\s-]{0,2}(?!(?:\d{1,3}[\s-]{0,2}-[\s-]{0,2})?\d{1,3}(?:[.,]\d)?[\s-]{0,2}mm(?![\p{L}\d]))\d[a-z0-9-]{0,8}|z[\s-]{0,2}fc?|d\d{3}[a-z0-9-]{0,8}|coolpix)|(?:panasonic[\s-]{0,2})?lumix[\s-]{0,2}(?:s|g|gh|gx|tz|lx)\d[a-z0-9-]{0,10}|om[\s-]{0,2}system[\s-]{0,2}om-\d[a-z0-9-]{0,8}|olympus[\s-]{0,2}(?:om-d|pen[\s-]{0,2}e-[a-z0-9-]{1,10}|tg-\d[a-z0-9-]{0,8})|leica[\s-]{0,2}(?:(?:q|m|sl)\d[a-z0-9-]{0,8}|d-lux|sofort)|ricoh[\s-]{0,2}gr[\s-]{0,2}(?:iii|ii|3|2)[a-z0-9-]{0,8})(?![\p{L}\d])/iu.test(
+      t
+    )
+  ) {
+    return 'cameras';
   }
   if (
     /(?<![\p{L}\d])(?:homestay|farmstay|nhà\s*nghỉ\s*dưỡng|căn\s*hộ\s*dịch\s*vụ|villa\s*nghỉ\s*dưỡng|lưu\s*trú)(?![\p{L}\d])/iu.test(
@@ -2776,6 +2890,16 @@ const CREDIT_CARD_BANK_PLATFORMS: ReadonlySet<string> = new Set([
   'shinhan',
 ]);
 /**
+ * VPS & hosting service platforms added in Wave E6 (DOS/Rate#1976).
+ */
+const VPS_HOSTING_PLATFORMS: ReadonlySet<string> = new Set([
+  'nhanhoa',
+  'pavietnam',
+  'hostvn',
+  'bkns',
+  'longvan',
+]);
+/**
  * First-party Vietnamese electronics and appliance retail chain platforms whose catalog
  * brand attributes are curated (not third-party seller text) (DOS/Rate#1953).
  */
@@ -3574,11 +3698,14 @@ export class ProductNormalizer {
           : 'bank-savings'
         : safeRaw.platform === 'vnpt' || safeRaw.platform === 'fpttelecom'
           ? 'internet-telecom'
-          : typeof safeRaw.platform === 'string' && CREDIT_CARD_BANK_PLATFORMS.has(safeRaw.platform)
-            ? titleDetectedSlug === 'smartphones'
-              ? 'credit-cards'
-              : null
-            : null;
+          : typeof safeRaw.platform === 'string' && VPS_HOSTING_PLATFORMS.has(safeRaw.platform)
+            ? 'vps-hosting'
+            : typeof safeRaw.platform === 'string' &&
+                CREDIT_CARD_BANK_PLATFORMS.has(safeRaw.platform)
+              ? titleDetectedSlug === 'smartphones'
+                ? 'credit-cards'
+                : null
+              : null;
     const detectedCategorySlug = hasExplicitCategorySlug
       ? detectCategorySlug(title, explicitCategorySlug)
       : (platformSlugHint ?? titleDetectedSlug ?? 'smartphones');
@@ -3631,6 +3758,16 @@ export class ProductNormalizer {
       else if (/\bseabank\b|\bsea\s*bank\b/i.test(identityTitle)) brand = 'SeABank';
       else if (/\bstandard\s*chartered\b/i.test(identityTitle)) brand = 'Standard Chartered';
       else if (/\buob\b/i.test(identityTitle)) brand = 'UOB';
+      else if (/(?<![\p{L}\d])(?:nh[aâ]n\s*h[oò]a|nhanhoa)(?![\p{L}\d])/iu.test(identityTitle))
+        brand = 'Nhân Hòa';
+      else if (
+        /(?<![\p{L}\d])(?:p\.?\s*a\.?\s*vi[eệ]t\s*nam|pavietnam)(?![\p{L}\d])/iu.test(identityTitle)
+      )
+        brand = 'P.A Việt Nam';
+      else if (/\bhostvn\b/i.test(identityTitle)) brand = 'HOSTVN';
+      else if (/\bbkns\b/i.test(identityTitle)) brand = 'BKNS';
+      else if (/(?<![\p{L}\d])(?:long\s*v[aâ]n|longvan)(?![\p{L}\d])/iu.test(identityTitle))
+        brand = 'Long Vân';
       else if (safeRaw.platform === 'vietcombank') brand = 'Vietcombank';
       else if (safeRaw.platform === 'acb') brand = 'ACB';
       else if (safeRaw.platform === 'vnpt') brand = 'VNPT';
@@ -3642,6 +3779,73 @@ export class ProductNormalizer {
       else if (safeRaw.platform === 'tpbank') brand = 'TPBank';
       else if (safeRaw.platform === 'hsbc') brand = 'HSBC';
       else if (safeRaw.platform === 'shinhan') brand = 'Shinhan Bank';
+      else if (safeRaw.platform === 'nhanhoa') brand = 'Nhân Hòa';
+      else if (safeRaw.platform === 'pavietnam') brand = 'P.A Việt Nam';
+      else if (safeRaw.platform === 'hostvn') brand = 'HOSTVN';
+      else if (safeRaw.platform === 'bkns') brand = 'BKNS';
+      else if (safeRaw.platform === 'longvan') brand = 'Long Vân';
+    } else if (WAVE_E6_PRODUCT_CATEGORY_SLUGS.has(categorySlug)) {
+      const detectWaveE6Brand = (src: string): string => {
+        if (categorySlug === 'monitors') {
+          if (/\bdell\b|ultrasharp|alienware/i.test(src)) return 'Dell';
+          if (/\blg\b|ultragear|dualup/i.test(src)) return 'LG';
+          if (/\basus\b|\brog\b|tuf\s*gaming|proart/i.test(src)) return 'Asus';
+          if (/\bacer\b|predator|nitro/i.test(src)) return 'Acer';
+          if (/\bmsi\b|\boptix\b/i.test(src)) return 'MSI';
+          if (/\bbenq\b|\bzowie\b|\bmobiuz\b/i.test(src)) return 'BenQ';
+          if (/\baoc\b|\bagon\b/i.test(src)) return 'AOC';
+          if (/\bviewsonic\b/i.test(src)) return 'ViewSonic';
+          if (/\bgigabyte\b|\baorus\b/i.test(src)) return 'Gigabyte';
+          if (/\bphilips\b|\bevnia\b/i.test(src)) return 'Philips';
+          if (/\bhkc\b/i.test(src)) return 'HKC';
+          if (/\bktc\b/i.test(src)) return 'KTC';
+          if (/\bsamsung\b|odyssey/i.test(src)) return 'Samsung';
+          if (/\bhp\b|\bomen\b/i.test(src)) return 'HP';
+          if (/\blenovo\b|thinkvision|legion/i.test(src)) return 'Lenovo';
+          if (/\bxiaomi\b|\bredmi\b/i.test(src)) return 'Xiaomi';
+          if (/\bapple\b|studio\s*display|pro\s*display\s*xdr/i.test(src)) return 'Apple';
+        } else if (categorySlug === 'cameras') {
+          if (/\bcanon\b|\beos\b|\bpowershot\b|\bixus\b/i.test(src)) return 'Canon';
+          if (/\bnikon\b|\bcoolpix\b/i.test(src)) return 'Nikon';
+          if (/\bsony\b|\bilce-|\bdsc-|\bzv-[a-z0-9]/i.test(src)) return 'Sony';
+          if (/\bfujifilm\b|\bfuji\b|\binstax\b/i.test(src)) return 'Fujifilm';
+          if (/\bpanasonic\b|\blumix\b/i.test(src)) return 'Panasonic';
+          if (/\bom\s*system\b/i.test(src)) return 'OM System';
+          if (/\bolympus\b/i.test(src)) return 'Olympus';
+          if (/\bleica\b/i.test(src)) return 'Leica';
+          if (/\bricoh\b/i.test(src)) return 'Ricoh';
+          if (/\bgopro\b/i.test(src)) return 'GoPro';
+          if (/\bdji\b|\bosmo\s*(?:action|pocket)\b/i.test(src)) return 'DJI';
+          if (/\binsta360\b/i.test(src)) return 'Insta360';
+          if (/\bkodak\b/i.test(src)) return 'Kodak';
+        }
+        return 'Khác';
+      };
+      const ownBrandTitle = ownProductPart(identityTitle);
+      brand = detectWaveE6Brand(ownBrandTitle);
+      if (brand === 'Khác') {
+        const strippedOwn = ownProductPart(identityTitle.replace(LEADING_PROMO_GROUPS, '').trim());
+        if (strippedOwn && strippedOwn !== ownBrandTitle) {
+          brand = detectWaveE6Brand(strippedOwn);
+        }
+      }
+      if (brand === 'Khác') {
+        const structuredHints = extractWaveE3StructuredBrandHints(safeRaw, safeRawRecord);
+        const brandContext: WaveE3BrandSanitizeContext = {
+          identityTitle,
+          platform: safeRaw.platform,
+          shopName: safeRaw.shop?.name,
+          isMall: safeRaw.shop?.isMall,
+        };
+        for (const hint of structuredHints) {
+          if (isDisallowedStructuredBrandHintNoise(hint)) continue;
+          const sanitized = sanitizeWaveE3StructuredBrand(hint, brandContext);
+          if (sanitized) {
+            brand = sanitized;
+            break;
+          }
+        }
+      }
     } else if (WAVE_E1_CATEGORY_SLUGS.has(categorySlug)) {
       brand = detectWaveE1AllowlistBrand(identityTitle) ?? 'Khác';
       if (brand === 'Khác') {
@@ -3796,7 +4000,8 @@ export class ProductNormalizer {
       brand === 'Khác' &&
       !SERVICE_CATEGORY_SLUGS.has(categorySlug) &&
       !WAVE_E3_CATEGORY_SLUGS.has(categorySlug) &&
-      !PLACE_CATEGORY_SLUGS.has(categorySlug)
+      !PLACE_CATEGORY_SLUGS.has(categorySlug) &&
+      !WAVE_E6_PRODUCT_CATEGORY_SLUGS.has(categorySlug)
     ) {
       // Not the "ipad" in Xiaomi's "Mipad" (DOS/Rate#826).
       if (/apple|iphone|(?<![a-z])ipad|macbook|airpods/i.test(identityTitle)) brand = 'Apple';
@@ -3908,7 +4113,7 @@ export class ProductNormalizer {
     // Samsung's "Galaxy S 24" and "Tab S 9" are the S24 and the Tab S9.
     if (brand === 'Samsung')
       modelTitle = modelTitle.replace(/\b(galaxy|tab) s (\d{1,2})\b/gi, '$1 S$2');
-    if (brand === 'Apple') {
+    if (brand === 'Apple' && !WAVE_E6_PRODUCT_CATEGORY_SLUGS.has(categorySlug)) {
       // "(2nd generation)" is the generation number: "Watch Ultra (2nd generation)" is
       // "Watch Ultra 2", "AirPods Pro (2nd generation)" is "AirPods Pro 2" (DOS/Rate#817).
       // One optional space before the "(" keeps a single space in the name; a leading
@@ -4272,10 +4477,16 @@ export class ProductNormalizer {
         ...(brand === 'MB Bank' ? ['MBBank'] : []),
         ...(brand === 'HDBank' ? ['HD Bank'] : []),
         ...(brand === 'SeABank' ? ['Sea Bank'] : []),
+        ...(brand === 'Nhân Hòa' ? ['Nhan Hoa', 'NhanHoa'] : []),
+        ...(brand === 'P.A Việt Nam' ? ['PA Viet Nam', 'P.A Viet Nam', 'PAVietNam'] : []),
+        ...(brand === 'Long Vân' ? ['Long Van', 'LongVan'] : []),
       ];
       const brandRe =
         brand !== 'Khác'
-          ? new RegExp(`\\b(?:${brandVariants.map(escapeRegExp).join('|')})\\b`, 'gi')
+          ? new RegExp(
+              `(?<![\\p{L}\\d])(?:${brandVariants.map(escapeRegExp).join('|')})(?![\\p{L}\\d])`,
+              'giu'
+            )
           : null;
       const cleanedService = (brandRe ? ownServiceTitle.replace(brandRe, ' ') : ownServiceTitle)
         .replace(/ {2,}/g, ' ')
@@ -4287,6 +4498,120 @@ export class ProductNormalizer {
         tokens.push(tok.replace(/[,;]+$/g, ''));
       }
       model = tokens.join(' ');
+    } else if (WAVE_E6_PRODUCT_CATEGORY_SLUGS.has(categorySlug)) {
+      const ownWaveE6Title = ownProductPart(
+        withoutLeadingPromoWords(modelTitle.replace(LEADING_PROMO_GROUPS, '').trim(), brand)
+      );
+      const brandAliases: string[] = [];
+      if (brand !== 'Khác') {
+        brandAliases.push(brand);
+        if (brand === 'Fujifilm') brandAliases.push('Fuji');
+        const foldedBrand = foldAccentsPreservingCase(brand);
+        if (foldedBrand && foldedBrand !== brand) brandAliases.push(foldedBrand);
+      }
+      let cleanedE6 = (
+        brandAliases.length > 0
+          ? stripWordBoundedAliases(ownWaveE6Title, brandAliases)
+          : ownWaveE6Title
+      )
+        .replace(/\[[^[\]]*\]/g, ' ')
+        .replace(
+          /\(\s*(?:tặng|kèm|quà|km|khuyến\s*mãi|free|chính\s*hãng|bảo\s*hành)[^()]*\)/giu,
+          ' '
+        )
+        .replace(/ {2,}/g, ' ')
+        .trim();
+      if (categorySlug === 'monitors') {
+        cleanedE6 = cleanedE6
+          .replace(
+            /^(?:(?:màn\s*hình|man\s*hinh)(?:\s+(?:máy\s*tính|may\s*tinh|pc|gaming|cong|phẳng|đồ\s*họa|đồ\s*hoạ|văn\s*phòng|rời|di\s*động|chuyên\s*đồ\s*họa|chơi\s*game|led|lcd|ips|oled|va|mini\s*led|ultrawide)){0,3}|(?:gaming|ultrawide|computer|pc|curved|oled|4k|2k|portable|ips)\s+monitors?)\s+/iu,
+            ''
+          )
+          .replace(/^[-:|/,\s]+/, '')
+          .trim();
+        const tokens: string[] = [];
+        const rawTokens = cleanedE6.split(/\s+/).filter(Boolean);
+        const isMonitorSizeTok = (val: string, nextVal?: string): boolean =>
+          /^\d{2}(?:[.,]\d)?(?:"|''|inch)?$/i.test(val) &&
+          (/(?:"|''|inch)$/i.test(val) ||
+            (nextVal !== undefined && /^(?:inch|in)$/i.test(nextVal)));
+        const hasUpcomingMonitorModelCode = (startIdx: number): boolean => {
+          for (let j = startIdx; j < rawTokens.length; j += 1) {
+            const look = rawTokens[j]!.normalize('NFC');
+            if (/^(?:chính|bảo|tặng|kèm|\+|\(|\[|-)$/iu.test(look)) break;
+            if (isMonitorSizeTok(look, rawTokens[j + 1])) continue;
+            if (/^(?:inch|in|4k|2k|5k|8k|\d+hz|\d+(?:[.,]\d+)?ms|\d+w|\d+bit)$/iu.test(look)) {
+              continue;
+            }
+            if (/\d/.test(look)) return true;
+          }
+          return false;
+        };
+        for (let idx = 0; idx < rawTokens.length; idx += 1) {
+          const tok = rawTokens[idx]!;
+          const normTok = tok.normalize('NFC');
+          if (tokens.length >= 6) break;
+          if (tokens.length === 0) {
+            // Skip leading bare screen size before model code ("27 inch P2725H", "27inch U2724D").
+            if (idx + 1 < rawTokens.length && isMonitorSizeTok(normTok, rawTokens[idx + 1])) {
+              if (/^(?:inch|in)$/i.test(rawTokens[idx + 1]!)) idx += 1;
+              continue;
+            }
+            if (/^(?:inch|in)$/i.test(normTok)) continue;
+          } else {
+            if (isMonitorSizeTok(normTok, rawTokens[idx + 1])) {
+              break;
+            }
+            if (
+              /^(?:oled|qd-?oled|mini-?led|qled)$/iu.test(normTok) &&
+              !/\d/.test(tokens.join('')) &&
+              hasUpcomingMonitorModelCode(idx + 1)
+            ) {
+              const cleanPanelTok = tok.replace(/[,;()[\]]+$/g, '').replace(/^[([ ]+/g, '');
+              if (cleanPanelTok) tokens.push(cleanPanelTok);
+              continue;
+            }
+            if (
+              /^(?:inch|ips|va|tn|oled|qd-?oled|mini-?led|qled|fhd|full|hd|qhd|wqhd|uhd|4k|2k|5k|\d+hz|\d+(?:[.,]\d+)?ms|hdmi|displayport|type-?c|usb-?c|chính|bảo|tặng|kèm|\+|\(|\[|-)$/iu.test(
+                normTok
+              )
+            ) {
+              break;
+            }
+          }
+          const cleanTok = tok.replace(/[,;()[\]]+$/g, '').replace(/^[([ ]+/g, '');
+          if (cleanTok) tokens.push(cleanTok);
+        }
+        model = tokens.join(' ');
+      } else {
+        cleanedE6 = cleanedE6
+          .replace(
+            /^(?:(?:máy\s*ảnh|may\s*anh)(?:\s+(?:mirrorless|dslr|kỹ\s*thuật\s*số|du\s*lịch|chụp\s*lấy\s*liền|lấy\s*liền|compact|film|chuyên\s*nghiệp|quay\s*vlog)){0,2}|(?:camera\s*(?:hành\s*động|hanh\s*dong|thể\s*thao|the\s*thao|vlog|360)|action\s*cam(?:era)?|máy\s*quay(?:\s+(?:phim|vlog|cầm\s*tay|hành\s*động|360))?))\s+/iu,
+            ''
+          )
+          .replace(/^[-:|/,\s]+/, '')
+          .trim();
+        const tokens: string[] = [];
+        for (const tok of cleanedE6.split(/\s+/).filter(Boolean)) {
+          if (tokens.length >= 6) break;
+          const normTok = tok.normalize('NFC');
+          if (tokens.length > 0) {
+            if (
+              /^(?:chính|bảo|tặng|kèm|\(|\[|-|4k|8k|full-?frame|aps-?c|\d+(?:[.,]\d+)?mp|hàng|mới)$/iu.test(
+                normTok
+              )
+            ) {
+              break;
+            }
+          }
+          const cleanTok = tok.replace(/[,;()[\]]+$/g, '').replace(/^[([ ]+/g, '');
+          if (cleanTok) tokens.push(cleanTok);
+        }
+        model = tokens.join(' ');
+      }
+      if (!slugify(model)) {
+        model = ownWaveE6Title || title;
+      }
     } else if (WAVE_E3_CATEGORY_SLUGS.has(categorySlug)) {
       const baseE3Title = withoutLeadingPromoWords(
         modelTitle.replace(LEADING_PROMO_GROUPS, '').trim(),
@@ -4797,13 +5122,15 @@ export class ProductNormalizer {
 
     const isSizeless = SIZELESS_CATEGORY_SLUGS.has(categorySlug);
     const isWaveE1 = WAVE_E1_CATEGORY_SLUGS.has(categorySlug);
-    // Wave E2 and Wave E5 services share the service pipeline (entity_type = 'service').
+    // Wave E2, Wave E5, and Wave E6 services share the service pipeline (entity_type = 'service').
     const isWaveE2 = SERVICE_CATEGORY_SLUGS.has(categorySlug);
     const isWaveE3 = WAVE_E3_CATEGORY_SLUGS.has(categorySlug);
     // Wave E4 and Wave E5 places share the place pipeline (entity_type = 'place').
     const isWaveE4 = PLACE_CATEGORY_SLUGS.has(categorySlug);
+    // Wave E6 hardware products (monitors, cameras) are sizeless products (entity_type = 'product').
+    const isWaveE6Product = WAVE_E6_PRODUCT_CATEGORY_SLUGS.has(categorySlug);
     const isWaveE1OrE2 = isWaveE1 || isWaveE2;
-    const isNonDeviceWave = isWaveE1OrE2 || isWaveE3 || isWaveE4;
+    const isNonDeviceWave = isWaveE1OrE2 || isWaveE3 || isWaveE4 || isWaveE6Product;
 
     let storageGb: number | null = null;
     let storageConfident = false;
@@ -4929,12 +5256,14 @@ export class ProductNormalizer {
       generic: string
     ): string | undefined => (iphoneSpecs ? iphoneSpecs[field] : generic);
 
-    const hasScreenAxis = !isSizeless || categorySlug === 'tvs';
+    const hasScreenAxis = !isSizeless || categorySlug === 'tvs' || categorySlug === 'monitors';
     const titleScreenMatch = !hasScreenAxis
       ? null
       : categorySlug === 'tvs'
         ? title.match(/\b(\d{2,3}(?:[.,]\d)?)\s*(?:inch|in\b|")/i)
-        : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i);
+        : categorySlug === 'monitors'
+          ? title.match(/\b(\d{2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i)
+          : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i);
     const parsedTitleScreen = titleScreenMatch
       ? parseFloat(titleScreenMatch[1].replace(',', '.'))
       : null;
@@ -4943,7 +5272,9 @@ export class ProductNormalizer {
       Number.isFinite(parsedTitleScreen) &&
       (categorySlug === 'tvs'
         ? parsedTitleScreen >= 20 && parsedTitleScreen <= 120
-        : parsedTitleScreen >= 0.8 && parsedTitleScreen <= 20)
+        : categorySlug === 'monitors'
+          ? parsedTitleScreen >= 13 && parsedTitleScreen <= 57
+          : parsedTitleScreen >= 0.8 && parsedTitleScreen <= 20)
         ? parsedTitleScreen
         : null;
 
@@ -5047,7 +5378,7 @@ export class ProductNormalizer {
               status: 'Available',
             },
           }
-        : isWaveE1 || isWaveE3
+        : isWaveE1 || isWaveE3 || isWaveE6Product
           ? {
               category_slug: categorySlug,
               availability: {
@@ -5056,8 +5387,8 @@ export class ProductNormalizer {
                   ? { prices_msrp: `${safePriceMin.toLocaleString('vi-VN')}₫` }
                   : {}),
               },
-              ...(isWaveE1 && colors.length > 0 ? { design: { colors } } : {}),
-              ...(categorySlug === 'tvs' && screenSize
+              ...((isWaveE1 || isWaveE6Product) && colors.length > 0 ? { design: { colors } } : {}),
+              ...((categorySlug === 'tvs' || categorySlug === 'monitors') && screenSize
                 ? { display: { size_inch: screenSize } }
                 : {}),
             }
@@ -5244,8 +5575,8 @@ export class ProductNormalizer {
     const keySpecs: KeySpecs =
       isWaveE2 || isWaveE3 || isWaveE4
         ? {}
-        : isWaveE1
-          ? categorySlug === 'tvs' && screenSize
+        : isWaveE1 || isWaveE6Product
+          ? (categorySlug === 'tvs' || categorySlug === 'monitors') && screenSize
             ? { screen: `${screenSize}"` }
             : {}
           : {

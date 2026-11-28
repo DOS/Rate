@@ -30,6 +30,9 @@
       "spas-aesthetics": "Spa a estetika",
       "english-centers": "Jazykové školy",
       "credit-cards": "Kreditní karty",
+      "monitors": "Monitory",
+      "cameras": "Fotoaparáty",
+      "vps-hosting": "VPS a hosting",
       "leaderboard": "Žebříček",
       "merchants": "Obchody",
       "inspect": "Ověřit odkaz",
@@ -84,6 +87,9 @@
         "spas-aesthetics": "Spa a estetické kliniky",
         "english-centers": "Jazykové školy angličtiny",
         "credit-cards": "Kreditní karty",
+        "monitors": "PC monitory",
+        "cameras": "Fotoaparáty a akční kamery",
+        "vps-hosting": "VPS a hosting",
         "leaderboard": "Žebříček produktů",
         "inspect": "Ověřit odkaz na produkt",
         "compare": "Porovnat parametry",
@@ -286,6 +292,12 @@
     "catEnglishCentersUnit": "jazykových škol",
     "catCreditCards": "Kreditní karty",
     "catCreditCardsUnit": "kreditních karet",
+    "catMonitors": "Monitory",
+    "catMonitorsUnit": "monitorů",
+    "catCameras": "Fotoaparáty",
+    "catCamerasUnit": "fotoaparátů",
+    "catVpsHosting": "VPS a hosting",
+    "catVpsHostingUnit": "tarifů",
     "boolYes": "Ano",
     "boolNo": "Ne",
     "group0Title": "Hodnocení a důvěryhodnost",
@@ -510,6 +522,9 @@
     "catSpasAesthetics": "Spa a estetika",
     "catEnglishCenters": "Jazykové školy",
     "catCreditCards": "Kreditní karty",
+    "catMonitors": "Monitory",
+    "catCameras": "Fotoaparáty",
+    "catVpsHosting": "VPS a hosting",
     "badgeCombined": "Celkové skóre",
     "badgeUser": "Ověření uživatelé",
     "badgeExpert": "Experti Lab",
@@ -542,6 +557,9 @@
     "tabSpasAesthetics": "Spa a estetika",
     "tabEnglishCenters": "Jazykové školy",
     "tabCreditCards": "Kreditní karty",
+    "tabMonitors": "Monitory",
+    "tabCameras": "Fotoaparáty",
+    "tabVpsHosting": "VPS a hosting",
     "dirLabel": "Technologie a elektronika",
     "chooseCategory": "1. Vyberte kategorii (Uzamčeno v rámci kategorie):",
     "chooseCriterion": "2. Řadit podle kritéria:",
@@ -1096,6 +1114,9 @@
     "catSupplements": "Doplňky stravy",
     "catCosmetics": "Kosmetika",
     "catMotherBaby": "Matka a dítě",
+    "catMonitors": "Monitory",
+    "catCameras": "Fotoaparáty",
+    "catVpsHosting": "VPS a hosting",
     "personaValueHunter": "Nejlepší poměr cena/výkon",
     "personaDefault": "Vyvážený výběr",
     "personaPhotography": "Fotoaparát a zvuk",
@@ -1742,6 +1763,9 @@
     "catDescSpasAesthetics": "Hodnocení spa a estetických klinik pro účinnost, hygienu, konzultace bez nátlaku a ceny",
     "catDescEnglishCenters": "Hodnocení jazykových škol angličtiny pro kvalitu výuky, lektory, osnovy, rozvrh a školné",
     "catDescCreditCards": "Porovnání cashbacku, výhod, ročních poplatků, úroků a správy kreditních karet v aplikaci",
+    "catDescMonitors": "Porovnejte monitory podle přesnosti barev, obnovovací frekvence, portů, ergonomie a reálných cen",
+    "catDescCameras": "Porovnejte bezzrcadlovky, DSLR a akční kamery podle kvality fotek, ostření, výdrže baterie a cen",
+    "catDescVpsHosting": "Porovnejte tarify VPS a hostingu podle dostupnosti, rychlosti NVMe, podpory a měsíčních cen",
     "popularBattlesBadge": "Souboje 1v1",
     "popularBattlesTitle": "Nejčastěji porovnávané vlajkové modely",
     "leaderboard5CatsBtn": "Žebříček",
@@ -2245,6 +2269,21 @@
         "titleCount": "Srovnání kreditních karet ({count, plural, one {# karta} few {# karty} other {# karet}}) | Rate.vn",
         "titleDefault": "Srovnání kreditních karet, cashbacku a ročních poplatků | Rate.vn",
         "description": "Porovnejte cashback, výhody, roční poplatky, úroky, rychlost schválení a mobilní správu kreditních karet na Rate.vn."
+      },
+      "monitors": {
+        "titleCount": "Porovnání PC monitorů ({count, plural, one {# model} few {# modely} other {# modelů}}) | Rate.vn",
+        "titleDefault": "Porovnání PC monitorů, parametrů a reálných cen | Rate.vn",
+        "description": "Porovnejte herní, grafické a kancelářské monitory podle kvality panelu, obnovovací frekvence, portů, ergonomie a historie cen na Rate.vn."
+      },
+      "cameras": {
+        "titleCount": "Porovnání fotoaparátů a akčních kamer ({count, plural, one {# model} few {# modely} other {# modelů}}) | Rate.vn",
+        "titleDefault": "Porovnání fotoaparátů, akčních kamer a reálných cen | Rate.vn",
+        "description": "Porovnejte bezzrcadlovky, zrcadlovky a akční kamery podle kvality fotek a videa, ostření, výdrže baterie a ověřených cen na Rate.vn."
+      },
+      "vps-hosting": {
+        "titleCount": "Porovnání tarifů VPS a hostingu ({count, plural, one {# tarif} few {# tarify} other {# tarifů}}) | Rate.vn",
+        "titleDefault": "Porovnání tarifů VPS a hostingu, dostupnosti a měsíčních cen | Rate.vn",
+        "description": "Porovnejte tarify VPS a hostingu podle výkonu, dostupnosti, rychlosti sítě a NVMe SSD, technické podpory a měsíční ceny na Rate.vn."
       }
     },
     "sortOptions": {
@@ -2585,6 +2624,39 @@
           "under-500k": "Pod 500K/rok",
           "500k-1500k": "500K - 1,5M/rok",
           "over-1500k": "Nad 1,5M/rok"
+        },
+        "features": {}
+      },
+      "monitors": {
+        "title": "PC monitory",
+        "subtitle": "Porovnejte kvalitu panelu, přesnost barev, obnovovací frekvenci, porty a ověřené ceny monitorů",
+        "searchPlaceholder": "Hledejte Dell UltraSharp, LG UltraGear, ASUS ProArt, Odyssey...",
+        "presets": {
+          "under-5m": "Pod 5 mil. VND",
+          "5m-12m": "5 - 12 mil. VND",
+          "over-12m": "Nad 12 mil. VND"
+        },
+        "features": {}
+      },
+      "cameras": {
+        "title": "Fotoaparáty a akční kamery",
+        "subtitle": "Porovnejte kvalitu fotek a videa, rychlost ostření, ergonomii, výdrž baterie a reálné ceny",
+        "searchPlaceholder": "Hledejte Sony Alpha, Canon EOS, Fujifilm X, GoPro, DJI...",
+        "presets": {
+          "under-15m": "Pod 15 mil. VND",
+          "15m-35m": "15 - 35 mil. VND",
+          "over-35m": "Nad 35 mil. VND"
+        },
+        "features": {}
+      },
+      "vps-hosting": {
+        "title": "VPS a hosting",
+        "subtitle": "Porovnejte výkon, dostupnost, rychlost sítě a NVMe SSD, technickou podporu a měsíční ceny",
+        "searchPlaceholder": "Hledejte Nhan Hoa, P.A Viet Nam, HOSTVN, BKNS, Long Van...",
+        "presets": {
+          "under-200k": "Pod 200K/měs.",
+          "200k-600k": "200K - 600K/měs.",
+          "over-600k": "Nad 600K/měs."
         },
         "features": {}
       }

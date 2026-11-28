@@ -775,6 +775,9 @@ export default function DealFinderWorkspace({
       { slug: 'supplements', label: t('catSupplements') },
       { slug: 'cosmetics', label: t('catCosmetics') },
       { slug: 'mother-baby', label: t('catMotherBaby') },
+      { slug: 'monitors', label: t('catMonitors') },
+      { slug: 'cameras', label: t('catCameras') },
+      { slug: 'vps-hosting', label: t('catVpsHosting') },
     ],
     [t]
   );

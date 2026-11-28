@@ -92,7 +92,7 @@ describe('Wave E5 shared-data and prompt contracts', () => {
       'english-centers',
       'spas-aesthetics',
     ]);
-    assert.equal(RATING_CRITERIA_ALL_CATEGORIES.length, 25);
+    assert.equal(RATING_CRITERIA_ALL_CATEGORIES.length, 28);
     for (const slug of WAVE_E5_SLUGS) {
       assert.equal(getRatingCriteriaVersion(slug), 4);
       assert.equal(aiCategoryOpen(slug), true);
@@ -239,6 +239,7 @@ describe('Wave E5 importer normalization', () => {
       'bank-savings',
       'credit-cards',
       'internet-telecom',
+      'vps-hosting',
     ]);
     for (const slug of WAVE_E5_SLUGS) {
       assert.equal(CANONICAL_CATEGORY_SLUGS.has(slug), true);

@@ -389,6 +389,11 @@ export const SUPPORTED_SERVICE_PLATFORMS = [
   'tpbank',
   'hsbc',
   'shinhan',
+  'nhanhoa',
+  'pavietnam',
+  'hostvn',
+  'bkns',
+  'longvan',
 ] as const;
 
 export const SupportedServicePlatformSchema = z.enum(

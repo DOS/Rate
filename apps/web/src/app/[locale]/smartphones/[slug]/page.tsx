@@ -69,11 +69,13 @@ import {
   BsBank,
   BsBoxSeam,
   BsBuilding,
+  BsCamera,
   BsCapsule,
   BsCardChecklist,
   BsCheckCircleFill,
   BsCreditCard2Front,
   BsCupHot,
+  BsDisplay,
   BsDroplet,
   BsEarbuds,
   BsForkKnife,
@@ -84,6 +86,7 @@ import {
   BsPersonArmsUp,
   BsLaptop,
   BsPhone,
+  BsServer,
   BsShieldCheck,
   BsShieldExclamation,
   BsSmartwatch,
@@ -2242,6 +2245,12 @@ export async function ProductDetailView({
                                     return (
                                       <BsCreditCard2Front {...iconProps} />
                                     );
+                                  case 'monitors':
+                                    return <BsDisplay {...iconProps} />;
+                                  case 'cameras':
+                                    return <BsCamera {...iconProps} />;
+                                  case 'vps-hosting':
+                                    return <BsServer {...iconProps} />;
                                   default:
                                     return <BsPhone {...iconProps} />;
                                 }

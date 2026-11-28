@@ -934,6 +934,12 @@ const SPA_AESTHETICS_MENTION_RE =
 const ENGLISH_CENTER_MENTION_RE =
   /(?<![\p{L}\p{N}])(?:trung\s*tâm|tiếng\s*anh|anh\s*ngữ|giáo\s*viên|giảng\s*viên|trợ\s*giảng|thầy|cô\s*giáo|bản\s*ngữ|giảng\s*dạy|giáo\s*trình|lộ\s*trình|lớp\s*học|phòng\s*học|sĩ\s*số|lịch\s*học|ca\s*học|học\s*phí|phát\s*âm|giao\s*tiếp|ielts|toeic|đầu\s*ra)(?![\p{L}\p{N}])/iu;
 
+const MONITOR_MENTION_RE =
+  /(?<![\p{L}\p{N}])(?:tấm\s*nền|ips|oled|mini\s*led|độ\s*phủ\s*màu|srgb|dci[\s-]*p3|hở\s*sáng|điểm\s*chết|chống\s*chói|tần\s*số\s*quét|\d+\s*hz|ghosting|bóng\s*mờ|displayport|hdmi|chân\s*đế|vesa)(?![\p{L}\p{N}])/iu;
+
+const CAMERA_MENTION_RE =
+  /(?<![\p{L}\p{N}])(?:máy\s*ảnh|cảm\s*biến|ống\s*kính|lens|lấy\s*nét|autofocus|chống\s*rung|ibis|kính\s*ngắm|evf|báng\s*cầm|quay\s*4k|quá\s*nhiệt|full[\s-]*frame|aps[\s-]*c)(?![\p{L}\p{N}])/iu;
+
 // Intrinsic product/packaging feedback for Wave E3 consumables (keeps courier-only remarks excluded).
 const E3_CONSUMABLE_MENTION_RE =
   /(?<![\p{L}\p{N}])(?:bao\s*bì|vòi\s*(?:xịt|nhấn|pump|bơm)|nắp\s*(?:chai|hộp|lọ|vặn|bật)|tem\s*niêm\s*phong|seal|hạn\s*sử\s*dụng|hsd|thành\s*phần|hoạt\s*chất|tác\s*dụng(?:\s*phụ)?|hiệu\s*quả|kích\s*ứng|dị\s*ứng|nổi\s*mụn|thấm|bết|nhờn|dưỡng|ẩm|mịn|mùi|vị|sữa|bỉm|tã|uống|bôi|thoa|tẩy|rửa|hòa\s*tan|chai|lọ|tuýp|hộp\s*thiếc|hũ|bé\s*(?:chịu|thích|hợp|ti|uống|bú))(?!\p{L}|\d)/iu;
@@ -962,6 +968,12 @@ function hasDomainSubstance(text: string, context?: ShippingCommentContext): boo
     return true;
   }
   if (category === 'english-centers' && ENGLISH_CENTER_MENTION_RE.test(text)) {
+    return true;
+  }
+  if (category === 'monitors' && MONITOR_MENTION_RE.test(text)) {
+    return true;
+  }
+  if (category === 'cameras' && CAMERA_MENTION_RE.test(text)) {
     return true;
   }
   if (

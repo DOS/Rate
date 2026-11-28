@@ -67,6 +67,19 @@ const V5_RATING_CRITERIA_CATEGORIES_SET = new Set<string>([
 export const V5_RATING_CRITERIA_CATEGORIES: ReadonlySet<string> =
   V5_RATING_CRITERIA_CATEGORIES_SET;
 
+/** Schema version for Wave E6 monitor, camera, and VPS hosting criteria. */
+export const RATING_CRITERIA_V6_VERSION = 6;
+
+const V6_RATING_CRITERIA_CATEGORIES_SET = new Set<string>([
+  'monitors',
+  'cameras',
+  'vps-hosting',
+]);
+
+// Exported as an identifier so the rules-isolation check does not read the strings as module imports.
+export const V6_RATING_CRITERIA_CATEGORIES: ReadonlySet<string> =
+  V6_RATING_CRITERIA_CATEGORIES_SET;
+
 const CRITERION_KEYS = [
   'performance',
   'camera',
@@ -863,21 +876,137 @@ const RATING_CRITERIA: Readonly<Record<string, readonly RatingCriterion[]>> = {
       null
     ),
   ],
+  monitors: [
+    c(
+      'display',
+      'Hiển thị & màu sắc',
+      'Display & color',
+      'Displej a barvy',
+      35,
+      'display'
+    ),
+    c(
+      'performance',
+      'Tần số quét & phản hồi',
+      'Refresh rate & response',
+      'Obnovovací frekvence a odezva',
+      20,
+      'display'
+    ),
+    c(
+      'connectivity',
+      'Cổng kết nối',
+      'Connectivity',
+      'Konektivita',
+      15,
+      'connectivity'
+    ),
+    c(
+      'design',
+      'Thiết kế & công thái học',
+      'Design & ergonomics',
+      'Design a ergonomie',
+      15,
+      'design'
+    ),
+    VALUE,
+  ],
+  cameras: [
+    c(
+      'camera',
+      'Chất lượng ảnh & video',
+      'Image & video quality',
+      'Kvalita fotek a videa',
+      35,
+      null
+    ),
+    c(
+      'performance',
+      'Lấy nét & tốc độ chụp',
+      'Autofocus & shooting speed',
+      'Ostření a rychlost snímání',
+      20,
+      null
+    ),
+    c(
+      'design',
+      'Thiết kế & cảm giác cầm',
+      'Build & ergonomics',
+      'Zpracování a ergonomie',
+      15,
+      'design'
+    ),
+    c(
+      'battery',
+      'Thời lượng pin',
+      'Battery life',
+      'Výdrž baterie',
+      15,
+      'battery'
+    ),
+    VALUE,
+  ],
+  'vps-hosting': [
+    c(
+      'performance',
+      'Hiệu năng & uptime',
+      'Performance & uptime',
+      'Výkon a dostupnost',
+      30,
+      null
+    ),
+    c(
+      'price',
+      'Giá cước & gia hạn',
+      'Pricing & renewal',
+      'Cena a prodloužení',
+      25,
+      null,
+      true
+    ),
+    c(
+      'speed',
+      'Tốc độ mạng & SSD',
+      'Network & SSD speed',
+      'Rychlost sítě a SSD',
+      20,
+      null
+    ),
+    c(
+      'service_quality',
+      'Hỗ trợ kỹ thuật',
+      'Technical support',
+      'Technická podpora',
+      15,
+      null
+    ),
+    c(
+      'ease_of_use',
+      'Bảng điều khiển & triển khai',
+      'Control panel & setup',
+      'Ovládací panel a správa',
+      10,
+      null
+    ),
+  ],
 };
 
 /**
  * Criteria schema version for a category slug.
  * Existing v1 categories stay pinned at 1 while Wave E1/E2 use v2, Wave E3/E4 use v3,
- * Wave E5 Phase 1 uses v4, and Wave E5 Phase 2 uses v5.
+ * Wave E5 Phase 1 uses v4, Wave E5 Phase 2 uses v5, and Wave E6 uses v6.
  */
 export function getRatingCriteriaVersion(
   categorySlug: string | null | undefined
-): 1 | 2 | 3 | 4 | 5 {
+): 1 | 2 | 3 | 4 | 5 | 6 {
   const raw = categorySlug;
   const normalized =
     typeof raw === 'string'
       ? raw.replace(LOCALE_CONTROL_CHARS_RE, '').trim().toLowerCase()
       : '';
+  if (V6_RATING_CRITERIA_CATEGORIES.has(normalized)) {
+    return RATING_CRITERIA_V6_VERSION;
+  }
   if (V5_RATING_CRITERIA_CATEGORIES.has(normalized)) {
     return RATING_CRITERIA_V5_VERSION;
   }
@@ -898,7 +1027,7 @@ export const RATING_CRITERIA_CATEGORIES: readonly string[] = Object.keys(
   RATING_CRITERIA
 ).filter((slug) => getRatingCriteriaVersion(slug) === RATING_CRITERIA_VERSION);
 
-/** All categories (v1 + Wave E1/E2 v2 + Wave E3/E4 v3 + Wave E5 Phase 1 v4 + Phase 2 v5) with their own criteria list. */
+/** All categories (v1 + Wave E1/E2 v2 + Wave E3/E4 v3 + Wave E5 Phase 1 v4 + Phase 2 v5 + Wave E6 v6) with their own criteria list. */
 export const RATING_CRITERIA_ALL_CATEGORIES: readonly string[] =
   Object.keys(RATING_CRITERIA);
 
@@ -1077,6 +1206,9 @@ const LEGACY_MAP: Readonly<
   'spas-aesthetics': {},
   'english-centers': {},
   'credit-cards': {},
+  monitors: {},
+  cameras: {},
+  'vps-hosting': {},
 };
 
 /**
@@ -1554,6 +1686,7 @@ const RATING_USE_CASE_PRESETS: Readonly<
       ...V3_RATING_CRITERIA_CATEGORIES,
       ...V4_RATING_CRITERIA_CATEGORIES,
       ...V5_RATING_CRITERIA_CATEGORIES,
+      ...V6_RATING_CRITERIA_CATEGORIES,
     ].map((slug) => [
       slug,
       [

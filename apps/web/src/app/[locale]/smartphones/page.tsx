@@ -55,6 +55,7 @@ import {
   BsArrowRight,
   BsBatteryHalf,
   BsCpu,
+  BsDisplay,
   BsLightningCharge,
   BsPhone,
   BsSearch,
@@ -1236,6 +1237,8 @@ export async function CategoryCatalogContent({
                           icon:
                             categorySlug === 'tvs' ? (
                               <BsTv aria-hidden="true" />
+                            ) : categorySlug === 'monitors' ? (
+                              <BsDisplay aria-hidden="true" />
                             ) : (
                               <BsPhone aria-hidden="true" />
                             ),
