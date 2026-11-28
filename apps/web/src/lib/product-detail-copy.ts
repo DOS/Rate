@@ -27,7 +27,11 @@ export function resolveDisplayVariantName(
   variantName: string | null | undefined
 ): string | null {
   if (typeof variantName !== 'string') return null;
-  const trimmed = variantName.replace(COPY_CONTROL_CHAR_RE, '').trim();
+  const trimmed = variantName
+    .normalize('NFC')
+    .replace(COPY_CONTROL_CHAR_RE, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!trimmed || GENERIC_VARIANT_NAME_RE.test(trimmed)) return null;
   return trimmed;
 }

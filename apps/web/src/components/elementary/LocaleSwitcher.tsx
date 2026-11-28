@@ -289,7 +289,7 @@ export function LocaleSwitcher({
                   type="button"
                   aria-pressed={isSelected}
                   onClick={() => handleSelect(loc)}
-                  className={`dropdown-item d-flex align-items-center justify-content-between rounded-2 border-0 px-2.5 py-2 text-start ${
+                  className={`dropdown-item d-flex align-items-center justify-content-between rounded-2 border-0 px-2 py-2 text-start ${
                     isSelected ? 'bg-light text-primary fw-bold' : 'text-dark'
                   }`}
                   style={{ width: '100%', fontSize: '13px', cursor: 'pointer' }}

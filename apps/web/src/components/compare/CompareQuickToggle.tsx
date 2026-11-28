@@ -176,9 +176,9 @@ export default function CompareQuickToggle({
           aria-pressed={ariaPressed}
           className={cn(
             'rate-chip-btn',
-            selected && 'is-active bg-brand-bg',
+            selected && 'is-active bg-brand-bg dark:bg-brand-bg',
             limitAlert &&
-              'is-warning border-status-warn-fg/40 bg-status-warn-bg text-status-warn-fg hover:bg-status-warn-bg'
+              'is-warning border-status-warn-fg/40 bg-status-warn-bg text-status-warn-fg hover:bg-status-warn-bg hover:text-status-warn-fg'
           )}
         >
           {selected ? (
@@ -235,7 +235,7 @@ export default function CompareQuickToggle({
         aria-pressed={ariaPressed}
         className={cn(
           limitAlert &&
-            'border-status-warn-fg/40 bg-status-warn-bg text-status-warn-fg hover:bg-status-warn-bg',
+            'border-status-warn-fg/40 bg-status-warn-bg text-status-warn-fg hover:bg-status-warn-bg hover:text-status-warn-fg',
           className
         )}
       >

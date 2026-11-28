@@ -15,7 +15,7 @@ const badgeVariants = cva(
         warning:
           'bg-status-warn-bg text-status-warn-fg border-status-warn-fg/25',
         danger: 'bg-status-bad-bg text-status-bad-fg border-status-bad-fg/25',
-        outline: 'bg-transparent text-fg-paragraph border-border-strong',
+        outline: 'bg-[transparent] text-fg-paragraph border-border-strong',
       },
     },
     defaultVariants: {

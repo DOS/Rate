@@ -12,6 +12,7 @@
 @source "../../components/elementary/LocaleSwitcher.tsx";
 @source "../../components/elementary/ExportMenu.tsx";
 @source "../../components/compare/CompareQuickToggle.tsx";
+@source "../../components/watchlist/WatchlistQuickToggle.tsx";
 @source "../../components/leaderboard/ProductShareAuditButton.tsx";
 @source "../../app/[locale]/components/navbar/NavbarDarkDynamic.tsx";
 @source not "../../**/__tests__";

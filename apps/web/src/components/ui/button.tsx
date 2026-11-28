@@ -20,14 +20,14 @@ const buttonVariants = cva(
         outline:
           'bg-surface text-fg-primary border-border-strong hover:bg-elevated hover:text-fg-primary',
         ghost:
-          'bg-transparent text-fg-secondary border-transparent hover:bg-elevated hover:text-fg-primary',
+          'bg-[transparent] text-fg-secondary border-transparent hover:bg-elevated hover:text-fg-primary',
         success:
           'bg-[#146c43] text-[#ffffff] border-transparent hover:bg-[#115c39] hover:text-[#ffffff]',
       },
       size: {
         sm: 'h-9 px-3.5 text-[13px] leading-tight',
         default: 'h-10 px-[16px] text-[14px] leading-tight',
-        icon: 'h-9 w-9 p-0 text-[14px]',
+        icon: 'h-9 w-9 p-[0px] text-[14px]',
       },
     },
     defaultVariants: {

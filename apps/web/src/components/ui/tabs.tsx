@@ -7,7 +7,7 @@ function NavTabs({ className, ...props }: React.ComponentProps<'nav'>) {
     <nav
       data-slot="nav-tabs"
       className={cn(
-        'inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-[10px] border-[1px] border-solid border-border-subtle bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        'inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-[10px] border-[1px] border-solid border-border-subtle bg-surface p-[4px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         className
       )}
       {...props}

@@ -433,8 +433,11 @@ function main() {
     'default',
     'Tiêu chuẩn',
     'tiêu chuẩn',
+    'Tiêu   chuẩn',
+    'Tiêu chuẩn'.normalize('NFD'),
     'Mặc định',
     'mặc định',
+    'Mặc định'.normalize('NFD'),
   ]) {
     assert.equal(
       resolveDisplayVariantName(generic),

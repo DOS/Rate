@@ -155,6 +155,7 @@ export function ItemSizePriceStrip({
             thumbnail={product.image}
             currentMinPrice={stats.minPrice}
             currency={effectiveCurrency}
+            priceUnit={context.priceUnit}
             size="sm"
           />
         )}
@@ -164,6 +165,7 @@ export function ItemSizePriceStrip({
           </a>
         </Button>
         <ProductShareAuditButton
+          slug={product.slug}
           name={product.name}
           brand={product.brand}
           modelKey={product.model_key}

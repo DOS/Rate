@@ -45,9 +45,9 @@ function main() {
         `Button (${variant}/${size}) must never use rounded-full`
       );
       assert.equal(
-        /(?:^|\s)border(?:\s|$)/.test(classes),
+        /(?:^|\s)(?:border|bg-transparent|p-0|p-1)(?:\s|$)/.test(classes),
         false,
-        `Button (${variant}/${size}) must avoid bare .border Bootstrap !important collision`
+        `Button (${variant}/${size}) must avoid colliding Bootstrap !important utilities (border, bg-transparent, p-0, p-1)`
       );
     }
   }
@@ -93,9 +93,9 @@ function main() {
       `Badge (${variant}) must use 6px radius`
     );
     assert.equal(
-      /(?:^|\s)border(?:\s|$)/.test(classes),
+      /(?:^|\s)(?:border|bg-transparent|p-0|p-1)(?:\s|$)/.test(classes),
       false,
-      `Badge (${variant}) must avoid bare .border Bootstrap !important collision`
+      `Badge (${variant}) must avoid colliding Bootstrap !important utilities (border, bg-transparent, p-0, p-1)`
     );
   }
   const badgeHtml = renderToStaticMarkup(
@@ -135,6 +135,8 @@ function main() {
   assert.match(tabsHtml, /<nav\b/);
   assert.match(tabsHtml, /data-slot="nav-tabs"/);
   assert.match(tabsHtml, /rounded-\[10px\]/);
+  assert.match(tabsHtml, /p-\[4px\]/);
+  assert.doesNotMatch(tabsHtml, /class="[^"]*\bp-1\b/);
   assert.match(tabsHtml, /data-slot="nav-tab"/);
   assert.match(tabsHtml, /rounded-\[6px\]/);
   assert.match(tabsHtml, /\bh-9\b/);

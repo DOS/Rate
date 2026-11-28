@@ -33,6 +33,7 @@ export interface ItemSizePanelData {
 /** Item-level facts every size's price strip shows the same. */
 export interface ItemSizeStripContext {
   categoryPath: string;
+  priceUnit?: string | null;
   userScore5: number;
   expertScore10: number | null;
   authenticReviews: number;

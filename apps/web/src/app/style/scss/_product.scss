@@ -403,12 +403,6 @@
   border: 1px solid var(--rate-border-strong);
   background-color: var(--rate-bg-elevated);
   color: var(--rate-fg-primary);
-
-  &.is-current {
-    background-color: var(--rate-bg-elevated);
-    border-color: var(--rate-border-strong);
-    color: var(--rate-fg-primary);
-  }
 }
 
 .rate-pdv-colors {

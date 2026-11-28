@@ -1097,6 +1097,19 @@ export async function ProductDetailView({
           </PriceStripRow>
         </PriceStripHeader>
         <PriceStripActions>
+          {isItemGroup && v.stats.minPrice > 0 && (
+            <PriceWatchButton
+              slug={v.product.slug}
+              name={v.product.name}
+              brand={v.product.brand}
+              categoryPath={categoryBasePath}
+              thumbnail={productImageUrl(v.product)}
+              currentMinPrice={v.stats.minPrice}
+              currency={effectiveCurrency}
+              priceUnit={effectivePriceUnit}
+              size="sm"
+            />
+          )}
           {!isPlace && (
             <Button variant="outline" size="sm" asChild>
               <a href="#pdv-price-history">
@@ -1165,6 +1178,7 @@ export async function ProductDetailView({
   );
   const sizeStripContext = {
     categoryPath: categoryBasePath,
+    priceUnit: effectivePriceUnit,
     userScore5: displayUserRating,
     expertScore10: expertRating10,
     authenticReviews: authenticCount,
@@ -1400,7 +1414,7 @@ export async function ProductDetailView({
           <div className="row g-4 mb-5">
             {/* Left: Images */}
             <div className="col-lg-5 col-12">
-              <div className="card rate-pdv-media-card rounded-[14px] p-md-4 p-3 text-center">
+              <div className="card rate-pdv-media-card p-md-4 p-3 text-center">
                 <div
                   className={`rate-pdv-media d-flex align-items-center justify-content-center${
                     mainImage ? ' is-studio' : ''
@@ -1803,7 +1817,7 @@ export async function ProductDetailView({
                         : t('writeOrReadReviewsBtn')}
                     </a>
                   </Button>
-                  {heroStats.minPrice > 0 && (
+                  {!isItemGroup && heroStats.minPrice > 0 && (
                     <PriceWatchButton
                       slug={product.slug}
                       name={product.name}
