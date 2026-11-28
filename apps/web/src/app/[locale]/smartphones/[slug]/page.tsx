@@ -2427,7 +2427,7 @@ export async function ProductDetailView({
                           </div>
                         </div>
 
-                        <div className="d-flex mt-auto gap-2">
+                        <div className="d-flex mt-auto flex-wrap gap-2">
                           {peerVersusHref && (
                             <Button
                               variant="outline-primary"

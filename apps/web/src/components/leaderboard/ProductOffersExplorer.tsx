@@ -813,7 +813,7 @@ export default function ProductOffersExplorer({
             return (
               <>
                 <div className="d-flex align-items-center flex-wrap gap-2">
-                  <Badge variant="success">
+                  <Badge variant="success" className="bg-surface">
                     {t('offersSpreadBadge', {
                       count: priceSpreadAudit.platformCount,
                     })}

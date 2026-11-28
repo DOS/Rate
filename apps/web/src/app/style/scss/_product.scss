@@ -258,6 +258,10 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+
+  a:focus-visible {
+    outline-offset: -2px !important;
+  }
 }
 
 .rate-pdv-devinfo {

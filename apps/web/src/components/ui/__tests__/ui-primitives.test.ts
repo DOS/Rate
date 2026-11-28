@@ -67,6 +67,16 @@ function main() {
     buttonVariants({ variant: 'success' }),
     /\bbg-success-bg\b.*\btext-success-fg\b.*\bhover:bg-success-hover\b.*\bhover:text-success-fg\b/
   );
+  assert.match(
+    buttonVariants({ variant: 'outline', size: 'icon' }),
+    /\bshrink-0\b/
+  );
+  const surfaceBadgeClasses = cn(
+    badgeVariants({ variant: 'success' }),
+    'bg-surface'
+  );
+  assert.match(surfaceBadgeClasses, /\bbg-surface\b/);
+  assert.doesNotMatch(surfaceBadgeClasses, /\bbg-status-good-bg\b/);
 
   const smBtnHtml = renderToStaticMarkup(
     React.createElement(

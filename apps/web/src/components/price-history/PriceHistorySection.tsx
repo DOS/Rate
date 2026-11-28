@@ -1438,7 +1438,7 @@ export default function PriceHistorySection({
           expose the pressed choice, not only its colour (DOS/Rate#1069). */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-3">
         <div
-          className="d-flex align-items-center flex-wrap gap-2"
+          className="d-flex align-items-center mw-100 flex-wrap gap-2"
           role="group"
           aria-labelledby={storeFilterLabelId}
         >
@@ -1472,6 +1472,7 @@ export default function PriceHistorySection({
                 type="button"
                 variant={isSelected ? 'secondary' : 'outline'}
                 size="sm"
+                className="mw-100"
                 aria-pressed={isSelected}
                 onClick={() => {
                   setSelectedProductId(oa.product_id);
@@ -1479,14 +1480,17 @@ export default function PriceHistorySection({
                 }}
               >
                 <span
-                  className="rounded-circle d-inline-block"
+                  className="rounded-circle d-inline-block flex-shrink-0"
                   style={{
                     width: '8px',
                     height: '8px',
                     backgroundColor: color,
                   }}
                 />
-                <span lang={contentLang(oa.merchant_name, locale)}>
+                <span
+                  className="text-truncate"
+                  lang={contentLang(oa.merchant_name, locale)}
+                >
                   {oa.merchant_name}
                 </span>
               </Button>

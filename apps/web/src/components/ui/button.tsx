@@ -31,7 +31,7 @@ const buttonVariants = cva('rounded-[var(--rate-radius-btn)]', {
     size: {
       sm: 'h-9 px-3.5 text-[13px] leading-tight',
       default: 'h-10 px-[16px] text-[14px] leading-tight',
-      icon: 'h-9 w-9 p-[0px] text-[14px]',
+      icon: 'h-9 w-9 shrink-0 p-[0px] text-[14px]',
     },
   },
   defaultVariants: {
