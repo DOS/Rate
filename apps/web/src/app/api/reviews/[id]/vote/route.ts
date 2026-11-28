@@ -6,6 +6,7 @@ import {
 } from '@/server/rate/cache-tags';
 import {
   BoundedSlidingWindowRateLimiter,
+  REVIEW_REPORT_REASONS,
   resolveReviewVoteInput,
   sanitizePublicApiError,
   type ReviewReportReason,
@@ -173,6 +174,16 @@ export async function POST(
           error:
             'Invalid vote action; provide voteType in ["up", "down", "report", "clear"] or boolean helpful',
           code: 'INVALID_VOTE_ACTION',
+        },
+        { status: 400, headers: REVIEW_VOTE_CORS_HEADERS }
+      );
+    }
+    if (parsedInput.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Invalid report reason; provide reportReason in [${REVIEW_REPORT_REASONS.map((r) => `"${r}"`).join(', ')}]`,
+          code: 'INVALID_REPORT_REASON',
         },
         { status: 400, headers: REVIEW_VOTE_CORS_HEADERS }
       );

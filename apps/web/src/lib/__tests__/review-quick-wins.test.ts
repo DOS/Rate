@@ -315,6 +315,41 @@ function testReportReasonPickerAndPayload() {
       reportReason: reason,
     });
   }
+  // An unknown or non-string reason is refused for a report, never turned
+  // into spam (#1963); absent keeps the spam default; other votes ignore it.
+  for (const bad of ['not-a-reason', '', '   ', 42, {}, ['spam'], true]) {
+    assert.deepEqual(
+      resolveReviewVoteInput({ voteType: 'report', reportReason: bad }),
+      { error: 'INVALID_REPORT_REASON' },
+      `reportReason ${JSON.stringify(bad)}`
+    );
+  }
+  assert.deepEqual(
+    resolveReviewVoteInput({ voteType: 'report', reason: 'typo' }),
+    { error: 'INVALID_REPORT_REASON' }
+  );
+  assert.deepEqual(
+    resolveReviewVoteInput({
+      voteType: 'report',
+      reportReason: 'bad',
+      reason: 'spam',
+    }),
+    { error: 'INVALID_REPORT_REASON' },
+    'reportReason wins over the legacy reason'
+  );
+  for (const absent of [{}, { reportReason: null }, { reason: null }]) {
+    assert.deepEqual(
+      resolveReviewVoteInput({ voteType: 'report', ...absent }),
+      {
+        voteType: 'report',
+        reportReason: 'spam',
+      }
+    );
+  }
+  assert.deepEqual(
+    resolveReviewVoteInput({ voteType: 'up', reportReason: 'not-a-reason' }),
+    { voteType: 'up', reportReason: 'spam' }
+  );
   assert.deepEqual(buildReviewVoteRequestBody('up'), { voteType: 'up' });
   assert.deepEqual(buildReviewVoteRequestBody('down'), { voteType: 'down' });
   assert.deepEqual(buildReviewVoteRequestBody('clear'), { voteType: 'clear' });

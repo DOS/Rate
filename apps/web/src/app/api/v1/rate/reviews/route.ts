@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import {
   sanitizeReviewImages,
@@ -7,7 +6,6 @@ import {
   type ReviewItem,
 } from '@/lib/rate-api';
 import {
-  RATE_CACHE_TAGS,
   getCachedMasterProductBySlug,
   getCachedMasterProductReviewsPage,
   getCachedMasterProductReviewSummary,
@@ -22,6 +20,7 @@ import {
   readBoundedJsonBody,
   rateLimitExceededResponse,
 } from '@/server/rate/api-handler';
+import { revalidateSubmittedReview } from '@/server/rate/review-revalidation';
 import {
   authenticateRateRequest,
   isMissingRpcError,
@@ -477,7 +476,7 @@ export async function POST(request: NextRequest) {
     // With v2 on, every review is a v2 review: a v1 body (no verdict, pros
     // or cons, a star from the browser) is refused as INVALID_BODY.
     if (isReviewFormV2Enabled()) {
-      return await submitReviewV2(auth.rateClient, rawBody);
+      return await submitReviewV2(auth.rateClient, auth.userId, rawBody);
     }
 
     const parsed = SubmitReviewSchema.safeParse(rawBody ?? {});
@@ -584,13 +583,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    try {
-      revalidateTag(RATE_CACHE_TAGS.REVIEWS, 'max');
-      revalidateTag(RATE_CACHE_TAGS.PRODUCTS, 'max');
-      revalidateTag(RATE_CACHE_TAGS.STATS, 'max');
-    } catch {
-      // Ignore revalidateTag errors outside Next.js request context
-    }
+    // This product's reviews and page only, not the whole catalogue
+    // (DOS/Rate#1962).
+    await revalidateSubmittedReview(
+      auth.rateClient,
+      auth.userId,
+      body.masterProductId
+    );
 
     return NextResponse.json(
       {
@@ -619,6 +618,7 @@ export async function POST(request: NextRequest) {
  */
 async function submitReviewV2(
   rateClient: AuthenticatedRateRequest['rateClient'],
+  userId: string,
   rawBody: unknown
 ): Promise<NextResponse> {
   const parsed = SubmitReviewV2Schema.safeParse(rawBody);
@@ -739,13 +739,9 @@ async function submitReviewV2(
     );
   }
 
-  try {
-    revalidateTag(RATE_CACHE_TAGS.REVIEWS, 'max');
-    revalidateTag(RATE_CACHE_TAGS.PRODUCTS, 'max');
-    revalidateTag(RATE_CACHE_TAGS.STATS, 'max');
-  } catch {
-    // Ignore revalidateTag errors outside Next.js request context
-  }
+  // This product's reviews and page only, not the whole catalogue
+  // (DOS/Rate#1962).
+  await revalidateSubmittedReview(rateClient, userId, body.masterProductId);
 
   // The RPC's `verdict` is the writer's verdict text; the analysis verdict
   // the review list reads is `flag_verdict`. Its criteria use the
