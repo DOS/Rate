@@ -43,6 +43,13 @@
  *                     the Item model is deployed), and the draft master stays unpublished
  *                     until someone publishes it.
  *
+ * Retractions (DOS/Rate#1972): a seed's `retract_spec_fields` removes stored spec values, so a
+ * run never applies them (nor rewrites a replaced seed's variant name) unless `--retract` is
+ * passed. Without it the seed value replaces the stored one and every other stored field stays (a scoped run changes only the paths it
+ * is approved for, e.g. the Bluetooth version of DOS/Rate#1955). `--retract` is the explicit,
+ * reviewed way to remove what an unsourced seed wrote (DOS/Rate#1459, #1858).
+ *   ... backfill-specs.ts --only <model_key,...> --retract                      (Dry-run: the diff shows each removal)
+ *
  * Safety invariant:
  * - Dry-run by default (`apply = false`): never mutates `rate.master_products` unless `--apply` is passed.
  * - Inserts a master only for a seed named with `--only ... --insert-missing` (DOS/Rate#1739).
@@ -147,6 +154,12 @@ export interface BackfillSpecsOptions {
    * instead of stopping the run. With `apply`, `expect` is required.
    */
   readonly insertMissing?: boolean;
+  /**
+   * `--retract`: also remove the paths a seed lists in `retract_spec_fields` from the stored
+   * specs and key specs. Off by default: a run never deletes a stored spec value on its own
+   * (DOS/Rate#1972).
+   */
+  readonly retract?: boolean;
 }
 
 export interface BackfillSpecsResult {
@@ -208,27 +221,32 @@ export function specUpdateChanges(
 
 /**
  * The spec columns a seed writes onto its existing master: specs and key specs merged into
- * the stored ones, minus the seed's retracted paths, and for a replaced seed its variant
- * name and value columns. Ensures no seed update keeps a retracted value.
+ * the stored ones. A stored value the seed does not state stays: the seed's retracted paths
+ * are removed, and a replaced seed's variant name rewritten, only with `retract`
+ * (`--retract`), so no run deletes a stored spec value on its own (DOS/Rate#1972). The value
+ * columns a seed carries (RAM, battery, colours) are still written by the caller as before:
+ * a seed replacing a value, not a removal.
  */
 export function seedMasterSpecUpdate(
   existing: { specifications?: unknown; key_specs?: unknown } | null | undefined,
-  seed: FlagshipDeviceSeed
+  seed: FlagshipDeviceSeed,
+  options: { readonly retract?: boolean } = {}
 ): Record<string, unknown> {
+  const retracted = options.retract === true ? seed.retract_spec_fields : undefined;
   return {
     specifications: withoutRetractedSpecs(
       mergeProductSpecifications(existing?.specifications, seed.specifications, seed.colors),
-      seed.retract_spec_fields,
+      retracted,
       'specifications'
     ),
     key_specs: withoutRetractedSpecs(
       mergeKeySpecs(existing?.key_specs, seed.key_specs as unknown as Record<string, unknown>),
-      seed.retract_spec_fields,
+      retracted,
       'key_specs'
     ),
-    // A replaced, unsourced seed's label ("16GB/256GB") and columns (RAM, battery, colours)
-    // follow the new one, on both entry points.
-    ...(seed.retract_spec_fields
+    // A replaced, unsourced seed's label ("16GB/256GB") and columns follow the new one, on
+    // both entry points, in the same explicit run as its retractions.
+    ...(retracted
       ? {
           variant_name: seed.variant_name,
           description: seed.description,
@@ -255,6 +273,8 @@ export async function syncItemSeedSpecs(
     apply?: boolean;
     seeds?: readonly FlagshipItemSeed[];
     itemModel?: ItemModelMode;
+    /** Remove the seed's retracted paths too; off by default (DOS/Rate#1972). */
+    retract?: boolean;
   } = {}
 ): Promise<{ updated: number; missing: string[] }> {
   void options.itemModel;
@@ -262,6 +282,7 @@ export async function syncItemSeedSpecs(
   const missing: string[] = [];
   let updated = 0;
   for (const seed of options.seeds ?? flagshipSeedsByItem()) {
+    const retracted = options.retract === true ? seed.retract_spec_fields : undefined;
     const { data: item, error: lookupErr } = await supabase
       .from('items')
       .select('id, specifications, key_specs')
@@ -284,14 +305,14 @@ export async function syncItemSeedSpecs(
             withoutVariantSpecs(
               mergeProductSpecifications(row.specifications, seed.specifications)
             ),
-            seed.retract_spec_fields,
+            retracted,
             'specifications'
           ),
           key_specs: withoutRetractedSpecs(
             withoutVariantKeySpecs(
               mergeKeySpecs(row.key_specs, seed.key_specs as unknown as Record<string, unknown>)
             ),
-            seed.retract_spec_fields,
+            retracted,
             'key_specs'
           ),
           ...(seed.images.length > 0 ? { images: seed.images, thumbnail: seed.images[0] } : {}),
@@ -555,6 +576,7 @@ export interface BackfillSpecsArgs {
   readonly expect?: number;
   readonly expectInserts?: number;
   readonly insertMissing?: boolean;
+  readonly retract?: boolean;
 }
 
 /** Parses the job's flags; throws on a malformed `--only`, `--expect` or `--expect-inserts`. */
@@ -567,8 +589,14 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
   let expectRaw: string | undefined;
   let expectInsertsRaw: string | undefined;
   let insertMissing = false;
+  let retract = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
+    if (arg === '--retract') {
+      if (retract) throw new Error(`${arg} is repeated`);
+      retract = true;
+      continue;
+    }
     if (arg === '--insert-missing') {
       if (insertMissing) throw new Error(`${arg} is repeated`);
       insertMissing = true;
@@ -596,7 +624,7 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
       continue;
     }
     throw new Error(
-      `unknown argument ${JSON.stringify(arg)}: this job takes --apply, --audit-only, --only <model_key,...>, --expect <n>, --expect-inserts <n> and --insert-missing`
+      `unknown argument ${JSON.stringify(arg)}: this job takes --apply, --audit-only, --only <model_key,...>, --expect <n>, --expect-inserts <n>, --insert-missing and --retract`
     );
   }
   let only: string[] | undefined;
@@ -630,6 +658,9 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
   if (auditOnly && apply) {
     throw new Error('--apply does not combine with --audit-only');
   }
+  if (auditOnly && retract) {
+    throw new Error('--retract does not combine with --audit-only');
+  }
   if (auditOnly && (only !== undefined || expect !== undefined || expectInserts !== undefined)) {
     throw new Error('--only, --expect and --expect-inserts do not combine with --audit-only');
   }
@@ -647,6 +678,7 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
     ...(expect !== undefined ? { expect } : {}),
     ...(expectInserts !== undefined ? { expectInserts } : {}),
     ...(insertMissing ? { insertMissing } : {}),
+    ...(retract ? { retract } : {}),
   };
 }
 
@@ -862,6 +894,7 @@ export async function runMasterSpecsBackfillWith(
   if (insertMissing && apply && expect === undefined) {
     throw new Error('insertMissing with apply needs expect');
   }
+  const retract = options.retract === true;
   const { enricher, matcher } = deps;
 
   const { data: categories, error: catErr } = await supabase
@@ -921,7 +954,8 @@ export async function runMasterSpecsBackfillWith(
       const row = existing as unknown as { id: string } & Record<string, unknown>;
       const specUpdate = seedMasterSpecUpdate(
         row as { specifications?: unknown; key_specs?: unknown },
-        device
+        device,
+        { retract }
       );
       const payload = {
         ...specFields,
@@ -933,7 +967,7 @@ export async function runMasterSpecsBackfillWith(
       // row, over everything the update writes (DOS/Rate#1464).
       const changes = scoped
         ? specUpdateChanges(row, withoutTimestamp(payload))
-        : device.retract_spec_fields
+        : retract && device.retract_spec_fields
           ? specUpdateChanges(row, specUpdate)
           : undefined;
       seedWrites.push({ kind: 'seed-update', device, id: row.id, payload, changes });
@@ -1230,7 +1264,7 @@ export async function runMasterSpecsBackfillWith(
       'Scoped run (--only): the job writes no rate.items row (a master trigger may still create a draft Item)'
     );
   } else {
-    itemsUpdated = (await syncItemSeedSpecs(supabase, { apply })).updated;
+    itemsUpdated = (await syncItemSeedSpecs(supabase, { apply, retract })).updated;
   }
 
   for (const w of masterWrites) {
@@ -1323,6 +1357,9 @@ export async function runQuickSpecSyncAndAudit(
   if (options.insertMissing) {
     throw new Error('--insert-missing does not combine with --audit-only');
   }
+  if (options.retract) {
+    throw new Error('--retract does not combine with --audit-only');
+  }
   const { createClient } = await import('@supabase/supabase-js');
   const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const supabaseKey = (
@@ -1378,6 +1415,9 @@ export async function runBackfillSpecsCli(
     if (args.insertMissing) {
       throw new Error('--insert-missing does not combine with --audit-only');
     }
+    if (args.retract) {
+      throw new Error('--retract does not combine with --audit-only');
+    }
     const runQuickAudit = runners.runQuickAudit ?? runQuickSpecSyncAndAudit;
     return runQuickAudit({ apply: false, auditOnly: true });
   }
@@ -1388,6 +1428,7 @@ export async function runBackfillSpecsCli(
     ...(args.expect !== undefined ? { expect: args.expect } : {}),
     ...(args.expectInserts !== undefined ? { expectInserts: args.expectInserts } : {}),
     ...(args.insertMissing ? { insertMissing: true } : {}),
+    ...(args.retract ? { retract: true } : {}),
   });
 }
 

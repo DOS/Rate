@@ -664,7 +664,7 @@ test('fields no source states are dropped and retracted from stored rows', () =>
       },
       key_specs: {},
     };
-    const update = seedMasterSpecUpdate(stored, seed) as {
+    const update = seedMasterSpecUpdate(stored, seed, { retract: true }) as {
       specifications: ProductSpecifications;
     };
     for (const path of paths) {
