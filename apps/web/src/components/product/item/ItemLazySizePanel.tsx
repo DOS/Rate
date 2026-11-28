@@ -94,6 +94,10 @@ export function ItemSizePriceStrip({
   const locale = useLocale();
   const { stats, priceHistory, product } = data;
   const categorySlug = context.categoryPath.replace(/^\/+/, '');
+  const priceFormatOptions = {
+    categorySlug,
+    priceUnit: context.priceUnit,
+  };
   const effectiveCurrency = resolveListingPriceCurrency({
     categorySlug,
     offers: data.offers,
@@ -107,9 +111,12 @@ export function ItemSizePriceStrip({
         <PriceStripRow>
           <PriceStripValue>
             {stats.minPrice > 0 ? (
-              formatListingPrice(stats.minPrice, effectiveCurrency, locale, {
-                categorySlug,
-              })
+              formatListingPrice(
+                stats.minPrice,
+                effectiveCurrency,
+                locale,
+                priceFormatOptions
+              )
             ) : data.saleStateKey ? (
               <span data-sale-state={data.saleState}>
                 {tSale(data.saleStateKey)}
@@ -121,21 +128,28 @@ export function ItemSizePriceStrip({
           {stats.minPrice > 0 && stats.minPrice !== stats.maxPrice && (
             <PriceStripRange>
               ~{' '}
-              {formatListingPrice(stats.maxPrice, effectiveCurrency, locale, {
-                categorySlug,
-              })}
+              {formatListingPrice(
+                stats.maxPrice,
+                effectiveCurrency,
+                locale,
+                priceFormatOptions
+              )}
             </PriceStripRange>
           )}
           {priceHistory.lowestEverPrice != null &&
             priceHistory.lowestEverPrice > 0 && (
               <Badge variant="success">
-                {hasListingUnitSuffix(effectiveCurrency, categorySlug)
+                {hasListingUnitSuffix(
+                  effectiveCurrency,
+                  categorySlug,
+                  context.priceUnit
+                )
                   ? t('allTimeLowBadgeCurrency', {
                       price: formatListingPrice(
                         priceHistory.lowestEverPrice,
                         effectiveCurrency,
                         locale,
-                        { categorySlug }
+                        priceFormatOptions
                       ),
                     })
                   : t('allTimeLowBadge', {

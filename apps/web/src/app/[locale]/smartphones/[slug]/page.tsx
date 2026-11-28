@@ -1022,8 +1022,9 @@ export async function ProductDetailView({
     emptyText:
       v.product.id === product.id ? pageEmptyOffersText : t('noOffersYet'),
   });
-  // The price strip of one size: price, range, all-time low and audit/export
-  // controls; an Item page renders it once per size (#1154).
+  // The price strip of one size: price, range, all-time low, size-scoped
+  // PriceWatchButton (when isItemGroup is true), and audit/export controls;
+  // an Item page renders it once per size (#1154).
   const renderPriceStrip = (v: {
     product: typeof product;
     offers: typeof offers;
