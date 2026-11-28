@@ -5617,7 +5617,7 @@ async function runCoreArchitectureSuite() {
       'POST /api/v1/rate/extension/ingest 400 response must include Access-Control-Allow-Origin: * (#402)'
     );
 
-    // 69.3 POST /api/v1/rate/reviews & POST /api/reviews/[id]/vote revalidate RATE_CACHE_TAGS.STATS
+    // 69.3 POST /api/v1/rate/reviews & POST /api/reviews/[id]/vote flush only their product's caches
     const reviewsRouteSrc402 = fs.readFileSync(
       path.join(repoRoot, 'apps/web/src/app/api/v1/rate/reviews/route.ts'),
       'utf8'
@@ -5626,16 +5626,26 @@ async function runCoreArchitectureSuite() {
       path.join(repoRoot, 'apps/web/src/app/api/reviews/[id]/vote/route.ts'),
       'utf8'
     );
+    const revalidationSrc1962 = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/server/rate/review-revalidation.ts'),
+      'utf8'
+    );
     // A vote flushes only the review caches and its product's page, not the
-    // global stats (DOS/Rate#1306); a new review still refreshes the stats.
+    // global stats (DOS/Rate#1306); a new review does the same for its
+    // product (DOS/Rate#1962), never the site-wide tags.
     assert.ok(
-      reviewsRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
+      reviewsRouteSrc402.includes('revalidateSubmittedReview(') &&
+        !reviewsRouteSrc402.includes('RATE_CACHE_TAGS.') &&
+        !reviewsRouteSrc402.includes('revalidateTag(') &&
+        revalidationSrc1962.includes('masterReviewsCacheTag(') &&
+        revalidationSrc1962.includes('productCacheTag(') &&
+        !revalidationSrc1962.includes('RATE_CACHE_TAGS.') &&
         voteRouteSrc402.includes('masterReviewsCacheTag(') &&
         !voteRouteSrc402.includes('RATE_CACHE_TAGS.REVIEWS') &&
         voteRouteSrc402.includes('productCacheTag(') &&
         !voteRouteSrc402.includes('RATE_CACHE_TAGS.PRODUCTS') &&
         voteRouteSrc402.includes('authenticateRateRequest('),
-      'POST /api/v1/rate/reviews must revalidate RATE_CACHE_TAGS.STATS; POST /api/reviews/[id]/vote must revalidate the review caches and its product tag only, and use authenticateRateRequest (#402, #1306)'
+      'POST /api/v1/rate/reviews must flush its product tags only; POST /api/reviews/[id]/vote must revalidate the review caches and its product tag only, and use authenticateRateRequest (#402, #1306, #1962)'
     );
   }
 

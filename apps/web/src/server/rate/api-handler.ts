@@ -1050,11 +1050,19 @@ const VALID_REVIEW_REPORT_REASONS = new Set<ReviewReportReason>(
 /**
  * Validates and normalizes the request body for `POST /api/reviews/[id]/vote`.
  * Rejects empty or unrecognized vote actions (`null`) instead of silently defaulting to `'up'`.
+ * A report with a reason that is present but not one of `REVIEW_REPORT_REASONS`
+ * is refused too (`{ error: 'INVALID_REPORT_REASON' }`, DOS/Rate#1963) instead
+ * of being stored as `spam`; `spam` is the default only when the reason is
+ * absent. Other vote types ignore the reason.
  */
-export function resolveReviewVoteInput(rawBody: unknown): {
-  voteType: ReviewVoteAction;
-  reportReason: ReviewReportReason;
-} | null {
+export function resolveReviewVoteInput(rawBody: unknown):
+  | {
+      voteType: ReviewVoteAction;
+      reportReason: ReviewReportReason;
+      error?: undefined;
+    }
+  | { error: 'INVALID_REPORT_REASON' }
+  | null {
   if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
     return null;
   }
@@ -1086,25 +1094,28 @@ export function resolveReviewVoteInput(rawBody: unknown): {
     return null;
   }
 
-  const rawReason =
-    typeof body.reportReason === 'string'
+  // `reportReason` wins over the legacy `reason`; null and undefined count as
+  // absent, anything else must be a known reason.
+  const providedReason =
+    body.reportReason !== undefined && body.reportReason !== null
       ? body.reportReason
+      : body.reason;
+  if (providedReason === undefined || providedReason === null) {
+    return { voteType, reportReason: 'spam' };
+  }
+  const rawReason =
+    typeof providedReason === 'string'
+      ? providedReason
           .replace(/\p{Cc}+/gu, '')
           .trim()
           .toLowerCase()
-      : typeof body.reason === 'string'
-        ? body.reason
-            .replace(/\p{Cc}+/gu, '')
-            .trim()
-            .toLowerCase()
-        : null;
-  const reportReason: ReviewReportReason =
-    rawReason &&
-    VALID_REVIEW_REPORT_REASONS.has(rawReason as ReviewReportReason)
-      ? (rawReason as ReviewReportReason)
-      : 'spam';
-
-  return { voteType, reportReason };
+      : '';
+  if (VALID_REVIEW_REPORT_REASONS.has(rawReason as ReviewReportReason)) {
+    return { voteType, reportReason: rawReason as ReviewReportReason };
+  }
+  return voteType === 'report'
+    ? { error: 'INVALID_REPORT_REASON' }
+    : { voteType, reportReason: 'spam' };
 }
 
 /**
