@@ -2271,17 +2271,17 @@
         "description": "Compare credit card cashback, rewards, annual fees, interest rates, approval speed and bank app management on Rate.vn."
       },
       "monitors": {
-        "titleCount": "Compare PC monitors ({count} models) | Rate.vn",
+        "titleCount": "Compare PC monitors ({count, plural, one {# model} other {# models}}) | Rate.vn",
         "titleDefault": "Compare PC monitors, display specs & real prices | Rate.vn",
         "description": "Compare gaming, creator, and office monitors by panel quality, refresh rate, ports, ergonomics, and verified price history on Rate.vn."
       },
       "cameras": {
-        "titleCount": "Compare cameras & action cams ({count} models) | Rate.vn",
+        "titleCount": "Compare cameras & action cams ({count, plural, one {# model} other {# models}}) | Rate.vn",
         "titleDefault": "Compare cameras, action cams & real prices | Rate.vn",
         "description": "Compare mirrorless cameras, DSLRs, and action cams by image and video quality, autofocus, battery life, and real store prices on Rate.vn."
       },
       "vps-hosting": {
-        "titleCount": "Compare VPS & hosting plans ({count} plans) | Rate.vn",
+        "titleCount": "Compare VPS & hosting plans ({count, plural, one {# plan} other {# plans}}) | Rate.vn",
         "titleDefault": "Compare VPS & hosting plans, uptime & monthly pricing | Rate.vn",
         "description": "Compare Vietnamese VPS and hosting plans by performance, uptime, network and NVMe SSD speed, support, and transparent monthly pricing on Rate.vn."
       }

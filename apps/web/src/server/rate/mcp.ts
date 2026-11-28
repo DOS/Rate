@@ -3964,7 +3964,7 @@ export function buildRateLlmsTxt(): string {
           .map((slug) => `[\`${slug}\`](https://rate.vn/${slug})`)
           .join(', ')}`
     ),
-    '- **Category-Scoped Specification Schema (`specifications` JSON keys)**: Up to 10 groups (`availability`, `design`, `display`, `hardware`, `battery`, `camera` with PhoneArena per-lens split, `connectivity`, `cellular`, `multimedia`, `regulatory`) on `smartphones`, `tablets`, and `laptops`; fewer groups on `smartwatches`, `earbuds`, `tvs`, and appliances; `availability` + `regulatory` only on Wave E2/E3/E4/E5.',
+    '- **Category-Scoped Specification Schema (`specifications` JSON keys)**: Up to 10 groups (`availability`, `design`, `display`, `hardware`, `battery`, `camera` with PhoneArena per-lens split, `connectivity`, `cellular`, `multimedia`, `regulatory`) on `smartphones`, `tablets`, and `laptops`; fewer groups on `smartwatches`, `earbuds`, `tvs`, appliances, `monitors`, and `cameras`; `availability` + `regulatory` only on Wave E2/E3/E4/E5 and `vps-hosting`.',
     '- **Price Truth & Anti-Fake-Sale Engine**: Compares live selling prices against recorded historical medians rather than seller-declared strikethrough prices; excludes sold-out/discontinued offers and implausibly low bait/accessory listings from market floors.',
     '- **6-Axis Review Trust Model v2 & Bayesian Rating**: Evaluates `authenticity`, `independence`, `depth`, `reviewer`, `context`, and `community` axes to filter coin-farming spam, duplicate paid seeding, competitor sabotage, and review bombing (`weight = 0`), then computes helpfulness-weighted Bayesian ratings (`k = 3`, prior `4.2`) alongside DOSafe seller scam risk.',
     '',

@@ -1645,7 +1645,7 @@
     "valueCalcCardValueScoreTitle": "Skóre cena/výkon a úspora mezi e-shopy",
     "valueCalcSpreadSavingsSub": "Rozdíl mezi e-shopy: {amount} ₫",
     "valueCalcUniformPriceSub": "Jednotná cena napříč prodejci",
-    "effToggle": "Čistá cena a splátky 0 %",
+    "effToggle": "Čistá cena a splátky 0\u00a0%",
     "effBase": "Cena nabídky",
     "effDisc": "Sleva",
     "effCap": "Max. limit",
@@ -2271,17 +2271,17 @@
         "description": "Porovnejte cashback, výhody, roční poplatky, úroky, rychlost schválení a mobilní správu kreditních karet na Rate.vn."
       },
       "monitors": {
-        "titleCount": "Porovnání PC monitorů ({count} modelů) | Rate.vn",
+        "titleCount": "Porovnání PC monitorů ({count, plural, one {# model} few {# modely} other {# modelů}}) | Rate.vn",
         "titleDefault": "Porovnání PC monitorů, parametrů a reálných cen | Rate.vn",
         "description": "Porovnejte herní, grafické a kancelářské monitory podle kvality panelu, obnovovací frekvence, portů, ergonomie a historie cen na Rate.vn."
       },
       "cameras": {
-        "titleCount": "Porovnání fotoaparátů a akčních kamer ({count} modelů) | Rate.vn",
+        "titleCount": "Porovnání fotoaparátů a akčních kamer ({count, plural, one {# model} few {# modely} other {# modelů}}) | Rate.vn",
         "titleDefault": "Porovnání fotoaparátů, akčních kamer a reálných cen | Rate.vn",
         "description": "Porovnejte bezzrcadlovky, zrcadlovky a akční kamery podle kvality fotek a videa, ostření, výdrže baterie a ověřených cen na Rate.vn."
       },
       "vps-hosting": {
-        "titleCount": "Porovnání tarifů VPS a hostingu ({count} tarifů) | Rate.vn",
+        "titleCount": "Porovnání tarifů VPS a hostingu ({count, plural, one {# tarif} few {# tarify} other {# tarifů}}) | Rate.vn",
         "titleDefault": "Porovnání tarifů VPS a hostingu, dostupnosti a měsíčních cen | Rate.vn",
         "description": "Porovnejte tarify VPS a hostingu podle výkonu, dostupnosti, rychlosti sítě a NVMe SSD, technické podpory a měsíční ceny na Rate.vn."
       }

@@ -1475,7 +1475,7 @@ async function runMcpTestSuite() {
     );
   }
 
-  // 11b. 24-category coverage in server instructions, tool text and /llms.txt (#1927, #1937, #1968)
+  // 11b. 27-category coverage in server instructions, tool text and /llms.txt (#1927, #1937, #1968, #1976)
   const expectedCategoryGroups: ReadonlyArray<
     readonly [string, readonly string[]]
   > = [

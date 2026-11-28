@@ -37,6 +37,7 @@ import { buildRateOpenApiSpec } from '../../server/rate/openapi';
 import {
   MCP_SUPPORTED_CATEGORY_COUNT,
   SUPPORTED_CATEGORY_ENUM,
+  buildRateLlmsTxt,
 } from '../../server/rate/mcp';
 import {
   getCategorySpecTemplate,
@@ -171,7 +172,26 @@ const fallbackCases: Array<[{ slug: string; name?: string }, string]> = [
   [{ slug: 'lg-ultragear-27gr75q-b' }, 'monitors'],
   [{ slug: 'man-hinh-gaming-27-inch-180hz' }, 'monitors'],
   [
+    {
+      slug: 'apple-studio-display-27',
+      name: 'Apple Studio Display 27 inch 5K',
+    },
+    'monitors',
+  ],
+  [{ slug: 'asus-proart-display-pa279crv' }, 'monitors'],
+  [{ slug: 'lenovo-legion-r27q-30' }, 'monitors'],
+  [{ slug: 'hp-omen-27q' }, 'monitors'],
+  [{ slug: 'msi-mag-274qrf-qd-e2' }, 'monitors'],
+  [{ slug: 'lg-27up850n-w' }, 'monitors'],
+  [
     { slug: 'sony-alpha-a6700', name: 'Máy ảnh Sony Alpha A6700 Body' },
+    'cameras',
+  ],
+  [
+    {
+      slug: 'may-anh-sony-a7-iv-lens-28-70mm',
+      name: 'Máy ảnh Sony A7 IV + Lens 28-70mm',
+    },
     'cameras',
   ],
   [{ slug: 'gopro-hero-13-black' }, 'cameras'],
@@ -192,12 +212,96 @@ const fallbackCases: Array<[{ slug: string; name?: string }, string]> = [
   ],
   [
     {
+      slug: 'samsung-galaxy-s24-ultra',
+      name: 'Samsung Galaxy S24 Ultra màn hình OLED 120Hz',
+    },
+    'smartphones',
+  ],
+  [
+    {
       slug: 'asus-tuf-gaming-a15',
       name: 'Laptop ASUS TUF Gaming A15 màn hình 15.6 inch',
     },
     'laptops',
   ],
+  [
+    {
+      slug: 'asus-rog-strix-g16',
+      name: 'ASUS ROG Strix G16 màn hình 16 inch 165Hz RTX 4060',
+    },
+    'laptops',
+  ],
+  [
+    {
+      slug: 'lenovo-legion-r7000p',
+      name: 'Lenovo Legion R7000P màn hình 16 inch 2.5K',
+    },
+    'laptops',
+  ],
+  [
+    {
+      slug: 'hp-omen-16b',
+      name: 'HP OMEN 16b màn hình 16.1 inch QHD',
+    },
+    'laptops',
+  ],
+  [
+    { slug: 'asus-proart-p16-h7606', name: 'ASUS ProArt P16 H7606 OLED' },
+    'smartphones',
+  ],
+  [{ slug: 'dell-e7470-core-i5', name: 'Dell E7470 Core i5' }, 'smartphones'],
+  [
+    { slug: 'lg-55uq7550psf', name: 'LG 55UQ7550PSF 55 inch 4K' },
+    'smartphones',
+  ],
+  [
+    { slug: 'msi-mag-b760m-mortar', name: 'MSI MAG B760M Mortar' },
+    'smartphones',
+  ],
+  [{ slug: 'msi-mpg-a850g', name: 'MSI MPG A850G PCIE5' }, 'smartphones'],
+  [
+    { slug: 'ipad-pro-m4-oled', name: 'iPad Pro M4 màn hình OLED 13 inch' },
+    'tablets',
+  ],
+  [
+    { slug: 'garmin-fenix-8', name: 'Garmin Fenix 8 màn hình AMOLED' },
+    'smartwatches',
+  ],
+  [
+    {
+      slug: 'jbl-tour-pro-3',
+      name: 'JBL Tour Pro 3 tai nghe màn hình cảm ứng',
+    },
+    'earbuds',
+  ],
+  [
+    {
+      slug: 'xiaomi-air-purifier-4',
+      name: 'Máy lọc không khí Xiaomi Smart Air Purifier 4 màn hình OLED',
+    },
+    'air-purifiers',
+  ],
+  [
+    { slug: 'zestech-z800', name: 'Màn hình Android Zestech Z800+ cho ô tô' },
+    'smartphones',
+  ],
+  [
+    { slug: 'anker-power-bank', name: 'Pin dự phòng Anker màn hình LCD' },
+    'smartphones',
+  ],
   [{ slug: 'lg-oled-55-c4', name: 'Smart Tivi LG OLED 55 inch 4K' }, 'tvs'],
+  // Vietnamese places sharing Nhân Hòa / Long Vân names must NEVER hijack to vps-hosting
+  [{ slug: 'nha-khoa-nhan-hoa', name: 'Nha khoa Nhân Hòa' }, 'dental-clinics'],
+  [{ slug: 'khach-san-long-van', name: 'Khách sạn Long Vân' }, 'hotels'],
+  [{ slug: 'spa-nhan-hoa', name: 'Spa Nhân Hòa' }, 'spas-aesthetics'],
+  [{ slug: 'quan-ca-phe-long-van', name: 'Quán Cà Phê Long Vân' }, 'cafes'],
+  [{ slug: 'nha-hang-nhan-hoa', name: 'Nhà hàng Nhân Hòa' }, 'restaurants'],
+  [{ slug: 'homestay-long-van', name: 'Homestay Long Vân' }, 'homestays'],
+  // VPS Securities must NOT classify as vps-hosting
+  [
+    { slug: 'vps-smartone', name: 'VPS SmartOne - Tài khoản giao dịch' },
+    'smartphones',
+  ],
   [
     { slug: 'ezviz-c8c-2k', name: 'Camera an ninh WiFi EZVIZ C8C' },
     'smartphones',
@@ -214,6 +318,51 @@ const fallbackCases: Array<[{ slug: string; name?: string }, string]> = [
     { slug: 'sony-fe-50mm-f18', name: 'Ống kính Sony FE 50mm f/1.8' },
     'smartphones',
   ],
+  [
+    {
+      slug: 'sigma-30mm-lens-sony',
+      name: 'Sigma 30mm f/1.4 Lens cho máy ảnh Mirrorless Sony',
+    },
+    'smartphones',
+  ],
+  [
+    {
+      slug: 'godox-tt685ii-flash',
+      name: 'Godox TT685II Đèn flash cho máy ảnh Canon',
+    },
+    'smartphones',
+  ],
+  [
+    {
+      slug: 'dji-rs4-mini-gimbal',
+      name: 'DJI RS 4 Mini Gimbal cho máy ảnh Mirrorless',
+    },
+    'smartphones',
+  ],
+  [
+    { slug: 'nikon-z-24-70mm-f2-8-s', name: 'Nikon Z 24-70mm f/2.8 S' },
+    'smartphones',
+  ],
+  [
+    { slug: 'nikon-z-50mm-f1-8-s', name: 'Nikon Z 50mm f/1.8 S' },
+    'smartphones',
+  ],
+  [
+    { slug: 'sony-a95l-65-inch', name: 'Sony A95L 65 inch QD-OLED' },
+    'smartphones',
+  ],
+  // ASCII / hyphenated slug guards
+  [{ slug: 'chan-de-roi-man-hinh-dell' }, 'smartphones'],
+  [{ slug: 'den-treo-man-hinh-xiaomi' }, 'smartphones'],
+  [{ slug: 'man-hinh-thay-the-iphone' }, 'smartphones'],
+  [{ slug: 'man-hinh-zin-laptop' }, 'laptops'],
+  [{ slug: 'man-hinh-zin-27-inch' }, 'smartphones'],
+  [{ slug: 'chan-may-anh-benro' }, 'smartphones'],
+  [{ slug: 'tui-dung-may-anh-peak' }, 'smartphones'],
+  [{ slug: 'pin-roi-sony-np-fz100' }, 'smartphones'],
+  [{ slug: 'camera-ngoai-troi-360' }, 'smartphones'],
+  [{ slug: 'camera-noi-soi-tai' }, 'smartphones'],
+  [{ slug: 'camera-o-to-4k' }, 'smartphones'],
 ];
 for (const [item, expected] of fallbackCases) {
   assert.equal(
@@ -268,6 +417,32 @@ for (const slug of E6_ALL) {
   assert.ok(SUPPORTED_CATEGORY_ENUM.options.includes(slug));
 }
 assert.equal(MCP_SUPPORTED_CATEGORY_COUNT, 27);
+const llmsTxt = buildRateLlmsTxt();
+assert.ok(
+  llmsTxt.includes(
+    '`availability` + `regulatory` only on Wave E2/E3/E4/E5 and `vps-hosting`'
+  ),
+  '/llms.txt spec summary must include vps-hosting'
+);
+
+// ReDoS safety check on adversarial long strings in web fallback detector.
+{
+  const start = performance.now();
+  for (const slug of [
+    '0'.repeat(5000),
+    '-'.repeat(5000),
+    `dell-u${'0'.repeat(5000)}`,
+    `sony-a${'0'.repeat(5000)}`,
+    `nikon-z-${'0'.repeat(5000)}mm`,
+  ]) {
+    getMasterProductCategorySlug({ slug });
+  }
+  const elapsedMs = performance.now() - start;
+  assert.ok(
+    elapsedMs < 50,
+    `Expected linear web fallback runtime (<50ms), got ${elapsedMs.toFixed(2)}ms`
+  );
+}
 
 // 6. Deal Radar omits costPerPointVnd for vps-hosting service rows.
 const ranked = rankProductsForDealFinder(
@@ -326,6 +501,18 @@ for (const [lang, msg] of [
     schemas: E6_ALL.map((s) => schemas[s]),
   });
   assert.doesNotMatch(serialized, /[\u2013\u2014]|&\x6ddash;/);
+}
+for (const slug of E6_ALL) {
+  assert.match(
+    (enMessages.catalog.meta as Record<string, { titleCount: string }>)[slug]!
+      .titleCount,
+    /\{count, plural, one \{# /
+  );
+  assert.match(
+    (csMessages.catalog.meta as Record<string, { titleCount: string }>)[slug]!
+      .titleCount,
+    /\{count, plural, one \{# .* few \{# .* other \{# /
+  );
 }
 
 console.warn('✅ Wave E6 web suite passed');
