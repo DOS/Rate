@@ -26,6 +26,10 @@
   --color-brand: var(--rate-brand);
   --color-brand-hover: var(--rate-brand-hover);
   --color-brand-bg: var(--rate-brand-bg);
+  --color-brand-fg: var(--rate-brand-fg);
+  --color-success-bg: var(--rate-success-bg);
+  --color-success-hover: var(--rate-success-hover);
+  --color-success-fg: var(--rate-success-fg);
   --color-crimson: var(--rate-crimson-text);
   --color-ink-primary: var(--rate-ink-primary);
   --color-fg-primary: var(--rate-fg-primary);

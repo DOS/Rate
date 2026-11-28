@@ -988,7 +988,13 @@ async function main() {
     authenticReviews: 0,
     keySpecLine: '6.1" OLED',
   };
-  const renderStrip = (minPrice: number, lowestEverPrice: number | null) =>
+  const renderStrip = (
+    minPrice: number,
+    lowestEverPrice: number | null,
+    contextOverrides: Partial<
+      typeof stripContext & { priceUnit?: string | null }
+    > = {}
+  ) =>
     renderToStaticMarkup(
       React.createElement(
         IntlProvider,
@@ -1007,7 +1013,7 @@ async function main() {
             },
             priceHistory: { ...sizeBody.data.priceHistory, lowestEverPrice },
           },
-          context: stripContext,
+          context: { ...stripContext, ...contextOverrides },
         })
       )
     );
@@ -1043,6 +1049,28 @@ async function main() {
     true
   );
   assert.match(pricedStripHtml, /href="#pdv-price-history"/);
+
+  // DOS/Rate#1989: ItemSizePriceStrip propagates context.priceUnit into all price formatters.
+  const unitStripHtml = renderStrip(500_000, 400_000, {
+    priceUnit: 'vnd_per_person',
+  });
+  assert.equal(
+    unitStripHtml.includes(`${formatNumber(500_000, 'en')} ₫/person`),
+    true,
+    'minPrice must include priceUnit suffix'
+  );
+  assert.equal(
+    unitStripHtml.includes(`${formatNumber(1_500_000, 'en')} ₫/person`),
+    true,
+    'maxPrice must include priceUnit suffix'
+  );
+  assert.equal(
+    unitStripHtml.includes(
+      `All-time low: ${formatNumber(400_000, 'en')} ₫/person`
+    ),
+    true,
+    'lowestEverPrice badge must include priceUnit suffix'
+  );
 
   const pdvSrc = fs.readFileSync(productRouteFiles[0]!, 'utf8');
   assert.match(
