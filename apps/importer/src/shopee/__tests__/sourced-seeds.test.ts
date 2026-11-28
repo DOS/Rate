@@ -195,7 +195,7 @@ for (const key of [
     key_specs: { ram: '16GB' },
   };
   const before = JSON.stringify(stored);
-  const update = seedMasterSpecUpdate(stored, seed) as {
+  const update = seedMasterSpecUpdate(stored, seed, { retract: true }) as {
     specifications: Record<string, Record<string, unknown> | undefined>;
     key_specs: Record<string, unknown>;
     variant_name?: string;
@@ -260,7 +260,8 @@ for (const key of ['apple:iphone-18-pro-max:256gb', 'apple:iphone-18-pro:256gb']
       },
       key_specs: { battery: '5567 mAh, Sạc nhanh 35W' },
     },
-    seed
+    seed,
+    { retract: true }
   ) as { specifications: Record<string, Record<string, unknown> | undefined> };
   assert.equal(update.specifications.battery?.fast_charging_w, undefined, key);
   assert.equal(update.specifications.regulatory?.sar_head, undefined, key);

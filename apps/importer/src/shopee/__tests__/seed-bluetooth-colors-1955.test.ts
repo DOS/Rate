@@ -162,7 +162,8 @@ test('earbud seeds state no cellular network and no 5G (#1955)', () => {
     );
     const update = seedMasterSpecUpdate(
       { specifications: { cellular: { has_5g: true } }, key_specs: {} },
-      seed
+      seed,
+      { retract: true }
     ) as { specifications: ProductSpecifications };
     const merged = (update.specifications as { cellular?: { has_5g?: unknown } }).cellular;
     assert.notEqual(merged?.has_5g, true, `${seed.model_key}: a stored cellular.has_5g`);

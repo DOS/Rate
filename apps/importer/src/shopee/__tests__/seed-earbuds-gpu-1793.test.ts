@@ -207,7 +207,9 @@ test('the backfill removes the stored earbud template text from masters and Item
       expected.sort(),
       `${key}: retract_spec_fields`
     );
-    const update = seedMasterSpecUpdate(structuredClone(STORED_TEMPLATE_TEXT), seed) as {
+    const update = seedMasterSpecUpdate(structuredClone(STORED_TEMPLATE_TEXT), seed, {
+      retract: true,
+    }) as {
       specifications: ProductSpecifications;
       key_specs: Record<string, unknown>;
       ram_gb: unknown;
@@ -250,7 +252,12 @@ test('the backfill removes the stored earbud template text from masters and Item
         },
       }),
     };
-    await syncItemSeedSpecs(client as never, { apply: true, seeds: [item], itemModel: 'item' });
+    await syncItemSeedSpecs(client as never, {
+      apply: true,
+      seeds: [item],
+      itemModel: 'item',
+      retract: true,
+    });
     for (const path of RETRACTED_EVERYWHERE) {
       const [scope, field] = path.split('.') as [string, string];
       const value =
@@ -277,7 +284,8 @@ test('the Series 11 GPS seed has no Wi-Fi, Bluetooth or eSIM text as a network v
       },
       key_specs: {},
     },
-    seed
+    seed,
+    { retract: true }
   ) as { specifications: ProductSpecifications };
   assert.deepEqual(stored(update.specifications.cellular), { has_5g: false });
 });
@@ -475,7 +483,9 @@ test('the backfill removes the stored smartwatch camera text from masters and It
       key
     );
 
-    const update = seedMasterSpecUpdate(structuredClone(STORED_WATCH_TEXT), seed) as {
+    const update = seedMasterSpecUpdate(structuredClone(STORED_WATCH_TEXT), seed, {
+      retract: true,
+    }) as {
       specifications: ProductSpecifications;
       key_specs: Record<string, unknown>;
     };
@@ -514,7 +524,12 @@ test('the backfill removes the stored smartwatch camera text from masters and It
         },
       }),
     };
-    await syncItemSeedSpecs(client as never, { apply: true, seeds: [item], itemModel: 'item' });
+    await syncItemSeedSpecs(client as never, {
+      apply: true,
+      seeds: [item],
+      itemModel: 'item',
+      retract: true,
+    });
     assert.deepEqual(stored(written!.specifications.camera), {}, `${key}: Item camera`);
     assert.equal(written!.key_specs.camera, undefined, `${key}: Item key_specs.camera`);
   }
@@ -602,14 +617,16 @@ test('the backfill replaces the stored watch 5G flag and CJK network text', () =
   };
   const ultra2 = seedMasterSpecUpdate(
     structuredClone(storedOld),
-    seedOf('apple:watch-ultra-2:64gb')
+    seedOf('apple:watch-ultra-2:64gb'),
+    { retract: true }
   ) as { has_5g: boolean; specifications: ProductSpecifications };
   assert.equal(ultra2.has_5g, false);
   assert.equal(ultra2.specifications.cellular?.has_5g, false);
 
   const galaxy = seedMasterSpecUpdate(
     structuredClone(storedOld),
-    seedOf('samsung:galaxy-watch-ultra:32gb')
+    seedOf('samsung:galaxy-watch-ultra:32gb'),
+    { retract: true }
   ) as { has_5g: boolean; specifications: ProductSpecifications };
   assert.equal(galaxy.has_5g, false);
   assert.equal(galaxy.specifications.cellular?.has_5g, false);
@@ -631,7 +648,8 @@ test('the backfill replaces the stored WF-1000XM6 colours, Cyrillic word and Smo
       key_specs: {},
       colors: ['Đen (Black)', 'Bạc Платина (Platinum Silver)', 'Hồng Khói (Smoky Pink)'],
     } as never,
-    seed
+    seed,
+    { retract: true }
   ) as { colors: string[]; specifications: ProductSpecifications };
   const expected = ['Đen (Black)', 'Bạc (Platinum Silver)'];
   assert.deepEqual(seed.colors, expected);
