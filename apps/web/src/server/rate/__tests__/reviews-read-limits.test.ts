@@ -24,8 +24,8 @@ async function main() {
   // Cursor bounds: a plausible review time passes, the far past and future do not.
   const now = Date.parse('2026-11-28T00:00:00Z');
   assert.ok(isReviewCursorInBounds(cursorAt('2026-11-27T10:00:00Z'), now));
-  assert.ok(isReviewCursorInBounds(cursorAt('2026-11-28T12:00:00Z'), now));
-  assert.ok(!isReviewCursorInBounds(cursorAt('2026-11-30T00:00:00Z'), now));
+  assert.ok(isReviewCursorInBounds(cursorAt('2026-11-30T00:00:00Z'), now));
+  assert.ok(!isReviewCursorInBounds(cursorAt('2027-02-01T00:00:00Z'), now));
   assert.ok(!isReviewCursorInBounds(cursorAt('9999-12-31T23:59:59Z'), now));
   assert.ok(!isReviewCursorInBounds(cursorAt('1999-12-31T23:59:59Z'), now));
   assert.ok(!isReviewCursorInBounds(null, now));

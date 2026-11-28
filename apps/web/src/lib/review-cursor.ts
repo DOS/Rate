@@ -212,12 +212,15 @@ export function parseReviewCursor(raw: unknown): ReviewKeysetCursor | null {
 
 /** Earliest `created_at` a review cursor can carry (Rate has no older reviews). */
 const MIN_REVIEW_CURSOR_MS = Date.UTC(2000, 0, 1);
-/** Clock skew allowed for a cursor ahead of the server clock. */
-const MAX_REVIEW_CURSOR_FUTURE_MS = 24 * 60 * 60 * 1000;
+/**
+ * Slack for a cursor ahead of the server clock: skew or a review imported with
+ * a slightly future `created_at` must not dead-end pagination.
+ */
+const MAX_REVIEW_CURSOR_FUTURE_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * True when the cursor's timestamp is a plausible review time: not before 2000
- * and not more than a day ahead of `now`. A client-crafted cursor outside that
+ * and not more than 30 days ahead of `now`. A client-crafted cursor outside that
  * range can only scan an empty or full range, so the public API rejects it
  * (DOS/Rate#1961).
  */

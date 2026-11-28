@@ -837,6 +837,24 @@ async function main() {
   );
   assert.ok(cappedHf.nextCursor, 'a capped scan hands back a cursor to resume');
 
+  // 13. #1961: past 20 cursor reads a minute a client gets a no-store 429 with Retry-After.
+  assert.equal(
+    (await get(`slug=${MASTER_SLUG}&limit=25`, '198.51.100.92')).status,
+    200
+  );
+  let limitedRes: Response | null = null;
+  for (let i = 0; i < 25 && !limitedRes; i += 1) {
+    const res = await get(
+      `slug=${MASTER_SLUG}&limit=25&cursor=${encodeURIComponent(firstBoundedBody.nextCursor)}`,
+      '198.51.100.92'
+    );
+    if (res.status === 429) limitedRes = res;
+  }
+  assert.ok(limitedRes, 'cursor reads are rate limited per client');
+  assert.equal(limitedRes.headers.get('Retry-After'), '60');
+  assert.equal(limitedRes.headers.get('Cache-Control'), 'no-store');
+  assert.equal((await limitedRes.json()).code, 'RATE_LIMIT_EXCEEDED');
+
   console.warn(
     '✅ Reviews keyset pagination, star counts & ?star=1..5 API suite passed (#1924, #1926, #1940)'
   );
