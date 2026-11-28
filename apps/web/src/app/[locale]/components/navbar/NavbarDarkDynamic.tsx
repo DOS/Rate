@@ -20,6 +20,7 @@ import ThemeToggle, {
   ThemeCycleButton,
 } from '@/components/elementary/ThemeToggle';
 import RateWordmark from '@/components/brand/RateWordmark';
+import { Button } from '@/components/ui/button';
 import {
   inertOutside,
   tabFromSpot,
@@ -610,25 +611,23 @@ export function NavbarDarkDynamic({
                 );
               })()}
 
-              <ul className="nav-menu nav-menu-social align-to-right d-flex align-items-center mb-0">
-                <li className="d-flex align-items-center me-2">
+              <ul className="nav-menu nav-menu-social align-to-right d-flex align-items-center mb-0 gap-2">
+                <li className="d-flex align-items-center">
                   {/* One icon on desktop, three named choices in the phone
                   menu (DOS/Rate#1435). */}
                   <ThemeCycleButton className="d-none d-lg-inline-flex" />
                   <ThemeToggle className="d-lg-none" />
                 </li>
-                <li className="d-flex align-items-center me-3">
+                <li className="d-flex align-items-center">
                   <LocaleSwitcher isDarkHeader={false} />
                 </li>
                 <li className="list-buttons d-flex align-items-center">
-                  <IntentLink
-                    href="/watchlist"
-                    className="d-inline-flex align-items-center"
-                    onClick={handleNavLinkClick}
-                  >
-                    <BsBellFill className="fs-6 me-1" />
-                    {tNav('priceWatchCta')}
-                  </IntentLink>
+                  <Button variant="primary" size="sm" asChild>
+                    <IntentLink href="/watchlist" onClick={handleNavLinkClick}>
+                      <BsBellFill aria-hidden="true" className="shrink-0" />
+                      <span>{tNav('priceWatchCta')}</span>
+                    </IntentLink>
+                  </Button>
                 </li>
               </ul>
             </div>

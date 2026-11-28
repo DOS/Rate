@@ -166,6 +166,9 @@ importers:
       '@plaiceholder/next':
         specifier: ^3.0.0
         version: 3.0.0(next@16.4.5(@babel/core@7.29.7)(@opentelemetry/api@1.10.0)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.108.2))(plaiceholder@3.0.0(sharp@0.35.5(@types/node@26.6.6)))(sharp@0.35.5(@types/node@26.6.6))
+      '@radix-ui/react-slot':
+        specifier: ^1.2.3
+        version: 1.5.0(@types/react@19.3.0)(react@19.3.0)
       '@repo/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
@@ -174,7 +177,7 @@ importers:
         version: link:../../packages/shared-data
       '@sentry/nextjs':
         specifier: ^11.16.0
-        version: 11.16.0(next@16.4.5(@babel/core@7.29.7)(@opentelemetry/api@1.10.0)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.108.2))(react@19.3.0)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)))
+        version: 11.16.0(next@16.4.5(@babel/core@7.29.7)(@opentelemetry/api@1.10.0)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.108.2))(react@19.3.0)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)))
       '@supabase/ssr':
         specifier: 0.12.7
         version: 0.12.7(@supabase/supabase-js@2.119.0(@opentelemetry/api@1.10.0))
@@ -184,6 +187,12 @@ importers:
       bootstrap:
         specifier: ^5.3.8
         version: 5.3.8(@popperjs/core@2.11.8)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
       next:
         specifier: ^16.4.5
         version: 16.4.5(@babel/core@7.29.7)(@opentelemetry/api@1.10.0)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.108.2)
@@ -208,6 +217,9 @@ importers:
       sharp:
         specifier: 0.35.5
         version: 0.35.5(@types/node@26.6.6)
+      tailwind-merge:
+        specifier: ^3.3.1
+        version: 3.7.1
       zod:
         specifier: ^4.6.5
         version: 4.6.7
@@ -227,6 +239,9 @@ importers:
       '@swc/core':
         specifier: 1.16.20
         version: 1.16.20(@swc/helpers@0.5.23)
+      '@tailwindcss/postcss':
+        specifier: ^4.1.4
+        version: 4.3.3
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6
@@ -254,9 +269,15 @@ importers:
       globals:
         specifier: ^17.14.0
         version: 17.14.0
+      postcss:
+        specifier: ^8.5.33
+        version: 8.5.33
       sass:
         specifier: ^1.108.2
         version: 1.108.2
+      tailwindcss:
+        specifier: ^4.1.4
+        version: 4.3.5
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -1292,6 +1313,24 @@ packages:
 
   '@popperjs/core@2.11.8':
     resolution: {integrity: sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==}
+
+  '@radix-ui/react-compose-refs@1.1.5':
+    resolution: {integrity: sha512-+48PbAAbq3didjJxa+OaWY2ZwgAKsNiRGyeHKszblZMQ+kcpd9pAaT11cMkGEie0vsOi3QdeTE6d5Fe3Gn61kA==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
+  '@radix-ui/react-slot@1.5.0':
+    resolution: {integrity: sha512-tyYd9ddPXAysAbdbD9eYxgwpCSv6f3PncqVSNKQFSR5lcJVLz3cb/pANDoYrLiHBpXv7skortyUgGUWsYuPPFQ==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   '@rollup/plugin-commonjs@28.0.1':
     resolution: {integrity: sha512-+tNWdlWKbpB3WgBN7ijjYkq9X5uhjmcvyjEght4NmH5fAU++zfQzAJ6wumLS+dNcvwEZhKx2Z+skY8m7v0wGSA==}
@@ -4120,6 +4159,9 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
+  tailwind-merge@3.7.1:
+    resolution: {integrity: sha512-v7y4BV4FUlO8exj/4M5UXKeoowDiuugVUg3tkMNIyOUCOHy5xp8+5aWQeXCtZ2491sUV1YPsVeM9EveZ6/xuZQ==}
+
   tailwindcss@4.3.3:
     resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
 
@@ -5143,6 +5185,19 @@ snapshots:
 
   '@popperjs/core@2.11.8': {}
 
+  '@radix-ui/react-compose-refs@1.1.5(@types/react@19.3.0)(react@19.3.0)':
+    dependencies:
+      react: 19.3.0
+    optionalDependencies:
+      '@types/react': 19.3.0
+
+  '@radix-ui/react-slot@1.5.0(@types/react@19.3.0)(react@19.3.0)':
+    dependencies:
+      '@radix-ui/react-compose-refs': 1.1.5(@types/react@19.3.0)(react@19.3.0)
+      react: 19.3.0
+    optionalDependencies:
+      '@types/react': 19.3.0
+
   '@rollup/plugin-commonjs@28.0.1(rollup@4.68.8)':
     dependencies:
       '@rollup/pluginutils': 5.5.1(rollup@4.68.8)
@@ -5258,7 +5313,7 @@ snapshots:
       '@sentry/replay': 11.16.0
       '@sentry/replay-canvas': 11.16.0
 
-  '@sentry/bundler-plugins@11.16.0(rollup@4.68.8)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)))':
+  '@sentry/bundler-plugins@11.16.0(rollup@4.68.8)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)))':
     dependencies:
       '@sentry/core': 11.16.0
       dotenv: 17.4.2
@@ -5268,7 +5323,7 @@ snapshots:
       sentry: 0.50.0
     optionalDependencies:
       rollup: 4.68.8
-      webpack: 5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6))
+      webpack: 5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6))
 
   '@sentry/cloudflare@11.16.0':
     dependencies:
@@ -5289,16 +5344,16 @@ snapshots:
     dependencies:
       '@sentry/core': 11.16.0
 
-  '@sentry/nextjs@11.16.0(next@16.4.5(@babel/core@7.29.7)(@opentelemetry/api@1.10.0)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.108.2))(react@19.3.0)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)))':
+  '@sentry/nextjs@11.16.0(next@16.4.5(@babel/core@7.29.7)(@opentelemetry/api@1.10.0)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.108.2))(react@19.3.0)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)))':
     dependencies:
       '@opentelemetry/api': 1.10.0
       '@rollup/plugin-commonjs': 28.0.1(rollup@4.68.8)
       '@sentry/browser-utils': 11.16.0
-      '@sentry/bundler-plugins': 11.16.0(rollup@4.68.8)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)))
+      '@sentry/bundler-plugins': 11.16.0(rollup@4.68.8)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)))
       '@sentry/cloudflare': 11.16.0
       '@sentry/conventions': 0.34.0
       '@sentry/core': 11.16.0
-      '@sentry/node': 11.16.0(rollup@4.68.8)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)))
+      '@sentry/node': 11.16.0(rollup@4.68.8)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)))
       '@sentry/opentelemetry': 11.16.0(@opentelemetry/api@1.10.0)
       '@sentry/react': 11.16.0(react@19.3.0)
       '@sentry/server-runtime-injection': 11.16.0
@@ -5315,10 +5370,10 @@ snapshots:
       - webpack
       - wrangler
 
-  '@sentry/node@11.16.0(rollup@4.68.8)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)))':
+  '@sentry/node@11.16.0(rollup@4.68.8)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)))':
     dependencies:
       '@opentelemetry/api': 1.10.0
-      '@sentry/bundler-plugins': 11.16.0(rollup@4.68.8)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)))
+      '@sentry/bundler-plugins': 11.16.0(rollup@4.68.8)(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)))
       '@sentry/conventions': 0.34.0
       '@sentry/core': 11.16.0
       '@sentry/opentelemetry': 11.16.0(@opentelemetry/api@1.10.0)
@@ -7402,14 +7457,15 @@ snapshots:
 
   minimist@1.2.8: {}
 
-  minimizer-webpack-plugin@5.14.1(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6))(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6))):
+  minimizer-webpack-plugin@5.14.1(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6))(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6))):
     dependencies:
       jest-worker: 27.5.1
-      schema-utils: 4.8.5(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)))
+      schema-utils: 4.8.5(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)))
       terser: 5.51.4
-      webpack: 5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6))
+      webpack: 5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6))
     optionalDependencies:
       '@swc/core': 1.16.20(@swc/helpers@0.5.23)
+      postcss: 8.5.33
       sharp: 0.35.5(@types/node@26.6.6)
     optional: true
 
@@ -7838,14 +7894,14 @@ snapshots:
 
   scheduler@0.28.0: {}
 
-  schema-utils@4.8.5(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6))):
+  schema-utils@4.8.5(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6))):
     dependencies:
       '@types/json-schema': 7.0.15
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       ajv-keywords: 5.1.0(ajv@8.20.0)
     optionalDependencies:
-      webpack: 5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6))
+      webpack: 5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6))
     optional: true
 
   semver@6.3.1: {}
@@ -8087,6 +8143,8 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
+  tailwind-merge@3.7.1: {}
+
   tailwindcss@4.3.3: {}
 
   tailwindcss@4.3.5: {}
@@ -8273,7 +8331,7 @@ snapshots:
   webpack-sources@3.7.1:
     optional: true
 
-  webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)):
+  webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)):
     dependencies:
       '@types/estree': 1.0.10
       '@types/json-schema': 7.0.15
@@ -8288,9 +8346,9 @@ snapshots:
       events: 3.3.0
       graceful-fs: 4.2.12
       mime-db: 1.54.0
-      minimizer-webpack-plugin: 5.14.1(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6))(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)))
+      minimizer-webpack-plugin: 5.14.1(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6))(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)))
       neo-async: 2.6.2
-      schema-utils: 4.8.5(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(sharp@0.35.5(@types/node@26.6.6)))
+      schema-utils: 4.8.5(webpack@5.110.3(@swc/core@1.16.20(@swc/helpers@0.5.23))(postcss@8.5.33)(sharp@0.35.5(@types/node@26.6.6)))
       tapable: 2.3.4
       watchpack: 2.6.4
       webpack-sources: 3.7.1

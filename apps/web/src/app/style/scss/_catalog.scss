@@ -55,6 +55,14 @@
   position: relative;
 
   summary {
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  summary:where(:not([data-slot])) {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -62,14 +70,9 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--rate-fg-paragraph);
-    list-style: none;
     cursor: pointer;
     border: 1px solid var(--rate-border-strong);
     border-radius: var(--rate-radius-btn);
-
-    &::-webkit-details-marker {
-      display: none;
-    }
 
     &:hover {
       color: var(--rate-fg-primary);
@@ -78,7 +81,7 @@
 
   &[open] summary {
     color: var(--rate-fg-primary);
-    background-color: var(--rate-bg-canvas);
+    background-color: var(--rate-bg-elevated);
   }
 }
 

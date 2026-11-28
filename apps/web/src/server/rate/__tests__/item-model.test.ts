@@ -1013,11 +1013,16 @@ async function main() {
     );
   const soldOutStripHtml = renderStrip(0, 0);
   assert.equal(soldOutStripHtml.includes(enMessages.watchlist.btnWatch), false);
-  assert.equal(soldOutStripHtml.includes('bg-success-subtle'), false);
+  assert.equal(soldOutStripHtml.includes('All-time low:'), false);
+  assert.equal(soldOutStripHtml.includes('data-slot="badge"'), false);
   assert.match(soldOutStripHtml, /href="#pdv-price-history"/);
   assert.doesNotMatch(soldOutStripHtml, /href="#price-history-section"/);
-  assert.equal(renderStrip(0, -1).includes('bg-success-subtle'), false);
-  assert.equal(renderStrip(0, Number.NaN).includes('bg-success-subtle'), false);
+  const negLowStripHtml = renderStrip(0, -1);
+  assert.equal(negLowStripHtml.includes('All-time low:'), false);
+  assert.equal(negLowStripHtml.includes('data-slot="badge"'), false);
+  const nanLowStripHtml = renderStrip(0, Number.NaN);
+  assert.equal(nanLowStripHtml.includes('All-time low:'), false);
+  assert.equal(nanLowStripHtml.includes('data-slot="badge"'), false);
   const soldOutWithHistoryHtml = renderStrip(0, 20_990_000);
   assert.equal(
     soldOutWithHistoryHtml.includes(enMessages.watchlist.btnWatch),
@@ -1050,7 +1055,14 @@ async function main() {
     pdvSrc,
     /v\.priceHistory\.lowestEverPrice != null &&\s*v\.priceHistory\.lowestEverPrice > 0/
   );
-  assert.match(pdvSrc, /\{v\.stats\.minPrice > 0 && \(\s*<PriceWatchButton/);
+  assert.match(
+    pdvSrc,
+    /\{isItemGroup && v\.stats\.minPrice > 0 && \(\s*<PriceWatchButton/
+  );
+  assert.match(
+    pdvSrc,
+    /\{!isItemGroup && heroStats\.minPrice > 0 && \(\s*<PriceWatchButton/
+  );
   assert.match(
     pdvSrc,
     /\{authenticCount > 0 && \(\s*<span className="rate-pdv-tag is-good">/

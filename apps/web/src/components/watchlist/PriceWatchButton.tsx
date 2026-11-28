@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { Button } from '@/components/ui/button';
 import { Link } from '@/lib/navigation';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 import {
@@ -273,15 +274,14 @@ export default function PriceWatchButton({
 
   return (
     <div ref={containerRef} className="position-relative d-inline-block">
-      <button
+      <Button
         ref={triggerBtnRef}
         type="button"
+        variant={watchedItem ? 'success' : 'outline-primary'}
+        size={size === 'sm' ? 'sm' : 'default'}
         aria-expanded={showEditor}
         aria-controls={editorId}
         onClick={() => setShowEditor((prev) => !prev)}
-        className={`btn ${
-          watchedItem ? 'btn-success text-white' : 'btn-outline-primary'
-        } ${size === 'sm' ? 'btn-sm px-2 py-1' : 'px-3'} rounded-pill fw-medium`}
         title={t('btnTitle')}
       >
         {watchedItem
@@ -305,7 +305,7 @@ export default function PriceWatchButton({
                 ),
               })
           : t('btnWatch')}
-      </button>
+      </Button>
 
       {showEditor && (
         <div

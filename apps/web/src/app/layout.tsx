@@ -1,5 +1,6 @@
 import './style/scss/bootstrap.scss';
 import './style/scss/style.scss';
+import './style/tailwind.css';
 
 // <html> and <body> are rendered by app/[locale]/layout.tsx, which knows the
 // locale from its URL segment. Resolving it here with getLocale() reads the

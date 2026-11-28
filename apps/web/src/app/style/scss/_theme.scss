@@ -333,27 +333,7 @@
   }
 }
 
-// Desktop navbar: one icon button that cycles the choice.
-.rate-theme-cycle {
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid var(--rate-border-strong);
-  border-radius: var(--rate-radius-btn);
-  background: transparent;
-  color: var(--rate-fg-primary);
-
-  &:hover {
-    background: var(--rate-bg-elevated);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--rate-focus-ring);
-    outline-offset: 1px;
-  }
-}
+// Desktop navbar ThemeCycleButton uses the shadcn Button primitive (h-9 w-9).
 
 // The light palette of :root in _custom.scss, for obsidian sections that turn
 // light on the light theme.
@@ -410,8 +390,22 @@
   border-color: var(--rate-border-subtle);
 
   // A .bg-dark chip or block stays dark, so its white text stays too.
-  .text-white:not(.btn, .badge, .bg-dark, .bg-dark *),
-  .text-light:not(.btn, .badge, .bg-dark, .bg-dark *) {
+  .text-white:not(
+    .btn,
+    .badge,
+    [data-slot='button'],
+    [data-slot='badge'],
+    .bg-dark,
+    .bg-dark *
+  ),
+  .text-light:not(
+    .btn,
+    .badge,
+    [data-slot='button'],
+    [data-slot='badge'],
+    .bg-dark,
+    .bg-dark *
+  ) {
     color: var(--rate-fg-primary) !important;
   }
 

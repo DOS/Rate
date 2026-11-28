@@ -12,7 +12,9 @@ import {
   subscribeWatchlist,
   upsertWatchlistItem,
 } from './watchlist-store';
+import { Button } from '@/components/ui/button';
 import { resolveListingPriceCurrency } from '@/lib/rate-domain';
+import { cn } from '@/lib/utils';
 
 export function normalizeQuickWatchlistSlug(value: unknown): string {
   return sanitizeWatchlistSlug(value);
@@ -163,8 +165,10 @@ export default function WatchlistQuickToggle({
       itemName: item?.name,
     });
     return (
-      <button
+      <Button
         type="button"
+        variant={watched ? 'outline-primary' : 'outline'}
+        size="sm"
         onClick={handleToggle}
         title={
           watched
@@ -173,7 +177,11 @@ export default function WatchlistQuickToggle({
         }
         aria-label={ariaLabel}
         aria-pressed={ariaPressed}
-        className={`rate-chip-btn${watched ? ' is-active' : ''} ${className}`.trim()}
+        className={cn(
+          'rate-chip-btn',
+          watched && 'is-active bg-brand-bg dark:bg-brand-bg',
+          className
+        )}
       >
         {watched ? (
           <BsBellFill aria-hidden="true" />
@@ -181,7 +189,7 @@ export default function WatchlistQuickToggle({
           <BsBell aria-hidden="true" />
         )}
         <span>{shortLabel}</span>
-      </button>
+      </Button>
     );
   }
 
@@ -196,22 +204,19 @@ export default function WatchlistQuickToggle({
   });
 
   return (
-    <button
+    <Button
       type="button"
+      variant={watched ? 'success' : 'outline'}
+      size={size === 'sm' ? 'sm' : 'default'}
       onClick={handleToggle}
       title={
         watched ? t('quickToggleTitleWatched') : t('quickToggleTitleUnwatched')
       }
       aria-label={ariaLabel}
       aria-pressed={ariaPressed}
-      className={`btn ${
-        watched
-          ? 'btn-success text-white'
-          : 'btn-outline-secondary text-dark bg-white'
-      } ${size === 'sm' ? 'btn-sm small px-2 py-1' : 'px-3 py-2'} rounded-pill fw-medium d-inline-flex align-items-center gap-1 shadow-sm ${className}`}
-      style={{ fontSize: size === 'sm' ? '0.8125rem' : '13.5px' }}
+      className={className}
     >
       <span>{btnLabel}</span>
-    </button>
+    </Button>
   );
 }

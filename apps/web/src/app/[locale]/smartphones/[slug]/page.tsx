@@ -100,7 +100,23 @@ import {
 import RadarBadge from '@/components/radar/RadarBadge';
 import { getRadarSignal, type RadarIndex } from '@/lib/deal-radar';
 import { startRenderTiming } from '@/lib/render-timing';
-import { bayesianTierKey, radarExplanation } from '@/lib/product-detail-copy';
+import {
+  bayesianTierKey,
+  radarExplanation,
+  resolveDisplayVariantName,
+} from '@/lib/product-detail-copy';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  PriceStrip,
+  PriceStripActions,
+  PriceStripHeader,
+  PriceStripLabel,
+  PriceStripRange,
+  PriceStripRow,
+  PriceStripValue,
+} from '@/components/ui/card';
+import { NavTabLink, NavTabs } from '@/components/ui/tabs';
 import {
   absoluteUrl,
   buildOgTruthCardImage,
@@ -1006,8 +1022,8 @@ export async function ProductDetailView({
     emptyText:
       v.product.id === product.id ? pageEmptyOffersText : t('noOffersYet'),
   });
-  // The price strip of one size: price, range, all-time low, price watch and
-  // the share card; an Item page renders it once per size (#1154).
+  // The price strip of one size: price, range, all-time low and audit/export
+  // controls; an Item page renders it once per size (#1154).
   const renderPriceStrip = (v: {
     product: typeof product;
     offers: typeof offers;
@@ -1021,13 +1037,13 @@ export async function ProductDetailView({
       return null;
     }
     return (
-      <div className="rounded-4 bg-light mb-2 border p-3">
-        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
-          <div>
-            <div className="text-muted small">
-              {t('priceReferenceLabel', { count: v.stats.sellerCount })}
-            </div>
-            <div className="fw-bold text-dark rate-tabular fs-5">
+      <PriceStrip>
+        <PriceStripHeader>
+          <PriceStripLabel>
+            {t('priceReferenceLabel', { count: v.stats.sellerCount })}
+          </PriceStripLabel>
+          <PriceStripRow>
+            <PriceStripValue>
               {v.stats.minPrice > 0 ? (
                 formatListingPrice(
                   v.stats.minPrice,
@@ -1045,81 +1061,79 @@ export async function ProductDetailView({
               ) : (
                 t('priceNoneInStock')
               )}
-              {v.stats.minPrice > 0 &&
-                v.stats.minPrice !== v.stats.maxPrice && (
-                  <span className="small fw-normal text-muted ms-2">
-                    ~{' '}
-                    {formatListingPrice(
-                      v.stats.maxPrice,
-                      effectiveCurrency,
-                      locale,
-                      { categorySlug, priceUnit: effectivePriceUnit }
-                    )}
-                  </span>
+            </PriceStripValue>
+            {v.stats.minPrice > 0 && v.stats.minPrice !== v.stats.maxPrice && (
+              <PriceStripRange>
+                ~{' '}
+                {formatListingPrice(
+                  v.stats.maxPrice,
+                  effectiveCurrency,
+                  locale,
+                  { categorySlug, priceUnit: effectivePriceUnit }
                 )}
-              {!isPlace &&
-                v.priceHistory.lowestEverPrice != null &&
-                v.priceHistory.lowestEverPrice > 0 && (
-                  <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                    {effectiveHasUnitSuffix
-                      ? t('allTimeLowBadgeCurrency', {
-                          price: formatListingPrice(
-                            v.priceHistory.lowestEverPrice,
-                            effectiveCurrency,
-                            locale,
-                            { categorySlug, priceUnit: effectivePriceUnit }
-                          ),
-                        })
-                      : t('allTimeLowBadge', {
-                          price: formatNumber(
-                            v.priceHistory.lowestEverPrice,
-                            locale
-                          ),
-                        })}
-                  </span>
-                )}
-            </div>
-          </div>
-          <div className="d-flex align-items-center flex-wrap gap-2">
-            {v.stats.minPrice > 0 && (
-              <PriceWatchButton
-                slug={v.product.slug}
-                name={v.product.name}
-                brand={v.product.brand}
-                categoryPath={categoryBasePath}
-                thumbnail={productImageUrl(v.product)}
-                currentMinPrice={v.stats.minPrice}
-                currency={effectiveCurrency}
-                priceUnit={effectivePriceUnit}
-                size="sm"
-              />
+              </PriceStripRange>
             )}
-            {!isPlace && (
-              <a
-                href="#pdv-price-history"
-                className="btn btn-sm btn-outline-secondary rounded-pill px-3"
-              >
-                {t('auditPriceBtn', { count: v.offers.length })}
-              </a>
-            )}
-            <ProductShareAuditButton
+            {!isPlace &&
+              v.priceHistory.lowestEverPrice != null &&
+              v.priceHistory.lowestEverPrice > 0 && (
+                <Badge variant="success">
+                  {effectiveHasUnitSuffix
+                    ? t('allTimeLowBadgeCurrency', {
+                        price: formatListingPrice(
+                          v.priceHistory.lowestEverPrice,
+                          effectiveCurrency,
+                          locale,
+                          { categorySlug, priceUnit: effectivePriceUnit }
+                        ),
+                      })
+                    : t('allTimeLowBadge', {
+                        price: formatNumber(
+                          v.priceHistory.lowestEverPrice,
+                          locale
+                        ),
+                      })}
+                </Badge>
+              )}
+          </PriceStripRow>
+        </PriceStripHeader>
+        <PriceStripActions>
+          {isItemGroup && v.stats.minPrice > 0 && (
+            <PriceWatchButton
               slug={v.product.slug}
               name={v.product.name}
               brand={v.product.brand}
-              modelKey={v.product.model_key}
-              userScore5={displayUserRating}
-              expertScore10={expertRating10}
-              authenticReviews={authenticCount}
-              minPriceVnd={v.stats.minPrice}
+              categoryPath={categoryBasePath}
+              thumbnail={productImageUrl(v.product)}
+              currentMinPrice={v.stats.minPrice}
               currency={effectiveCurrency}
-              categorySlug={categorySlug}
-              offerCount={v.stats.sellerCount}
-              keySpecLine={keySpecLine}
-              radarSignal={v.radarSignal}
+              priceUnit={effectivePriceUnit}
+              size="sm"
             />
-          </div>
-        </div>
-      </div>
+          )}
+          {!isPlace && (
+            <Button variant="outline" size="sm" asChild>
+              <a href="#pdv-price-history">
+                {t('auditPriceBtn', { count: v.offers.length })}
+              </a>
+            </Button>
+          )}
+          <ProductShareAuditButton
+            slug={v.product.slug}
+            name={v.product.name}
+            brand={v.product.brand}
+            modelKey={v.product.model_key}
+            userScore5={displayUserRating}
+            expertScore10={expertRating10}
+            authenticReviews={authenticCount}
+            minPriceVnd={v.stats.minPrice}
+            currency={effectiveCurrency}
+            categorySlug={categorySlug}
+            offerCount={v.stats.sellerCount}
+            keySpecLine={keySpecLine}
+            radarSignal={v.radarSignal}
+          />
+        </PriceStripActions>
+      </PriceStrip>
     );
   };
   const variantStripInput = (v: ItemPageVariant) => {
@@ -1164,6 +1178,7 @@ export async function ProductDetailView({
   );
   const sizeStripContext = {
     categoryPath: categoryBasePath,
+    priceUnit: effectivePriceUnit,
     userScore5: displayUserRating,
     expertScore10: expertRating10,
     authenticReviews: authenticCount,
@@ -1275,8 +1290,9 @@ export async function ProductDetailView({
   const hasCriteriaScores = criteria.some((crit) => crit.score != null);
   const heroSellerCount =
     heroStats.sellerCount > 0 ? heroStats.sellerCount : offers.length;
+  const meaningfulVariantName = resolveDisplayVariantName(product.variant_name);
   const singleVariantLabel =
-    !isItemGroup && !variantLinks ? product.variant_name?.trim() || null : null;
+    !isItemGroup && !variantLinks ? meaningfulVariantName : null;
   const productColors = Array.isArray(product.colors)
     ? product.colors.map((c) => c.trim()).filter(Boolean)
     : [];
@@ -1286,6 +1302,12 @@ export async function ProductDetailView({
     singleVariantLabel ||
     productColors.length > 0
   );
+  const confidenceBadgeVariant =
+    bayesianSummary.confidenceTier === 'high'
+      ? 'success'
+      : bayesianSummary.confidenceTier === 'medium'
+        ? 'secondary'
+        : 'warning';
   const userScoreBox = (
     <div className={`rate-pdv-score${hasCriteriaScores ? '' : ' is-compact'}`}>
       <div className="rate-pdv-score-label is-user">
@@ -1311,7 +1333,8 @@ export async function ProductDetailView({
         className="rate-pdv-confidence"
         data-testid="pdv-bayesian-confidence"
       >
-        <span
+        <Badge
+          variant={confidenceBadgeVariant}
           className={`rate-pdv-tag is-${bayesianSummary.confidenceTier}`}
           title={
             bayesianSummary.effectiveWeightSum > 0
@@ -1328,7 +1351,7 @@ export async function ProductDetailView({
               {Math.round(bayesianSummary.confidenceRatio * 100)}%)
             </span>
           )}
-        </span>
+        </Badge>
       </div>
     </div>
   );
@@ -1391,7 +1414,7 @@ export async function ProductDetailView({
           <div className="row g-4 mb-5">
             {/* Left: Images */}
             <div className="col-lg-5 col-12">
-              <div className="card rate-pdv-media-card rounded-4 p-md-4 p-3 text-center">
+              <div className="card rate-pdv-media-card p-md-4 p-3 text-center">
                 <div
                   className={`rate-pdv-media d-flex align-items-center justify-content-center${
                     mainImage ? ' is-studio' : ''
@@ -1455,10 +1478,10 @@ export async function ProductDetailView({
                 {[product.brand, product.has_5g ? '5G' : '']
                   .filter(Boolean)
                   .join(' · ')}
-                {product.variant_name && !isItemGroup && (
+                {meaningfulVariantName && !isItemGroup && (
                   <>
                     {product.brand || product.has_5g ? ' · ' : ''}
-                    <ContentText text={product.variant_name} locale={locale} />
+                    <ContentText text={meaningfulVariantName} locale={locale} />
                   </>
                 )}
               </p>
@@ -1614,30 +1637,32 @@ export async function ProductDetailView({
               the sellers; this row jumps to each (DOS/Rate#1469, #1530). It
               sits under the price, before the scoreboard, so a phone shows it
               in the first screen (DOS/Rate#1517). */}
-              <nav
-                className="rate-pdv-jumpnav"
+              <NavTabs
+                className="rate-pdv-jumpnav mb-4"
                 aria-label={t('jumpNavAria')}
                 data-testid="pdv-jump-nav"
               >
                 {(!isPlace || showPlaceDetails) && (
-                  <a
+                  <NavTabLink
                     href={isPlace ? '#place-details-section' : '#specs-section'}
                   >
                     {t('jumpNavSpecs')}
-                  </a>
+                  </NavTabLink>
                 )}
-                <a href="#jreviews-section">
+                <NavTabLink href="#jreviews-section">
                   {t('jumpNavReviews', { count: authenticCount })}
-                </a>
+                </NavTabLink>
                 {!isPlace && (
-                  <a href="#pdv-price-history">{t('jumpNavPriceHistory')}</a>
+                  <NavTabLink href="#pdv-price-history">
+                    {t('jumpNavPriceHistory')}
+                  </NavTabLink>
                 )}
                 {!isPlace && (
-                  <a href="#offers-table">
+                  <NavTabLink href="#offers-table">
                     {t('jumpNavOffers', { count: heroSellerCount })}
-                  </a>
+                  </NavTabLink>
                 )}
-              </nav>
+              </NavTabs>
               {/* #1 Core Focus Above the Fold: JReviews Dual-Rating & 5-Criteria Scoreboard (DESIGN.md v3.0) */}
               <div
                 className={`rate-scoreboard-dark rate-surface-dark rate-pdv-board${
@@ -1783,15 +1808,16 @@ export async function ProductDetailView({
 
                 {/* Primary Review & Evaluation Actions */}
                 <div className="rate-pdv-actions">
-                  <a
-                    href="#jreviews-section"
-                    className="btn btn-primary fw-semibold"
-                  >
-                    {authenticCount > 0
-                      ? t('readAndSubmitReviewsBtn', { count: authenticCount })
-                      : t('writeOrReadReviewsBtn')}
-                  </a>
-                  {heroStats.minPrice > 0 && (
+                  <Button variant="primary" size="sm" asChild>
+                    <a href="#jreviews-section">
+                      {authenticCount > 0
+                        ? t('readAndSubmitReviewsBtn', {
+                            count: authenticCount,
+                          })
+                        : t('writeOrReadReviewsBtn')}
+                    </a>
+                  </Button>
+                  {!isItemGroup && heroStats.minPrice > 0 && (
                     <PriceWatchButton
                       slug={product.slug}
                       name={product.name}

@@ -66,6 +66,58 @@ test('hero removes duplicate CTAs, aligns seller counts, collapses empty boxes, 
   ).toHaveCount(1);
   await expect(actions.locator('.rate-chip-btn')).toHaveCount(1);
 
+  // DOS/Rate#1986: unified 36px height & 8px radius across navbar right controls,
+  // hero actions, and market price strip; compact 6px radius jump-nav tabs.
+  const metrics = await page.evaluate(() => {
+    const readBox = (el: Element | null) => {
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return {
+        height: Math.round(el.getBoundingClientRect().height),
+        radius: cs.borderRadius,
+        textTransform: cs.textTransform,
+      };
+    };
+    const navSocial = document.querySelector('.nav-menu.nav-menu-social');
+    const navControls = [
+      navSocial?.querySelector('[data-testid="theme-cycle"]') ?? null,
+      navSocial?.querySelector('button[aria-expanded]') ?? null,
+      navSocial?.querySelector('li.list-buttons a') ?? null,
+    ].map(readBox);
+    const actionControls = [
+      document.querySelector('.rate-pdv-actions a[href="#jreviews-section"]'),
+      document.querySelector('.rate-pdv-actions button[aria-controls]'),
+      document.querySelector('.rate-pdv-actions .rate-chip-btn'),
+    ].map(readBox);
+    const jumpTab = readBox(
+      document.querySelector('[data-testid="pdv-jump-nav"] a')
+    );
+    const stripControls = [
+      document.querySelector(
+        'a[href="#pdv-price-history"][data-slot="button"]'
+      ),
+      document.querySelector(
+        'details.rate-export-menu summary[data-slot="button"]'
+      ),
+    ].map(readBox);
+    return { navControls, actionControls, jumpTab, stripControls };
+  });
+  for (const box of [
+    ...metrics.navControls,
+    ...metrics.actionControls,
+    ...metrics.stripControls,
+  ]) {
+    expect(box).not.toBeNull();
+    expect(box!.height).toBe(36);
+    expect(box!.radius).toBe('8px');
+  }
+  expect(metrics.navControls[2]!.textTransform).toBe('none');
+  expect(metrics.jumpTab).toEqual({
+    height: 36,
+    radius: '6px',
+    textTransform: 'none',
+  });
+
   // Leaderboard standing label renders no duplicate trophy icon beside the #1 badge.
   const standingLink = board.locator('a[href^="/leaderboard?cat="]').first();
   await expect(standingLink).toBeVisible();
