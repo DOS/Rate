@@ -243,7 +243,7 @@ test('normalizeScrapedProductPrices preserves decimal PCT rates and rounds VND',
 test('ShopeeIngestionPipeline refuses silent smartphone fallback when Wave E1/E2 category is absent', async () => {
   const db = {
     rpc(fn: string) {
-      if (fn === 'match_master_product') {
+      if (fn === 'match_master_product' || fn === 'match_item') {
         return Promise.resolve({ data: [], error: null });
       }
       return Promise.resolve({ data: null, error: null });
@@ -278,7 +278,7 @@ test('ShopeeIngestionPipeline refuses silent smartphone fallback when Wave E1/E2
     },
   } as unknown as RateSupabaseClient;
 
-  const pipeline = new ShopeeIngestionPipeline({ supabaseClient: db, itemModel: 'off' });
+  const pipeline = new ShopeeIngestionPipeline({ supabaseClient: db });
   await assert.rejects(
     pipeline.ingestProduct(
       baseProduct({
@@ -379,12 +379,19 @@ test('P0 #2: ProductNormalizer and ingestProduct preserve both camelCase and sna
 
   const db = {
     rpc(fn: string) {
-      if (fn === 'match_master_product') {
+      if (fn === 'match_master_product' || fn === 'match_item') {
         return Promise.resolve({ data: [], error: null });
       }
       return Promise.resolve({ data: null, error: null });
     },
     from(table: string) {
+      if (table === 'items') {
+        return {
+          select() {
+            return createQueryBuilder([]);
+          },
+        };
+      }
       if (table === 'categories') {
         return {
           select() {
@@ -432,8 +439,8 @@ test('P0 #2: ProductNormalizer and ingestProduct preserve both camelCase and sna
           };
         };
         return {
-          select() {
-            return createQueryBuilder([]);
+          select(cols?: string) {
+            return createQueryBuilder(cols === 'item_id' ? [{ item_id: 'item-purifier-1' }] : []);
           },
           insert: writeHandler,
           upsert: writeHandler,
@@ -475,7 +482,7 @@ test('P0 #2: ProductNormalizer and ingestProduct preserve both camelCase and sna
     },
   } as unknown as RateSupabaseClient;
 
-  const pipeline = new ShopeeIngestionPipeline({ supabaseClient: db, itemModel: 'off' });
+  const pipeline = new ShopeeIngestionPipeline({ supabaseClient: db });
   const result = await pipeline.ingestProduct(
     baseProduct({
       platform: 'shopee',

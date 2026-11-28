@@ -6,34 +6,30 @@ import type {
 } from '../../lib/rate-api';
 
 /**
- * Web rollout flag for the Item / variant / listing model (DOS/Rate#1153;
+ * Web rollout mode for the Item / variant / listing model (DOS/Rate#1153, #1984;
  * design doc `Docs/Proposals/2026-10-27-item-variant-listing-model.md`,
- * sections 5.1 and 7). Same env and values as the importer's
+ * sections 5.1 and 7). Same env and active values as the importer's
  * `item-model-flag.ts`:
- * - `off` (default, and any unknown value): today's pages. Nothing reads
- *   `rate.items` or the item columns, so the site runs on a database without
- *   the DOS-Me M1+M2 migration (#1150).
- * - `item` / `nullable_variant`: catalogue slugs resolve to Items, old
- *   variant URLs 308 to the Item URL with `?v=`. Needs M1+M2.
+ * - `item` (default, and any unknown or unset value): catalogue slugs resolve
+ *   to Items, old variant URLs 308 to the Item URL with `?v=`.
+ * - `nullable_variant`: same web behavior as `item`; importer writes listings
+ *   with no stated size on multi-size Items with `cluster_id = NULL`.
  */
 export const ITEM_MODEL_ENV = 'RATE_ITEM_MODEL';
 
-const ITEM_MODEL_MODES = ['off', 'item', 'nullable_variant'] as const;
-export type WebItemModelMode = (typeof ITEM_MODEL_MODES)[number];
+export type WebItemModelMode = 'item' | 'nullable_variant';
 
 export function resolveWebItemModelMode(
   raw: unknown = process.env[ITEM_MODEL_ENV]
 ): WebItemModelMode {
-  if (typeof raw !== 'string') return 'off';
+  if (typeof raw !== 'string') return 'item';
   const value = raw.trim().toLowerCase().replace(/-/g, '_');
-  return (ITEM_MODEL_MODES as readonly string[]).includes(value)
-    ? (value as WebItemModelMode)
-    : 'off';
+  return value === 'nullable_variant' ? 'nullable_variant' : 'item';
 }
 
-/** Whether pages read Items. Read per request, so a flag flip needs no build. */
+/** Whether pages read Items. Always true; Item Model is unconditionally enabled. */
 export function isItemModelOn(): boolean {
-  return resolveWebItemModelMode() !== 'off';
+  return true;
 }
 
 // A variant key in `?v=`: the literal third key segment, e.g. 256gb, 1024gb,

@@ -69,7 +69,7 @@ let publishedItems: StubItem[] | null;
 let catalogOverride: StubMasterRow[] | null;
 
 beforeEach(() => {
-  process.env.RATE_ITEM_MODEL = 'off';
+  delete process.env.RATE_ITEM_MODEL;
   resetRateClientForTests();
   requests.length = 0;
   publishedItems = null;
@@ -230,10 +230,9 @@ test('a cold pinned and bare link keeps the selected size and all four columns i
   const link = '/compare?slugs=first,acme@256gb,peer,last';
   const expected = ['first', 'acme-256gb', 'peer-128gb', 'last'];
   assert.deepEqual(await openSharedLink(link), expected);
-  assert.ok(requests.every((url) => !url.pathname.endsWith('/items')));
-  process.env.RATE_ITEM_MODEL = 'item';
-  assert.deepEqual(await openSharedLink(link), expected);
   assert.ok(requests.some((url) => url.pathname.endsWith('/items')));
+  process.env.RATE_ITEM_MODEL = 'nullable_variant';
+  assert.deepEqual(await openSharedLink(link), expected);
 });
 
 test('bare-only links recover unique masters and skip ambiguous Items without shifting their peers', async () => {
@@ -428,43 +427,39 @@ test('tokenless /compare deduplicates multiple variants of the same Item under R
     },
   ];
 
-  // Flag off: legacy variant-level defaults keep the raw catalogue rows.
-  process.env.RATE_ITEM_MODEL = 'off';
-  const offDefaults = await getComparePageSelection({});
-  assert.deepEqual(
-    offDefaults.initialProducts.map((row) => row.slug),
-    ['acme-256gb', 'acme-128gb', 'peer-128gb']
-  );
-
-  // Flag on: acme-256gb and acme-128gb collapse to one standing variant in
-  // both initialProducts and catalogCandidates, preserving that variant's own
-  // name, price range, and merchant count while attaching item_slug.
-  process.env.RATE_ITEM_MODEL = 'item';
-  const itemDefaults = await getComparePageSelection({});
-  assert.equal(itemDefaults.hasExplicitSlugs, false);
-  assert.deepEqual(
-    itemDefaults.initialProducts.map((row) => row.slug),
-    ['acme-128gb', 'peer-128gb', 'last']
-  );
-  assert.deepEqual(
-    itemDefaults.catalogCandidates.map((row) => row.slug),
-    ['acme-128gb', 'peer-128gb', 'last']
-  );
-  assert.deepEqual(itemDefaults.rawCandidateSlugs, [
-    'acme-256gb',
-    'acme-128gb',
-    'peer-128gb',
-    'last',
-  ]);
-  const standingAcme = itemDefaults.initialProducts[0] as Record<
-    string,
-    unknown
-  >;
-  assert.equal(standingAcme.name, 'Acme Phone 128GB');
-  assert.equal(standingAcme.min_price, 19_990_000);
-  assert.equal(standingAcme.max_price, 20_990_000);
-  assert.equal(standingAcme.merchant_count, 2);
-  assert.equal(standingAcme.item_slug, 'acme');
+  // Default (unset) and 'off' both behave as active Item model, collapsing
+  // acme-256gb and acme-128gb to one standing variant in both initialProducts
+  // and catalogCandidates while preserving that variant's own name, price range,
+  // and merchant count and attaching item_slug.
+  for (const mode of [undefined, 'off', 'item'] as const) {
+    if (mode === undefined) delete process.env.RATE_ITEM_MODEL;
+    else process.env.RATE_ITEM_MODEL = mode;
+    const itemDefaults = await getComparePageSelection({});
+    assert.equal(itemDefaults.hasExplicitSlugs, false);
+    assert.deepEqual(
+      itemDefaults.initialProducts.map((row) => row.slug),
+      ['acme-128gb', 'peer-128gb', 'last']
+    );
+    assert.deepEqual(
+      itemDefaults.catalogCandidates.map((row) => row.slug),
+      ['acme-128gb', 'peer-128gb', 'last']
+    );
+    assert.deepEqual(itemDefaults.rawCandidateSlugs, [
+      'acme-256gb',
+      'acme-128gb',
+      'peer-128gb',
+      'last',
+    ]);
+    const standingAcme = itemDefaults.initialProducts[0] as Record<
+      string,
+      unknown
+    >;
+    assert.equal(standingAcme.name, 'Acme Phone 128GB');
+    assert.equal(standingAcme.min_price, 19_990_000);
+    assert.equal(standingAcme.max_price, 20_990_000);
+    assert.equal(standingAcme.merchant_count, 2);
+    assert.equal(standingAcme.item_slug, 'acme');
+  }
 
   // Flag on, Item table unavailable: graceful fallback to variant rows.
   publishedItems = null;

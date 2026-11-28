@@ -935,9 +935,15 @@ async function main() {
 
     const { default: sitemap } = await import('../../app/sitemap');
 
-    // 1. RATE_ITEM_MODEL active ('item' & 'nullable_variant'):
-    for (const mode of ['item', 'nullable_variant'] as const) {
-      process.env.RATE_ITEM_MODEL = mode;
+    // 1. Always-on Item model across unset, 'off', 'item', and 'nullable_variant':
+    for (const mode of [
+      undefined,
+      'off',
+      'item',
+      'nullable_variant',
+    ] as const) {
+      if (mode === undefined) delete process.env.RATE_ITEM_MODEL;
+      else process.env.RATE_ITEM_MODEL = mode;
       const entries = await sitemap();
       const compareEntries = entries.filter((e) =>
         new URL(e.url).pathname.startsWith('/compare/')
@@ -1053,75 +1059,9 @@ async function main() {
       assert.equal(
         lowerSet.size,
         compareUrls.length,
-        `[${mode}] versusSeen must prevent case-insensitive duplicate compare URLs`
+        `[${mode ?? 'unset'}] versusSeen must prevent case-insensitive duplicate compare URLs`
       );
     }
-
-    // 2. RATE_ITEM_MODEL off (variant mode):
-    delete process.env.RATE_ITEM_MODEL;
-    const offEntries = await sitemap();
-    const offCompareEntries = offEntries.filter((e) =>
-      new URL(e.url).pathname.startsWith('/compare/')
-    );
-    const offCompareUrls = offCompareEntries.map((e) => e.url);
-    const offComparePaths = offCompareEntries.map(
-      (e) => new URL(e.url).pathname
-    );
-    const offComparePathSet = new Set(offComparePaths);
-
-    assertEveryCompareUrlRenders200(offCompareUrls, false, '[flag off]');
-
-    // Variant mode keeps variant-vs-variant pairings for distinct valid lowercase
-    // variant slugs, while enforcing -vs-, trailing -vs parseability, exact lowercase
-    // master slug validity, and cross-category versusSeen deduplication.
-    assert.deepEqual(
-      offCompareUrls.slice(0, 3),
-      [
-        'https://rate.vn/compare/apple-iphone-16-pro-max-256gb-vs-caseco-flagship-256gb',
-        'https://rate.vn/compare/apple-iphone-16-pro-max-512gb-vs-caseco-flagship-256gb',
-        'https://rate.vn/compare/apple-iphone-16-pro-max-256gb-vs-apple-iphone-16-pro-max-512gb',
-      ],
-      '[flag off] variant mode pairs distinct variant slugs via versusHref'
-    );
-    assert.equal(
-      offComparePaths.filter(
-        (p) =>
-          p ===
-          '/compare/apple-iphone-16-pro-max-256gb-vs-caseco-flagship-256gb'
-      ).length,
-      1,
-      '[flag off] cross-category duplicate variant pair must be emitted only once via versusSeen'
-    );
-    assert.ok(
-      !offComparePaths.some((p) => p.toLowerCase().includes('case-vs-cover')),
-      '[flag off] variant slug containing -vs- must be excluded in variant mode too'
-    );
-    assert.ok(
-      !offComparePaths.some(
-        (p) =>
-          p.toLowerCase().includes('alpha-book-vs') &&
-          p.toLowerCase().includes('beta-book-vs')
-      ),
-      '[flag off] unparseable trailing -vs pair must be excluded in variant mode too'
-    );
-    assert.ok(
-      offComparePathSet.has('/compare/zeta-ultrabook-vs-alpha-book-vs') &&
-        offComparePathSet.has('/compare/zeta-ultrabook-vs-beta-book-vs'),
-      '[flag off] single trailing -vs variant slug paired with normal slug emits in parseable lowercase order'
-    );
-    assert.ok(
-      !offComparePaths.some((p) => p.includes('Sony-WF-1000XM5')) &&
-        offComparePathSet.has(
-          '/compare/apple-airpods-pro-2-vs-sony-wf-1000xm5'
-        ),
-      '[flag off] mixed-case variant slug is skipped so valid lowercase sibling emits canonical 200 URL'
-    );
-    const offLowerSet = new Set(offCompareUrls.map((u) => u.toLowerCase()));
-    assert.equal(
-      offLowerSet.size,
-      offCompareUrls.length,
-      '[flag off] versusSeen enforces case-insensitive pairKey deduplication in variant mode'
-    );
   } finally {
     globalThis.fetch = prevFetch;
     if (prevSupabaseUrl === undefined) {

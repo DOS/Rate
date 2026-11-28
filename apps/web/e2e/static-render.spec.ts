@@ -42,8 +42,8 @@ type RpcCall = { fn: string; body: string };
 // Exact RPC bodies of the two catalogue reads below (seeded earbuds category,
 // sorted by newest), which no other spec makes.
 const EARBUDS = '"p_category_id":"c0000000-0000-4000-8000-000000000005"';
-const PLAIN_BODY = `{${EARBUDS},"p_sort":"newest","p_limit":201,"p_offset":0}`;
-const FILTERED_BODY = `{${EARBUDS},"p_min_rating":3,"p_sort":"newest","p_limit":201,"p_offset":0}`;
+const PLAIN_BODY = `{${EARBUDS},"p_sort":"newest","p_limit":500,"p_offset":0}`;
+const FILTERED_BODY = `{${EARBUDS},"p_min_rating":3,"p_sort":"newest","p_limit":500,"p_offset":0}`;
 async function catalogueReads(
   request: import('@playwright/test').APIRequestContext,
   body: string

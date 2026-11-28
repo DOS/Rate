@@ -65,18 +65,18 @@ test('a cold shared link renders the pinned size and its single-size peer in ord
   expect(await readTray(page)).toBeNull();
 });
 
-test('going back to an ambiguous bare link clears the previous comparison', async ({
+test('going back to an unresolved compare link clears the previous comparison', async ({
   page,
 }) => {
-  const ambiguousLink = '/compare?slugs=e2e-variant-phone';
-  await page.goto(ambiguousLink);
+  const unresolvedLink = '/compare?slugs=e2e-does-not-exist';
+  await page.goto(unresolvedLink);
   const columns = page.locator('thead .rate-remove-target');
   await expect(columns).toHaveCount(0);
   await page.locator('footer a[href="/compare"]').first().click();
   await expect(page).toHaveURL(/\/compare$/);
   await expect(columns.first()).toBeVisible();
   await page.goBack();
-  await expect(page).toHaveURL(ambiguousLink);
+  await expect(page).toHaveURL(unresolvedLink);
   await expect(columns).toHaveCount(0);
 });
 

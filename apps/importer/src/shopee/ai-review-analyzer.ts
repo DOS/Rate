@@ -9,7 +9,7 @@ import {
 } from './ai-spec-enricher.js';
 import type { RateSupabaseClient, ScrapedReviewer } from './types.js';
 import { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
-import { resolveItemModelMode, type ItemModelMode } from './item-model-flag.js';
+import type { ItemModelMode } from './item-model-flag.js';
 export { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
 
 /**
@@ -2814,12 +2814,7 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
     // 3b. A listing with no variant still rates its Item: the M2 `refresh_item_stats`
     // recomputes the Item's pooled rating over all its listings. With a variant,
     // `refresh_master_product_rating` above resolves the Item itself (M2 body).
-    if (
-      !safeMasterId &&
-      safeItemId &&
-      (params?.itemModel ?? resolveItemModelMode()) !== 'off' &&
-      typeof supabase.rpc === 'function'
-    ) {
+    if (!safeMasterId && safeItemId && typeof supabase.rpc === 'function') {
       const { error: itemRpcErr } = await supabase.rpc('refresh_item_stats', {
         p_item_id: safeItemId,
       });

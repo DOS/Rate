@@ -150,15 +150,16 @@ const ZENBOOK_1TB = {
 async function run() {
   console.log('🧪 Item-first matcher suite (DOS/Rate#1151)');
 
-  // 1. Flag parsing
+  // 1. Flag parsing (always-on Item Model: default 'item', only 'nullable_variant' opts into NULL cluster_id)
   assert.equal(ITEM_MODEL_ENV, 'RATE_ITEM_MODEL');
-  assert.equal(resolveItemModelMode(undefined), 'off');
-  assert.equal(resolveItemModelMode(''), 'off');
+  assert.equal(resolveItemModelMode(undefined), 'item');
+  assert.equal(resolveItemModelMode(''), 'item');
+  assert.equal(resolveItemModelMode('off'), 'item');
   assert.equal(resolveItemModelMode('item'), 'item');
   assert.equal(resolveItemModelMode(' Nullable-Variant '), 'nullable_variant');
-  assert.equal(resolveItemModelMode('nullable'), 'off', 'a typo must never enable writes');
-  assert.equal(resolveItemModelMode(true), 'off');
-  console.log('  ✅ [1/6] RATE_ITEM_MODEL defaults to off');
+  assert.equal(resolveItemModelMode('nullable'), 'item', 'unknown value defaults to item');
+  assert.equal(resolveItemModelMode(true), 'item');
+  console.log('  ✅ [1/6] RATE_ITEM_MODEL defaults to item (always-on)');
 
   // 2. Normalizer Item fields
   const cases: Array<[string, Row]> = [
@@ -222,37 +223,33 @@ async function run() {
   }
   console.log('  ✅ [2/6] Normalizer emits item_key/variant_key and never an empty segment');
 
-  // 3. Mode off: today's matcher, no rate.items access
+  // 3. Default mode: always-on Item-first matcher
   {
-    const db = createItemDb({ items: [ZENBOOK_ITEM], variants: [ZENBOOK_1TB] });
-    const matcher = new EntityMatcher(db.client, passthroughEnricher, { itemModel: 'off' });
+    const db = createItemDb({ seededItemId: 'item-zenbook-new' });
+    const envDefault = process.env[ITEM_MODEL_ENV];
+    delete process.env[ITEM_MODEL_ENV];
+    const matcher = new EntityMatcher(db.client, passthroughEnricher);
+    assert.equal(matcher.itemModel, 'item');
+    if (envDefault !== undefined) process.env[ITEM_MODEL_ENV] = envDefault;
+
     const result = await matcher.resolveItemAndVariant(
       candidateFor('Laptop ASUS Zenbook S 14 UX5406AA-SU348W'),
       'cat-laptops'
     );
     assert.deepEqual(result, {
-      itemId: null,
+      itemId: 'item-zenbook-new',
       masterId: 'seeded-master',
       isNew: true,
       variantSource: null,
     });
-    assert.ok(!db.calls.some(c => c.table === 'items' || c.table === 'match_item'));
-    assert.ok(db.calls.some(c => c.table === 'match_master_product'));
-    const seeded = db.calls.find(c => c.op === 'upsert');
-    assert.equal(seeded?.payload?.model_key, 'asus:zenbook-s-14:unknown');
-    assert.ok(!('item_id' in (seeded?.payload ?? {})));
-
-    const envDefault = process.env[ITEM_MODEL_ENV];
-    delete process.env[ITEM_MODEL_ENV];
-    assert.equal(new EntityMatcher(db.client, passthroughEnricher).itemModel, 'off');
-    if (envDefault !== undefined) process.env[ITEM_MODEL_ENV] = envDefault;
+    assert.ok(db.calls.some(c => c.table === 'items' || c.table === 'match_item'));
 
     await assert.rejects(
       matcher.resolveOrCreateMasterProduct(candidateFor('Samsung')),
       UnkeyableProductTitleError
     );
   }
-  console.log('  ✅ [3/6] Mode off keeps the master matcher and never reads rate.items');
+  console.log('  ✅ [3/6] Default mode uses the always-on Item matcher');
 
   // 4. Item modes
   {
@@ -637,7 +634,7 @@ async function run() {
     url: 'https://shopee.vn/product/shop-1151/item-1151',
   });
   const ingest = async (
-    mode: 'off' | 'item' | 'nullable_variant',
+    mode: 'item' | 'nullable_variant',
     title: string,
     item: ItemDb,
     extra: { hint?: Row | null; stored?: Row | null; failOn?: 'stored' | 'kept' } = {},
@@ -688,13 +685,6 @@ async function run() {
 
   const zenbook = { items: [ZENBOOK_ITEM], variants: [ZENBOOK_1TB] };
   const bareTitle = 'Laptop ASUS Zenbook S 14 UX5406AA-SU348W';
-  {
-    const off = await ingest('off', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', zenbook);
-    assert.ok(off.listing && !('item_id' in off.listing) && !('variant_source' in off.listing));
-    assert.equal(off.result.itemId, null);
-    assert.ok(!off.rpcs.includes('refresh_item_stats'));
-    assert.ok(!off.calls.some(c => c.table === 'items'));
-  }
   {
     const nullable = await ingest('nullable_variant', bareTitle, zenbook);
     assert.equal(nullable.listing?.cluster_id, null);
@@ -869,14 +859,6 @@ async function run() {
       stored: { cluster_id: ZENBOOK_1TB.id, variant_source: 'title', item_id: ZENBOOK_ITEM.id },
     });
     assert.deepEqual(itemStats(sameItem.calls), [ZENBOOK_ITEM.id]);
-
-    // Flag off: the stored listing is never read and no Item is refreshed.
-    const off = await ingest('off', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', twoItems, {
-      stored: { cluster_id: vivobook512.id, variant_source: 'manual', item_id: vivobook.id },
-    });
-    assert.ok(!off.calls.some(c => c.table === 'products' && c.op === 'select'));
-    assert.deepEqual(itemStats(off.calls), []);
-    assert.ok(off.listing && !('item_id' in off.listing));
   }
   {
     // An archived masterIdHint maps to its Item; a live one is kept.
@@ -938,19 +920,6 @@ async function run() {
     assert.equal(conflict.listing?.item_id, 'item-zenbook');
     assert.equal(conflict.listing?.variant_source, 'title');
     assert.ok(!live.calls.some(c => c.table === 'items'), 'a live hint skips matching');
-
-    const offHint = await ingest(
-      'off',
-      bareTitle,
-      zenbook,
-      { hint: { id: 'master-zenbook-unknown', specifications: { display: { size: 'x' } } } },
-      { masterIdHint: 'master-zenbook-unknown', itemIdHint: 'item-zenbook' }
-    );
-    assert.equal(offHint.listing?.cluster_id, 'master-zenbook-unknown');
-    assert.equal(
-      offHint.calls.find(c => c.table === 'master_products' && filter(c, 'id'))?.cols,
-      'id, specifications, storage_gb'
-    );
   }
   {
     // itemIdHint for a storage-less page.
@@ -971,7 +940,7 @@ async function run() {
     const db = createDb(call =>
       call.table === 'categories' ? { data: [], error: null } : undefined
     );
-    const pipeline = new ShopeeIngestionPipeline({ supabaseClient: db.client, itemModel: 'off' });
+    const pipeline = new ShopeeIngestionPipeline({ supabaseClient: db.client });
     await assert.rejects(
       pipeline.ingestProduct(product('Samsung'), undefined, { pricesOnly: true }),
       UnkeyableProductTitleError
@@ -980,7 +949,7 @@ async function run() {
 
     // With a live masterIdHint the title's key is unused: the refresh still works.
     const hintedRefresh = await ingest(
-      'off',
+      'item',
       'Samsung',
       zenbook,
       { hint: { id: 'master-legacy', specifications: { display: { size: 'x' } } } },
@@ -1063,9 +1032,6 @@ async function run() {
           : undefined
       );
     const dry = seedDb(['asus:zenbook-s-14']);
-    const offRun = await syncItemSeedSpecs(dry.client, { seeds, apply: true, itemModel: 'off' });
-    assert.deepEqual(offRun, { updated: 0, missing: [] });
-    assert.equal(dry.calls.length, 0, 'flag off: no Item read or write');
     const dryRun = await syncItemSeedSpecs(dry.client, { seeds, itemModel: 'item' });
     assert.deepEqual(dryRun, { updated: 1, missing: ['apple:watch-series-10-42mm'] });
     assert.ok(!dry.calls.some(c => c.op === 'update'));
@@ -1129,7 +1095,7 @@ async function run() {
     await enricher.enrichCandidate(vivobook);
     assert.deepEqual(asks.at(-1), { storageGb: 512, ramGb: 16 });
 
-    // The matcher asks per Item only with the flag on.
+    // The matcher always asks per Item.
     const seen: unknown[] = [];
     const recording = {
       enrichCandidate: async <T>(candidate: T, _title?: string, options?: unknown) => {
@@ -1140,10 +1106,11 @@ async function run() {
     await new EntityMatcher(createItemDb({ seededItemId: 'item-vivobook' }).client, recording, {
       itemModel: 'item',
     }).resolveItemAndVariant(vivobook, 'cat-laptops');
-    await new EntityMatcher(createItemDb().client, recording, {
-      itemModel: 'off',
-    }).resolveItemAndVariant(vivobook, 'cat-laptops');
-    assert.deepEqual(seen, [{ perItem: true }, { perItem: false }]);
+    await new EntityMatcher(
+      createItemDb({ seededItemId: 'item-vivobook' }).client,
+      recording
+    ).resolveItemAndVariant(vivobook, 'cat-laptops');
+    assert.deepEqual(seen, [{ perItem: true }, { perItem: true }]);
   }
   // Item-level rating (Q4): a listing with no variant refreshes its Item; with a
   // variant the master RPC (Item-aware in M2) runs as before; no Item, no Item RPC.
@@ -1152,7 +1119,7 @@ async function run() {
       ids: {
         masterId?: string | null;
         itemId?: string | null;
-        itemModel?: 'off' | 'item' | 'nullable_variant';
+        itemModel?: 'item' | 'nullable_variant';
       },
       mode = 'nullable_variant'
     ) => {
@@ -1168,7 +1135,7 @@ async function run() {
     const persistOnce = async (ids: {
       masterId?: string | null;
       itemId?: string | null;
-      itemModel?: 'off' | 'item' | 'nullable_variant';
+      itemModel?: 'item' | 'nullable_variant';
     }) => {
       const db = createDb(call =>
         call.table === 'reviews' && call.op === 'select' ? { data: [], error: null } : undefined
@@ -1187,15 +1154,9 @@ async function run() {
       ['refresh_master_product_rating', { p_master_id: 'master-zenbook-1tb' }],
     ]);
     assert.deepEqual(await persist({ masterId: null }), []);
-    assert.deepEqual(await persist({ masterId: null, itemId: 'item-zenbook' }, 'off'), []);
-    // The pipeline's own mode wins over the env (a pipeline configured with the model on).
-    assert.deepEqual(
-      await persist(
-        { masterId: null, itemId: 'item-zenbook', itemModel: 'nullable_variant' },
-        'off'
-      ),
-      [['refresh_item_stats', { p_item_id: 'item-zenbook' }]]
-    );
+    assert.deepEqual(await persist({ masterId: null, itemId: 'item-zenbook' }, 'item'), [
+      ['refresh_item_stats', { p_item_id: 'item-zenbook' }],
+    ]);
   }
   console.log(
     '  ✅ [6/6] Seeds grouped by Item; Item specs from the seeds; enrichment and rating per Item (#1152)'

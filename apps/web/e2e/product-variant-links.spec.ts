@@ -4,29 +4,32 @@ import { expect, test } from '@playwright/test';
 // quick-spec cards used to be, marks its own, and puts the specs before the
 // reviews (DOS/Rate#1436).
 
-test('variant links resolve and mark the current variant', async ({ page }) => {
+test('variant links redirect to the Item picker and mark the selected size', async ({
+  page,
+}) => {
   await page.goto('/smartphones/e2e-variant-phone-256gb');
-  const links = page.getByTestId('pdv-variant-links');
-  await expect(links).toBeVisible();
-  const current = links.locator('[aria-current="page"]');
-  await expect(current).toHaveCount(1);
-  await expect(current).toHaveAttribute(
-    'data-variant-slug',
-    'e2e-variant-phone-256gb'
-  );
-  await expect(current).toContainText('256GB');
+  await expect(page).toHaveURL(/\/smartphones\/e2e-variant-phone\?v=256gb$/);
+  const picker = page.getByTestId('pdv-variant-picker');
+  await expect(picker).toBeVisible();
+  const chips = picker.locator('button[data-variant]');
   // The draft 512GB is no choice to offer.
-  await expect(links.locator('[data-variant-slug]')).toHaveCount(2);
-  await expect(links).not.toContainText('512GB');
+  await expect(chips).toHaveCount(2);
+  await expect(picker).not.toContainText('512GB');
 
-  const other = links.locator('a[data-variant-slug="e2e-variant-phone-128gb"]');
+  const current = picker.locator('[data-variant="256gb"]');
+  await expect(current).toHaveAttribute('aria-pressed', 'true');
+  await expect(current).toContainText('256GB');
+
+  const other = picker.locator('button[data-variant="128gb"]');
   await expect(other).toContainText('128GB');
   await expect(other).toContainText('9.990.000');
-  await other.click();
-  await expect(page).toHaveURL(/\/smartphones\/e2e-variant-phone-128gb$/);
-  await expect(
-    page.getByTestId('pdv-variant-links').locator('[aria-current="page"]')
-  ).toHaveAttribute('data-variant-slug', 'e2e-variant-phone-128gb');
+  await expect(async () => {
+    await other.click();
+    await expect(other).toHaveAttribute('aria-pressed', 'true', {
+      timeout: 500,
+    });
+  }).toPass({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/smartphones\/e2e-variant-phone\?v=128gb$/);
 });
 
 test('a model with no other variant has no variant area and no quick specs', async ({
