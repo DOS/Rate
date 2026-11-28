@@ -48,27 +48,28 @@ function isHttpsUrl(value: unknown): value is string {
   }
 }
 
+/** The spec groups a seed fills (metadata keys and unset groups excluded). */
+function filledSpecGroups(seed: SeedProvenance): string[] {
+  return Object.entries(seed.specifications ?? {})
+    .filter(
+      ([key, value]) => !NON_GROUP_SPEC_KEYS.has(key) && value !== undefined && value !== null
+    )
+    .map(([key]) => key);
+}
+
 /** The filled spec groups of a seed that no https source covers (empty = fully sourced). */
 export function unsourcedSpecGroups(seed: SeedProvenance): string[] {
   const urlPaths = Object.entries(seed.sources ?? {})
     .filter(([, url]) => isHttpsUrl(url))
     .map(([path]) => path);
-  const groups = Object.entries(seed.specifications ?? {})
-    .filter(
-      ([key, value]) => !NON_GROUP_SPEC_KEYS.has(key) && value !== undefined && value !== null
-    )
-    .map(([key]) => key);
-  return groups.filter(
+  return filledSpecGroups(seed).filter(
     group => !urlPaths.some(path => path === group || path.startsWith(`${group}.`))
   );
 }
 
 /** True when the seed fills at least one spec group and every filled group has a source URL. */
 export function isFullySourcedSeed(seed: SeedProvenance): boolean {
-  const filled = Object.entries(seed.specifications ?? {}).some(
-    ([key, value]) => !NON_GROUP_SPEC_KEYS.has(key) && value !== undefined && value !== null
-  );
-  return filled && unsourcedSpecGroups(seed).length === 0;
+  return filledSpecGroups(seed).length > 0 && unsourcedSpecGroups(seed).length === 0;
 }
 
 /**
@@ -87,7 +88,11 @@ export function isSourcedSeedModelKey(
   return matches.length > 0 && matches.every(isFullySourcedSeed);
 }
 
-/** A listing as `rate.products` stores it; only the fields the predicate reads. */
+/**
+ * A listing as `rate.products` stores it; only the fields the predicate reads. The caller's
+ * SELECT must include `platform`, `price_current`, `currency`, `availability`, `origin` and
+ * `stock`: a missing `availability` counts as not in stock, so nothing would publish.
+ */
 export interface PublishListing {
   /** Retail platform, e.g. "fptshop", "hoanghamobile" or "shopee". */
   readonly platform?: string | null;
