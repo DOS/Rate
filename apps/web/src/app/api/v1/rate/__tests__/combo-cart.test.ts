@@ -1170,26 +1170,26 @@ async function main() {
     assert.equal(retiredBody.data.singleStoreBest, null);
     assert.equal(retiredBody.data.multiStoreOptimal, null);
 
-    // 5g. RATE_ITEM_MODEL off still resolves canonical master product slugs cleanly
+    // 5g. Unset RATE_ITEM_MODEL stays active and resolves both Item-backed variants and unlinked masters cleanly
     delete process.env.RATE_ITEM_MODEL;
-    const resFlagOff = await GET(
+    const resDefaultEnv = await GET(
       new NextRequest(
         'http://localhost/api/v1/rate/combo-cart?items=apple-iphone-16-128gb,apple-airpods-pro-2-usb-c',
         { headers: { 'x-forwarded-for': '203.0.113.56' } }
       )
     );
-    assert.equal(resFlagOff.status, 200);
-    const flagOffPayload = (await resFlagOff.json()) as {
+    assert.equal(resDefaultEnv.status, 200);
+    const defaultEnvPayload = (await resDefaultEnv.json()) as {
       ok: boolean;
       data: {
         missingSlugs: string[];
         items: Array<{ itemSlug: string | null; resolvedSlug: string | null }>;
       };
     };
-    assert.deepEqual(flagOffPayload.data.missingSlugs, []);
-    assert.equal(flagOffPayload.data.items[0]!.itemSlug, null);
+    assert.deepEqual(defaultEnvPayload.data.missingSlugs, []);
+    assert.equal(defaultEnvPayload.data.items[0]!.itemSlug, 'apple-iphone-16');
     assert.equal(
-      flagOffPayload.data.items[0]!.resolvedSlug,
+      defaultEnvPayload.data.items[0]!.resolvedSlug,
       'apple-iphone-16-128gb'
     );
     process.env.RATE_ITEM_MODEL = 'item';

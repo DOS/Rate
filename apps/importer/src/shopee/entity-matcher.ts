@@ -238,8 +238,7 @@ export class EntityMatcher {
   }
 
   /**
-   * Item-first matching (DOS/Rate#1151, design doc section 4.5). In mode `off` this is
-   * exactly `resolveOrCreateMasterProduct`. Otherwise:
+   * Item-first matching (DOS/Rate#1151, #1984, design doc section 4.5):
    * 1. Item by `itemIdHint`, then by exact `item_key`, then fuzzy on Item names
    *    (`match_item`). Item names carry no storage, so a bare title can no longer
    *    land on a sized variant (#1105).
@@ -254,15 +253,6 @@ export class EntityMatcher {
     rawTitle?: string,
     options: { itemIdHint?: string | null } = {}
   ): Promise<ItemMatchResult> {
-    if (this.itemModel === 'off') {
-      const { masterId, isNew } = await this.resolveOrCreateMasterProduct(
-        candidate,
-        categoryId,
-        rawTitle
-      );
-      return { itemId: null, masterId, isNew, variantSource: null };
-    }
-
     const input = this.sanitizeCandidateInput(candidate, categoryId, rawTitle);
     candidate = input.candidate;
     const { safeModelKey, safeCategoryId, safeRawTitle } = input;
@@ -748,7 +738,7 @@ export class EntityMatcher {
     candidate = inherited
       ? inheritItemProfile(candidate, inherited)
       : await this.enricher.enrichCandidate(candidate, safeRawTitle, {
-          perItem: this.itemModel !== 'off',
+          perItem: true,
         });
 
     // - Upsert on model_key (unique) so a concurrent crawler inserting the same

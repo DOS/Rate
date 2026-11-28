@@ -15,7 +15,7 @@ import {
 } from '@repo/shared-data';
 import { isItemKey, splitModelKey } from '@repo/shared-data';
 import { mergeProductSpecifications } from './ai-spec-enricher.js';
-import { resolveItemModelMode, type ItemModelMode } from './item-model-flag.js';
+import type { ItemModelMode } from './item-model-flag.js';
 import {
   mergeKeySpecs,
   withoutVariantKeySpecs,
@@ -858,10 +858,7 @@ export class ArenaSpecSyncer {
     pageSize?: number,
     options: { itemModel?: ItemModelMode } = {}
   ): Promise<ArenaCatalogAuditReport> {
-    const itemModel =
-      options && typeof options === 'object' && options.itemModel
-        ? options.itemModel
-        : resolveItemModelMode();
+    void options;
     const rows = await fetchAllPages(
       'Arena catalog audit: failed to read master_products',
       (from, to) =>
@@ -930,9 +927,8 @@ export class ArenaSpecSyncer {
     // With the Item model on, a flagship is present when its Item is: another size of
     // the same Item is not a missing release (design doc 4.1, DOS/Rate#1213).
     const existingItemKeys = new Set<string>();
-    let incompleteSpecItems: ArenaCatalogAuditReport['incompleteSpecItems'];
-    if (itemModel !== 'off') {
-      incompleteSpecItems = [];
+    const incompleteSpecItems: ArenaCatalogAuditReport['incompleteSpecItems'] = [];
+    {
       for (const key of existingKeys) {
         const itemKey = splitModelKey(key)?.itemKey;
         if (itemKey) existingItemKeys.add(itemKey);
@@ -1069,8 +1065,7 @@ const formatStorage = (gb: number): string =>
  * `updated_at`, so a row another writer changed (or archived) after the read is left
  * alone and counted in `conflicts`.
  * `key` is an `item_key` or a `model_key`. Items are never created (the M1 sync trigger
- * and the M2 backfill own that). Dry-run unless `apply`; with RATE_ITEM_MODEL off it
- * reads and writes nothing.
+ * and the M2 backfill own that). Dry-run unless `apply`; Item Model is always active.
  */
 export async function syncArenaSpecsToItem(
   supabase: RateSupabaseClient,
@@ -1090,7 +1085,6 @@ export async function syncArenaSpecsToItem(
     variantsUpdated: 0,
     conflicts: 0,
   };
-  if ((safeOptions.itemModel ?? resolveItemModelMode()) === 'off') return result;
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return result;
   const rawKey = typeof safeOptions.key === 'string' ? safeOptions.key.trim().toLowerCase() : '';
   const itemKey = isItemKey(rawKey) ? rawKey : (splitModelKey(rawKey)?.itemKey ?? null);

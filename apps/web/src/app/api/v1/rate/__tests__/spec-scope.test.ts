@@ -1324,25 +1324,25 @@ async function testSpecMatchesBodies() {
     ['Samsung']
   );
 
-  // GET /reviews documents optional `v` variant size slug under RATE_ITEM_MODEL (#1830).
+  // GET /reviews always documents optional `v` variant size slug across unset, 'off', 'item', and 'nullable_variant' (#1830, #1984).
   const prevItemModelFlag = process.env.RATE_ITEM_MODEL;
   try {
-    delete process.env.RATE_ITEM_MODEL;
-    const flagOffSpec = buildRateOpenApiSpec('https://rate.vn');
-    assert.equal(
-      flagOffSpec.paths['/api/v1/rate/reviews']!.get!.parameters!.some(
-        (p) => p.name === 'v'
-      ),
-      false,
-      'flag off does not advertise v on /reviews'
-    );
-    for (const mode of ['item', 'nullable_variant'] as const) {
-      process.env.RATE_ITEM_MODEL = mode;
+    for (const mode of [
+      undefined,
+      'off',
+      'item',
+      'nullable_variant',
+    ] as const) {
+      if (mode === undefined) delete process.env.RATE_ITEM_MODEL;
+      else process.env.RATE_ITEM_MODEL = mode;
       const flagOnSpec = buildRateOpenApiSpec('https://rate.vn');
       const reviewParams =
         flagOnSpec.paths['/api/v1/rate/reviews']!.get!.parameters!;
       const vParam = reviewParams.find((p) => p.name === 'v');
-      assert.ok(vParam, `/reviews documents v when RATE_ITEM_MODEL=${mode}`);
+      assert.ok(
+        vParam,
+        `/reviews documents v when RATE_ITEM_MODEL=${mode ?? 'unset'}`
+      );
       assert.equal(vParam.in, 'query');
       assert.notEqual(vParam.required, true);
       assert.equal(vParam.schema.type, 'string');

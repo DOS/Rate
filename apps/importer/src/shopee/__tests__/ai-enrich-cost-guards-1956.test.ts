@@ -282,9 +282,9 @@ async function enrichWith(row: Record<string, unknown>) {
     };
   };
   const state = { updates: 0 };
-  const ok = await new EntityMatcher(masterClient(row, state), enricher, {
-    itemModel: 'off',
-  }).enrichMasterProductById('m1');
+  const ok = await new EntityMatcher(masterClient(row, state), enricher).enrichMasterProductById(
+    'm1'
+  );
   return { ok, aiCalls, updates: state.updates };
 }
 

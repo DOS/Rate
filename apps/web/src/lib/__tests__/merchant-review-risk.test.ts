@@ -2594,7 +2594,7 @@ async function merchantAuditExportsItemLinksAndRscStrippingSuite() {
       itemSlugBySlug: null,
     }),
     '/smartphones/iphone-16-pro-max-256gb#jreviews-section',
-    'RATE_ITEM_MODEL off preserves variant URLs'
+    'null itemSlugBySlug fallback preserves variant URLs'
   );
   for (const unsafeSlug of [
     '__proto__',

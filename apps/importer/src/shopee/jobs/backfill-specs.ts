@@ -65,7 +65,7 @@ import {
 import { withoutRetractedSpecs } from '../spec-retraction.js';
 
 export { withoutRetractedSpecs };
-import { resolveItemModelMode, type ItemModelMode } from '../item-model-flag.js';
+import type { ItemModelMode } from '../item-model-flag.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
 
@@ -257,8 +257,7 @@ export async function syncItemSeedSpecs(
     itemModel?: ItemModelMode;
   } = {}
 ): Promise<{ updated: number; missing: string[] }> {
-  // Items exist only with the Item model on: with it off this writes nothing.
-  if ((options.itemModel ?? resolveItemModelMode()) === 'off') return { updated: 0, missing: [] };
+  void options.itemModel;
   const apply = options.apply === true;
   const missing: string[] = [];
   let updated = 0;

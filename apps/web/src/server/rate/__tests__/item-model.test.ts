@@ -15,6 +15,8 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.test';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
 
 const ITEM_ID = '11111111-1111-4111-8111-111111111153';
+const LEGACY_ITEM_ID = '11111111-1111-4111-8111-111111111154';
+const LEGACY_MASTER_ID = '22222222-2222-4222-8222-222222222999';
 const V128 = '22222222-2222-4222-8222-222222222128';
 const V256 = '22222222-2222-4222-8222-222222222256';
 const UNKNOWN_LISTING = '33333333-3333-4333-8333-333333333333';
@@ -111,6 +113,22 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
       )
         return json([itemRow]);
       if (q.includes(`id=eq.${ITEM_ID}`)) return json([itemRow]);
+      if (
+        q.includes('slug=eq.legacy-non-colon-phone') ||
+        q.includes(`id=eq.${LEGACY_ITEM_ID}`)
+      ) {
+        return json([
+          {
+            ...itemRow,
+            id: LEGACY_ITEM_ID,
+            item_key: 'legacy_non_colon_phone',
+            slug: 'legacy-non-colon-phone',
+            name: 'Legacy Non Colon Phone',
+            default_variant_id: LEGACY_MASTER_ID,
+            price_variant_count: 1,
+          },
+        ]);
+      }
       return json([]);
     case '/rest/v1/master_products':
       if (q.includes('slug=eq.apple-iphone-16-128gb'))
@@ -135,8 +153,22 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
             status: 'published',
           },
         ]);
+      // A published legacy non-colon master linked to a variant-less Item by M1+M2.
+      if (q.includes('slug=eq.legacy-non-colon-phone'))
+        return json([
+          {
+            ...variantRow(LEGACY_MASTER_ID, 256, null),
+            item_id: LEGACY_ITEM_ID,
+            slug: 'legacy-non-colon-phone',
+            variant_key: null,
+            variant_name: null,
+            storage_gb: null,
+            status: 'published',
+          },
+        ]);
       if (q.includes(`item_id=eq.${ITEM_ID}`))
         return json([variantRow(V256, 256, null), variantRow(V128, 128, null)]);
+      if (q.includes(`item_id=eq.${LEGACY_ITEM_ID}`)) return json([]);
       return json([]);
     case '/rest/v1/products':
       if (
@@ -174,32 +206,41 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
 async function main() {
   console.warn('🧪 Item web data layer suite (DOS/Rate#1153)');
   const flag = await import('../item-model');
-  const { planItemRoute, resolveWebItemModelMode, sanitizeVariantParam } = flag;
+  const {
+    isItemModelOn,
+    planItemRoute,
+    resolveWebItemModelMode,
+    sanitizeVariantParam,
+  } = flag;
 
-  // 1. The flag reads like the importer's: anything unknown is off.
-  assert.equal(resolveWebItemModelMode(undefined), 'off');
+  // 1. Always-on Item Model: unset/off/unknown resolve to 'item', only nullable_variant opts in.
+  assert.equal(resolveWebItemModelMode(undefined), 'item');
+  assert.equal(resolveWebItemModelMode(''), 'item');
+  assert.equal(resolveWebItemModelMode('off'), 'item');
   assert.equal(resolveWebItemModelMode('ITEM'), 'item');
   assert.equal(resolveWebItemModelMode('nullable-variant'), 'nullable_variant');
-  assert.equal(resolveWebItemModelMode('on'), 'off');
+  assert.equal(resolveWebItemModelMode('on'), 'item');
   assert.equal(sanitizeVariantParam(['256GB']), '256gb');
   assert.equal(sanitizeVariantParam('../x'), null);
 
-  // 2. Flag off: no Item read at all, and no extra cache tag.
+  // 2. Always-on when env is unset or 'off': isItemModelOn() is true and routes/tags work.
+  delete process.env.RATE_ITEM_MODEL;
+  assert.equal(isItemModelOn(), true);
+  process.env.RATE_ITEM_MODEL = 'off';
+  assert.equal(isItemModelOn(), true);
   delete process.env.RATE_ITEM_MODEL;
   const { resolveItemRoute } = await import('../item-route');
   const { resolveRevalidationTargets, productCacheTag } =
     await import('../cache-tags');
-  calls = [];
-  assert.equal(
+  assert.deepEqual(
     await resolveItemRoute({
       slug: 'apple-iphone-16-128gb',
       categoryBasePath: '/smartphones',
     }),
-    null
+    { kind: 'redirect', to: '/smartphones/apple-iphone-16?v=128gb' }
   );
-  assert.deepEqual(calls, [], 'flag off reads nothing');
   assert.ok(
-    !resolveRevalidationTargets({
+    resolveRevalidationTargets({
       slugs: ['apple-iphone-16-128gb'],
     }).tags.includes(productCacheTag('apple-iphone-16'))
   );
@@ -579,6 +620,19 @@ async function main() {
     }),
     null
   );
+  // A legacy non-colon master linked to a variant-less Item stays unlinked.
+  assert.deepEqual(await api.resolveCatalogSlug('legacy-non-colon-phone'), {
+    kind: 'unlinked',
+    item: null,
+    variant: null,
+  });
+  assert.equal(
+    await resolveItemRoute({
+      slug: 'legacy-non-colon-phone',
+      categoryBasePath: '/smartphones',
+    }),
+    null
+  );
   assert.ok(
     resolveRevalidationTargets({
       slugs: ['apple-iphone-16-128gb'],
@@ -611,7 +665,11 @@ async function main() {
   assert.equal((await sizeGet('samsung-galaxy-s24-256gb')).status, 404);
   delete process.env.RATE_ITEM_MODEL;
   sizeRes = await sizeGet('apple-iphone-16-128gb');
-  assert.equal(sizeRes.status, 404, 'flag off: the size route answers nothing');
+  assert.equal(
+    sizeRes.status,
+    200,
+    'with RATE_ITEM_MODEL unset, the size route stays active'
+  );
 
   // Product routes stay ISR whatever the flag: no request-time API (query
   // string, headers, cookies) and no dynamic opt-in. `?v=` is client-side.

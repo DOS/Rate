@@ -31,10 +31,12 @@ for (const name of [
 ]) {
   assert.equal(typeof crawlers[name], 'function', `@repo/crawlers is missing export ${name}`);
 }
-// Item model rollout flag (DOS/Rate#1151): Rate-Services reads the same env name.
+// Item model rollout flag (DOS/Rate#1151, #1984): Rate-Services reads the same env name.
 assert.equal(crawlers.ITEM_MODEL_ENV, 'RATE_ITEM_MODEL');
-assert.deepEqual([...crawlers.ITEM_MODEL_MODES], ['off', 'item', 'nullable_variant']);
-assert.equal(crawlers.resolveItemModelMode(undefined), 'off');
+assert.deepEqual([...crawlers.ITEM_MODEL_MODES], ['item', 'nullable_variant']);
+assert.equal(crawlers.resolveItemModelMode(undefined), 'item');
+assert.equal(crawlers.resolveItemModelMode('off'), 'item');
+assert.equal(crawlers.resolveItemModelMode('nullable_variant'), 'nullable_variant');
 assert.equal(typeof crawlers.EntityMatcher.prototype.resolveItemAndVariant, 'function');
 assert.equal(crawlers.UNKEYED_MODEL_SEGMENT, 'unkeyed');
 assert.equal(

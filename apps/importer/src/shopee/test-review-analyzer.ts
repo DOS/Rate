@@ -1473,6 +1473,13 @@ async function run() {
       }
       if (table === 'products') {
         return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            }),
+          }),
           upsert: () => ({
             select: () => ({
               single: async () => ({ data: { id: 'prod-356' }, error: null }),
@@ -2266,6 +2273,13 @@ async function run() {
       }
       if (table === 'products') {
         return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            }),
+          }),
           upsert: () => ({
             select: () => ({
               single: async () => ({ data: { id: 'prod-158' }, error: null }),

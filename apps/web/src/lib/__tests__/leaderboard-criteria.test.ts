@@ -3180,25 +3180,13 @@ test('a shared leaderboard link includes its irregular pinned master and bare pe
   assert.equal(query.get('variant.peer'), 'peer-retail');
 });
 
-test('a directory outage distinguishes an empty Item selection from no selection', async (t) => {
-  const previous = process.env.RATE_ITEM_MODEL;
-  t.after(() => {
-    if (previous === undefined) delete process.env.RATE_ITEM_MODEL;
-    else process.env.RATE_ITEM_MODEL = previous;
-  });
-  process.env.RATE_ITEM_MODEL = 'off';
+test('a directory outage distinguishes an empty Item selection from no selection', async () => {
   const slugs = ['acme-retail-1tb'];
   assert.deepEqual(await getItemSlugsFor(slugs, []), {});
   assert.equal(await getItemSlugsFor(slugs), null);
 });
 
-test('a later failed compare read preserves the selection that already resolved', async (t) => {
-  const previous = process.env.RATE_ITEM_MODEL;
-  t.after(() => {
-    if (previous === undefined) delete process.env.RATE_ITEM_MODEL;
-    else process.env.RATE_ITEM_MODEL = previous;
-  });
-  process.env.RATE_ITEM_MODEL = 'item';
+test('a later failed compare read preserves the selection that already resolved', async () => {
   const slugs = ['acme-256gb'];
   const selected = await whenItemModel('compare slugs', async () => slugs);
   const failed = await whenItemModel('compare slugs', async () => {
@@ -3207,7 +3195,6 @@ test('a later failed compare read preserves the selection that already resolved'
   assert.deepEqual(selected, slugs);
   assert.equal(failed, null);
   assert.equal(await getItemSlugsFor(slugs, failed), null);
-  process.env.RATE_ITEM_MODEL = 'off';
   assert.deepEqual(await getItemSlugsFor(slugs, selected), {});
 });
 

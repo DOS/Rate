@@ -107,7 +107,10 @@ function createMockSupabase(opts?: {
     };
 
     const builder: Record<string, unknown> = {
-      select() {
+      select(cols?: string) {
+        if (table === 'master_products' && cols === 'item_id') {
+          pendingResult = { data: [{ item_id: 'item-mock-1' }], error: null };
+        }
         return builder;
       },
       eq() {
@@ -1296,7 +1299,7 @@ describe('Ingestion pipeline, EntityMatcher, and upsertPlaceDetails Open-Core gu
     const { client: rejectClient, mutations: rejectMutations } = createMockSupabase();
     const rejectPipeline = new ShopeeIngestionPipeline({
       supabaseClient: rejectClient,
-      itemModel: 'off',
+      itemModel: 'item',
     });
 
     await assert.rejects(
@@ -1331,7 +1334,7 @@ describe('Ingestion pipeline, EntityMatcher, and upsertPlaceDetails Open-Core gu
     } = createMockSupabase();
     const placePipeline = new ShopeeIngestionPipeline({
       supabaseClient: placeClient,
-      itemModel: 'off',
+      itemModel: 'item',
     });
     const placeResult = await placePipeline.ingestProduct(
       createSampleProduct({
@@ -1368,7 +1371,7 @@ describe('Ingestion pipeline, EntityMatcher, and upsertPlaceDetails Open-Core gu
     } = createMockSupabase();
     const avakidsPipeline = new ShopeeIngestionPipeline({
       supabaseClient: avakidsClient,
-      itemModel: 'off',
+      itemModel: 'item',
     });
     const avakidsResult = await avakidsPipeline.ingestProduct(
       createSampleProduct({
@@ -1420,7 +1423,7 @@ describe('Ingestion pipeline, EntityMatcher, and upsertPlaceDetails Open-Core gu
     const { client, mutations } = createMockSupabase();
     const pipeline = new ShopeeIngestionPipeline({
       supabaseClient: client,
-      itemModel: 'off',
+      itemModel: 'item',
     });
     const result = await pipeline.ingestProduct(
       createSampleProduct({
@@ -1450,7 +1453,7 @@ describe('Ingestion pipeline, EntityMatcher, and upsertPlaceDetails Open-Core gu
 
   it('EntityMatcher seeds place entities for Wave E4 categories', async () => {
     const { client, mutations } = createMockSupabase();
-    const matcher = new EntityMatcher(client, undefined, { itemModel: 'off' });
+    const matcher = new EntityMatcher(client, undefined);
     const normalizer = new ProductNormalizer();
     const candidate = normalizer.normalize(
       createSampleProduct({
@@ -1699,7 +1702,7 @@ describe('DOS/Rate#1923 retail platforms, typed custom_fields, and Wave E3 brand
       const { client, mutations, rpcs } = createMockSupabase();
       const pipeline = new ShopeeIngestionPipeline({
         supabaseClient: client,
-        itemModel: 'off',
+        itemModel: 'item',
       });
       const res = await pipeline.ingestProduct(
         createSampleProduct({
@@ -1963,7 +1966,7 @@ describe('DOS/Rate#1923 retail platforms, typed custom_fields, and Wave E3 brand
     const { client, mutations } = createMockSupabase();
     const pipeline = new ShopeeIngestionPipeline({
       supabaseClient: client,
-      itemModel: 'off',
+      itemModel: 'item',
     });
     const ingestRes = await pipeline.ingestProduct(
       createSampleProduct({
@@ -2062,7 +2065,7 @@ describe('DOS/Rate#1923 retail platforms, typed custom_fields, and Wave E3 brand
       },
       key_specs: {},
     });
-    const enrichMatcher = new EntityMatcher(enrichMockClient, stubEnricher, { itemModel: 'off' });
+    const enrichMatcher = new EntityMatcher(enrichMockClient, stubEnricher);
     const updatedOk = await enrichMatcher.enrichMasterProductById('master-custom-1923');
     assert.equal(updatedOk, true);
     const updatedSpecs = (updatedPayload as { specifications?: Record<string, unknown> } | null)

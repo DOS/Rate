@@ -33,7 +33,7 @@ import {
   sanitizeHttpUrlList,
   type ItemMatchResult,
 } from './entity-matcher.js';
-import type { ItemModelMode } from './item-model-flag.js';
+import { resolveItemModelMode, type ItemModelMode } from './item-model-flag.js';
 import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
 import { AiReviewAnalyzer, type ReviewInputItem } from './ai-review-analyzer.js';
 import { createImporterLogger, errorDetail } from './logger.js';
@@ -405,8 +405,8 @@ export interface IngestOptions {
   masterIdHint?: string | null;
   /**
    * Item this listing is known to belong to, for a page that states no size
-   * (DOS/Rate#1151). Its variant still comes from the title. Ignored while
-   * `RATE_ITEM_MODEL` is `off`, and when `masterIdHint` resolves.
+   * (DOS/Rate#1151). Its variant still comes from the title. Ignored when
+   * `masterIdHint` resolves.
    */
   itemIdHint?: string | null;
   /**
@@ -636,7 +636,7 @@ export class ShopeeIngestionPipeline {
     merchantId: string;
     /** The listing's variant; null only in `RATE_ITEM_MODEL=nullable_variant` (no variant). */
     masterId: string | null;
-    /** The listing's Item; null while `RATE_ITEM_MODEL` is `off`. */
+    /** The listing's Item; null only if unlinked/missing. */
     itemId: string | null;
     platform: SupportedPlatform;
   }> {
@@ -776,23 +776,18 @@ export class ShopeeIngestionPipeline {
     // A caller that already verified the master (coverage discovery, or a refresh of
     // a listing that is already clustered) keeps the listing on it instead of
     // re-matching every crawl, which can split it onto a new draft master.
-    // A matcher with no mode (e.g. a test double) reads as the flag's default, off.
-    const itemModel: ItemModelMode = this.matcher.itemModel ?? 'off';
+    // A matcher with no mode (e.g. a test double) falls back to resolveItemModelMode().
+    const itemModel: ItemModelMode = this.matcher.itemModel ?? resolveItemModelMode();
     let hinted: ItemMatchResult | null = null;
     // undefined = leave the stored variant_source as it is.
     let hintedVariantSource: ItemMatchResult['variantSource'] | undefined;
-    // A hinted master left on a storage conflict: its stats follow the move.
+    // A hinted master left on a storage conflict: its stats follow the move if
+    // the stored listing row does not carry a different previous cluster.
     let ignoredHintMasterId: string | null = null;
     let safeItemIdHint =
       typeof options.itemIdHint === 'string'
         ? (sanitizeIngestionEntityId(options.itemIdHint, 128) ?? '')
         : '';
-    if (safeItemIdHint && itemModel === 'off') {
-      platLogger.warn('ingest.item_hint_ignored', 'itemIdHint ignored: RATE_ITEM_MODEL is off', {
-        itemIdHint: safeItemIdHint,
-      });
-      safeItemIdHint = '';
-    }
     const safeMasterIdHint =
       typeof options.masterIdHint === 'string'
         ? (sanitizeIngestionEntityId(options.masterIdHint, 128) ?? '')
@@ -800,11 +795,7 @@ export class ShopeeIngestionPipeline {
     if (safeMasterIdHint) {
       const { data: hintData, error: hintErr } = await this.supabase
         .from('master_products')
-        .select(
-          itemModel === 'off'
-            ? 'id, specifications, storage_gb'
-            : 'id, specifications, storage_gb, status, item_id, variant_key'
-        )
+        .select('id, specifications, storage_gb, status, item_id, variant_key')
         .eq('id', safeMasterIdHint)
         .maybeSingle();
       if (hintErr) {
@@ -852,8 +843,7 @@ export class ShopeeIngestionPipeline {
         hintStorageGb > 0 &&
         pageStorageGb !== hintStorageGb &&
         !titleNamesStorage(product.title, hintStorageGb);
-      const hintItemId =
-        itemModel === 'off' ? null : sanitizeIngestionEntityId(hintMeta?.item_id, 128);
+      const hintItemId = sanitizeIngestionEntityId(hintMeta?.item_id, 128);
       if (hintRow?.id && storageConflict) {
         platLogger.warn(
           'ingest.master_hint_storage_conflict',
@@ -867,7 +857,7 @@ export class ShopeeIngestionPipeline {
         ignoredHintMasterId = hintRow.id;
         // The hinted variant's Item still holds the listing's model.
         if (hintItemId && !safeItemIdHint) safeItemIdHint = hintItemId;
-      } else if (hintRow?.id && itemModel !== 'off' && hintMeta?.status === 'archived') {
+      } else if (hintRow?.id && hintMeta?.status === 'archived') {
         // A retired master (an Item's `unknown` variant after M3) must not take the
         // listing back: the hint maps to its Item, and the variant comes from the title.
         platLogger.info(
@@ -916,63 +906,56 @@ export class ShopeeIngestionPipeline {
     let previousItemId: string | null = null;
     // True when itemId comes from a kept variant: then it is written even when null.
     let itemIdFromKeptVariant = false;
-    // Off mode reads no stored listing; the master a conflicting hint named is
-    // where the listing sat before.
-    if (itemModel === 'off' && ignoredHintMasterId) previousClusterId = ignoredHintMasterId;
-    if (itemModel !== 'off') {
-      // A variant set by hand is evidence, never undone by a later page that just
-      // does not state the size (design doc 4.4): only listing evidence
-      // (variant_source set) may move it.
-      const { data: stored, error: storedErr } = await this.supabase
-        .from('products')
-        .select('cluster_id, variant_source, item_id')
-        .eq('platform', platform)
-        .eq('platform_item_id', product.itemId)
+    // A variant set by hand is evidence, never undone by a later page that just
+    // does not state the size (design doc 4.4): only listing evidence
+    // (variant_source set) may move it.
+    const { data: stored, error: storedErr } = await this.supabase
+      .from('products')
+      .select('cluster_id, variant_source, item_id')
+      .eq('platform', platform)
+      .eq('platform_item_id', product.itemId)
+      .maybeSingle();
+    if (storedErr) {
+      throw new Error(`Failed to read the stored listing variant: ${storedErr.message}`);
+    }
+    const storedClusterId = sanitizeIngestionEntityId(stored?.cluster_id, 128);
+    previousClusterId = storedClusterId ?? ignoredHintMasterId;
+    previousItemId = sanitizeIngestionEntityId(stored?.item_id, 128);
+    // A hand-set variant always stays. A variant backed by listing evidence stays
+    // when this crawl has none; a `legacy` or NULL-source link (e.g. a #1105
+    // fuzzy link) does not. A caller hint is not overridden.
+    const storedSource = stored?.variant_source;
+    const keepStored =
+      !hinted &&
+      (storedSource === 'manual' ||
+        (!resolved.variantSource &&
+          (storedSource === 'title' || storedSource === 'sku' || storedSource === 'single_size')));
+    if (storedClusterId && keepStored) {
+      masterId = storedClusterId;
+      variantSourceToWrite = undefined;
+      // The kept variant brings its own Item: the title may now resolve to another
+      // one (a repurposed listing), and a variant never sits under a foreign Item.
+      const { data: keptVariant, error: keptErr } = await this.supabase
+        .from('master_products')
+        .select('id, item_id')
+        .eq('id', storedClusterId)
         .maybeSingle();
-      if (storedErr) {
-        throw new Error(`Failed to read the stored listing variant: ${storedErr.message}`);
+      if (keptErr) {
+        throw new Error(`Failed to read the kept variant's Item: ${keptErr.message}`);
       }
-      const storedClusterId = sanitizeIngestionEntityId(stored?.cluster_id, 128);
-      previousClusterId = storedClusterId;
-      previousItemId = sanitizeIngestionEntityId(stored?.item_id, 128);
-      // A hand-set variant always stays. A variant backed by listing evidence stays
-      // when this crawl has none; a `legacy` or NULL-source link (e.g. a #1105
-      // fuzzy link) does not. A caller hint is not overridden.
-      const storedSource = stored?.variant_source;
-      const keepStored =
-        !hinted &&
-        (storedSource === 'manual' ||
-          (!resolved.variantSource &&
-            (storedSource === 'title' ||
-              storedSource === 'sku' ||
-              storedSource === 'single_size')));
-      if (storedClusterId && keepStored) {
-        masterId = storedClusterId;
-        variantSourceToWrite = undefined;
-        // The kept variant brings its own Item: the title may now resolve to another
-        // one (a repurposed listing), and a variant never sits under a foreign Item.
-        const { data: keptVariant, error: keptErr } = await this.supabase
-          .from('master_products')
-          .select('id, item_id')
-          .eq('id', storedClusterId)
-          .maybeSingle();
-        if (keptErr) {
-          throw new Error(`Failed to read the kept variant's Item: ${keptErr.message}`);
-        }
-        const keptItemId = sanitizeIngestionEntityId(
-          (keptVariant as { item_id?: unknown } | null)?.item_id,
-          128
+      const keptItemId = sanitizeIngestionEntityId(
+        (keptVariant as { item_id?: unknown } | null)?.item_id,
+        128
+      );
+      if (keptItemId !== itemId) {
+        platLogger.info(
+          'ingest.kept_variant_item',
+          `Kept variant ${storedClusterId} belongs to Item ${keptItemId ?? '(none)'}, not the title's ${itemId ?? '(none)'}`,
+          { masterId: storedClusterId, itemId: keptItemId, titleItemId: itemId }
         );
-        if (keptItemId !== itemId) {
-          platLogger.info(
-            'ingest.kept_variant_item',
-            `Kept variant ${storedClusterId} belongs to Item ${keptItemId ?? '(none)'}, not the title's ${itemId ?? '(none)'}`,
-            { masterId: storedClusterId, itemId: keptItemId, titleItemId: itemId }
-          );
-        }
-        itemId = keptItemId;
-        itemIdFromKeptVariant = true;
       }
+      itemId = keptItemId;
+      itemIdFromKeptVariant = true;
     }
     platLogger.info(
       'ingest.master_resolved',
@@ -981,13 +964,10 @@ export class ShopeeIngestionPipeline {
     );
     await report?.('master');
 
-    // Item columns exist only once the DOS-Me Item migration is applied (DOS/Rate#1150).
     const itemColumns: { item_id?: string | null; variant_source?: string | null } = {};
-    if (itemModel !== 'off') {
-      // A kept variant with no Item clears a stale item_id rather than leave it.
-      if (itemId || itemIdFromKeptVariant) itemColumns.item_id = itemId;
-      if (variantSourceToWrite !== undefined) itemColumns.variant_source = variantSourceToWrite;
-    }
+    // A kept variant with no Item clears a stale item_id rather than leave it.
+    if (itemId || itemIdFromKeptVariant) itemColumns.item_id = itemId;
+    if (variantSourceToWrite !== undefined) itemColumns.variant_source = variantSourceToWrite;
 
     // 3. Upsert product listing into rate.products (linked via cluster_id)
     const { data: savedProduct, error: productErr } = await this.supabase
@@ -1060,12 +1040,9 @@ export class ShopeeIngestionPipeline {
     }
     // Then the Item roll-up (DOS-Me M2 `refresh_item_stats`, design doc 4.1), for the
     // Item the listing just left too.
-    const statsItemIds =
-      itemModel === 'off'
-        ? []
-        : [itemId, previousItemId].filter(
-            (id, i, all): id is string => Boolean(id) && all.indexOf(id) === i
-          );
+    const statsItemIds = [itemId, previousItemId].filter(
+      (id, i, all): id is string => Boolean(id) && all.indexOf(id) === i
+    );
     for (const statsItemId of typeof this.supabase.rpc === 'function' ? statsItemIds : []) {
       const { error: itemStatsErr } = await this.supabase.rpc('refresh_item_stats', {
         p_item_id: statsItemId,
