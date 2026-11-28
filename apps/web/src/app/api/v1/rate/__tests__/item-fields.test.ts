@@ -266,97 +266,63 @@ const setFlag = (value: string | undefined) => {
   else process.env.RATE_ITEM_MODEL = value;
 };
 
-async function testFlagOffUnchanged() {
+async function testAlwaysOnAndSchemaFallback() {
   setFlag(undefined);
-  const off = await detail('apple-iphone-16-128gb');
-  assert.equal(off.status, 200);
-  assert.ok(!calls.some((c) => c.startsWith('/rest/v1/items')));
-  const body = JSON.parse(off.text);
+  // Item model is always on by default even with RATE_ITEM_MODEL unset, and
+  // falls back to legacy variant responses when M1+M2 Item tables are absent.
+  schemaMissing = true;
+  const fallback = await detail('apple-iphone-16-128gb');
+  assert.equal(fallback.status, 200);
+  const fallbackBody = JSON.parse(fallback.text);
   for (const key of [
     'item',
     'variants',
     'selected_variant',
     'unknown_variant_offers',
   ]) {
-    assert.ok(!(key in body.data), `flag off adds no ${key}`);
+    assert.ok(!(key in fallbackBody.data), `missing schema adds no ${key}`);
   }
-  // An Item slug is no product while the flag is off.
-  assert.equal((await detail('apple-iphone-16')).status, 404);
+  assert.equal((await detail('apple-iphone-17')).status, 404);
 
-  // Flag on but M1+M2 missing: the same bytes as flag off.
-  setFlag('item');
-  schemaMissing = true;
-  const missing = await detail('apple-iphone-16-128gb');
-  assert.equal(missing.text, off.text);
-  // `group=item` with a spec filter: the variant list as before, not a 400.
-  setFlag(undefined);
+  // `group=item` with a spec filter when Item tables are missing: the variant list as before, not a 400.
   catalog = [M128];
-  const offFiltered = await list('category=all&group=item&ram=8');
+  const fallbackFiltered = await list('category=all&group=item&ram=8');
+  assert.equal(fallbackFiltered.status, 200);
   setFlag('item');
-  const missingFiltered = await list('category=all&group=item&ram=8');
-  assert.equal(missingFiltered.status, 200);
-  assert.equal(missingFiltered.text, offFiltered.text);
-  // Also for a category with no row: the tables are checked before an empty list.
+  assert.equal(
+    (await list('category=all&group=item&ram=8')).text,
+    fallbackFiltered.text
+  );
   setFlag(undefined);
-  const offCategory = await list('category=smartphones&group=item&ram=8');
+  const fallbackCategory = await list('category=smartphones&group=item&ram=8');
   setFlag('item');
   assert.equal(
     (await list('category=smartphones&group=item&ram=8')).text,
-    offCategory.text
+    fallbackCategory.text
   );
   catalog = [];
   schemaMissing = false;
-  // Only the unknown-variant offers read fails: the whole response is as before.
+
+  // Only the unknown-variant offers read fails: the detail response falls back cleanly.
   offersSchemaMissing = true;
-  assert.equal((await detail('apple-iphone-16-128gb')).text, off.text);
+  assert.equal((await detail('apple-iphone-16-128gb')).text, fallback.text);
   offersSchemaMissing = false;
 
-  // `group=item` with the flag off answers the variant list, byte for byte.
-  setFlag(undefined);
-  catalog = [M128, M256];
-  const plain = await list('category=all');
-  const grouped = await list('category=all&group=item');
-  assert.equal(grouped.text, plain.text);
-
-  const { lookupExtensionProduct } = await import('@/server/rate/extension');
-  calls = [];
-  const lookup = await lookupExtensionProduct({
-    title: 'Apple iPhone 16',
-    mode: 'pill',
-  });
-  assert.ok(!('item' in lookup) && !('selectedVariant' in lookup));
-  // Today's lookup: siblings from the search hits, the first hit's page.
-  assert.equal(lookup.productDetailUrl, '/smartphones/apple-iphone-16-128gb');
-  assert.equal(lookup.matchStatus, 'ambiguous_variant');
-  assert.deepEqual(
-    lookup.variantCandidates.map((v) => [v.storageGb, v.slug]),
-    [
-      [128, 'apple-iphone-16-128gb'],
-      [256, 'apple-iphone-16-256gb'],
-    ]
-  );
-
-  // The OpenAPI document is unchanged with the flag off.
+  // OpenAPI always includes RateItem and group=item even when RATE_ITEM_MODEL is unset or 'off'.
   const { buildRateOpenApiSpec } = await import('@/server/rate/openapi');
-  const offSpec = JSON.stringify(buildRateOpenApiSpec('https://rate.vn'));
-  assert.ok(!offSpec.includes('RateItem'));
-  setFlag('item');
-  const onSpec = buildRateOpenApiSpec('https://rate.vn');
-  assert.ok(onSpec.components.schemas.RateItem);
-  assert.ok(
-    onSpec.paths['/api/v1/rate/products']!.get!.parameters!.some(
-      (p) => p.name === 'group'
-    )
-  );
+  for (const mode of [undefined, 'off', 'item'] as const) {
+    setFlag(mode);
+    const spec = buildRateOpenApiSpec('https://rate.vn');
+    assert.ok(spec.components.schemas.RateItem);
+    assert.ok(
+      spec.paths['/api/v1/rate/products']!.get!.parameters!.some(
+        (p) => p.name === 'group'
+      )
+    );
+  }
   setFlag(undefined);
-  assert.equal(
-    JSON.stringify(buildRateOpenApiSpec('https://rate.vn')),
-    offSpec
-  );
-  assert.ok(!calls.some((c) => c.startsWith('/rest/v1/items')));
-  catalog = [];
   console.warn(
-    '  ✅ Flag off (and flag on without M1+M2): responses unchanged'
+    '  ✅ Always-on default & M1+M2 missing-schema fallback verified'
   );
 }
 
@@ -548,30 +514,17 @@ async function testReviewsAndItemSizeRoutes() {
 
   itemReviewsEnabled = true;
   try {
-    // 1. Flag off: canonical Item slug returns 404 without querying items; variant slug returns 200.
+    // 1. Always-on with env unset: canonical Item slug resolves to default variant (256GB),
+    // and Item tables missing falls back to master product lookup.
     setFlag(undefined);
-    calls = [];
     let res = await reviewsRoute.GET(
       new NextRequest(
         'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16'
       )
     );
-    assert.equal(res.status, 404);
-    assert.equal((await res.json()).code, 'NOT_FOUND');
-    assert.ok(!calls.some((c) => c.startsWith('/rest/v1/items')));
-
-    res = await reviewsRoute.GET(
-      new NextRequest(
-        'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16-128gb'
-      )
-    );
     assert.equal(res.status, 200);
-    let body = await res.json();
-    assert.equal(body.masterProductId, V128);
-    assert.equal(body.data[0]?.id, 'rev-item-128');
+    assert.equal((await res.json()).masterProductId, V256);
 
-    // 2. Flag on, Item tables missing: falls back to master product lookup.
-    setFlag('item');
     schemaMissing = true;
     res = await reviewsRoute.GET(
       new NextRequest(
@@ -582,14 +535,14 @@ async function testReviewsAndItemSizeRoutes() {
     assert.equal((await res.json()).masterProductId, V128);
     schemaMissing = false;
 
-    // 3. Flag on: canonical Item slug resolves to default variant (256GB), ?v= selects variant, case-insensitive.
+    // 2. Canonical Item slug resolves to default variant (256GB), ?v= selects variant, case-insensitive.
     res = await reviewsRoute.GET(
       new NextRequest(
         'http://localhost/api/v1/rate/reviews?slug=apple-iphone-16'
       )
     );
     assert.equal(res.status, 200);
-    body = await res.json();
+    let body = await res.json();
     assert.equal(body.ok, true);
     assert.equal(body.masterProductId, V256);
     assert.equal(body.count, 1);
@@ -666,14 +619,17 @@ async function testReviewsAndItemSizeRoutes() {
     );
 
     setFlag(undefined);
-    const sizeOffRes = await itemSizeRoute.GET(
+    const sizeDefaultRes = await itemSizeRoute.GET(
       new Request(
         'http://localhost/api/v1/rate/item-size/apple-iphone-16-128gb'
       ),
       { params: Promise.resolve({ slug: 'apple-iphone-16-128gb' }) }
     );
-    assert.equal(sizeOffRes.status, 404);
-    assert.equal(sizeOffRes.headers.get('access-control-allow-origin'), '*');
+    assert.equal(sizeDefaultRes.status, 200);
+    assert.equal(
+      sizeDefaultRes.headers.get('access-control-allow-origin'),
+      '*'
+    );
   } finally {
     itemReviewsEnabled = false;
     schemaMissing = false;
@@ -686,7 +642,7 @@ async function testReviewsAndItemSizeRoutes() {
 
 async function main() {
   console.warn('🧪 API v1 Item fields suite (DOS/Rate#1158)');
-  await testFlagOffUnchanged();
+  await testAlwaysOnAndSchemaFallback();
   await testDetailItemFields();
   await testGroupItem();
   await testExtensionLookup();

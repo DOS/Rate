@@ -326,7 +326,7 @@ const WATCHLIST_MASTERS = [
   }),
 ];
 
-let calls: string[] = [];
+const calls: string[] = [];
 let schemaMissing = false;
 let itemsDown = false;
 let watchlistRouteTest = false;
@@ -426,9 +426,15 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         return json([]);
       }
       if (q.includes('select=id,slug')) {
-        return json([{ id: ITEM, slug: 'apple-iphone-16' }]);
+        return json([
+          { id: ITEM, slug: 'apple-iphone-16' },
+          { id: OVERLONG_SLUG_ITEM, slug: 'legacy-non-colon-phone' },
+        ]);
       }
       if (q.includes('select=id&')) return json([{ id: ITEM }]);
+      if (q.includes(OVERLONG_SLUG_ITEM)) {
+        return json([itemRow, overlongSlugItemRow]);
+      }
       return json([itemRow]);
     case '/rest/v1/master_products':
       if (watchlistRouteTest) {
@@ -465,14 +471,28 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
           { id: V128, item_id: ITEM },
           { id: V256, item_id: ITEM },
           { id: LONE, item_id: null },
+          { id: OVERLONG_V128, item_id: OVERLONG_SLUG_ITEM },
         ]);
       }
       if (q.includes('select=slug,item_id')) {
         return json([
-          { slug: 'apple-iphone-16-128gb', item_id: ITEM },
-          { slug: 'apple-iphone-16-256gb', item_id: ITEM },
-          { slug: 'samsung-galaxy-s24', item_id: null },
-          { slug: 'pixel-10', item_id: DRAFT_ITEM },
+          {
+            slug: 'apple-iphone-16-128gb',
+            item_id: ITEM,
+            variant_key: '128gb',
+          },
+          {
+            slug: 'apple-iphone-16-256gb',
+            item_id: ITEM,
+            variant_key: '256gb',
+          },
+          { slug: 'samsung-galaxy-s24', item_id: null, variant_key: '128gb' },
+          { slug: 'pixel-10', item_id: DRAFT_ITEM, variant_key: '128gb' },
+          {
+            slug: 'legacy-non-colon-phone',
+            item_id: OVERLONG_SLUG_ITEM,
+            variant_key: null,
+          },
         ]);
       }
       if (q.includes('select=id,brand,item_id')) {
@@ -515,23 +535,8 @@ async function main() {
     row(V128, 'apple-iphone-16-128gb', 21990000),
   ];
 
-  // Flag off: rows as they were, no page, and nothing reads the Item tables.
+  // Always-on default (env unset): one row per Item, pages cut after grouping.
   delete process.env.RATE_ITEM_MODEL;
-  calls = [];
-  assert.equal(await dir.groupCatalogRowsByItem(rows), rows);
-  assert.equal(
-    await dir.getItemCatalogPage(async () => rows, 0, 10),
-    null,
-    'flag off: the caller reads its variants as before'
-  );
-  assert.equal(await dir.getItemBrandFacets(CATEGORY, 'smartphones'), null);
-  assert.equal(await dir.getItemCount(), null);
-  assert.equal(await dir.getItemSlugByVariantSlug(), null);
-  assert.equal(await dir.getItemSlugsFor(['apple-iphone-16-128gb']), null);
-  assert.deepEqual(calls, [], 'flag off: no database read');
-
-  // Flag on: one row per Item, pages cut after grouping.
-  process.env.RATE_ITEM_MODEL = 'item';
   const grouped = await dir.groupCatalogRowsByItem(rows);
   assert.deepEqual(
     grouped.map((r) => [r.id, r.item_slug ?? null]),
@@ -605,6 +610,17 @@ async function main() {
   assert.equal(slugs.get('apple-iphone-16-256gb'), 'apple-iphone-16');
   assert.equal(slugs.has('samsung-galaxy-s24'), false);
   assert.equal(slugs.has('pixel-10'), false, 'draft Items are not listed');
+  assert.equal(
+    slugs.has('legacy-non-colon-phone'),
+    false,
+    'variantless legacy masters stay unmapped'
+  );
+  const legacyLinks = await api.getItemLinksForMasters([OVERLONG_V128]);
+  assert.equal(
+    legacyLinks.has(OVERLONG_V128),
+    false,
+    'variantless legacy masters are absent from getItemLinksForMasters'
+  );
 
   // Flag on, Item tables missing (M1+M2 not applied): variants as before.
   schemaMissing = true;
@@ -643,14 +659,9 @@ async function main() {
   itemsDown = false;
   delete process.env.RATE_ITEM_MODEL;
 
-  // Compare, versus and watchlist per Item (DOS/Rate#1156).
+  // Compare, versus and watchlist per Item (DOS/Rate#1156, always-on #1984).
   const cmp = await import('../item-compare');
-  calls = [];
-  assert.equal(await cmp.resolveCompareSlugs(['apple-iphone-16']), null);
-  assert.equal(await cmp.resolveVersusPlan('a', 'b'), null);
-  assert.equal(await cmp.resolveWatchlistSlug('apple-iphone-16'), null);
-  assert.deepEqual(calls, [], 'flag off: no database read');
-  process.env.RATE_ITEM_MODEL = 'item';
+  delete process.env.RATE_ITEM_MODEL;
   assert.deepEqual(
     await cmp.resolveCompareSlugs(['apple-iphone-16@128gb']),
     ['apple-iphone-16-128gb'],
@@ -693,46 +704,18 @@ async function main() {
     await import('../../../app/[locale]/watchlist/page');
   watchlistRouteTest = true;
   try {
-    // 1. Flag off: no Item read; variant and unlinked slugs emit their own master href.
-    delete process.env.RATE_ITEM_MODEL;
-    calls = [];
-    const offWatchRes = await watchlistRoute.GET(
-      new NextRequest(
-        'http://localhost/api/v1/rate/watchlist?slugs=apple-iphone-16,apple-iphone-16-256gb,apple-macbook-air-m4-256gb,apple-macbook-air-m4-unknown,samsung-galaxy-s24'
-      )
-    );
-    assert.equal(offWatchRes.status, 200);
-    assert.ok(
-      !calls.some((c) => c.startsWith('/rest/v1/items')),
-      'flag off watchlist GET must not query rate.items'
-    );
-    const offWatchBody = await offWatchRes.json();
-    assert.equal(offWatchBody.ok, true);
-    assert.equal(offWatchBody.count, 3);
-    assert.equal('apple-iphone-16' in offWatchBody.items, false);
-    assert.equal(
-      'apple-macbook-air-m4-unknown' in offWatchBody.items,
-      false,
-      'archived/retired variant is omitted when Item model is off'
-    );
-    assert.equal(
-      offWatchBody.items['apple-iphone-16-256gb']?.product_href,
-      '/smartphones/apple-iphone-16-256gb'
-    );
-    assert.equal(
-      offWatchBody.items['apple-macbook-air-m4-256gb']?.product_href,
-      '/laptops/apple-macbook-air-m4-256gb'
-    );
-    assert.equal(
-      offWatchBody.items['samsung-galaxy-s24']?.product_href,
-      '/smartphones/samsung-galaxy-s24'
-    );
-
-    // 2. Flag on (`item` and `nullable_variant`): resolveWatchlistSlug exposes itemSlug &
-    // itemCategoryId, and GET /api/v1/rate/watchlist emits canonical `/<category>/<item-slug>`
+    // 1. Always-on across unset, 'off', 'item', and 'nullable_variant':
+    // resolveWatchlistSlug exposes itemSlug & itemCategoryId, and
+    // GET /api/v1/rate/watchlist emits canonical `/<category>/<item-slug>`
     // in the Item's own category (#1281, #1829) with no `?v=`.
-    for (const mode of ['item', 'nullable_variant'] as const) {
-      process.env.RATE_ITEM_MODEL = mode;
+    for (const mode of [
+      undefined,
+      'off',
+      'item',
+      'nullable_variant',
+    ] as const) {
+      if (mode === undefined) delete process.env.RATE_ITEM_MODEL;
+      else process.env.RATE_ITEM_MODEL = mode;
 
       assert.deepEqual(
         await cmp.resolveWatchlistSlug('apple-macbook-air-m4-256gb'),

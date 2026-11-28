@@ -252,7 +252,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       return json(ITEM_ROWS);
 
     case '/rest/v1/master_products':
-      if (query.includes('select=id,item_id')) {
+      if (query.includes('select=id,item_id&')) {
         itemTableReads += 1;
         return json([
           { id: V_IPHONE_512, item_id: ITEM_IPHONE },
@@ -313,30 +313,22 @@ async function main() {
     resolveRevalidationTargets,
   } = await import('../../server/rate');
 
-  // 1. Flag off: no Item reads, raw variants preserved on both / and /deals.
-  delete process.env.RATE_ITEM_MODEL;
-  itemTableReads = 0;
-  const flagOffHome = await resolveHomeGroupedCatalog(CATALOG_ROWS);
-  assert.equal(flagOffHome.gridProducts, CATALOG_ROWS);
-  assert.equal(itemTableReads, 0, 'flag off must not read Item tables');
-  assert.equal(
-    flagOffHome.popularHomeBattles[0]?.versusSlug,
-    'apple-iphone-16-pro-max-256gb-vs-apple-iphone-16-pro-max-512gb',
-    'flag off pairs raw variant rows as legacy control baseline'
-  );
+  // 1. Always-on Item grouping across unset, 'off', 'item', and 'nullable_variant':
+  // homepage 1v1 battles group by Item BEFORE pairing, never pair two storage
+  // variants of the same Item, and emit canonical Item slugs instead of variant slugs.
+  for (const mode of [undefined, 'off', 'item', 'nullable_variant'] as const) {
+    if (mode === undefined) delete process.env.RATE_ITEM_MODEL;
+    else process.env.RATE_ITEM_MODEL = mode;
 
-  const flagOffDeals = await loadDealsCatalogProducts(async () => CATALOG_ROWS);
-  assert.equal(flagOffDeals, CATALOG_ROWS);
-  assert.equal(itemTableReads, 0, 'flag off /deals must not read Item tables');
-
-  // 2. RATE_ITEM_MODEL active ('item' and 'nullable_variant'): homepage 1v1
-  // battles group by Item BEFORE pairing, never pair two storage variants of
-  // the same Item, and emit canonical Item slugs instead of variant slugs.
-  for (const mode of ['item', 'nullable_variant'] as const) {
-    process.env.RATE_ITEM_MODEL = mode;
-
+    const readsBefore = itemTableReads;
     const { gridProducts, popularHomeBattles } =
       await resolveHomeGroupedCatalog(CATALOG_ROWS);
+    if (mode === undefined) {
+      assert.ok(
+        itemTableReads > readsBefore,
+        'unset mode still reads Item tables'
+      );
+    }
 
     assert.equal(
       gridProducts.length,
@@ -494,12 +486,13 @@ async function main() {
     'two slugs ending in -vs have no parseable versus URL in either order and must be skipped'
   );
 
-  // 3. /deals applies groupCatalogRowsByItem consistently with category pages
-  // under RATE_ITEM_MODEL ('item' and 'nullable_variant'), collapsing storage
+  // 2. /deals applies groupCatalogRowsByItem consistently with category pages
+  // across unset, 'item', and 'nullable_variant', collapsing storage
   // variants while preserving per-variant cross-platform spreadSavingsVnd,
   // Radar badges, and canonical Item links.
-  for (const mode of ['item', 'nullable_variant'] as const) {
-    process.env.RATE_ITEM_MODEL = mode;
+  for (const mode of [undefined, 'item', 'nullable_variant'] as const) {
+    if (mode === undefined) delete process.env.RATE_ITEM_MODEL;
+    else process.env.RATE_ITEM_MODEL = mode;
     rpcCalls = [];
     const dealsProducts = await loadDealsCatalogProducts();
     assert.equal(rpcCalls.length, 1);

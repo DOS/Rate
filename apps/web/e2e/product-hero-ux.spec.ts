@@ -76,14 +76,15 @@ test('hero removes duplicate CTAs, aligns seller counts, collapses empty boxes, 
   await expect(standingLabel.locator('svg')).toHaveCount(0);
 });
 
-test('multi-variant product surfaces variant links inside pdv-variant-strip', async ({
+test('multi-variant product surfaces variant picker inside pdv-variant-strip', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   expect((await page.goto(VARIANT_PHONE))?.status()).toBe(200);
+  await expect(page).toHaveURL(/\/smartphones\/e2e-variant-phone\?v=256gb$/);
   const strip = page.getByTestId('pdv-variant-strip');
   await expect(strip).toBeVisible();
-  await expect(strip.getByTestId('pdv-variant-links')).toBeVisible();
+  await expect(strip.getByTestId('pdv-variant-picker')).toBeVisible();
 });
 
 for (const viewport of [

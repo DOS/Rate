@@ -35,6 +35,18 @@ function fakeClient(rows: ArenaAuditMasterRow[], maxRows: number, failAtOffset?:
   const calls: Array<[number, number]> = [];
   const client = {
     from: (table: string) => {
+      if (table === 'items') {
+        return {
+          select: (columns: string) => {
+            assert.equal(columns, 'id, name, slug, item_key, specifications');
+            return {
+              order: () => ({
+                range: () => Promise.resolve({ data: [], error: null }),
+              }),
+            };
+          },
+        };
+      }
       assert.equal(table, 'master_products');
       return {
         select: (columns: string) => {

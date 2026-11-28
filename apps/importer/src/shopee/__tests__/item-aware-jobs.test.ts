@@ -247,19 +247,16 @@ async function run() {
         return undefined;
       });
 
-    // Flag off (explicit and from the env): nothing is read or written.
-    const off = catalogDb();
-    const offRun = await syncArenaSpecsToItem(off.client, spec, {
-      key: 'xiaomi:18-pro-max:512gb',
-      apply: true,
-      itemModel: 'off',
-    });
-    assert.equal(offRun.status, 'skipped');
-    const envOff = await withFlag(undefined, () =>
-      syncArenaSpecsToItem(off.client, spec, { key: 'xiaomi:18-pro-max', apply: true })
+    // Unset env defaults to always-on 'item' mode and syncs Items/variants.
+    const defaultClient = catalogDb();
+    const defaultRun = await withFlag(undefined, () =>
+      syncArenaSpecsToItem(defaultClient.client, spec, { key: 'xiaomi:18-pro-max', apply: true })
     );
-    assert.equal(envOff.status, 'skipped');
-    assert.equal(off.calls.length, 0, 'flag off: no Item or variant read or write');
+    assert.equal(defaultRun.status, 'synced');
+    assert.ok(
+      defaultClient.calls.some(c => c.table === 'items'),
+      'default mode reads rate.items'
+    );
 
     // A key that is neither an item_key nor a model_key reads nothing.
     const badKey = catalogDb();
@@ -433,12 +430,14 @@ async function run() {
     };
     const syncer = new ArenaSpecSyncer();
 
-    const offReport = await withFlag(undefined, () =>
+    const defaultReport = await withFlag(undefined, () =>
       syncer.auditCatalogAgainstArenaRegistry(auditClient as never)
     );
-    assert.ok(!tables.includes('items'), 'flag off: rate.items is never read');
-    assert.equal(offReport.presentInDatabase, 1, 'flag off: only the exact model_key counts');
-    assert.equal(offReport.incompleteSpecItems, undefined, 'flag off: report shape unchanged');
+    assert.ok(tables.includes('items'), 'default mode always reads rate.items');
+    assert.equal(defaultReport.presentInDatabase, 3, 'another size or an Item row means present');
+    assert.deepEqual(defaultReport.incompleteSpecItems, [
+      { id: 'i-9', name: 'Thin', item_key: 'acme:thin', populatedGroups: 1 },
+    ]);
 
     tables.length = 0;
     const onReport = await syncer.auditCatalogAgainstArenaRegistry(auditClient as never, 1000, {

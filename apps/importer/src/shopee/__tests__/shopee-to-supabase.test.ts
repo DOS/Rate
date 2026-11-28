@@ -148,13 +148,65 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
         };
       }
 
+      if (table === 'items') {
+        return {
+          select(_cols: string) {
+            return {
+              eq(_col: string, val: string) {
+                return {
+                  maybeSingle() {
+                    return Promise.resolve({
+                      data:
+                        opts.exactMasterRow === null ? null : { id: 'item-exact-1', item_key: val },
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          },
+        };
+      }
+
       if (table === 'master_products') {
         return {
           select(cols: string) {
             return {
               eq(col: string, val: string) {
+                if (col === 'item_id') {
+                  return {
+                    limit(_n: number) {
+                      return Promise.resolve({
+                        data: [
+                          {
+                            id: opts.exactMasterRow?.id ?? 'master-exact-1',
+                            variant_key: '256gb',
+                            status: 'published',
+                          },
+                          {
+                            id: opts.exactMasterRow?.id ?? 'master-exact-1',
+                            variant_key: '1024gb',
+                            status: 'published',
+                          },
+                          {
+                            id: opts.exactMasterRow?.id ?? 'master-exact-1',
+                            variant_key: 'unknown',
+                            status: 'published',
+                          },
+                        ],
+                        error: null,
+                      });
+                    },
+                  };
+                }
                 return {
                   maybeSingle() {
+                    if (col === 'id' && cols === 'item_id') {
+                      return Promise.resolve({
+                        data: { item_id: 'item-exact-1' },
+                        error: null,
+                      });
+                    }
                     if (col === 'id' && (cols === 'id' || cols.startsWith('id, specifications'))) {
                       return Promise.resolve({
                         data: opts.hintRow ?? null,
@@ -195,6 +247,21 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
 
       if (table === 'products') {
         return {
+          select(_cols: string) {
+            return {
+              eq(_col: string, _val: string) {
+                return {
+                  eq(_col2: string, _val2: string) {
+                    return {
+                      maybeSingle() {
+                        return Promise.resolve({ data: null, error: null });
+                      },
+                    };
+                  },
+                };
+              },
+            };
+          },
           upsert(payload: Record<string, unknown>, _options?: unknown) {
             events.productUpserts.push(payload);
             return {
@@ -424,8 +491,15 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
         }
         return { data: 'inserted', error: null };
       }
-      if (fn === 'refresh_master_review_stats' || fn === 'refresh_merchant_risk_score') {
+      if (
+        fn === 'refresh_master_review_stats' ||
+        fn === 'refresh_merchant_risk_score' ||
+        fn === 'refresh_item_stats'
+      ) {
         return { data: null, error: null };
+      }
+      if (fn === 'match_item') {
+        return { data: [], error: null };
       }
       throw new Error(`Unexpected RPC in stub: ${fn}`);
     },

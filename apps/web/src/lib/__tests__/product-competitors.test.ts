@@ -820,31 +820,16 @@ async function main() {
       'pair unparseable in both orders returns null'
     );
 
-    // 6. Flag off: peers stay ungrouped, map is null, 1v1 links use variant slugs.
-    delete process.env.RATE_ITEM_MODEL;
-    const groupedOff = await groupCatalogRowsByItem(storedCategoryPeers);
-    assert.equal(groupedOff, storedCategoryPeers);
-    const statusOff =
-      await groupCatalogRowsByItemWithStatus(storedCategoryPeers);
-    assert.equal(statusOff.rows, storedCategoryPeers);
-    assert.equal(statusOff.itemModelActive, false);
-    assert.equal(statusOff.degraded, false);
-    assert.equal(
-      buildPeerItemSlugMap(
-        { slug: currentProduct.slug, itemSlug: null },
-        groupedOff
-      ),
-      null
-    );
-    assert.equal(
-      resolvePeerVersusHref(
-        currentProduct.slug,
-        'samsung-galaxy-s25-ultra-256gb',
-        null,
-        { degraded: statusOff.degraded }
-      ),
-      '/compare/apple-iphone-16-pro-256gb-vs-samsung-galaxy-s25-ultra-256gb'
-    );
+    // 6. Unset RATE_ITEM_MODEL and 'off' stay active (always-on Item grouping).
+    for (const mode of [undefined, 'off'] as const) {
+      if (mode === undefined) delete process.env.RATE_ITEM_MODEL;
+      else process.env.RATE_ITEM_MODEL = mode;
+      const statusDefault =
+        await groupCatalogRowsByItemWithStatus(storedCategoryPeers);
+      assert.equal(statusDefault.rows.length, groupedOn.length);
+      assert.equal(statusDefault.itemModelActive, true);
+      assert.equal(statusDefault.degraded, false);
+    }
 
     // 7. DOS/Rate#1834: compareAllCount parity with emitted slugs= tokens,
     //    leading-underscore Item slugs on detail vs 1v1/compare links, and

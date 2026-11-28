@@ -5855,7 +5855,10 @@ export async function resolveCatalogSlug(
     typeof slug === 'string' ? slug.replace(/\p{Cc}+/gu, '').trim() : '';
   if (!isSafeCatalogSlug(clean)) return null;
   const item = await readItem('slug', clean);
-  if (item) return { kind: 'item', item, variant: null };
+  if (item) {
+    const variants = await getItemVariants(item.id);
+    if (variants.length > 0) return { kind: 'item', item, variant: null };
+  }
   // An archived variant (a retired `unknown`, an archived duplicate) still
   // redirects its old URL to its Item; it is never offered as a size.
   const { data, error } = await untypedRate()
@@ -5873,10 +5876,22 @@ export async function resolveCatalogSlug(
   }
   const variant = mapItemVariantRow(data);
   if (!variant) {
-    // A master not yet linked to an Item keeps its page; only a slug that is
-    // no master at all (or a malformed row) is unknown here.
-    const row = data as { id?: unknown; item_id?: unknown } | null;
-    return row && sanitizeRateEntityId(row.id) && row.item_id == null
+    // A published master not yet linked to a sized Item (item_id NULL or a
+    // legacy non-colon master with variant_key NULL) keeps its own page; only
+    // a slug that is no published master at all (or a malformed/archived row)
+    // is unknown here.
+    const row = data as {
+      id?: unknown;
+      item_id?: unknown;
+      variant_key?: unknown;
+      status?: unknown;
+    } | null;
+    const hasVariantKey =
+      typeof row?.variant_key === 'string' && row.variant_key.length > 0;
+    return row &&
+      sanitizeRateEntityId(row.id) &&
+      row.status === 'published' &&
+      (row.item_id == null || !hasVariantKey)
       ? { kind: 'unlinked', item: null, variant: null }
       : null;
   }
@@ -5952,10 +5967,11 @@ export async function getItemLinksForMasters(
   }
   for (const [masterId, itemId] of itemIdByMaster) {
     const item = itemsById.get(itemId);
-    if (!item) continue;
+    const variants = variantsByItem.get(itemId) ?? [];
+    if (!item || variants.length === 0) continue;
     links.set(masterId, {
       item,
-      variants: variantsByItem.get(itemId) ?? [],
+      variants,
     });
   }
   return links;
@@ -6076,7 +6092,11 @@ export async function getItemSlugByVariantSlug(): Promise<Map<string, string>> {
   const [masterRows, itemRows] = await Promise.all([
     fetchAllRows(
       'sitemap item links',
-      page('sitemap item links', 'master_products', 'slug, item_id')
+      page(
+        'sitemap item links',
+        'master_products',
+        'slug, item_id, variant_key'
+      )
     ),
     fetchAllRows('sitemap items', page('sitemap items', 'items', 'id, slug')),
   ]);
@@ -6091,7 +6111,12 @@ export async function getItemSlugByVariantSlug(): Promise<Map<string, string>> {
   for (const raw of masterRows as Array<{
     slug?: unknown;
     item_id?: unknown;
+    variant_key?: unknown;
   }>) {
+    const hasVariantKey =
+      !('variant_key' in raw) ||
+      (typeof raw.variant_key === 'string' && raw.variant_key.length > 0);
+    if (!hasVariantKey) continue;
     const itemSlug = itemSlugById.get(sanitizeRateEntityId(raw.item_id));
     if (itemSlug && typeof raw.slug === 'string' && raw.slug) {
       out.set(raw.slug, itemSlug);
